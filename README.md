@@ -8,13 +8,14 @@ Generate Anki flashcards from PDF lecture slides, guided by examples from an exi
 
 ### Project Structure
 ```
-ankiparse/
+lectern/
   README.md
   main.py            # CLI orchestrator
   config.py          # Env-based configuration
   pdf_parser.py      # Text + image extraction via PyMuPDF
-  anki_reader.py     # Read-only .apkg sampler for few-shot examples
+  (no .apkg reader)  # Examples sampled via AnkiConnect only
   ai_generator.py    # Gemini prompt + generation
+  utils/             # CLI helpers (colors, timers)
   anki_connector.py  # AnkiConnect HTTP helpers
   requirements.txt   # Python dependencies
   logs/              # Request/response logs (JSON)
@@ -30,18 +31,20 @@ ankiparse/
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+## Optional: auto-load environment variables from a .env file
+# pip install python-dotenv
 ```
 
 ### Configuration
 - `GEMINI_API_KEY` (required): Your Google Generative AI API key.
+- `DEFAULT_GEMINI_MODEL` (optional): Defaults to `gemini-2.5-pro`.
 - `ANKI_CONNECT_URL` (optional): Defaults to `http://localhost:8765`.
 - `BASIC_MODEL_NAME` (optional): Defaults to `prettify-nord-basic`.
 - `CLOZE_MODEL_NAME` (optional): Defaults to `prettify-nord-cloze`.
 - `DEFAULT_TAG` (optional): Defaults to `lectern`.
 - `ENABLE_DEFAULT_TAG` (optional): `true`/`false` (default `true`).
 
-If `python-dotenv` is available, `.env` files are auto-loaded from the project root
-and `~/.env`.
+If `python-dotenv` is installed, `.env` files are auto-loaded from the project root and `~/.env`.
 
 Example (macOS/Linux):
 ```bash
@@ -51,29 +54,43 @@ export GEMINI_API_KEY="your_api_key"
 
 You can place these in a local shell profile or a `.env` you source before running.
 
+Example `.env` file:
+```
+GEMINI_API_KEY=your_api_key
+# DEFAULT_GEMINI_MODEL=gemini-2.5-pro
+# ANKI_CONNECT_URL=http://localhost:8765
+# BASIC_MODEL_NAME=prettify-nord-basic
+# CLOZE_MODEL_NAME=prettify-nord-cloze
+# DEFAULT_TAG=lectern
+# ENABLE_DEFAULT_TAG=true
+```
+
 ### Usage
-Run the CLI directly:
+Run the CLI (minimum required flags):
+```bash
+python main.py --pdf-path /path/to/slides.pdf --deck-name "My Deck"
+```
+
+With optional parameters:
 ```bash
 python main.py \
   --pdf-path /path/to/slides.pdf \
   --deck-name "My Deck" \
-  --context-apkg-path /path/to/context.apkg \
-  --context-deck-name "Deck Name Inside APKG" \
+  --context-deck "Existing Deck For Style" \
   --model-name prettify-nord-basic \
-  --tags university
+  --tags exam week1
 ```
 
 Arguments:
 - `--pdf-path` (required): Path to the PDF slides.
 - `--deck-name` (required): Destination deck in Anki.
-- `--context-apkg-path` (optional): An `.apkg` to sample 5 notes for style; improves consistency.
-- `--context-deck-name` (optional): Deck name inside the `.apkg` to sample from. Defaults to `--deck-name`.
+- `--context-deck` (optional): Deck name to sample 5 notes for style via AnkiConnect. Defaults to `--deck-name`.
 - `--model-name` (optional): Default note type if AI omits it. Default: `prettify-nord-basic`.
-- `--tags` (optional): Tags for created notes. Default: `lectern` (if `ENABLE_DEFAULT_TAG=true`). To disable auto-tagging, set `ENABLE_DEFAULT_TAG=false`.
+- `--tags` (optional): Space-separated tags to apply (e.g., `--tags exam week1`). Default: `lectern` if `ENABLE_DEFAULT_TAG=true`. To disable auto-tagging, set `ENABLE_DEFAULT_TAG=false`.
 
 ### What it does
 1. Checks AnkiConnect availability.
-2. Optionally samples a few notes from `--context-apkg-path` to guide style.
+2. Optionally samples a few notes from `--context-deck` via AnkiConnect to guide style.
 3. Extracts text and images from the PDF (original image bytes preserved).
 4. Sends a multimodal prompt to Gemini requesting a strict JSON array of cards. The prompt includes definitive guidelines (atomic cards, cloze priority, wording rules, interference avoidance) and prefers `prettify-nord-cloze` then `prettify-nord-basic`.
 5. Uploads any media specified by the AI and adds notes to Anki.
@@ -118,7 +135,7 @@ Troubleshooting
   - Export the key in your shell before running.
 - No cards created:
   - Check that slides contain extractable text (current version does not OCR).
-  - Try providing `--context-apkg-path` for better style guidance.
+  - Try providing `--context-deck` for better style guidance.
   - Inspect console output for any API errors.
 
 ### Roadmap ideas
@@ -128,12 +145,13 @@ Troubleshooting
 - Tests with mocked AnkiConnect and sample PDFs.
 
 ### Safety
-- Lectern never writes `.apkg` or `collection.anki2` directly.
+- Lectern never writes Anki collection files directly.
 - All modifications go through AnkiConnect's API.
 
 ### Defaults & customization quick reference
 - Default models: `prettify-nord-basic`, `prettify-nord-cloze` (override via env).
+- Default Gemini model: `gemini-2.5-pro` (override via `DEFAULT_GEMINI_MODEL`).
 - Default tag: `lectern` (disable by `ENABLE_DEFAULT_TAG=false`).
-- Examples: pass `--context-apkg-path` to inject style examples into the prompt.
+- Examples: pass `--context-deck` to inject style examples into the prompt.
 
 

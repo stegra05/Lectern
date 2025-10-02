@@ -42,6 +42,10 @@ _load_environment_files()
 # Google Gemini API key. Must be provided via environment variable for security.
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
+# Default Gemini model name for generation.
+# Centralizes the model selection to avoid hardcoding in modules.
+DEFAULT_GEMINI_MODEL: str = os.getenv("DEFAULT_GEMINI_MODEL", "gemini-2.5-pro")
+
 # AnkiConnect default URL. Can be overridden via environment variable if needed.
 ANKI_CONNECT_URL: str = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
 
