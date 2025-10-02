@@ -269,3 +269,61 @@ def _salvage_truncated_json_array(candidate: str) -> str:
     return head + "]"
 
 
+
+def _extract_json_object_string(text: str) -> str:
+    """Extract the first top-level JSON object from text, robust to code fences and quotes.
+
+    - Strips optional ```json fences
+    - Tracks quotes and escapes so braces inside strings don't break matching
+    Returns the best-effort object substring, or the original text if not found.
+    """
+
+    if not isinstance(text, str):
+        return ""
+
+    stripped = text.strip()
+
+    # Remove code fences if present
+    if stripped.startswith("```"):
+        first_nl = stripped.find("\n")
+        if first_nl != -1:
+            stripped = stripped[first_nl + 1 :]
+            if stripped.endswith("```"):
+                stripped = stripped[: -3].strip()
+
+    # Fast path
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped
+
+    # Scan for top-level object while respecting strings and escapes
+    start = -1
+    in_string = False
+    escape = False
+    depth = 0
+    for idx, ch in enumerate(stripped):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        else:
+            if ch == '"':
+                in_string = True
+                continue
+            if ch == "{":
+                if depth == 0:
+                    start = idx
+                depth += 1
+                continue
+            if ch == "}":
+                if depth > 0:
+                    depth -= 1
+                    if depth == 0 and start != -1:
+                        return stripped[start : idx + 1]
+                continue
+
+    return text
+
