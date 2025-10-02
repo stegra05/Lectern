@@ -22,6 +22,7 @@ from ai_common import (
     _start_session_log,
     _append_session_log,
     _extract_json_array_string,
+    _extract_json_object_string,
 )
 from ai_cards import _normalize_card_object
 
@@ -67,7 +68,12 @@ def chat_concept_map(chat: Any, pdf_content: List[Dict[str, Any]], log_path: str
     try:
         data = json.loads(s)
     except Exception:
-        return {"concepts": []}
+        # Attempt to salvage a JSON object from truncated or wrapped text
+        obj = _extract_json_object_string(s)
+        try:
+            data = json.loads(obj)
+        except Exception:
+            return {"concepts": []}
     return data if isinstance(data, dict) else {"concepts": []}
 
 

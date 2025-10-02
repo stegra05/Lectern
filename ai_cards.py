@@ -49,6 +49,24 @@ def _normalize_card_object(card: Dict[str, Any]) -> Dict[str, Any] | None:
     front = _get_ci(["Front", "front", "question", "q"])  # basic
     back = _get_ci(["Back", "back", "answer", "a"])  # basic
 
+    # Map common generic field labels (e.g., exported JSON uses Field 1/Field 2)
+    field1 = ""
+    field2 = ""
+    for k, v in card.items():
+        if isinstance(k, str) and isinstance(v, (str, int)):
+            lk = k.strip().lower()
+            if lk in ("field 1", "field1", "f1"):
+                field1 = str(v)
+            elif lk in ("field 2", "field2", "f2"):
+                field2 = str(v)
+
+    if not text and not front and not back and (field1 or field2):
+        if "{{c" in field1.lower():
+            text = field1
+        else:
+            front = field1
+            back = field2
+
     # Determine model
     is_cloze = False
     content_all = f"{text} {front} {back}".lower()
