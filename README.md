@@ -6,6 +6,10 @@ Generate Anki flashcards from PDF lecture slides, guided by examples from an exi
 - Initial functional skeleton. Safe defaults, clear CLI, and modular architecture.
 - Requires: Anki desktop running with the AnkiConnect add‑on, and a Gemini API key.
 
+### Disclaimer
+- This tool is experimental and currently very untested. It may not work with all Anki or AnkiConnect versions.
+- The default note types `prettify-nord-basic` and `prettify-nord-cloze` must exist in your Anki profile. If they don't, either create/import them or override via environment variables (`BASIC_MODEL_NAME`, `CLOZE_MODEL_NAME`) or the `--model-name` flag.
+
 ### Project Structure
 ```
 lectern/
@@ -23,9 +27,12 @@ lectern/
 
 ### Prerequisites
 - Python 3.9+
-- Anki desktop open with AnkiConnect add‑on enabled
+- Anki desktop open with AnkiConnect `https://ankiweb.net/shared/info/2055492159` add‑on enabled
   - Default URL: `http://localhost:8765` (configurable via `ANKI_CONNECT_URL`)
-- Google Gemini API key exported as `GEMINI_API_KEY`
+- Google Gemini API key `https://aistudio.google.com/api-keys` exported as `GEMINI_API_KEY`
+- Required Anki note types present (by default): `prettify-nord-basic`, `prettify-nord-cloze`.
+  - You can change these defaults via `BASIC_MODEL_NAME` and `CLOZE_MODEL_NAME`.
+ - Target deck must already exist in Anki with exactly the same name you pass to `--deck-name`. Create the deck in Anki first; it is not created automatically.
 
 ### Installation
 ```bash
@@ -71,12 +78,13 @@ Run the CLI (minimum required flags):
 python main.py --pdf-path /path/to/slides.pdf --deck-name "My Deck"
 ```
 
+Note: Ensure a deck named exactly "My Deck" already exists in Anki before running.
+
 With optional parameters:
 ```bash
 python main.py \
   --pdf-path /path/to/slides.pdf \
   --deck-name "My Deck" \
-  --context-deck "Existing Deck For Style" \
   --model-name prettify-nord-basic \
   --tags exam week1
 ```
@@ -87,6 +95,12 @@ Arguments:
 - `--context-deck` (optional): Deck name to sample 5 notes for style via AnkiConnect. Defaults to `--deck-name`.
 - `--model-name` (optional): Default note type if AI omits it. Default: `prettify-nord-basic`.
 - `--tags` (optional): Space-separated tags to apply (e.g., `--tags exam week1`). Default: `lectern` if `ENABLE_DEFAULT_TAG=true`. To disable auto-tagging, set `ENABLE_DEFAULT_TAG=false`.
+- `--max-notes-per-batch` (optional): Max cards requested per turn. Default from config.
+- `--reflection-rounds` (optional): Number of post-generation refinement rounds. Default from config.
+- `--enable-reflection` (optional): Enable or disable the reflection phase. Default from config.
+
+Quality tip
+- Card quality is typically better for existing decks. The app samples up to 5 notes from `--context-deck` (defaults to `--deck-name`) to guide style and structure. If the referenced deck is empty and no `--context-deck` is provided, generation proceeds without style examples.
 
 ### What it does
 1. Checks AnkiConnect availability.
@@ -125,7 +139,7 @@ Notes:
 - Model names like `Basic`/`Cloze` are normalized to your configured models.
 
 ### Logs & troubleshooting
-- Each run writes a JSON log under `logs/generation-*.json` with the request (redacted) and raw response text. Verify that examples are included under `request.parts[0].text`.
+- Each run writes a JSON log under `logs/session-*.json` capturing request parts and raw response text. Inspect `exchanges[*].request.parts` for the prompts (including any style examples) and `exchanges[*].response_text` for the raw model output.
 
 Troubleshooting
 - "Could not connect to AnkiConnect":
@@ -153,5 +167,9 @@ Troubleshooting
 - Default Gemini model: `gemini-2.5-pro` (override via `DEFAULT_GEMINI_MODEL`).
 - Default tag: `lectern` (disable by `ENABLE_DEFAULT_TAG=false`).
 - Examples: pass `--context-deck` to inject style examples into the prompt.
+
+
+### Feedback
+I’d love to hear your feedback, bug reports, and ideas for improvements. Feel free to open an issue or share thoughts on what works well and what doesn’t.
 
 
