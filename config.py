@@ -10,6 +10,34 @@ from __future__ import annotations
 
 import os
 
+from typing import Optional
+
+try:
+    # Prefer python-dotenv if available to load .env automatically
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover - optional dependency at runtime
+    load_dotenv = None  # type: ignore[assignment]
+
+def _load_environment_files() -> None:
+    """Load environment variables from project .env and fallback to home .env.
+
+    - First tries `.env` in the project root (current working directory).
+    - Then tries `~/.env` as a fallback if not already set.
+    """
+
+    if load_dotenv is None:
+        return
+
+    # Load from CWD/project root if present
+    load_dotenv(override=False)
+
+    # Fallback to ~/.env for users who prefer global secrets
+    home_env_path = os.path.join(os.path.expanduser("~"), ".env")
+    if os.path.exists(home_env_path):
+        load_dotenv(dotenv_path=home_env_path, override=False)
+
+# Load env files before reading values
+_load_environment_files()
 
 # Google Gemini API key. Must be provided via environment variable for security.
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")

@@ -51,6 +51,7 @@ python -m lectern.main \
   --pdf-path /path/to/slides.pdf \
   --deck-name "My Deck" \
   --context-apkg-path /path/to/context.apkg \
+  --context-deck-name "Deck Name Inside APKG" \
   --model-name Basic \
   --tags lectern university
 ```
@@ -59,6 +60,7 @@ Arguments:
 - `--pdf-path` (required): Path to the PDF slides.
 - `--deck-name` (required): Destination deck in Anki.
 - `--context-apkg-path` (optional): An `.apkg` to sample 5 notes for style; improves consistency.
+- `--context-deck-name` (optional): Deck name inside the `.apkg` to sample from. Defaults to `--deck-name`.
 - `--model-name` (optional): Default note type if AI omits it. Default: `Basic`.
 - `--tags` (optional): Tags for created notes. Default: `lectern`.
 

@@ -9,4 +9,8 @@ google-generativeai>=0.7.0
 requests>=2.31.0
 
 
+# Load environment variables from .env
+python-dotenv>=1.0.1
+
+
 
