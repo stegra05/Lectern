@@ -10,14 +10,14 @@ Generate Anki flashcards from PDF lecture slides, guided by examples from an exi
 ```
 ankiparse/
   README.md
-  lectern/
-    main.py            # CLI orchestrator
-    config.py          # Env-based configuration
-    pdf_parser.py      # Text + image extraction via PyMuPDF
-    anki_reader.py     # Read-only .apkg sampler for few-shot examples
-    ai_generator.py    # Gemini prompt + generation
-    anki_connector.py  # AnkiConnect HTTP helpers
-    requirements.txt   # Python dependencies
+  main.py            # CLI orchestrator
+  config.py          # Env-based configuration
+  pdf_parser.py      # Text + image extraction via PyMuPDF
+  anki_reader.py     # Read-only .apkg sampler for few-shot examples
+  ai_generator.py    # Gemini prompt + generation
+  anki_connector.py  # AnkiConnect HTTP helpers
+  requirements.txt   # Python dependencies
+  logs/              # Request/response logs (JSON)
 ```
 
 ### Prerequisites
@@ -35,6 +35,13 @@ pip install -r requirements.txt
 ### Configuration
 - `GEMINI_API_KEY` (required): Your Google Generative AI API key.
 - `ANKI_CONNECT_URL` (optional): Defaults to `http://localhost:8765`.
+- `BASIC_MODEL_NAME` (optional): Defaults to `prettify-nord-basic`.
+- `CLOZE_MODEL_NAME` (optional): Defaults to `prettify-nord-cloze`.
+- `DEFAULT_TAG` (optional): Defaults to `lectern`.
+- `ENABLE_DEFAULT_TAG` (optional): `true`/`false` (default `true`).
+
+If `python-dotenv` is available, `.env` files are auto-loaded from the project root
+and `~/.env`.
 
 Example (macOS/Linux):
 ```bash
@@ -45,15 +52,15 @@ export GEMINI_API_KEY="your_api_key"
 You can place these in a local shell profile or a `.env` you source before running.
 
 ### Usage
-Run the CLI module directly:
+Run the CLI directly:
 ```bash
-python -m lectern.main \
+python main.py \
   --pdf-path /path/to/slides.pdf \
   --deck-name "My Deck" \
   --context-apkg-path /path/to/context.apkg \
   --context-deck-name "Deck Name Inside APKG" \
-  --model-name Basic \
-  --tags lectern university
+  --model-name prettify-nord-basic \
+  --tags university
 ```
 
 Arguments:
@@ -61,14 +68,14 @@ Arguments:
 - `--deck-name` (required): Destination deck in Anki.
 - `--context-apkg-path` (optional): An `.apkg` to sample 5 notes for style; improves consistency.
 - `--context-deck-name` (optional): Deck name inside the `.apkg` to sample from. Defaults to `--deck-name`.
-- `--model-name` (optional): Default note type if AI omits it. Default: `Basic`.
-- `--tags` (optional): Tags for created notes. Default: `lectern`.
+- `--model-name` (optional): Default note type if AI omits it. Default: `prettify-nord-basic`.
+- `--tags` (optional): Tags for created notes. Default: `lectern` (if `ENABLE_DEFAULT_TAG=true`). To disable auto-tagging, set `ENABLE_DEFAULT_TAG=false`.
 
 ### What it does
 1. Checks AnkiConnect availability.
 2. Optionally samples a few notes from `--context-apkg-path` to guide style.
 3. Extracts text and images from the PDF (original image bytes preserved).
-4. Sends a multimodal prompt to Gemini requesting a strict JSON array of cards.
+4. Sends a multimodal prompt to Gemini requesting a strict JSON array of cards. The prompt includes definitive guidelines (atomic cards, cloze priority, wording rules, interference avoidance) and prefers `prettify-nord-cloze` then `prettify-nord-basic`.
 5. Uploads any media specified by the AI and adds notes to Anki.
 
 ### Output expectations
@@ -76,7 +83,7 @@ The AI is instructed to return a JSON array like:
 ```json
 [
   {
-    "model_name": "Basic",
+    "model_name": "prettify-nord-basic",
     "fields": { "Front": "Question?", "Back": "Answer." },
     "tags": ["lectern"],
     "media": [ { "filename": "slide-3.png", "data": "<base64>" } ]
@@ -84,11 +91,26 @@ The AI is instructed to return a JSON array like:
 ]
 ```
 
-Notes:
-- If the response is not valid JSON, Lectern currently skips creating notes (fails safe).
-- Images extracted from the PDF are available to the model; it may also return additional media to upload.
+For cloze deletions:
+```json
+[
+  {
+    "model_name": "prettify-nord-cloze",
+    "fields": { "Text": "{{c1::Einstein}} developed the theory of {{c2::relativity}}." },
+    "tags": ["lectern"]
+  }
+]
+```
 
-### Troubleshooting
+Notes:
+- If the response is not valid JSON, Lectern skips creating notes (fail-safe).
+- Images extracted from the PDF are available to the model; it may also return additional media to upload.
+- Model names like `Basic`/`Cloze` are normalized to your configured models.
+
+### Logs & troubleshooting
+- Each run writes a JSON log under `logs/generation-*.json` with the request (redacted) and raw response text. Verify that examples are included under `request.parts[0].text`.
+
+Troubleshooting
 - "Could not connect to AnkiConnect":
   - Ensure Anki desktop is open and the AnkiConnect add‑on is installed/enabled.
   - Verify `ANKI_CONNECT_URL` (default `http://localhost:8765`).
@@ -108,5 +130,10 @@ Notes:
 ### Safety
 - Lectern never writes `.apkg` or `collection.anki2` directly.
 - All modifications go through AnkiConnect's API.
+
+### Defaults & customization quick reference
+- Default models: `prettify-nord-basic`, `prettify-nord-cloze` (override via env).
+- Default tag: `lectern` (disable by `ENABLE_DEFAULT_TAG=false`).
+- Examples: pass `--context-apkg-path` to inject style examples into the prompt.
 
 
