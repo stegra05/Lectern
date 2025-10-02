@@ -55,17 +55,40 @@ def unpack_apkg_to_temp(apkg_path: str) -> Tuple[str, str]:
 def _resolve_deck_id(conn: sqlite3.Connection, deck_name: str) -> int:
     """Resolve a deck ID for a given deck name.
 
+    Tries exact match first, then case-insensitive and normalized comparisons.
     Supports modern Anki schemas via the `decks` table and provides a fallback
     for legacy schemas by reading from the `col` table JSON.
     """
 
+    def _normalize(name: str) -> str:
+        return "::".join(part.strip().lower() for part in name.split("::"))
+
+    target_exact = deck_name
+    target_norm = _normalize(deck_name)
+
     # Preferred: decks table
     try:
+        # Exact match
         row = conn.execute(
-            "SELECT id FROM decks WHERE name = ? LIMIT 1", (deck_name,)
+            "SELECT id FROM decks WHERE name = ? LIMIT 1", (target_exact,)
         ).fetchone()
         if row and isinstance(row[0], int):
             return row[0]
+
+        # Case-insensitive/normalized match across all decks
+        rows = conn.execute("SELECT id, name FROM decks").fetchall()
+        best_ci_id = None
+        best_norm_id = None
+        for did, name in rows:
+            if isinstance(name, str):
+                if name.lower() == target_exact.lower():
+                    best_ci_id = did
+                if _normalize(name) == target_norm:
+                    best_norm_id = did
+        if best_ci_id is not None:
+            return int(best_ci_id)
+        if best_norm_id is not None:
+            return int(best_norm_id)
     except sqlite3.Error:
         pass
 
@@ -74,13 +97,37 @@ def _resolve_deck_id(conn: sqlite3.Connection, deck_name: str) -> int:
         row = conn.execute("SELECT decks FROM col LIMIT 1").fetchone()
         if row and row[0]:
             decks_json = json.loads(row[0])
+            # Exact
             for deck in decks_json.values():
-                if deck.get("name") == deck_name:
+                name = str(deck.get("name", ""))
+                if name == target_exact:
+                    return int(deck["id"])  # type: ignore[arg-type]
+            # Case-insensitive / normalized
+            for deck in decks_json.values():
+                name = str(deck.get("name", ""))
+                if name.lower() == target_exact.lower() or _normalize(name) == target_norm:
                     return int(deck["id"])  # type: ignore[arg-type]
     except (sqlite3.Error, json.JSONDecodeError, KeyError, ValueError):
         pass
 
-    raise ValueError(f"Deck not found: {deck_name}")
+    # Build helpful error with available deck names
+    try:
+        names: List[str] = []
+        try:
+            for (name,) in conn.execute("SELECT name FROM decks"):
+                if isinstance(name, str):
+                    names.append(name)
+        except sqlite3.Error:
+            pass
+        if not names:
+            row = conn.execute("SELECT decks FROM col LIMIT 1").fetchone()
+            if row and row[0]:
+                decks_json = json.loads(row[0])
+                names = [str(d.get("name", "")) for d in decks_json.values()]
+        available = ", ".join(sorted(n for n in names if n)) or "<none>"
+        raise ValueError(f"Deck not found: {deck_name}. Available: {available}")
+    except Exception:
+        raise ValueError(f"Deck not found: {deck_name}")
 
 
 def get_sample_notes(db_path: str, deck_name: str, sample_size: int = 5) -> List[Dict[str, object]]:
