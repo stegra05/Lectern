@@ -16,7 +16,7 @@ from typing import Any, Dict, Iterable, List
 
 import google.generativeai as genai  # type: ignore
 
-from . import config
+import config
 
 
 DEFAULT_MODEL_NAME = "gemini-2.5-pro"

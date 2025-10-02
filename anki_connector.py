@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from .config import ANKI_CONNECT_URL
+from config import ANKI_CONNECT_URL
 
 
 def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15) -> Any:
