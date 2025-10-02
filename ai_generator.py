@@ -78,6 +78,8 @@ def chat_generate_more_cards(chat: Any, limit: int, log_path: str) -> Dict[str, 
         f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\n"
         "- Avoid duplicates; complement existing coverage.\n"
         "- Prefer cloze when natural; otherwise Basic Front/Back.\n"
+        "- For each note, include a \"tags\" array with 1-2 concise topical tags that categorize the content (lowercase kebab-case, ASCII, hyphens only; avoid generic terms; do not include \"lectern\" or deck/model names).\n"
+        "- Use consistent tag names across related notes to cluster them.\n"
         "- Return ONLY JSON: either an array of note objects or {\"cards\": [...], \"done\": bool}. No prose.\n"
         "- If no more high-quality cards remain, return an empty array or {\"cards\": [], \"done\": true}.\n"
     )
@@ -118,6 +120,7 @@ def chat_reflect(chat: Any, deck_summary: List[str], limit: int, log_path: str, 
         "You are a reflective and critical learner tasked with creating high-quality Anki flashcards from lecture materials. "
         "Review your last set of cards with a deep and analytical mindset. Goals: coverage, gaps, inaccuracies, depth, clarity/atomicity, and cross-concept connections.\n"
         "First, write a concise reflection (≤1200 chars). Then provide improved or additional cards.\n"
+        "Include a \"tags\" array per note with 1-3 concise topical tags (lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
         f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
     )
     deck_summary_json = json.dumps(deck_summary or [], ensure_ascii=False)
