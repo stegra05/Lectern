@@ -1,16 +1,16 @@
 # Core dependencies for Lectern CLI
 # PDF parsing and image extraction
-PyMuPDF>=1.24.0
+PyMuPDF>=1.24.0,<1.26
 
 # Google Gemini API client
-google-generativeai>=0.7.0
+google-generativeai>=0.7.0,<0.9
 
 # HTTP requests for AnkiConnect communication
-requests>=2.31.0
+requests>=2.31.0,<2.33
 
 
 # Load environment variables from .env (optional, see README)
-# python-dotenv>=1.0.1
+# python-dotenv>=1.0.1,<2.0
 
 
 
