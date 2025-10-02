@@ -40,6 +40,9 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ## Optional: auto-load environment variables from a .env file
 # pip install python-dotenv
+## Optional: richer CLI experience (progress bars + tab completion)
+# pip install rich argcomplete
+# activate-global-python-argcomplete  # or eval "$(register-python-argcomplete python)"
 ```
 
 ### Configuration
@@ -89,6 +92,20 @@ python main.py \
   --tags exam week1
 ```
 
+Interactive mode (prompts for missing inputs and asks to confirm before note creation):
+```bash
+python main.py --interactive
+```
+
+Verbosity controls:
+```bash
+# Detailed status + AI snippets
+python main.py --pdf-path /path/to/slides.pdf --deck-name "My Deck" --verbose
+
+# Minimal output (errors only)
+python main.py --pdf-path /path/to/slides.pdf --deck-name "My Deck" --quiet
+```
+
 Arguments:
 - `--pdf-path` (required): Path to the PDF slides.
 - `--deck-name` (required): Destination deck in Anki.
@@ -98,6 +115,9 @@ Arguments:
 - `--max-notes-per-batch` (optional): Max cards requested per turn. Default from config.
 - `--reflection-rounds` (optional): Number of post-generation refinement rounds. Default from config.
 - `--enable-reflection` (optional): Enable or disable the reflection phase. Default from config.
+- `--interactive` (optional): Prompt for missing inputs and confirm before creating notes.
+- `--verbose` (optional): Show detailed progress and AI response snippets.
+- `--quiet` (optional): Suppress non-essential output; still shows errors and failures.
 
 Quality tip
 - Card quality is typically better for existing decks. The app samples up to 5 notes from `--context-deck` (defaults to `--deck-name`) to guide style and structure. If the referenced deck is empty and no `--context-deck` is provided, generation proceeds without style examples.
@@ -108,6 +128,11 @@ Quality tip
 3. Extracts text and images from the PDF (original image bytes preserved).
 4. Sends a multimodal prompt to Gemini requesting a strict JSON array of cards. The prompt includes definitive guidelines (atomic cards, cloze priority, wording rules, interference avoidance) and prefers `prettify-nord-cloze` then `prettify-nord-basic`.
 5. Uploads any media specified by the AI and adds notes to Anki.
+
+Progress & feedback
+- Stage timers show start/finish for each step. If `rich` is installed, generation, reflection, and note creation display live progress bars; otherwise a lightweight textual progress is shown.
+- `--verbose` prints additional status including small AI response snippets; `--quiet` hides non-essential messages.
+- At the end, a concise summary prints counts (pages parsed, cards generated, notes created/failed) and total runtime.
 
 ### Output expectations
 The AI is instructed to return a JSON array like:
@@ -155,7 +180,6 @@ Troubleshooting
 ### Roadmap ideas
 - OCR for image-only PDFs (e.g., Tesseract).
 - Schema validation for AI output (e.g., Pydantic) and retries on non-JSON.
-- Rich logging/verbosity flags and progress bars.
 - Tests with mocked AnkiConnect and sample PDFs.
 
 ### Safety

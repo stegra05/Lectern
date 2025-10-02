@@ -25,6 +25,7 @@ from ai_common import (
     _extract_json_object_string,
 )
 from ai_cards import _normalize_card_object
+from utils.cli import vprint, is_verbose
 
 
 DEFAULT_MODEL_NAME = config.DEFAULT_GEMINI_MODEL
@@ -42,7 +43,7 @@ def start_single_session() -> Tuple[Any, str]:
     model = genai.GenerativeModel(DEFAULT_MODEL_NAME, generation_config=generation_config)
     chat = model.start_chat(history=[])
     log_path = _start_session_log()
-    print(f"[AI] Started single session; log={os.path.basename(log_path) if log_path else 'disabled'}")
+    vprint(f"[AI] Started single session; log={os.path.basename(log_path) if log_path else 'disabled'}", level=1)
     return chat, log_path
 
 
@@ -55,10 +56,10 @@ def chat_concept_map(chat: Any, pdf_content: List[Dict[str, Any]], log_path: str
         "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array). No prose.\n"
     )
     parts = _compose_multimodal_content(pdf_content, prompt)
-    print(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
+    vprint(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}", level=2)
     response = chat.send_message(parts, request_options={"timeout": 180})
     text = getattr(response, "text", None) or ""
-    print(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\n',' ')}...")
+    vprint(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\n',' ')}...", level=2)
     _append_session_log(log_path, "conceptmap", parts, text, False)
     s = _strip_code_fences(text)
     try:
@@ -86,7 +87,7 @@ def chat_generate_more_cards(chat: Any, limit: int, log_path: str) -> Dict[str, 
     parts: List[Dict[str, Any]] = [{"text": prompt}]
     response = chat.send_message(parts, request_options={"timeout": 180})
     text = getattr(response, "text", None) or ""
-    print(f"[Chat/Gen] Response snippet: {text[:200].replace('\n',' ')}...")
+    vprint(f"[Chat/Gen] Response snippet: {text[:200].replace('\n',' ')}...", level=2)
     _append_session_log(log_path, "generation", parts, text, False)
     s = _strip_code_fences(text)
     try:
@@ -120,7 +121,7 @@ def chat_reflect(chat: Any, deck_summary: List[str], limit: int, log_path: str, 
         "You are a reflective and critical learner tasked with creating high-quality Anki flashcards from lecture materials. "
         "Review your last set of cards with a deep and analytical mindset. Goals: coverage, gaps, inaccuracies, depth, clarity/atomicity, and cross-concept connections.\n"
         "First, write a concise reflection (≤1200 chars). Then provide improved or additional cards.\n"
-        "Include a \"tags\" array per note with 1-3 concise topical tags (lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
+        "Include a \"tags\" array per note with 1-2 concise topical tags (lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
         f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
     )
     deck_summary_json = json.dumps(deck_summary or [], ensure_ascii=False)
@@ -128,7 +129,7 @@ def chat_reflect(chat: Any, deck_summary: List[str], limit: int, log_path: str, 
     parts: List[Dict[str, Any]] = [{"text": prompt}]
     response = chat.send_message(parts, request_options={"timeout": 180})
     text = getattr(response, "text", None) or ""
-    print(f"[Chat/Reflect] Response snippet: {text[:200].replace('\n',' ')}...")
+    vprint(f"[Chat/Reflect] Response snippet: {text[:200].replace('\n',' ')}...", level=2)
     _append_session_log(log_path, "reflection", parts, text, False)
     s = _strip_code_fences(text)
     try:
