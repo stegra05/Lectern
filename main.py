@@ -101,13 +101,13 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument(
         "--model-name",
         required=False,
-        default="Basic",
+        default=config.DEFAULT_BASIC_MODEL,
         help="Anki note type/model to use when not specified by AI",
     )
     parser.add_argument(
         "--tags",
         nargs="*",
-        default=["lectern"],
+        default=([config.DEFAULT_TAG] if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG else []),
         help="Tags to apply to created notes",
     )
     return parser.parse_args(argv)
@@ -188,10 +188,21 @@ def main(argv: List[str]) -> int:
         created = 0
         for idx, card in enumerate(cards, start=1):
             model_name = str(card.get("model_name") or args.model_name)
+            # Normalize common aliases to configured models
+            lower_model = model_name.strip().lower()
+            if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
+                model_name = config.DEFAULT_BASIC_MODEL
+            elif lower_model in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
+                model_name = config.DEFAULT_CLOZE_MODEL
             fields: Dict[str, str] = {
                 str(k): str(v) for k, v in (card.get("fields") or {}).items()
             }
-            tags = [str(t) for t in (card.get("tags") or args.tags)]
+            # Merge AI-provided tags with CLI defaults and ensure default tag if enabled
+            ai_tags = [str(t) for t in (card.get("tags") or [])]
+            merged_tags = list(dict.fromkeys(ai_tags + (args.tags or [])))
+            if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
+                merged_tags.append(config.DEFAULT_TAG)
+            tags = merged_tags
 
             # Upload any media provided by the AI before adding the note
             for media in card.get("media", []) or []:

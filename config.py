@@ -46,6 +46,21 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 ANKI_CONNECT_URL: str = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
 
 
+# Default Anki note models to use. These can be overridden via environment.
+# Intended to steer AI output and to map generic model names returned by the AI.
+DEFAULT_BASIC_MODEL: str = os.getenv("BASIC_MODEL_NAME", "prettify-nord-basic")
+DEFAULT_CLOZE_MODEL: str = os.getenv("CLOZE_MODEL_NAME", "prettify-nord-cloze")
+
+# Default tag behavior. When enabled, the application will ensure this tag is
+# present on every created note unless explicitly disabled via CLI.
+DEFAULT_TAG: str = os.getenv("DEFAULT_TAG", "lectern")
+ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not in (
+    "0",
+    "false",
+    "no",
+)
+
+
 def assert_required_config() -> None:
     """Raise a ValueError if critical configuration is missing.
 
