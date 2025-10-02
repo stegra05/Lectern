@@ -14,11 +14,11 @@ import argparse
 import sys
 from typing import List, Dict, Any
 
-from . import config
-from .anki_connector import add_note, check_connection, store_media_file
-from .anki_reader import read_examples_from_apkg
-from .pdf_parser import extract_content_from_pdf
-from .ai_generator import generate_cards
+import config
+from anki_connector import add_note, check_connection, store_media_file
+from anki_reader import read_examples_from_apkg
+from pdf_parser import extract_content_from_pdf
+from ai_generator import generate_cards
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
