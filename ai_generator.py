@@ -62,12 +62,41 @@ def _build_prompt(examples: str) -> str:
         "use a Basic note with Front/Back fields.\n\n"
         "Return ONLY a JSON array. No prose. The array contains objects with "
         "these fields: \n"
-        "- model_name: string (e.g., 'Basic' or 'Cloze')\n"
-        "- fields: object mapping field names to strings (e.g., Front, Back, Text)\n"
+        "- model_name: string (\"prettify-nord-basic\" for basic front/back or \"prettify-nord-cloze\" for cloze). Accepting 'Basic'/'Cloze' is also fine.\n"
+        "- fields: object mapping field names to strings (Front/Back for basic, Text for cloze)\n"
         "- tags: array of strings\n"
         "- media: optional array of objects with 'filename' and 'data' (base64-encoded image)\n\n"
         "Do not include Markdown in field values unless present in the slide.\n"
-        "If including media, choose short, unique filenames (e.g., 'slide-3-diagram.png').\n"
+        "If including media, choose short, unique filenames (e.g., 'slide-3-diagram.png').\n\n"
+        "Definitive Guidelines for LLM Anki Card Generation\n"
+        "Core principles (non-negotiable):\n"
+        "- Prioritize comprehension over rote memorization: if concepts are ambiguous, first synthesize understanding; avoid hallucinations.\n"
+        "- Minimum information principle: each card must test exactly one distinct fact or idea. Split multi-fact statements into multiple cards.\n"
+        "- Build upon basics: prefer foundational definitions and core principles before nuanced details.\n\n"
+        "Card creation process:\n"
+        "- Input analysis: read the slide text; extract key facts, definitions, relationships; ignore filler.\n"
+        "- Information extraction: simplify to the smallest clear QA or cloze.\n"
+        "- Example transformation: break complex sentences into separate atomic units (e.g., location, property, value, comparison).\n\n"
+        "Card type selection (in priority):\n"
+        "1) Cloze deletion: prefer when a sentence can hide a key term/date/phrase. Use Anki syntax {{c1::...}}; multiple clozes per note should use c1, c2, ...; overlapping clozes reuse the same index. Hints allowed as {{c1::text::hint}}.\n"
+        "2) Image occlusion (when a visual is present): describe the visual and the hidden region as text, but still output as either a cloze or basic card within this JSON schema. If an image is provided, include it under media; otherwise, describe the occlusion context in the Front/Text.\n"
+        "3) Basic Q&A: use when cloze is unnatural; ensure a clear, unambiguous question and concise answer.\n\n"
+        "Wording optimization:\n"
+        "- Be concise; remove redundant words.\n"
+        "- Ensure unambiguity and specificity; add minimal context to uniquely identify the target.\n\n"
+        "Contextualization & personalization:\n"
+        "- If categories or groupings exist, include subtle context cues in the text (short prefixes), but keep the card atomic.\n\n"
+        "Mnemonic integration (optional):\n"
+        "- For difficult items, you may append a short mnemonic suggestion at the end of the Back or Text, clearly separated in plain parentheses (no markdown). Keep it brief.\n\n"
+        "Avoidance guidelines:\n"
+        "- Avoid unordered sets; do not ask to list many items.\n"
+        "- Avoid long enumerations; if needed, split across multiple cards or use overlapping clozes.\n"
+        "- Avoid yes/no questions; rephrase to elicit recall.\n"
+        "- Reduce interference: differentiate similar concepts with distinguishing context.\n\n"
+        "Metadata (optional):\n"
+        "- For debatable or changing facts, you may add a brief source or date in plain text at the end of Back/Text, in parentheses, e.g., (as of 2025).\n\n"
+        "Output constraints (critical):\n"
+        "- Despite these guidelines, you must return ONLY a strict JSON array of note objects as specified above, using model_name values 'prettify-nord-cloze' or 'prettify-nord-basic' (or 'Cloze'/'Basic').\n"
     )
 
     return example_prefix + instructions
@@ -263,11 +292,41 @@ def generate_cards(pdf_content: List[Dict[str, Any]], examples: str = "") -> Lis
     except json.JSONDecodeError:
         return []
 
+    # Normalize models and ensure default tag if configured
+    def _normalize_model(name: str) -> str:
+        lower = name.strip().lower()
+        if lower in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
+            return config.DEFAULT_BASIC_MODEL
+        if lower in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
+            return config.DEFAULT_CLOZE_MODEL
+        return name
+
+    def _merge_default_tag(tags: List[str]) -> List[str]:
+        if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG:
+            if config.DEFAULT_TAG not in tags:
+                return tags + [config.DEFAULT_TAG]
+        return tags
+
     if isinstance(data, list):
-        return data
+        normalized: List[Dict[str, Any]] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            item["model_name"] = _normalize_model(str(item.get("model_name", "")))
+            item["tags"] = _merge_default_tag([str(t) for t in (item.get("tags") or [])])
+            normalized.append(item)
+        return normalized
     # If the model wrapped the list, try extracting under a common key
     if isinstance(data, dict) and isinstance(data.get("cards"), list):
-        return data["cards"]
+        cards = data["cards"]
+        normalized: List[Dict[str, Any]] = []
+        for item in cards:
+            if not isinstance(item, dict):
+                continue
+            item["model_name"] = _normalize_model(str(item.get("model_name", "")))
+            item["tags"] = _merge_default_tag([str(t) for t in (item.get("tags") or [])])
+            normalized.append(item)
+        return normalized
 
     return []
 
