@@ -76,3 +76,21 @@ def assert_required_config() -> None:
         )
 
 
+
+# Batch generation and reflection settings
+# Maximum notes the model should emit per batch. Keep small to avoid truncation.
+MAX_NOTES_PER_BATCH: int = int(os.getenv("MAX_NOTES_PER_BATCH", "30"))
+
+# Number of pages to include per generation window (sliding through the PDF)
+PAGE_WINDOW_SIZE: int = int(os.getenv("PAGE_WINDOW_SIZE", "6"))
+
+# Maximum number of reflection rounds to attempt after initial generation
+REFLECTION_MAX_ROUNDS: int = int(os.getenv("REFLECTION_MAX_ROUNDS", "2"))
+
+# Enable/disable reflection phase
+ENABLE_REFLECTION: bool = os.getenv("ENABLE_REFLECTION", "true").lower() not in (
+    "0",
+    "false",
+    "no",
+)
+

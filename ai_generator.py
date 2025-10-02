@@ -9,396 +9,227 @@ It requests a structured JSON response describing notes to create.
 
 from __future__ import annotations
 
-import base64
 import json
-import imghdr
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List, Tuple
 import os
-from datetime import datetime
 
 import google.generativeai as genai  # type: ignore
 
 import config
+from ai_common import (
+    _compose_multimodal_content,
+    _strip_code_fences,
+    _start_session_log,
+    _append_session_log,
+    _extract_json_array_string,
+)
+from ai_cards import _normalize_card_object
 
 
 DEFAULT_MODEL_NAME = config.DEFAULT_GEMINI_MODEL
-MAX_NOTES = 30
 
 
-def _infer_mime_type(image_bytes: bytes) -> str:
-    """Best-effort inference of image MIME type from raw bytes.
-
-    Falls back to application/octet-stream when type is unknown.
-    """
-
-    kind = imghdr.what(None, h=image_bytes)
-    if kind == "png":
-        return "image/png"
-    if kind in ("jpeg", "jpg"):
-        return "image/jpeg"
-    if kind == "gif":
-        return "image/gif"
-    if kind == "webp":
-        return "image/webp"
-    return "application/octet-stream"
+    # imported from ai_common
 
 
-def _build_prompt(examples: str) -> str:
-    """Construct the instruction prompt for Gemini.
-
-    The prompt explicitly requests a strict JSON array of note objects to
-    minimize parsing ambiguity.
-    """
-
-    example_prefix = (
-        f"Examples from user's deck (style guide):\n{examples}\n\n"
-        if examples.strip()
-        else ""
-    )
-
-    instructions = (
-        "You are an expert at creating high-quality Anki flashcards from "
-        "university lecture slides. Generate concise, atomic cards that test "
-        "one idea per card. Prefer cloze deletions when appropriate; otherwise "
-        "use a Basic note with Front/Back fields.\n\n"
-        "Return ONLY a JSON array. No prose. The array contains objects with "
-        "these fields: \n"
-        "- model_name: string (\"prettify-nord-basic\" for basic front/back or \"prettify-nord-cloze\" for cloze). Accepting 'Basic'/'Cloze' is also fine.\n"
-        "- fields: object mapping field names to strings (Front/Back for basic, Text for cloze)\n"
-        "- tags: array of strings\n"
-        "- media: optional array of objects with 'filename' and 'data' (base64-encoded image)\n\n"
-        "Do not include Markdown in field values unless present in the slide.\n"
-        "If including media, choose short, unique filenames (e.g., 'slide-3-diagram.png').\n\n"
-        "Definitive Guidelines for LLM Anki Card Generation\n"
-        "Core principles (non-negotiable):\n"
-        "- Prioritize comprehension over rote memorization: if concepts are ambiguous, first synthesize understanding; avoid hallucinations.\n"
-        "- Minimum information principle: each card must test exactly one distinct fact or idea. Split multi-fact statements into multiple cards.\n"
-        "- Build upon basics: prefer foundational definitions and core principles before nuanced details.\n\n"
-        "Card creation process:\n"
-        "- Input analysis: read the slide text; extract key facts, definitions, relationships; ignore filler.\n"
-        "- Information extraction: simplify to the smallest clear QA or cloze.\n"
-        "- Example transformation: break complex sentences into separate atomic units (e.g., location, property, value, comparison).\n\n"
-        "Card type selection (in priority):\n"
-        "1) Cloze deletion: prefer when a sentence can hide a key term/date/phrase. Use Anki syntax {{c1::...}}; multiple clozes per note should use c1, c2, ...; overlapping clozes reuse the same index. Hints allowed as {{c1::text::hint}}.\n"
-        "2) Image occlusion (when a visual is present): describe the visual and the hidden region as text, but still output as either a cloze or basic card within this JSON schema. If an image is provided, include it under media; otherwise, describe the occlusion context in the Front/Text.\n"
-        "3) Basic Q&A: use when cloze is unnatural; ensure a clear, unambiguous question and concise answer.\n\n"
-        "Wording optimization:\n"
-        "- Be concise; remove redundant words.\n"
-        "- Ensure unambiguity and specificity; add minimal context to uniquely identify the target.\n\n"
-        "Contextualization & personalization:\n"
-        "- If categories or groupings exist, include subtle context cues in the text (short prefixes), but keep the card atomic.\n\n"
-        "Mnemonic integration (optional):\n"
-        "- For difficult items, you may append a short mnemonic suggestion at the end of the Back or Text, clearly separated in plain parentheses (no markdown). Keep it brief.\n\n"
-        "Avoidance guidelines:\n"
-        "- Avoid unordered sets; do not ask to list many items.\n"
-        "- Avoid long enumerations; if needed, split across multiple cards or use overlapping clozes.\n"
-        "- Avoid yes/no questions; rephrase to elicit recall.\n"
-        "- Reduce interference: differentiate similar concepts with distinguishing context.\n\n"
-        "Metadata (optional):\n"
-        "- For debatable or changing facts, you may add a brief source or date in plain text at the end of Back/Text, in parentheses, e.g., (as of 2025).\n\n"
-        "Output constraints (critical):\n"
-        "- Despite these guidelines, you must return ONLY a strict JSON array of note objects as specified above, using model_name values 'prettify-nord-cloze' or 'prettify-nord-basic' (or 'Cloze'/'Basic').\n"
-        f"- Limit output to at most {MAX_NOTES} notes. Focus on the most central, atomic facts first.\n"
-    )
-
-    return example_prefix + instructions
-
-
-def _compose_multimodal_content(pdf_content: Iterable[Dict[str, Any]], prompt: str) -> List[Dict[str, Any]]:
-    """Compose the list of content parts for Gemini from parsed pages.
-
-    Expects each page item to expose 'text' and 'images' (list of bytes).
-    """
-
-    parts: List[Dict[str, Any]] = [{"text": prompt}]
-    for page in pdf_content:
-        page_text = str(page.get("text", ""))
-        if page_text.strip():
-            parts.append({"text": f"Slide text:\n{page_text}"})
-        for image_bytes in page.get("images", []) or []:
-            mime = _infer_mime_type(image_bytes)
-            parts.append(
-                {
-                    "inline_data": {
-                        "mime_type": mime,
-                        "data": base64.b64encode(image_bytes).decode("utf-8"),
-                    }
-                }
-            )
-    return parts
-
-
-def _extract_json_array_string(text: str) -> str:
-    """Extract the first top-level JSON array from text, robust to code fences and quotes.
-
-    - Strips optional ```json ... ``` fences
-    - Tracks quotes and escapes so brackets inside strings don't break matching
-    Returns the best-effort array substring, or the original text if not found.
-    """
-
-    if not isinstance(text, str):
-        return ""
-
-    stripped = text.strip()
-
-    # Remove code fences if present
-    if stripped.startswith("```"):
-        # find the first newline after the opening fence
-        first_nl = stripped.find("\n")
-        if first_nl != -1:
-            # drop the opening fence line (could be ``` or ```json)
-            stripped = stripped[first_nl + 1 :]
-            # remove closing fence if present
-            if stripped.endswith("```"):
-                stripped = stripped[: -3].strip()
-
-    # Fast path
-    if stripped.startswith("[") and stripped.endswith("]"):
-        return stripped
-
-    # Scan for top-level array while respecting strings and escapes
-    start = -1
-    in_string = False
-    escape = False
-    depth = 0
-    for idx, ch in enumerate(stripped):
-        if in_string:
-            if escape:
-                escape = False
-            elif ch == "\\":
-                escape = True
-            elif ch == '"':
-                in_string = False
-            continue
-        else:
-            if ch == '"':
-                in_string = True
-                continue
-            if ch == "[":
-                if depth == 0:
-                    start = idx
-                depth += 1
-                continue
-            if ch == "]":
-                if depth > 0:
-                    depth -= 1
-                    if depth == 0 and start != -1:
-                        return stripped[start : idx + 1]
-                continue
-
-    return text
-
-
-def _salvage_truncated_json_array(candidate: str) -> str:
-    """If the JSON array looks truncated, attempt to trim to the last complete object and close the array.
-
-    Returns the salvaged array string or the original candidate if salvage is not possible.
-    """
-
-    if not isinstance(candidate, str):
-        return candidate
-    s = candidate.strip()
-    if not s.startswith("["):
-        return candidate
-
-    in_string = False
-    escape = False
-    array_depth = 0
-    object_depth = 0
-    last_complete_obj_end = -1
-
-    for idx, ch in enumerate(s):
-        if in_string:
-            if escape:
-                escape = False
-            elif ch == "\\":
-                escape = True
-            elif ch == '"':
-                in_string = False
-            continue
-        else:
-            if ch == '"':
-                in_string = True
-                continue
-            if ch == "[":
-                array_depth += 1
-                continue
-            if ch == "]":
-                array_depth -= 1
-                if array_depth == 0:
-                    last_complete_obj_end = idx
-                    break
-                continue
-            if ch == "{":
-                object_depth += 1
-                continue
-            if ch == "}":
-                if object_depth > 0:
-                    object_depth -= 1
-                    # If we just closed a top-level object within the top-level array
-                    if array_depth == 1 and object_depth == 0:
-                        last_complete_obj_end = idx
-                continue
-
-    if last_complete_obj_end == -1:
-        return candidate
-
-    # Trim to last complete object and close array
-    head = s[: last_complete_obj_end + 1]
-    # Remove trailing commas/spaces after the object if any
-    while len(head) and head[-1] in ", \n\r\t":
-        head = head[:-1]
-    return head + "]"
-
-
-def generate_cards(pdf_content: List[Dict[str, Any]], examples: str = "") -> List[Dict[str, Any]]:
-    """Generate Anki card specifications from parsed PDF content.
-
-    Parameters:
-        pdf_content: List of page dicts or PageContent-like objects with keys
-            'text' and 'images' (list of bytes). The `pdf_parser.extract_content_from_pdf`
-            function returns dataclasses, which can be converted to dicts using
-            `dataclasses.asdict` by the caller if needed. For convenience, this
-            function treats objects with attribute access as dict-compatible.
-        examples: Optional few-shot examples string sampled from an existing deck.
-
-    Returns:
-        A list of card objects suitable for passing to the Anki connector:  
-        [{
-            'model_name': 'Basic' | 'Cloze',
-            'fields': { 'Front': '...', 'Back': '...' } | { 'Text': '...' },
-            'tags': ['lectern'],
-            'media': [{ 'filename': 'slide-3.png', 'data': '<base64>' }] (optional)
-        }]
-    """
-
+def start_single_session() -> Tuple[Any, str]:
     if not config.GEMINI_API_KEY:
-        # Fail fast with a clear error to help the user configure the app.
         raise ValueError("GEMINI_API_KEY is not set. Export it before running Lectern.")
-
     genai.configure(api_key=config.GEMINI_API_KEY)
-
-    generation_config = {
+    # In a single-session flow, avoid response_schema to keep flexibility
+    generation_config: Dict[str, Any] = {
         "response_mime_type": "application/json",
         "temperature": 0.2,
         "max_output_tokens": 8192,
     }
     model = genai.GenerativeModel(DEFAULT_MODEL_NAME, generation_config=generation_config)
+    chat = model.start_chat(history=[])
+    log_path = _start_session_log()
+    print(f"[AI] Started single session; log={os.path.basename(log_path) if log_path else 'disabled'}")
+    return chat, log_path
 
-    prompt = _build_prompt(examples=examples)
 
-    # Tolerate both dataclass objects and dicts
-    normalized_pages: List[Dict[str, Any]] = []
-    for page in pdf_content:
-        if hasattr(page, "text") and hasattr(page, "images"):
-            normalized_pages.append({"text": page.text, "images": page.images})  # type: ignore[attr-defined]
-        else:
-            normalized_pages.append({
-                "text": page.get("text", ""),  # type: ignore[union-attr]
-                "images": page.get("images", []),  # type: ignore[union-attr]
-            })
-
-    content_parts = _compose_multimodal_content(normalized_pages, prompt)
-
-    # Debug logging of prompt and (later) response
+def chat_concept_map(chat: Any, pdf_content: List[Dict[str, Any]], log_path: str) -> Dict[str, Any]:
+    prompt = (
+        "You are an expert educator. From the following slides, extract a compact global concept map for learning.\n"
+        "- Identify learning objectives (explicit or inferred).\n"
+        "- List key concepts (entities, definitions, categories), assign stable short IDs.\n"
+        "- Extract relations between concepts (is-a, part-of, causes, contrasts-with, depends-on), noting page references.\n"
+        "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array). No prose.\n"
+    )
+    parts = _compose_multimodal_content(pdf_content, prompt)
+    print(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
+    response = chat.send_message(parts, request_options={"timeout": 180})
+    text = getattr(response, "text", None) or ""
+    print(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\n',' ')}...")
+    _append_session_log(log_path, "conceptmap", parts, text, False)
+    s = _strip_code_fences(text)
     try:
-        logs_dir = os.path.join(os.getcwd(), "logs")
-        os.makedirs(logs_dir, exist_ok=True)
-        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
-        log_path = os.path.join(logs_dir, f"generation-{ts}.json")
-        # Build a redacted/loggable snapshot of parts (avoid dumping base64)
-        loggable_parts: List[Dict[str, Any]] = []
-        for part in content_parts:
-            if "text" in part:
-                txt = str(part.get("text", ""))
-                loggable_parts.append({"text": txt[:20000]})
-            elif "inline_data" in part:
-                inline = part.get("inline_data", {}) or {}
-                data_str = str(inline.get("data", ""))
-                loggable_parts.append(
-                    {
-                        "inline_data": {
-                            "mime_type": inline.get("mime_type", ""),
-                            "data_len": len(data_str),
-                        }
-                    }
-                )
-        with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "timestamp_utc": ts,
-                    "model": DEFAULT_MODEL_NAME,
-                    "generation_config": generation_config,
-                    "request": {"role": "user", "parts": loggable_parts},
-                },
-                f,
-                ensure_ascii=False,
-            )
+        data = json.loads(s)
     except Exception:
-        # Logging is best-effort and should not break generation
-        log_path = ""
+        return {"concepts": []}
+    return data if isinstance(data, dict) else {"concepts": []}
 
+
+def chat_generate_more_cards(chat: Any, limit: int, log_path: str) -> Dict[str, Any]:
+    prompt = (
+        f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\n"
+        "- Avoid duplicates; complement existing coverage.\n"
+        "- Prefer cloze when natural; otherwise Basic Front/Back.\n"
+        "- Return ONLY JSON: either an array of note objects or {\"cards\": [...], \"done\": bool}. No prose.\n"
+        "- If no more high-quality cards remain, return an empty array or {\"cards\": [], \"done\": true}.\n"
+    )
+    parts: List[Dict[str, Any]] = [{"text": prompt}]
+    response = chat.send_message(parts, request_options={"timeout": 180})
+    text = getattr(response, "text", None) or ""
+    print(f"[Chat/Gen] Response snippet: {text[:200].replace('\n',' ')}...")
+    _append_session_log(log_path, "generation", parts, text, False)
+    s = _strip_code_fences(text)
     try:
-        # Pass parts directly; SDK assembles the request for multimodal input
-        response = model.generate_content(content_parts, request_options={"timeout": 180})
-    except Exception as exc:  # Broad catch to surface a helpful message to the CLI
-        raise RuntimeError(f"Gemini generation failed: {exc}")
-
-    text = getattr(response, "text", None)
-    if not text:
-        # Try extracting from candidates/parts
+        data = json.loads(s)
+    except Exception:
+        # Try array salvage
+        arr = _extract_json_array_string(s)
         try:
-            candidates = getattr(response, "candidates", None) or []
-            for cand in candidates:
-                cand_text = getattr(cand, "text", None)
-                if cand_text:
-                    text = cand_text
-                    break
-                content = getattr(cand, "content", None)
-                parts = getattr(content, "parts", []) if content else []
-                for p in parts:
-                    p_text = getattr(p, "text", None)
-                    if p_text:
-                        text = p_text
-                        break
-                if text:
-                    break
+            cards = json.loads(arr)
+            if isinstance(cards, list):
+                normalized = [_normalize_card_object(c) for c in cards if isinstance(c, dict)]
+                normalized = [c for c in normalized if c]
+                return {"cards": normalized, "done": len(normalized) == 0}
         except Exception:
-            text = None
-        if not text:
-            return []
-
-    # Best-effort logging of the response text
-    if log_path:
-        try:
-            with open(log_path, "r+", encoding="utf-8") as f:
-                payload = json.load(f)
-                payload["response_text"] = text
-                f.seek(0)
-                json.dump(payload, f, ensure_ascii=False)
-                f.truncate()
-        except Exception:
-            pass
-
-    try:
-        extracted = _extract_json_array_string(text)
-        try:
-            data = json.loads(extracted)
-        except json.JSONDecodeError:
-            # Try salvage if truncated
-            salvaged = _salvage_truncated_json_array(extracted)
-            data = json.loads(salvaged)
-    except json.JSONDecodeError:
-        return []
-
-    # Return the parsed list as-is (no normalization or default tag merging).
-    # Normalization is handled by the CLI layer when creating notes.
+            return {"cards": [], "done": True}
     if isinstance(data, list):
-        return [item for item in data if isinstance(item, dict)]
-    # If the model wrapped the list, try extracting under a common key
-    if isinstance(data, dict) and isinstance(data.get("cards"), list):
-        return [item for item in data.get("cards", []) if isinstance(item, dict)]
+        normalized = [_normalize_card_object(c) for c in data if isinstance(c, dict)]
+        normalized = [c for c in normalized if c]
+        return {"cards": normalized, "done": len(normalized) == 0}
+    if isinstance(data, dict):
+        cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
+        normalized = [_normalize_card_object(c) for c in cards]
+        normalized = [c for c in normalized if c]
+        done = bool(data.get("done", False)) or (len(normalized) == 0)
+        return {"cards": normalized, "done": done}
+    return {"cards": [], "done": True}
 
-    return []
+
+def chat_reflect(chat: Any, deck_summary: List[str], limit: int, log_path: str, reflection_prompt: str | None = None) -> Dict[str, Any]:
+    base = (
+        "You are a reflective and critical learner tasked with creating high-quality Anki flashcards from lecture materials. "
+        "Review your last set of cards with a deep and analytical mindset. Goals: coverage, gaps, inaccuracies, depth, clarity/atomicity, and cross-concept connections.\n"
+        "First, write a concise reflection (≤1200 chars). Then provide improved or additional cards.\n"
+        f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
+    )
+    deck_summary_json = json.dumps(deck_summary or [], ensure_ascii=False)
+    prompt = (reflection_prompt or base) + f"\nDeck summary (Front or Cloze Text only): {deck_summary_json}"
+    parts: List[Dict[str, Any]] = [{"text": prompt}]
+    response = chat.send_message(parts, request_options={"timeout": 180})
+    text = getattr(response, "text", None) or ""
+    print(f"[Chat/Reflect] Response snippet: {text[:200].replace('\n',' ')}...")
+    _append_session_log(log_path, "reflection", parts, text, False)
+    s = _strip_code_fences(text)
+    try:
+        data = json.loads(s)
+    except Exception:
+        return {"reflection": "", "cards": [], "done": True}
+    if isinstance(data, dict):
+        cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
+        normalized = [_normalize_card_object(c) for c in cards]
+        normalized = [c for c in normalized if c]
+        done = bool(data.get("done", False)) or (len(normalized) == 0)
+        return {"reflection": str(data.get("reflection", "")), "cards": normalized, "done": done}
+    return {"reflection": "", "cards": [], "done": True}
+
+
+def _normalize_card_object(card: Dict[str, Any]) -> Dict[str, Any] | None:
+    """Normalize a model-returned card into { model_name, fields, tags?, media? }.
+
+    Accepts variants like {front, back}, {question, answer}, {Text}, or already 'fields'.
+    Infers model_name based on presence of cloze markup or 'Text'. Returns None if invalid.
+    """
+
+    if not isinstance(card, dict):
+        return None
+
+    # If already canonical fields present
+    fields_obj = card.get("fields")
+    model_name = str(card.get("model_name")) if card.get("model_name") else None
+    if isinstance(fields_obj, dict):
+        # Ensure strings
+        fields: Dict[str, str] = {str(k): str(v) for k, v in fields_obj.items() if v is not None}
+        text_val = fields.get("Text", "")
+        front_val = fields.get("Front", "")
+        back_val = fields.get("Back", "")
+        content = f"{text_val} {front_val} {back_val}".lower()
+        if model_name is None:
+            model_name = "Cloze" if "{{c" in content else "Basic"
+        return {
+            "model_name": model_name,
+            "fields": {k: v for k, v in fields.items() if k in ("Text", "Front", "Back") and v},
+            "tags": [str(t) for t in (card.get("tags") or []) if isinstance(t, (str, int))],
+            "media": [m for m in (card.get("media") or []) if isinstance(m, dict)],
+        }
+
+    # Case-insensitive key accessors
+    def _get_ci(keys: List[str]) -> str:
+        for k in keys:
+            if k in card and isinstance(card[k], (str, int)):
+                return str(card[k])
+        # lowercase variants
+        lower_map = {str(k).lower(): k for k in card.keys()}
+        for k in keys:
+            lk = k.lower()
+            if lk in lower_map and isinstance(card[lower_map[lk]], (str, int)):
+                return str(card[lower_map[lk]])
+        return ""
+
+    text = _get_ci(["Text", "text", "cloze"])  # cloze-like
+    front = _get_ci(["Front", "front", "question", "q"])  # basic
+    back = _get_ci(["Back", "back", "answer", "a"])  # basic
+
+    # Determine model
+    is_cloze = False
+    content_all = f"{text} {front} {back}".lower()
+    if "{{c" in content_all:
+        is_cloze = True
+    if text.strip():
+        is_cloze = True
+
+    if is_cloze:
+        val = text.strip() if text.strip() else (front if "{{c" in front.lower() else "")
+        if not val:
+            return None
+        return {
+            "model_name": model_name or "Cloze",
+            "fields": {"Text": val},
+            "tags": [str(t) for t in (card.get("tags") or []) if isinstance(t, (str, int))],
+            "media": [m for m in (card.get("media") or []) if isinstance(m, dict)],
+        }
+
+    # Basic card
+    if not front.strip() and not back.strip():
+        return None
+    return {
+        "model_name": model_name or "Basic",
+        "fields": {"Front": front.strip(), "Back": back.strip()},
+        "tags": [str(t) for t in (card.get("tags") or []) if isinstance(t, (str, int))],
+        "media": [m for m in (card.get("media") or []) if isinstance(m, dict)],
+    }
+
+
+    # legacy prompt and content builders moved to ai_legacy/ai_common
+
+
+    # batch functions moved to ai_batch
+
+
+    # batch functions moved to ai_batch
+
+
+    # batch functions moved to ai_batch
+
+
+    # moved to ai_common
+
+
+    # legacy generator moved to ai_legacy
 
 
