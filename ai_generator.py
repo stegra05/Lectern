@@ -13,6 +13,8 @@ import base64
 import json
 import imghdr
 from typing import Any, Dict, Iterable, List
+import os
+from datetime import datetime
 
 import google.generativeai as genai  # type: ignore
 
@@ -95,6 +97,38 @@ def _compose_multimodal_content(pdf_content: Iterable[Dict[str, Any]], prompt: s
     return parts
 
 
+def _extract_json_array_string(text: str) -> str:
+    """Attempt to extract the first top-level JSON array from a string.
+
+    This is a lenient helper for cases where the model returns prose around
+    the JSON. If no array is found, returns the original text.
+    """
+
+    if not isinstance(text, str):
+        return ""
+
+    # Fast path: looks like JSON already
+    stripped = text.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        return stripped
+
+    # Find first '[' and scan to matching ']'
+    start = stripped.find("[")
+    if start == -1:
+        return text
+    depth = 0
+    for i in range(start, len(stripped)):
+        ch = stripped[i]
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                candidate = stripped[start : i + 1]
+                return candidate
+    return text
+
+
 def generate_cards(pdf_content: List[Dict[str, Any]], examples: str = "") -> List[Dict[str, Any]]:
     """Generate Anki card specifications from parsed PDF content.
 
@@ -122,7 +156,12 @@ def generate_cards(pdf_content: List[Dict[str, Any]], examples: str = "") -> Lis
 
     genai.configure(api_key=config.GEMINI_API_KEY)
 
-    model = genai.GenerativeModel(DEFAULT_MODEL_NAME)
+    generation_config = {
+        "response_mime_type": "application/json",
+        "temperature": 0.2,
+        "max_output_tokens": 8192,
+    }
+    model = genai.GenerativeModel(DEFAULT_MODEL_NAME, generation_config=generation_config)
 
     prompt = _build_prompt(examples=examples)
 
@@ -139,22 +178,89 @@ def generate_cards(pdf_content: List[Dict[str, Any]], examples: str = "") -> Lis
 
     content_parts = _compose_multimodal_content(normalized_pages, prompt)
 
+    # Debug logging of prompt and (later) response
     try:
-        response = model.generate_content(content_parts)
+        logs_dir = os.path.join(os.getcwd(), "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
+        log_path = os.path.join(logs_dir, f"generation-{ts}.json")
+        # Build a redacted/loggable snapshot of parts (avoid dumping base64)
+        loggable_parts: List[Dict[str, Any]] = []
+        for part in content_parts:
+            if "text" in part:
+                txt = str(part.get("text", ""))
+                loggable_parts.append({"text": txt[:20000]})
+            elif "inline_data" in part:
+                inline = part.get("inline_data", {}) or {}
+                data_str = str(inline.get("data", ""))
+                loggable_parts.append(
+                    {
+                        "inline_data": {
+                            "mime_type": inline.get("mime_type", ""),
+                            "data_len": len(data_str),
+                        }
+                    }
+                )
+        with open(log_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "timestamp_utc": ts,
+                    "model": DEFAULT_MODEL_NAME,
+                    "generation_config": generation_config,
+                    "request": {"role": "user", "parts": loggable_parts},
+                },
+                f,
+                ensure_ascii=False,
+            )
+    except Exception:
+        # Logging is best-effort and should not break generation
+        log_path = ""
+
+    try:
+        # Pass parts directly; SDK assembles the request for multimodal input
+        response = model.generate_content(content_parts, request_options={"timeout": 180})
     except Exception as exc:  # Broad catch to surface a helpful message to the CLI
         raise RuntimeError(f"Gemini generation failed: {exc}")
 
     text = getattr(response, "text", None)
     if not text:
-        # Some SDK responses may keep candidates in a different structure.
-        # As a safe default for the initial sketch, return an empty list.
-        return []
+        # Try extracting from candidates/parts
+        try:
+            candidates = getattr(response, "candidates", None) or []
+            for cand in candidates:
+                cand_text = getattr(cand, "text", None)
+                if cand_text:
+                    text = cand_text
+                    break
+                content = getattr(cand, "content", None)
+                parts = getattr(content, "parts", []) if content else []
+                for p in parts:
+                    p_text = getattr(p, "text", None)
+                    if p_text:
+                        text = p_text
+                        break
+                if text:
+                    break
+        except Exception:
+            text = None
+        if not text:
+            return []
+
+    # Best-effort logging of the response text
+    if log_path:
+        try:
+            with open(log_path, "r+", encoding="utf-8") as f:
+                payload = json.load(f)
+                payload["response_text"] = text
+                f.seek(0)
+                json.dump(payload, f, ensure_ascii=False)
+                f.truncate()
+        except Exception:
+            pass
 
     try:
-        data = json.loads(text)
+        data = json.loads(_extract_json_array_string(text))
     except json.JSONDecodeError:
-        # If the model returns non-JSON or pre/post text, attempt to locate the first JSON array
-        # For the initial sketch, prefer failing gracefully.
         return []
 
     if isinstance(data, list):
