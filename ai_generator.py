@@ -21,7 +21,8 @@ import google.generativeai as genai  # type: ignore
 import config
 
 
-DEFAULT_MODEL_NAME = "gemini-2.5-pro"
+DEFAULT_MODEL_NAME = config.DEFAULT_GEMINI_MODEL
+MAX_NOTES = 30
 
 
 def _infer_mime_type(image_bytes: bytes) -> str:
@@ -97,6 +98,7 @@ def _build_prompt(examples: str) -> str:
         "- For debatable or changing facts, you may add a brief source or date in plain text at the end of Back/Text, in parentheses, e.g., (as of 2025).\n\n"
         "Output constraints (critical):\n"
         "- Despite these guidelines, you must return ONLY a strict JSON array of note objects as specified above, using model_name values 'prettify-nord-cloze' or 'prettify-nord-basic' (or 'Cloze'/'Basic').\n"
+        f"- Limit output to at most {MAX_NOTES} notes. Focus on the most central, atomic facts first.\n"
     )
 
     return example_prefix + instructions
@@ -127,35 +129,126 @@ def _compose_multimodal_content(pdf_content: Iterable[Dict[str, Any]], prompt: s
 
 
 def _extract_json_array_string(text: str) -> str:
-    """Attempt to extract the first top-level JSON array from a string.
+    """Extract the first top-level JSON array from text, robust to code fences and quotes.
 
-    This is a lenient helper for cases where the model returns prose around
-    the JSON. If no array is found, returns the original text.
+    - Strips optional ```json ... ``` fences
+    - Tracks quotes and escapes so brackets inside strings don't break matching
+    Returns the best-effort array substring, or the original text if not found.
     """
 
     if not isinstance(text, str):
         return ""
 
-    # Fast path: looks like JSON already
     stripped = text.strip()
+
+    # Remove code fences if present
+    if stripped.startswith("```"):
+        # find the first newline after the opening fence
+        first_nl = stripped.find("\n")
+        if first_nl != -1:
+            # drop the opening fence line (could be ``` or ```json)
+            stripped = stripped[first_nl + 1 :]
+            # remove closing fence if present
+            if stripped.endswith("```"):
+                stripped = stripped[: -3].strip()
+
+    # Fast path
     if stripped.startswith("[") and stripped.endswith("]"):
         return stripped
 
-    # Find first '[' and scan to matching ']'
-    start = stripped.find("[")
-    if start == -1:
-        return text
+    # Scan for top-level array while respecting strings and escapes
+    start = -1
+    in_string = False
+    escape = False
     depth = 0
-    for i in range(start, len(stripped)):
-        ch = stripped[i]
-        if ch == "[":
-            depth += 1
-        elif ch == "]":
-            depth -= 1
-            if depth == 0:
-                candidate = stripped[start : i + 1]
-                return candidate
+    for idx, ch in enumerate(stripped):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        else:
+            if ch == '"':
+                in_string = True
+                continue
+            if ch == "[":
+                if depth == 0:
+                    start = idx
+                depth += 1
+                continue
+            if ch == "]":
+                if depth > 0:
+                    depth -= 1
+                    if depth == 0 and start != -1:
+                        return stripped[start : idx + 1]
+                continue
+
     return text
+
+
+def _salvage_truncated_json_array(candidate: str) -> str:
+    """If the JSON array looks truncated, attempt to trim to the last complete object and close the array.
+
+    Returns the salvaged array string or the original candidate if salvage is not possible.
+    """
+
+    if not isinstance(candidate, str):
+        return candidate
+    s = candidate.strip()
+    if not s.startswith("["):
+        return candidate
+
+    in_string = False
+    escape = False
+    array_depth = 0
+    object_depth = 0
+    last_complete_obj_end = -1
+
+    for idx, ch in enumerate(s):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        else:
+            if ch == '"':
+                in_string = True
+                continue
+            if ch == "[":
+                array_depth += 1
+                continue
+            if ch == "]":
+                array_depth -= 1
+                if array_depth == 0:
+                    last_complete_obj_end = idx
+                    break
+                continue
+            if ch == "{":
+                object_depth += 1
+                continue
+            if ch == "}":
+                if object_depth > 0:
+                    object_depth -= 1
+                    # If we just closed a top-level object within the top-level array
+                    if array_depth == 1 and object_depth == 0:
+                        last_complete_obj_end = idx
+                continue
+
+    if last_complete_obj_end == -1:
+        return candidate
+
+    # Trim to last complete object and close array
+    head = s[: last_complete_obj_end + 1]
+    # Remove trailing commas/spaces after the object if any
+    while len(head) and head[-1] in ", \n\r\t":
+        head = head[:-1]
+    return head + "]"
 
 
 def generate_cards(pdf_content: List[Dict[str, Any]], examples: str = "") -> List[Dict[str, Any]]:
@@ -288,45 +381,23 @@ def generate_cards(pdf_content: List[Dict[str, Any]], examples: str = "") -> Lis
             pass
 
     try:
-        data = json.loads(_extract_json_array_string(text))
+        extracted = _extract_json_array_string(text)
+        try:
+            data = json.loads(extracted)
+        except json.JSONDecodeError:
+            # Try salvage if truncated
+            salvaged = _salvage_truncated_json_array(extracted)
+            data = json.loads(salvaged)
     except json.JSONDecodeError:
         return []
 
-    # Normalize models and ensure default tag if configured
-    def _normalize_model(name: str) -> str:
-        lower = name.strip().lower()
-        if lower in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
-            return config.DEFAULT_BASIC_MODEL
-        if lower in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
-            return config.DEFAULT_CLOZE_MODEL
-        return name
-
-    def _merge_default_tag(tags: List[str]) -> List[str]:
-        if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG:
-            if config.DEFAULT_TAG not in tags:
-                return tags + [config.DEFAULT_TAG]
-        return tags
-
+    # Return the parsed list as-is (no normalization or default tag merging).
+    # Normalization is handled by the CLI layer when creating notes.
     if isinstance(data, list):
-        normalized: List[Dict[str, Any]] = []
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            item["model_name"] = _normalize_model(str(item.get("model_name", "")))
-            item["tags"] = _merge_default_tag([str(t) for t in (item.get("tags") or [])])
-            normalized.append(item)
-        return normalized
+        return [item for item in data if isinstance(item, dict)]
     # If the model wrapped the list, try extracting under a common key
     if isinstance(data, dict) and isinstance(data.get("cards"), list):
-        cards = data["cards"]
-        normalized: List[Dict[str, Any]] = []
-        for item in cards:
-            if not isinstance(item, dict):
-                continue
-            item["model_name"] = _normalize_model(str(item.get("model_name", "")))
-            item["tags"] = _merge_default_tag([str(t) for t in (item.get("tags") or [])])
-            normalized.append(item)
-        return normalized
+        return [item for item in data.get("cards", []) if isinstance(item, dict)]
 
     return []
 

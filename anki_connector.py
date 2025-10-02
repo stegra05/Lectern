@@ -97,3 +97,65 @@ def store_media_file(filename: str, data: bytes) -> str:
     return result
 
 
+def _escape_query_value(value: str) -> str:
+    """Escape a value for inclusion in an AnkiConnect search query string."""
+
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def find_notes(query: str) -> List[int]:
+    """Find note IDs matching an Anki search query string."""
+
+    result = _invoke("findNotes", {"query": query})
+    if not isinstance(result, list):
+        return []
+    return [int(nid) for nid in result if isinstance(nid, int) or (isinstance(nid, str) and str(nid).isdigit())]
+
+
+def notes_info(note_ids: List[int]) -> List[Dict[str, Any]]:
+    """Return notesInfo for the given note IDs."""
+
+    if not note_ids:
+        return []
+    result = _invoke("notesInfo", {"notes": note_ids})
+    if not isinstance(result, list):
+        return []
+    return [ri for ri in result if isinstance(ri, dict)]
+
+
+def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
+    """Sample a few notes' fields from a deck via AnkiConnect and format as examples.
+
+    Returns an empty string if no notes are found or an error occurs.
+    """
+
+    try:
+        deck = _escape_query_value(deck_name)
+        query = f'deck:"{deck}"'
+        ids = find_notes(query)
+        if not ids:
+            return ""
+        ids = ids[:sample_size]
+        infos = notes_info(ids)
+        if not infos:
+            return ""
+
+        lines: List[str] = []
+        for idx, info in enumerate(infos, start=1):
+            fields_obj = info.get("fields", {}) if isinstance(info, dict) else {}
+            # fields_obj is a dict: { fieldName: { "value": str, ... }, ... }
+            values: List[str] = []
+            if isinstance(fields_obj, dict):
+                for _fname, f in fields_obj.items():
+                    if isinstance(f, dict):
+                        v = f.get("value", "")
+                        if isinstance(v, str):
+                            values.append(v)
+            lines.append(f"Example {idx}:")
+            for f_idx, value in enumerate(values, start=1):
+                lines.append(f"  Field {f_idx}: {value}")
+            lines.append("")
+        return "\n".join(lines).strip()
+    except Exception:
+        return ""
+
