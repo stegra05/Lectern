@@ -200,23 +200,13 @@ def main(argv: List[str]) -> int:
     with StepTimer("Start AI session"):
         chat, session_log = start_single_session()
 
-    # Helpers for dedupe and summary
+    # Helpers for dedupe
     def _normalize_card_key(card: Dict[str, str]) -> str:
         fields = card.get("fields") or {}
         value = str(fields.get("Text") or fields.get("Front") or "")
         return " ".join(value.lower().split())
 
-    def _summarize_deck(cards: List[Dict]) -> List[str]:
-        seen = set()
-        summary: List[str] = []
-        for c in cards:
-            key = _normalize_card_key(c)
-            if key and key not in seen:
-                seen.add(key)
-                fields = c.get("fields") or {}
-                value = str(fields.get("Text") or fields.get("Front") or "")
-                summary.append(value)
-        return summary
+    
 
     # Phase 0: Concept map in chat
     concept_map: Dict = {}
@@ -305,9 +295,7 @@ def main(argv: List[str]) -> int:
                     ) as rp:
                         task = rp.add_task("Reflection", total=total_rounds or 1)
                         for round_idx in range(total_rounds):
-                            deck_summary = _summarize_deck(all_cards)
-                            vprint(f"{_C.DIM}[Reflect] summary_size={len(deck_summary)}{_C.RESET}", level=2)
-                            out = chat_reflect(chat, deck_summary=deck_summary, limit=max_batch, log_path=session_log)
+                            out = chat_reflect(chat, limit=max_batch, log_path=session_log)
                             additions = 0
                             for card in out.get("cards", []) or []:
                                 key = _normalize_card_key(card)
@@ -322,9 +310,7 @@ def main(argv: List[str]) -> int:
                 else:
                     p = Progress(total=total_rounds, label="Reflection rounds")
                     for round_idx in range(total_rounds):
-                        deck_summary = _summarize_deck(all_cards)
-                        vprint(f"{_C.DIM}[Reflect] summary_size={len(deck_summary)}{_C.RESET}", level=1)
-                        out = chat_reflect(chat, deck_summary=deck_summary, limit=max_batch, log_path=session_log)
+                        out = chat_reflect(chat, limit=max_batch, log_path=session_log)
                         additions = 0
                         for card in out.get("cards", []) or []:
                             key = _normalize_card_key(card)

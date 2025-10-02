@@ -116,7 +116,7 @@ def chat_generate_more_cards(chat: Any, limit: int, log_path: str) -> Dict[str, 
     return {"cards": [], "done": True}
 
 
-def chat_reflect(chat: Any, deck_summary: List[str], limit: int, log_path: str, reflection_prompt: str | None = None) -> Dict[str, Any]:
+def chat_reflect(chat: Any, limit: int, log_path: str, reflection_prompt: str | None = None) -> Dict[str, Any]:
     base = (
         "You are a reflective and critical learner tasked with creating high-quality Anki flashcards from lecture materials. "
         "Review your last set of cards with a deep and analytical mindset. Goals: coverage, gaps, inaccuracies, depth, clarity/atomicity, and cross-concept connections.\n"
@@ -124,8 +124,7 @@ def chat_reflect(chat: Any, deck_summary: List[str], limit: int, log_path: str, 
         "Include a \"tags\" array per note with 1-2 concise topical tags (lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
         f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
     )
-    deck_summary_json = json.dumps(deck_summary or [], ensure_ascii=False)
-    prompt = (reflection_prompt or base) + f"\nDeck summary (Front or Cloze Text only): {deck_summary_json}"
+    prompt = (reflection_prompt or base)
     parts: List[Dict[str, Any]] = [{"text": prompt}]
     response = chat.send_message(parts, request_options={"timeout": 180})
     text = getattr(response, "text", None) or ""
