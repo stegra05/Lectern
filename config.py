@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import os
 
-from typing import Optional
-
 try:
     # Prefer python-dotenv if available to load .env automatically
     from dotenv import load_dotenv  # type: ignore

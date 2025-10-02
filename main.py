@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import List, Dict, Any
+from typing import List, Dict
 
 import config
 from anki_connector import add_note, check_connection, store_media_file, sample_examples_from_deck
