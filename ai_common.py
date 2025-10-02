@@ -127,25 +127,6 @@ def _append_session_log(
         pass
 
 
-def _log_exchange(stage: str, parts: List[Dict[str, Any]], response_text: str, model_name: str) -> None:
-    try:
-        logs_dir = os.path.join(os.getcwd(), "logs")
-        os.makedirs(logs_dir, exist_ok=True)
-        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
-        log_path = os.path.join(logs_dir, f"{stage}-{ts}.json")
-        payload = {
-            "timestamp_utc": ts,
-            "stage": stage,
-            "model": model_name,
-            "request": {"role": "user", "parts": _build_loggable_parts(parts)},
-            "response_text": response_text,
-        }
-        with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False)
-    except Exception:
-        pass
-
-
 def _extract_json_array_string(text: str) -> str:
     """Extract the first top-level JSON array from text, robust to code fences and quotes.
 
@@ -205,68 +186,6 @@ def _extract_json_array_string(text: str) -> str:
                 continue
 
     return text
-
-
-def _salvage_truncated_json_array(candidate: str) -> str:
-    """If the JSON array looks truncated, attempt to trim to the last complete object and close the array.
-
-    Returns the salvaged array string or the original candidate if salvage is not possible.
-    """
-
-    if not isinstance(candidate, str):
-        return candidate
-    s = candidate.strip()
-    if not s.startswith("["):
-        return candidate
-
-    in_string = False
-    escape = False
-    array_depth = 0
-    object_depth = 0
-    last_complete_obj_end = -1
-
-    for idx, ch in enumerate(s):
-        if in_string:
-            if escape:
-                escape = False
-            elif ch == "\\":
-                escape = True
-            elif ch == '"':
-                in_string = False
-            continue
-        else:
-            if ch == '"':
-                in_string = True
-                continue
-            if ch == "[":
-                array_depth += 1
-                continue
-            if ch == "]":
-                array_depth -= 1
-                if array_depth == 0:
-                    last_complete_obj_end = idx
-                    break
-                continue
-            if ch == "{":
-                object_depth += 1
-                continue
-            if ch == "}":
-                if object_depth > 0:
-                    object_depth -= 1
-                    # If we just closed a top-level object within the top-level array
-                    if array_depth == 1 and object_depth == 0:
-                        last_complete_obj_end = idx
-                continue
-
-    if last_complete_obj_end == -1:
-        return candidate
-
-    # Trim to last complete object and close array
-    head = s[: last_complete_obj_end + 1]
-    # Remove trailing commas/spaces after the object if any
-    while len(head) and head[-1] in ", \n\r\t":
-        head = head[:-1]
-    return head + "]"
 
 
 
