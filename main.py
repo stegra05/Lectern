@@ -17,7 +17,12 @@ from typing import List, Dict
 import config
 from anki_connector import add_note, check_connection, store_media_file, sample_examples_from_deck
 from pdf_parser import extract_content_from_pdf
-from ai_generator import generate_cards
+from ai_generator import (
+    start_single_session,
+    chat_concept_map,
+    chat_generate_more_cards,
+    chat_reflect,
+)
 from utils.cli import C as _C, StepTimer
 
 
@@ -46,6 +51,24 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default=([config.DEFAULT_TAG] if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG else []),
         help="Tags to apply to created notes",
     )
+    parser.add_argument(
+        "--max-notes-per-batch",
+        type=int,
+        default=config.MAX_NOTES_PER_BATCH,
+        help="Maximum number of cards generated per turn",
+    )
+    parser.add_argument(
+        "--reflection-rounds",
+        type=int,
+        default=config.REFLECTION_MAX_ROUNDS,
+        help="Maximum number of reflection iterations",
+    )
+    parser.add_argument(
+        "--enable-reflection",
+        action="store_true" if config.ENABLE_REFLECTION else "store_false",
+        default=config.ENABLE_REFLECTION,
+        help="Enable reflection phase after generation",
+    )
     return parser.parse_args(argv)
 
 
@@ -63,6 +86,7 @@ def main(argv: List[str]) -> int:
         print(f"{_C.BLUE}Context deck:{_C.RESET} {args.context_deck}")
     print(f"{_C.BLUE}AnkiConnect:{_C.RESET} {config.ANKI_CONNECT_URL}")
     print(f"{_C.BLUE}GEMINI_API_KEY:{_C.RESET} {masked_key}")
+    print(f"{_C.DIM}(Config) batch={config.MAX_NOTES_PER_BATCH} reflection_rounds={config.REFLECTION_MAX_ROUNDS} reflection_enabled={config.ENABLE_REFLECTION}{_C.RESET}")
 
     # Check AnkiConnect availability early
     with StepTimer("Check AnkiConnect") as t:
@@ -102,14 +126,94 @@ def main(argv: List[str]) -> int:
         pages = extract_content_from_pdf(args.pdf_path)
         print(f"{_C.DIM}Parsed {len(pages)} pages{_C.RESET}")
 
-    with StepTimer("Generate cards with Gemini") as t:
-        try:
-            cards = generate_cards(pdf_content=[p.__dict__ for p in pages], examples=examples)
-        except Exception as exc:
-            print(f"{_C.RED}Error during generation: {exc}{_C.RESET}")
-            t.fail("Gemini generation error")
-            return 2
+    # Start a single chat session
+    with StepTimer("Start AI session"):
+        chat, session_log = start_single_session()
 
+    # Helpers for dedupe and summary
+    def _normalize_card_key(card: Dict[str, str]) -> str:
+        fields = card.get("fields") or {}
+        value = str(fields.get("Text") or fields.get("Front") or "")
+        return " ".join(value.lower().split())
+
+    def _summarize_deck(cards: List[Dict]) -> List[str]:
+        seen = set()
+        summary: List[str] = []
+        for c in cards:
+            key = _normalize_card_key(c)
+            if key and key not in seen:
+                seen.add(key)
+                fields = c.get("fields") or {}
+                value = str(fields.get("Text") or fields.get("Front") or "")
+                summary.append(value)
+        return summary
+
+    # Phase 0: Concept map in chat
+    concept_map: Dict = {}
+    with StepTimer("Build global concept map") as t:
+        try:
+            concept_map = chat_concept_map(chat, [p.__dict__ for p in pages], session_log)
+            obj = concept_map.get("objectives") if isinstance(concept_map, dict) else None
+            concept_count = len(concept_map.get("concepts", [])) if isinstance(concept_map, dict) else 0
+            print(f"{_C.DIM}[ConceptMap] objectives={len(obj) if isinstance(obj, list) else 0} concepts={concept_count}{_C.RESET}")
+        except Exception as exc:
+            print(f"{_C.YELLOW}Warning: Concept map failed ({exc}); proceeding without it.{_C.RESET}")
+            concept_map = {}
+
+    # Phase 1: Generation turns in chat
+    all_cards: List[Dict] = []
+    seen_keys = set()
+    max_batch = int(getattr(args, "max_notes_per_batch", config.MAX_NOTES_PER_BATCH))
+    with StepTimer("Generate cards") as t:
+        # Prime with examples and concept map before generation
+        if examples.strip():
+            try:
+                chat.send_message([{ "text": f"Style examples to follow:\n{examples}" }])
+            except Exception:
+                pass
+        if concept_map:
+            try:
+                cm_json = json.dumps(concept_map, ensure_ascii=False)
+                chat.send_message([{ "text": f"Global concept map (JSON):\n{cm_json}" }])
+            except Exception:
+                pass
+        # Iteratively request more cards until the model indicates done or no additions
+        for _ in range(50):  # hard cap to avoid accidental loops
+            out = chat_generate_more_cards(chat, limit=max_batch, log_path=session_log)
+            additions = 0
+            for card in out.get("cards", []) or []:
+                key = _normalize_card_key(card)
+                if key and key not in seen_keys:
+                    seen_keys.add(key)
+                    all_cards.append(card)
+                    additions += 1
+            print(f"{_C.DIM}[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}")
+            if out.get("done") or additions == 0:
+                break
+
+    # Phase 2: Reflection
+    if getattr(args, "enable_reflection", config.ENABLE_REFLECTION):
+        with StepTimer("Reflection and improvement") as t:
+            try:
+                rounds = int(getattr(args, "reflection_rounds", config.REFLECTION_MAX_ROUNDS))
+                for _ in range(max(0, rounds)):
+                    deck_summary = _summarize_deck(all_cards)
+                    print(f"{_C.DIM}[Reflect] summary_size={len(deck_summary)}{_C.RESET}")
+                    out = chat_reflect(chat, deck_summary=deck_summary, limit=max_batch, log_path=session_log)
+                    additions = 0
+                    for card in out.get("cards", []) or []:
+                        key = _normalize_card_key(card)
+                        if key and key not in seen_keys:
+                            seen_keys.add(key)
+                            all_cards.append(card)
+                            additions += 1
+                    print(f"{_C.DIM}[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}")
+                    if out.get("done") or additions == 0:
+                        break
+            except Exception as exc:
+                print(f"{_C.YELLOW}Warning: Reflection failed: {exc}{_C.RESET}")
+
+    cards = all_cards
     if not cards:
         print(f"{_C.YELLOW}No cards were generated.{_C.RESET}")
         return 0
