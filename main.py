@@ -21,16 +21,8 @@ import config
 from anki_connector import add_note, check_connection, store_media_file, sample_examples_from_deck
 from pdf_parser import extract_content_from_pdf
 from ai_client import LecternAIClient
-from utils.cli import C as _C, StepTimer, set_verbosity, is_quiet, is_verbose, Progress, vprint
+from utils.cli import C as _C, StepTimer, set_verbosity, is_quiet, Progress, vprint
 from utils.tags import build_grouped_tags
-
-# Optional rich progress bars
-try:
-    from rich.progress import Progress as RichProgress
-    from rich.progress import BarColumn, TimeElapsedColumn, TimeRemainingColumn, TextColumn
-    _HAS_RICH = True
-except Exception:
-    _HAS_RICH = False
 
 
 # CLI helpers are now provided by utils.cli
@@ -234,54 +226,25 @@ def main(argv: List[str]) -> int:
         # Iteratively request more cards until the model indicates done or no additions
         # Make turns cap proportional to desired total cards
         total_turns_cap = max(1, (total_cards_cap + max_batch - 1) // max_batch + 2)
-        if _HAS_RICH and not is_quiet():
-            with RichProgress(
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                "{task.completed}/" + str(total_turns_cap),
-                TimeElapsedColumn(),
-                TimeRemainingColumn(),
-                transient=True,
-            ) as rp:
-                task = rp.add_task("Generation", total=total_turns_cap)
-                for _ in range(total_turns_cap):
-                    remaining = max(0, total_cards_cap - len(all_cards))
-                    if remaining == 0:
-                        break
-                    out = ai.generate_more_cards(limit=min(max_batch, remaining))
-                    additions = 0
-                    for card in out.get("cards", []) or []:
-                        key = _normalize_card_key(card)
-                        if key and key not in seen_keys:
-                            seen_keys.add(key)
-                            all_cards.append(card)
-                            additions += 1
-                    vprint(f"{_C.DIM}[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=2)
-                    # Update dynamic description with real-time counts
-                    rp.update(task, description=f"Generation (gen={len(all_cards)} created={created})")
-                    rp.advance(task, 1)
-                    if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
-                        break
-        else:
-            p = Progress(total=total_turns_cap, label="Generation turns")
-            for turn_idx in range(total_turns_cap):  # hard cap to avoid accidental loops
-                remaining = max(0, total_cards_cap - len(all_cards))
-                if remaining == 0:
-                    break
-                out = ai.generate_more_cards(limit=min(max_batch, remaining))
-                additions = 0
-                for card in out.get("cards", []) or []:
-                    key = _normalize_card_key(card)
-                    if key and key not in seen_keys:
-                        seen_keys.add(key)
-                        all_cards.append(card)
-                        additions += 1
-                vprint(f"{_C.DIM}[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
-                p.update(turn_idx + 1)
-                # Surface real-time counts in basic mode
-                vprint(f"{_C.DIM}[Gen] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
-                if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
-                    break
+        p = Progress(total=total_turns_cap, label="Generation turns")
+        for turn_idx in range(total_turns_cap):  # hard cap to avoid accidental loops
+            remaining = max(0, total_cards_cap - len(all_cards))
+            if remaining == 0:
+                break
+            out = ai.generate_more_cards(limit=min(max_batch, remaining))
+            additions = 0
+            for card in out.get("cards", []) or []:
+                key = _normalize_card_key(card)
+                if key and key not in seen_keys:
+                    seen_keys.add(key)
+                    all_cards.append(card)
+                    additions += 1
+            vprint(f"{_C.DIM}[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
+            p.update(turn_idx + 1)
+            # Surface real-time counts in basic mode
+            vprint(f"{_C.DIM}[Gen] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
+            if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
+                break
 
     # Phase 2: Reflection
     if getattr(args, "enable_reflection", config.ENABLE_REFLECTION) and len(all_cards) > 0 and len(all_cards) < total_cards_cap:
@@ -289,54 +252,25 @@ def main(argv: List[str]) -> int:
             try:
                 rounds = int(getattr(args, "reflection_rounds", config.REFLECTION_MAX_ROUNDS))
                 total_rounds = max(0, rounds)
-                if _HAS_RICH and not is_quiet():
-                    with RichProgress(
-                        TextColumn("[progress.description]{task.description}"),
-                        BarColumn(),
-                        "{task.completed}/" + str(total_rounds),
-                        TimeElapsedColumn(),
-                        TimeRemainingColumn(),
-                        transient=True,
-                    ) as rp:
-                        task = rp.add_task("Reflection", total=total_rounds or 1)
-                        for round_idx in range(total_rounds):
-                            remaining = max(0, total_cards_cap - len(all_cards))
-                            if remaining == 0:
-                                break
-                            out = ai.reflect(limit=min(max_batch, remaining))
-                            additions = 0
-                            for card in out.get("cards", []) or []:
-                                key = _normalize_card_key(card)
-                                if key and key not in seen_keys:
-                                    seen_keys.add(key)
-                                    all_cards.append(card)
-                                    additions += 1
-                            vprint(f"{_C.DIM}[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=2)
-                            # Update dynamic description with real-time counts
-                            rp.update(task, description=f"Reflection (gen={len(all_cards)} created={created})")
-                            rp.advance(task, 1)
-                            if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
-                                break
-                else:
-                    p = Progress(total=total_rounds, label="Reflection rounds")
-                    for round_idx in range(total_rounds):
-                        remaining = max(0, total_cards_cap - len(all_cards))
-                        if remaining == 0:
-                            break
-                        out = ai.reflect(limit=min(max_batch, remaining))
-                        additions = 0
-                        for card in out.get("cards", []) or []:
-                            key = _normalize_card_key(card)
-                            if key and key not in seen_keys:
-                                seen_keys.add(key)
-                                all_cards.append(card)
-                                additions += 1
-                        vprint(f"{_C.DIM}[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
-                        p.update(round_idx + 1)
-                        # Surface real-time counts in basic mode
-                        vprint(f"{_C.DIM}[Reflect] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
-                        if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
-                            break
+                p = Progress(total=total_rounds, label="Reflection rounds")
+                for round_idx in range(total_rounds):
+                    remaining = max(0, total_cards_cap - len(all_cards))
+                    if remaining == 0:
+                        break
+                    out = ai.reflect(limit=min(max_batch, remaining))
+                    additions = 0
+                    for card in out.get("cards", []) or []:
+                        key = _normalize_card_key(card)
+                        if key and key not in seen_keys:
+                            seen_keys.add(key)
+                            all_cards.append(card)
+                            additions += 1
+                    vprint(f"{_C.DIM}[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
+                    p.update(round_idx + 1)
+                    # Surface real-time counts in basic mode
+                    vprint(f"{_C.DIM}[Reflect] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
+                    if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
+                        break
             except Exception as exc:
                 print(f"{_C.YELLOW}Warning: Reflection failed: {exc}{_C.RESET}")
 
@@ -356,107 +290,54 @@ def main(argv: List[str]) -> int:
     with StepTimer(f"Create {len(cards)} notes in Anki"):
         created = 0
         failed = 0
-        if _HAS_RICH and not is_quiet():
-            with RichProgress(
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                "{task.completed}/{task.total}",
-                TimeElapsedColumn(),
-                TimeRemainingColumn(),
-            ) as rp:
-                task = rp.add_task("Creating notes", total=len(cards))
-                for idx, card in enumerate(cards, start=1):
-                    model_name = str(card.get("model_name") or args.model_name)
-                    lower_model = model_name.strip().lower()
-                    if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
-                        model_name = config.DEFAULT_BASIC_MODEL
-                    elif lower_model in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
-                        model_name = config.DEFAULT_CLOZE_MODEL
-                    fields: Dict[str, str] = {
-                        str(k): str(v) for k, v in (card.get("fields") or {}).items()
-                    }
-                    ai_tags = [str(t) for t in (card.get("tags") or [])]
-                    merged_tags = list(dict.fromkeys(ai_tags + (args.tags or [])))
-                    if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
-                        merged_tags.append(config.DEFAULT_TAG)
-                    tags = (
-                        build_grouped_tags(args.deck_name, merged_tags)
-                        if getattr(config, "GROUP_TAGS_BY_DECK", False)
-                        else merged_tags
-                    )
+        progress = Progress(total=len(cards), label="Notes")
+        for idx, card in enumerate(cards, start=1):
+            model_name = str(card.get("model_name") or args.model_name)
+            # Normalize common aliases to configured models
+            lower_model = model_name.strip().lower()
+            if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
+                model_name = config.DEFAULT_BASIC_MODEL
+            elif lower_model in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
+                model_name = config.DEFAULT_CLOZE_MODEL
+            fields: Dict[str, str] = {
+                str(k): str(v) for k, v in (card.get("fields") or {}).items()
+            }
+            # Merge AI-provided tags with CLI defaults and ensure default tag if enabled
+            ai_tags = [str(t) for t in (card.get("tags") or [])]
+            merged_tags = list(dict.fromkeys(ai_tags + (args.tags or [])))
+            if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
+                merged_tags.append(config.DEFAULT_TAG)
+            tags = (
+                build_grouped_tags(args.deck_name, merged_tags)
+                if getattr(config, "GROUP_TAGS_BY_DECK", False)
+                else merged_tags
+            )
 
-                    for media in card.get("media", []) or []:
-                        filename = str(media.get("filename") or f"lectern-{idx}.png")
-                        data_b64 = str(media.get("data") or "")
-                        try:
-                            import base64 as _b64
-                            stored_name = store_media_file(filename, _b64.b64decode(data_b64))
-                            vprint(f"  {_C.BLUE}Media:{_C.RESET} uploaded {stored_name}", level=2)
-                        except Exception as exc:
-                            print(f"  {_C.YELLOW}Warning: Failed to upload media '{filename}': {exc}{_C.RESET}")
-
-                    try:
-                        note_id = add_note(
-                            deck_name=args.deck_name, model_name=model_name, fields=fields, tags=tags
-                        )
-                        created += 1
-                        vprint(f"  {_C.GREEN}[{created}/{len(cards)}]{_C.RESET} Created note {note_id}", level=2)
-                    except Exception as exc:
-                        failed += 1
-                        print(f"  {_C.RED}Error creating note {idx}: {exc}{_C.RESET}")
-                    finally:
-                        # Update dynamic description with real-time counts
-                        rp.update(task, description=f"Creating (gen={len(cards)} created={created} failed={failed})")
-                        rp.advance(task, 1)
-        else:
-            progress = Progress(total=len(cards), label="Notes")
-            for idx, card in enumerate(cards, start=1):
-                model_name = str(card.get("model_name") or args.model_name)
-                # Normalize common aliases to configured models
-                lower_model = model_name.strip().lower()
-                if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
-                    model_name = config.DEFAULT_BASIC_MODEL
-                elif lower_model in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
-                    model_name = config.DEFAULT_CLOZE_MODEL
-                fields: Dict[str, str] = {
-                    str(k): str(v) for k, v in (card.get("fields") or {}).items()
-                }
-                # Merge AI-provided tags with CLI defaults and ensure default tag if enabled
-                ai_tags = [str(t) for t in (card.get("tags") or [])]
-                merged_tags = list(dict.fromkeys(ai_tags + (args.tags or [])))
-                if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
-                    merged_tags.append(config.DEFAULT_TAG)
-                tags = (
-                    build_grouped_tags(args.deck_name, merged_tags)
-                    if getattr(config, "GROUP_TAGS_BY_DECK", False)
-                    else merged_tags
-                )
-
-                # Upload any media provided by the AI before adding the note
-                for media in card.get("media", []) or []:
-                    filename = str(media.get("filename") or f"lectern-{idx}.png")
-                    data_b64 = str(media.get("data") or "")
-                    try:
-                        import base64 as _b64
-
-                        stored_name = store_media_file(filename, _b64.b64decode(data_b64))
-                        vprint(f"  {_C.BLUE}Media:{_C.RESET} uploaded {stored_name}", level=2)
-                    except Exception as exc:
-                        print(f"  {_C.YELLOW}Warning: Failed to upload media '{filename}': {exc}{_C.RESET}")
-
+            # Upload any media provided by the AI before adding the note
+            for media in card.get("media", []) or []:
+                filename = str(media.get("filename") or f"lectern-{idx}.png")
+                data_b64 = str(media.get("data") or "")
                 try:
-                    note_id = add_note(
-                        deck_name=args.deck_name, model_name=model_name, fields=fields, tags=tags
-                    )
-                    created += 1
-                    vprint(f"  {_C.GREEN}[{created}/{len(cards)}]{_C.RESET} Created note {note_id}", level=1)
+                    import base64 as _b64
+
+                    stored_name = store_media_file(filename, _b64.b64decode(data_b64))
+                    vprint(f"  {_C.BLUE}Media:{_C.RESET} uploaded {stored_name}", level=2)
                 except Exception as exc:
-                    failed += 1
-                    print(f"  {_C.RED}Error creating note {idx}: {exc}{_C.RESET}")
-                finally:
-                    progress.update(created + failed)
-                    # Surface real-time counts in basic mode
-                    vprint(f"{_C.DIM}[Create] Status gen={len(cards)} created={created} failed={failed}{_C.RESET}", level=1)
+                    print(f"  {_C.YELLOW}Warning: Failed to upload media '{filename}': {exc}{_C.RESET}")
+
+            try:
+                note_id = add_note(
+                    deck_name=args.deck_name, model_name=model_name, fields=fields, tags=tags
+                )
+                created += 1
+                vprint(f"  {_C.GREEN}[{created}/{len(cards)}]{_C.RESET} Created note {note_id}", level=1)
+            except Exception as exc:
+                failed += 1
+                print(f"  {_C.RED}Error creating note {idx}: {exc}{_C.RESET}")
+            finally:
+                progress.update(created + failed)
+                # Surface real-time counts in basic mode
+                vprint(f"{_C.DIM}[Create] Status gen={len(cards)} created={created} failed={failed}{_C.RESET}", level=1)
     total_elapsed = time.perf_counter() - _run_start
     if not is_quiet():
         print(f"{_C.MAGENTA}{_C.BOLD}Done.{_C.RESET}")
