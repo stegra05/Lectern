@@ -26,6 +26,7 @@ from ai_generator import (
     chat_generate_more_cards,
     chat_reflect,
 )
+from ai_generator import LATEX_STYLE_GUIDE
 from utils.cli import C as _C, StepTimer, set_verbosity, is_quiet, is_verbose, Progress, vprint
 from utils.tags import build_grouped_tags
 
@@ -200,6 +201,11 @@ def main(argv: List[str]) -> int:
     # Start a single chat session
     with StepTimer("Start AI session"):
         chat, session_log = start_single_session()
+        # Prime formatting policy (HTML emphasis, MathJax for math, no Markdown)
+        try:
+            chat.send_message([{ "text": LATEX_STYLE_GUIDE }])
+        except Exception:
+            pass
 
     # Helpers for dedupe
     def _normalize_card_key(card: Dict[str, str]) -> str:
