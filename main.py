@@ -20,13 +20,7 @@ from typing import List, Dict
 import config
 from anki_connector import add_note, check_connection, store_media_file, sample_examples_from_deck
 from pdf_parser import extract_content_from_pdf
-from ai_generator import (
-    start_single_session,
-    chat_concept_map,
-    chat_generate_more_cards,
-    chat_reflect,
-)
-from ai_generator import LATEX_STYLE_GUIDE
+from ai_client import LecternAIClient
 from utils.cli import C as _C, StepTimer, set_verbosity, is_quiet, is_verbose, Progress, vprint
 from utils.tags import build_grouped_tags
 
@@ -200,12 +194,8 @@ def main(argv: List[str]) -> int:
 
     # Start a single chat session
     with StepTimer("Start AI session"):
-        chat, session_log = start_single_session()
-        # Prime formatting policy (HTML emphasis, MathJax for math, no Markdown)
-        try:
-            chat.send_message([{ "text": LATEX_STYLE_GUIDE }])
-        except Exception:
-            pass
+        ai = LecternAIClient()
+        session_log = ai.log_path
 
     # Helpers for dedupe
     def _normalize_card_key(card: Dict[str, str]) -> str:
@@ -219,7 +209,7 @@ def main(argv: List[str]) -> int:
     concept_map: Dict = {}
     with StepTimer("Build global concept map") as t:
         try:
-            concept_map = chat_concept_map(chat, [p.__dict__ for p in pages], session_log)
+            concept_map = ai.concept_map([p.__dict__ for p in pages])
             obj = concept_map.get("objectives") if isinstance(concept_map, dict) else None
             concept_count = len(concept_map.get("concepts", [])) if isinstance(concept_map, dict) else 0
             vprint(f"{_C.DIM}[ConceptMap] objectives={len(obj) if isinstance(obj, list) else 0} concepts={concept_count}{_C.RESET}", level=1)
@@ -230,22 +220,20 @@ def main(argv: List[str]) -> int:
     # Phase 1: Generation turns in chat
     all_cards: List[Dict] = []
     seen_keys = set()
+    # Track creation results early so we can surface counts during earlier phases
+    created = 0
+    failed = 0
     max_batch = int(getattr(args, "max_notes_per_batch", config.MAX_NOTES_PER_BATCH))
     with StepTimer("Generate cards") as t:
-        # Prime with examples and concept map before generation
-        if examples.strip():
-            try:
-                chat.send_message([{ "text": f"Style examples to follow:\n{examples}" }])
-            except Exception:
-                pass
-        if concept_map:
-            try:
-                cm_json = json.dumps(concept_map, ensure_ascii=False)
-                chat.send_message([{ "text": f"Global concept map (JSON):\n{cm_json}" }])
-            except Exception:
-                pass
+        # Compute total cap based on slides and optional hard cap
+        total_cards_cap = int(len(pages) * getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+        hard_cap = int(getattr(config, "MAX_TOTAL_NOTES", 0))
+        if hard_cap > 0:
+            total_cards_cap = min(total_cards_cap, hard_cap)
+        # Examples and concept map are already incorporated via dedicated stages
         # Iteratively request more cards until the model indicates done or no additions
-        total_turns_cap = 50
+        # Make turns cap proportional to desired total cards
+        total_turns_cap = max(1, (total_cards_cap + max_batch - 1) // max_batch + 2)
         if _HAS_RICH and not is_quiet():
             with RichProgress(
                 TextColumn("[progress.description]{task.description}"),
@@ -257,7 +245,10 @@ def main(argv: List[str]) -> int:
             ) as rp:
                 task = rp.add_task("Generation", total=total_turns_cap)
                 for _ in range(total_turns_cap):
-                    out = chat_generate_more_cards(chat, limit=max_batch, log_path=session_log)
+                    remaining = max(0, total_cards_cap - len(all_cards))
+                    if remaining == 0:
+                        break
+                    out = ai.generate_more_cards(limit=min(max_batch, remaining))
                     additions = 0
                     for card in out.get("cards", []) or []:
                         key = _normalize_card_key(card)
@@ -266,13 +257,18 @@ def main(argv: List[str]) -> int:
                             all_cards.append(card)
                             additions += 1
                     vprint(f"{_C.DIM}[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=2)
+                    # Update dynamic description with real-time counts
+                    rp.update(task, description=f"Generation (gen={len(all_cards)} created={created})")
                     rp.advance(task, 1)
-                    if out.get("done") or additions == 0:
+                    if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
                         break
         else:
             p = Progress(total=total_turns_cap, label="Generation turns")
             for turn_idx in range(total_turns_cap):  # hard cap to avoid accidental loops
-                out = chat_generate_more_cards(chat, limit=max_batch, log_path=session_log)
+                remaining = max(0, total_cards_cap - len(all_cards))
+                if remaining == 0:
+                    break
+                out = ai.generate_more_cards(limit=min(max_batch, remaining))
                 additions = 0
                 for card in out.get("cards", []) or []:
                     key = _normalize_card_key(card)
@@ -282,11 +278,13 @@ def main(argv: List[str]) -> int:
                         additions += 1
                 vprint(f"{_C.DIM}[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
                 p.update(turn_idx + 1)
-                if out.get("done") or additions == 0:
+                # Surface real-time counts in basic mode
+                vprint(f"{_C.DIM}[Gen] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
+                if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
                     break
 
     # Phase 2: Reflection
-    if getattr(args, "enable_reflection", config.ENABLE_REFLECTION):
+    if getattr(args, "enable_reflection", config.ENABLE_REFLECTION) and len(all_cards) > 0 and len(all_cards) < total_cards_cap:
         with StepTimer("Reflection and improvement") as t:
             try:
                 rounds = int(getattr(args, "reflection_rounds", config.REFLECTION_MAX_ROUNDS))
@@ -302,7 +300,10 @@ def main(argv: List[str]) -> int:
                     ) as rp:
                         task = rp.add_task("Reflection", total=total_rounds or 1)
                         for round_idx in range(total_rounds):
-                            out = chat_reflect(chat, limit=max_batch, log_path=session_log)
+                            remaining = max(0, total_cards_cap - len(all_cards))
+                            if remaining == 0:
+                                break
+                            out = ai.reflect(limit=min(max_batch, remaining))
                             additions = 0
                             for card in out.get("cards", []) or []:
                                 key = _normalize_card_key(card)
@@ -311,13 +312,18 @@ def main(argv: List[str]) -> int:
                                     all_cards.append(card)
                                     additions += 1
                             vprint(f"{_C.DIM}[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=2)
+                            # Update dynamic description with real-time counts
+                            rp.update(task, description=f"Reflection (gen={len(all_cards)} created={created})")
                             rp.advance(task, 1)
-                            if out.get("done") or additions == 0:
+                            if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
                                 break
                 else:
                     p = Progress(total=total_rounds, label="Reflection rounds")
                     for round_idx in range(total_rounds):
-                        out = chat_reflect(chat, limit=max_batch, log_path=session_log)
+                        remaining = max(0, total_cards_cap - len(all_cards))
+                        if remaining == 0:
+                            break
+                        out = ai.reflect(limit=min(max_batch, remaining))
                         additions = 0
                         for card in out.get("cards", []) or []:
                             key = _normalize_card_key(card)
@@ -327,7 +333,9 @@ def main(argv: List[str]) -> int:
                                 additions += 1
                         vprint(f"{_C.DIM}[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
                         p.update(round_idx + 1)
-                        if out.get("done") or additions == 0:
+                        # Surface real-time counts in basic mode
+                        vprint(f"{_C.DIM}[Reflect] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
+                        if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
                             break
             except Exception as exc:
                 print(f"{_C.YELLOW}Warning: Reflection failed: {exc}{_C.RESET}")
@@ -397,6 +405,8 @@ def main(argv: List[str]) -> int:
                         failed += 1
                         print(f"  {_C.RED}Error creating note {idx}: {exc}{_C.RESET}")
                     finally:
+                        # Update dynamic description with real-time counts
+                        rp.update(task, description=f"Creating (gen={len(cards)} created={created} failed={failed})")
                         rp.advance(task, 1)
         else:
             progress = Progress(total=len(cards), label="Notes")
@@ -445,6 +455,8 @@ def main(argv: List[str]) -> int:
                     print(f"  {_C.RED}Error creating note {idx}: {exc}{_C.RESET}")
                 finally:
                     progress.update(created + failed)
+                    # Surface real-time counts in basic mode
+                    vprint(f"{_C.DIM}[Create] Status gen={len(cards)} created={created} failed={failed}{_C.RESET}", level=1)
     total_elapsed = time.perf_counter() - _run_start
     if not is_quiet():
         print(f"{_C.MAGENTA}{_C.BOLD}Done.{_C.RESET}")
