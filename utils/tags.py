@@ -42,7 +42,6 @@ def build_grouped_tags(deck_name: str, tags: Iterable[str]) -> List[str]:
 
     Examples
     - deck: "Econ::Macro", tag: "gdp" -> "econ::macro::gdp"
-    - with TAG_GROUP_ROOT="lectern": -> "lectern::econ::macro::gdp"
     """
 
     deck_path = _deck_path_slug(deck_name)
@@ -51,9 +50,7 @@ def build_grouped_tags(deck_name: str, tags: Iterable[str]) -> List[str]:
     if not deck_path:
         return normalized_tags
 
-    root = (getattr(config, "TAG_GROUP_ROOT", "") or "").strip()
-    prefix = (root + "::") if root else ""
-    prefix += deck_path + "::"
+    prefix = deck_path + "::"
     return [prefix + t for t in normalized_tags]
 
 

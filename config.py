@@ -64,13 +64,11 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
 
 # Group tags under the destination deck using Anki's hierarchical tag separator '::'.
 # Example: deck "Econ::Macro", tag "gdp" -> "econ::macro::gdp".
-# Optional TAG_GROUP_ROOT adds a root namespace like "lectern::".
 GROUP_TAGS_BY_DECK: bool = os.getenv("GROUP_TAGS_BY_DECK", "true").lower() not in (
     "0",
     "false",
     "no",
 )
-TAG_GROUP_ROOT: str = os.getenv("TAG_GROUP_ROOT", "")
 
 
 def assert_required_config() -> None:
@@ -90,9 +88,6 @@ def assert_required_config() -> None:
 # Batch generation and reflection settings
 # Maximum notes the model should emit per batch. Keep small to avoid truncation.
 MAX_NOTES_PER_BATCH: int = int(os.getenv("MAX_NOTES_PER_BATCH", "30"))
-
-# Number of pages to include per generation window (sliding through the PDF)
-PAGE_WINDOW_SIZE: int = int(os.getenv("PAGE_WINDOW_SIZE", "6"))
 
 # Maximum number of reflection rounds to attempt after initial generation
 REFLECTION_MAX_ROUNDS: int = int(os.getenv("REFLECTION_MAX_ROUNDS", "2"))
