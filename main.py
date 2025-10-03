@@ -27,6 +27,7 @@ from ai_generator import (
     chat_reflect,
 )
 from utils.cli import C as _C, StepTimer, set_verbosity, is_quiet, is_verbose, Progress, vprint
+from utils.tags import build_grouped_tags
 
 # Optional rich progress bars
 try:
@@ -364,7 +365,11 @@ def main(argv: List[str]) -> int:
                     merged_tags = list(dict.fromkeys(ai_tags + (args.tags or [])))
                     if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
                         merged_tags.append(config.DEFAULT_TAG)
-                    tags = merged_tags
+                    tags = (
+                        build_grouped_tags(args.deck_name, merged_tags)
+                        if getattr(config, "GROUP_TAGS_BY_DECK", False)
+                        else merged_tags
+                    )
 
                     for media in card.get("media", []) or []:
                         filename = str(media.get("filename") or f"lectern-{idx}.png")
@@ -405,7 +410,11 @@ def main(argv: List[str]) -> int:
                 merged_tags = list(dict.fromkeys(ai_tags + (args.tags or [])))
                 if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
                     merged_tags.append(config.DEFAULT_TAG)
-                tags = merged_tags
+                tags = (
+                    build_grouped_tags(args.deck_name, merged_tags)
+                    if getattr(config, "GROUP_TAGS_BY_DECK", False)
+                    else merged_tags
+                )
 
                 # Upload any media provided by the AI before adding the note
                 for media in card.get("media", []) or []:

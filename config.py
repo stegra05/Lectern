@@ -62,6 +62,16 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
     "no",
 )
 
+# Group tags under the destination deck using Anki's hierarchical tag separator '::'.
+# Example: deck "Econ::Macro", tag "gdp" -> "econ::macro::gdp".
+# Optional TAG_GROUP_ROOT adds a root namespace like "lectern::".
+GROUP_TAGS_BY_DECK: bool = os.getenv("GROUP_TAGS_BY_DECK", "true").lower() not in (
+    "0",
+    "false",
+    "no",
+)
+TAG_GROUP_ROOT: str = os.getenv("TAG_GROUP_ROOT", "")
+
 
 def assert_required_config() -> None:
     """Raise a ValueError if critical configuration is missing.
