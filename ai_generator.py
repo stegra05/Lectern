@@ -30,6 +30,20 @@ from utils.cli import vprint, is_verbose
 
 DEFAULT_MODEL_NAME = config.DEFAULT_GEMINI_MODEL
 
+LATEX_STYLE_GUIDE = (
+    "Formatting policy:\n"
+    "- Use LaTeX/MathJax for math: inline with \\( ... \\), display with \\[ ... \\].\n"
+    "- Use HTML for non-math emphasis: <b>...</b> or <strong>...</strong>; italics with <i>...</i> or <em>...</em>.\n"
+    "- For math bold: \\textbf{...} (text), \\mathbf{...} or \\boldsymbol{...} (symbols). Do not use HTML inside math.\n"
+    "- Never use Markdown (no **bold**, headers, or code fences).\n"
+    "- JSON must escape backslashes (e.g., \\\\frac, \\\\alpha).\n"
+    "Examples:\n"
+    '  Basic: {"model_name":"Basic","fields":{"Front":"State the quadratic formula.", '
+    '"Back":"Key idea: <b>roots</b>. Formula: \\(x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\\)."},"tags":["algebra"]}\n'
+    '  Cloze: {"model_name":"Cloze","fields":{"Text":"The derivative of \\(x^n\\) is '
+    '{{c1::\\(n x^{n-1}\\)}}."},"tags":["calculus"]}\n'
+)
+
 def start_single_session() -> Tuple[Any, str]:
     if not config.GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY is not set. Export it before running Lectern.")
@@ -81,6 +95,7 @@ def chat_generate_more_cards(chat: Any, limit: int, log_path: str) -> Dict[str, 
         "- Prefer cloze when natural; otherwise Basic Front/Back.\n"
         "- For each note, include a \"tags\" array with 1-2 concise topical tags that categorize the content (lowercase kebab-case, ASCII, hyphens only; avoid generic terms; do not include \"lectern\" or deck/model names).\n"
         "- Use consistent tag names across related notes to cluster them.\n"
+        f"{LATEX_STYLE_GUIDE}"
         "- Return ONLY JSON: either an array of note objects or {\"cards\": [...], \"done\": bool}. No prose.\n"
         "- If no more high-quality cards remain, return an empty array or {\"cards\": [], \"done\": true}.\n"
     )
@@ -122,6 +137,7 @@ def chat_reflect(chat: Any, limit: int, log_path: str, reflection_prompt: str | 
         "Review your last set of cards with a deep and analytical mindset. Goals: coverage, gaps, inaccuracies, depth, clarity/atomicity, and cross-concept connections.\n"
         "First, write a concise reflection (≤1200 chars). Then provide improved or additional cards.\n"
         "Include a \"tags\" array per note with 1-2 concise topical tags (lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
+        f"{LATEX_STYLE_GUIDE}"
         f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
     )
     prompt = (reflection_prompt or base)
