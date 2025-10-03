@@ -8,6 +8,20 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List
 
 
+LATEX_STYLE_GUIDE = (
+    "Formatting policy:\n"
+    "- Use LaTeX/MathJax for math: inline with \\( ... \\), display with \\[ ... \\].\n"
+    "- Use HTML for non-math emphasis: <b>...</b> or <strong>...</strong>; italics with <i>...</i> or <em>...</em>.\n"
+    "- For math bold: \\textbf{...} (text), \\mathbf{...} or \\boldsymbol{...} (symbols). Do not use HTML inside math.\n"
+    "- Never use Markdown (no **bold**, headers, or code fences).\n"
+    "- JSON must escape backslashes (e.g., \\\\frac, \\\\alpha).\n"
+    "Examples:\n"
+    '  Basic: {"model_name":"Basic","fields":{"Front":"State the quadratic formula.", '
+    '"Back":"Key idea: <b>roots</b>. Formula: \\(x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\\)."},"tags":["algebra"]}\n'
+    '  Cloze: {"model_name":"Cloze","fields":{"Text":"The derivative of \\(x^n\\) is '
+    '{{c1::\\(n x^{n-1}\\)}}."},"tags":["calculus"]}\n'
+)
+
 def _infer_mime_type(image_bytes: bytes) -> str:
     """Best-effort inference of image MIME type from raw bytes.
 

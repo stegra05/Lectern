@@ -104,3 +104,10 @@ ENABLE_REFLECTION: bool = os.getenv("ENABLE_REFLECTION", "true").lower() not in 
     "no",
 )
 
+# Caps for total note creation per run
+# Target cards per slide (e.g., 1.5 -> ~50% more cards than slides)
+CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.5"))
+
+# Absolute maximum total notes (0 disables the hard cap)
+MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
+
