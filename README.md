@@ -40,9 +40,11 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ## Optional: auto-load environment variables from a .env file
 # pip install python-dotenv
-## Optional: richer CLI experience (progress bars + tab completion)
-# pip install rich argcomplete
+## Optional: shell autocompletion for the CLI
+# pip install argcomplete
 # activate-global-python-argcomplete  # or eval "$(register-python-argcomplete python)"
+
+Rich-based console output is now enabled by default via `requirements.txt`.
 ```
 
 ### Configuration
@@ -130,9 +132,20 @@ Quality tip
 5. Uploads any media specified by the AI and adds notes to Anki.
 
 Progress & feedback
-- Stage timers show start/finish for each step. If `rich` is installed, generation, reflection, and note creation display live progress bars; otherwise a lightweight textual progress is shown.
-- `--verbose` prints additional status including small AI response snippets; `--quiet` hides non-essential messages.
-- At the end, a concise summary prints counts (pages parsed, cards generated, notes created/failed) and total runtime.
+- Consistent Rich theming and icons: `✔` success (green), `✖` error (red), `⚠` warning (yellow), `ℹ` info (blue), debug is dim.
+- Live progress bars with spinner, bar, `completed/total`, elapsed and ETA for generation, reflection, and note creation.
+- `--verbose` surfaces additional debug lines; `--quiet` hides non-essential messages but still shows errors and failures.
+- Final summary includes parsed pages, generated cards, created/failed notes, and total runtime.
+
+Console output standards
+- Message helpers: `utils.cli.success/info/warn/error/debug` provide consistent styles and cross‑platform output.
+- Tables: `utils.cli.render_table(columns, rows, title=None)` renders data grids with headers.
+- Code: `utils.cli.print_code(code, language="python")` shows syntax‑highlighted snippets.
+- Markdown: `utils.cli.print_markdown(md_text)` renders Markdown sections.
+- Grids: `utils.cli.render_grid(items)` lays out items in responsive columns.
+- Logging: `utils.cli.setup_logging(level)` wires `RichHandler` with levels and tracebacks; use standard `logging` calls.
+- Accessibility: icons plus color cues improve readability; theme can be adjusted centrally in `utils/cli.py`.
+- Performance: Rich rendering is used selectively and respects verbosity to avoid excessive output.
 
 ### Output expectations
 The AI is instructed to return a JSON array like:

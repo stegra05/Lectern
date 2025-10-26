@@ -15,13 +15,14 @@ import json
 import os
 import sys
 import time
+import logging
 from typing import List, Dict
 
 import config
 from anki_connector import add_note, check_connection, store_media_file, sample_examples_from_deck
 from pdf_parser import extract_content_from_pdf
 from ai_client import LecternAIClient
-from utils.cli import C as _C, StepTimer, set_verbosity, is_quiet, Progress, vprint
+from utils.cli import StepTimer, set_verbosity, is_quiet, Progress, info, warn, error, success, setup_logging, debug
 from utils.tags import build_grouped_tags
 
 
@@ -101,6 +102,7 @@ def main(argv: List[str]) -> int:
 
     # Set verbosity early
     set_verbosity(0 if args.quiet else (2 if args.verbose else 1))
+    setup_logging(logging.DEBUG if args.verbose else logging.INFO)
 
     # Interactive mode: prompt for missing required inputs
     if args.interactive:
@@ -118,22 +120,22 @@ def main(argv: List[str]) -> int:
 
     # Validate required inputs for non-interactive runs
     if not args.pdf_path or not args.deck_name:
-        print(f"{_C.RED}Error: --pdf-path and --deck-name are required (or use --interactive).{_C.RESET}")
+        error("--pdf-path and --deck-name are required (or use --interactive).")
         return 2
 
     # Debug summary of inputs and configuration (mask secrets)
     key_set = bool(config.GEMINI_API_KEY)
     masked_key = "<set>" if key_set else "<missing>"
     if not is_quiet():
-        print(f"{_C.MAGENTA}{_C.BOLD}Lectern starting...{_C.RESET}")
-        print(f"{_C.BLUE}PDF:{_C.RESET} {args.pdf_path}")
-        print(f"{_C.BLUE}Deck:{_C.RESET} {args.deck_name}  {_C.BLUE}Model:{_C.RESET} {args.model_name}")
-        print(f"{_C.BLUE}Tags:{_C.RESET} {', '.join(args.tags)}")
+        info("Lectern starting...")
+        info(f"PDF: {args.pdf_path}")
+        info(f"Deck: {args.deck_name}  Model: {args.model_name}")
+        info(f"Tags: {', '.join(args.tags)}")
         if getattr(args, "context_deck", ""):
-            print(f"{_C.BLUE}Context deck:{_C.RESET} {args.context_deck}")
-        print(f"{_C.BLUE}AnkiConnect:{_C.RESET} {config.ANKI_CONNECT_URL}")
-        print(f"{_C.BLUE}GEMINI_API_KEY:{_C.RESET} {masked_key}")
-        print(f"{_C.DIM}(Config) batch={config.MAX_NOTES_PER_BATCH} reflection_rounds={config.REFLECTION_MAX_ROUNDS} reflection_enabled={config.ENABLE_REFLECTION}{_C.RESET}")
+            info(f"Context deck: {args.context_deck}")
+        info(f"AnkiConnect: {config.ANKI_CONNECT_URL}")
+        info(f"GEMINI_API_KEY: {masked_key}")
+        debug(f"(Config) batch={config.MAX_NOTES_PER_BATCH} reflection_rounds={config.REFLECTION_MAX_ROUNDS} reflection_enabled={config.ENABLE_REFLECTION}")
 
     # Start total timer
     _run_start = time.perf_counter()
@@ -141,12 +143,8 @@ def main(argv: List[str]) -> int:
     # Check AnkiConnect availability early
     with StepTimer("Check AnkiConnect") as t:
         if not check_connection():
-            print(
-                f"{_C.RED}Error: Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}{_C.RESET}"
-            )
-            print(
-                f"{_C.YELLOW}Ensure Anki is open and the AnkiConnect add-on is installed and enabled.{_C.RESET}"
-            )
+            error(f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}")
+            warn("Ensure Anki is open and the AnkiConnect add-on is installed and enabled.")
             t.fail("AnkiConnect unreachable")
             return 2
 
@@ -155,15 +153,15 @@ def main(argv: List[str]) -> int:
         try:
             config.assert_required_config()
         except ValueError as exc:
-            print(f"{_C.RED}Error: {exc}{_C.RESET}")
+            error(str(exc))
             t.fail("Missing configuration")
             return 2
 
     # Validate PDF path early
     with StepTimer("Validate inputs") as t:
         if not _validate_pdf_path(args.pdf_path):
-            print(f"{_C.RED}Error: PDF not found or not readable: {args.pdf_path}{_C.RESET}")
-            print(f"{_C.YELLOW}Tip: Check the path and permissions; use an absolute path if unsure.{_C.RESET}")
+            error(f"PDF not found or not readable: {args.pdf_path}")
+            warn("Tip: Check the path and permissions; use an absolute path if unsure.")
             t.fail("Invalid PDF path")
             return 2
 
@@ -173,16 +171,16 @@ def main(argv: List[str]) -> int:
             deck_for_examples = (args.context_deck or args.deck_name)
             examples = sample_examples_from_deck(deck_name=deck_for_examples, sample_size=5)
             if examples.strip():
-                print(f"{_C.DIM}(Loaded style examples via AnkiConnect){_C.RESET}")
+                debug("(Loaded style examples via AnkiConnect)")
             else:
                 t.fail("No examples found via AnkiConnect")
         except Exception as exc:
-            print(f"{_C.YELLOW}Warning: Failed to sample examples via AnkiConnect: {exc}{_C.RESET}")
+            warn(f"Failed to sample examples via AnkiConnect: {exc}")
             # proceed without examples
 
     with StepTimer("Parse PDF"):
         pages = extract_content_from_pdf(args.pdf_path)
-        vprint(f"{_C.DIM}Parsed {len(pages)} pages{_C.RESET}", level=1)
+        debug(f"Parsed {len(pages)} pages", level=1)
 
     # Start a single chat session
     with StepTimer("Start AI session"):
@@ -204,9 +202,9 @@ def main(argv: List[str]) -> int:
             concept_map = ai.concept_map([p.__dict__ for p in pages])
             obj = concept_map.get("objectives") if isinstance(concept_map, dict) else None
             concept_count = len(concept_map.get("concepts", [])) if isinstance(concept_map, dict) else 0
-            vprint(f"{_C.DIM}[ConceptMap] objectives={len(obj) if isinstance(obj, list) else 0} concepts={concept_count}{_C.RESET}", level=1)
+            debug(f"[ConceptMap] objectives={len(obj) if isinstance(obj, list) else 0} concepts={concept_count}")
         except Exception as exc:
-            print(f"{_C.YELLOW}Warning: Concept map failed ({exc}); proceeding without it.{_C.RESET}")
+            warn(f"Concept map failed ({exc}); proceeding without it.")
             concept_map = {}
 
     # Phase 1: Generation turns in chat
@@ -239,10 +237,10 @@ def main(argv: List[str]) -> int:
                     seen_keys.add(key)
                     all_cards.append(card)
                     additions += 1
-            vprint(f"{_C.DIM}[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
+            debug(f"[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}")
             p.update(turn_idx + 1)
             # Surface real-time counts in basic mode
-            vprint(f"{_C.DIM}[Gen] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
+            debug(f"[Gen] Status gen={len(all_cards)} created={created}")
             if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
                 break
 
@@ -265,26 +263,26 @@ def main(argv: List[str]) -> int:
                             seen_keys.add(key)
                             all_cards.append(card)
                             additions += 1
-                    vprint(f"{_C.DIM}[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}{_C.RESET}", level=1)
+                    debug(f"[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}")
                     p.update(round_idx + 1)
                     # Surface real-time counts in basic mode
-                    vprint(f"{_C.DIM}[Reflect] Status gen={len(all_cards)} created={created}{_C.RESET}", level=1)
+                    debug(f"[Reflect] Status gen={len(all_cards)} created={created}")
                     if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
                         break
             except Exception as exc:
-                print(f"{_C.YELLOW}Warning: Reflection failed: {exc}{_C.RESET}")
+                warn(f"Reflection failed: {exc}")
 
     cards = all_cards
     if not cards:
-        print(f"{_C.YELLOW}No cards were generated.{_C.RESET}")
+        warn("No cards were generated.")
         return 0
 
     # Interactive confirmation before creating notes
     if args.interactive and not is_quiet():
-        print(f"{_C.BLUE}Ready to create{_C.RESET} {len(cards)} notes in deck '{args.deck_name}'.")
+        info(f"Ready to create {len(cards)} notes in deck '{args.deck_name}'.")
         proceed = _prompt("Proceed? (y/N)", "N").lower()
         if proceed not in ("y", "yes"):
-            print(f"{_C.YELLOW}Cancelled before creating notes.{_C.RESET}")
+            warn("Cancelled before creating notes.")
             return 0
 
     with StepTimer(f"Create {len(cards)} notes in Anki"):
@@ -321,28 +319,28 @@ def main(argv: List[str]) -> int:
                     import base64 as _b64
 
                     stored_name = store_media_file(filename, _b64.b64decode(data_b64))
-                    vprint(f"  {_C.BLUE}Media:{_C.RESET} uploaded {stored_name}", level=2)
+                    debug(f"  Media: uploaded {stored_name}", level=2)
                 except Exception as exc:
-                    print(f"  {_C.YELLOW}Warning: Failed to upload media '{filename}': {exc}{_C.RESET}")
+                    warn(f"  Failed to upload media '{filename}': {exc}")
 
             try:
                 note_id = add_note(
                     deck_name=args.deck_name, model_name=model_name, fields=fields, tags=tags
                 )
                 created += 1
-                vprint(f"  {_C.GREEN}[{created}/{len(cards)}]{_C.RESET} Created note {note_id}", level=1)
+                success(f"  [{created}/{len(cards)}] Created note {note_id}")
             except Exception as exc:
                 failed += 1
-                print(f"  {_C.RED}Error creating note {idx}: {exc}{_C.RESET}")
+                error(f"  Error creating note {idx}: {exc}")
             finally:
                 progress.update(created + failed)
                 # Surface real-time counts in basic mode
-                vprint(f"{_C.DIM}[Create] Status gen={len(cards)} created={created} failed={failed}{_C.RESET}", level=1)
+                debug(f"[Create] Status gen={len(cards)} created={created} failed={failed}")
     total_elapsed = time.perf_counter() - _run_start
     if not is_quiet():
-        print(f"{_C.MAGENTA}{_C.BOLD}Done.{_C.RESET}")
-        print(
-            f"{_C.BLUE}Summary:{_C.RESET} pages={len(pages)} generated={len(cards)} created={created} failed={failed} elapsed={total_elapsed:.2f}s"
+        success("Done.")
+        info(
+            f"Summary: pages={len(pages)} generated={len(cards)} created={created} failed={failed} elapsed={total_elapsed:.2f}s"
         )
     return 0
 

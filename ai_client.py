@@ -16,7 +16,7 @@ from ai_common import (
     _extract_json_object_string,
 )
 from ai_cards import _normalize_card_object
-from utils.cli import vprint
+from utils.cli import debug
 
 
 class LecternAIClient:
@@ -36,7 +36,7 @@ class LecternAIClient:
         )
         self._chat = self._model.start_chat(history=[])
         self._log_path = _start_session_log()
-        vprint("[AI] Started session via LecternAIClient", level=1)
+        debug("[AI] Started session via LecternAIClient")
 
     @property
     def log_path(self) -> str:
@@ -51,10 +51,10 @@ class LecternAIClient:
             "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array). No prose.\n"
         )
         parts = _compose_multimodal_content(pdf_content, prompt)
-        vprint(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}", level=2)
+        debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
         response = self._chat.send_message(parts, request_options={"timeout": 180})
         text = getattr(response, "text", None) or ""
-        vprint(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\n',' ')}...", level=2)
+        debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\n',' ')}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, False)
         s = _strip_code_fences(text)
         try:
@@ -80,7 +80,7 @@ class LecternAIClient:
         parts: List[Dict[str, Any]] = [{"text": prompt}]
         response = self._chat.send_message(parts, request_options={"timeout": 180})
         text = getattr(response, "text", None) or ""
-        vprint(f"[Chat/Gen] Response snippet: {text[:200].replace('\n',' ')}...", level=2)
+        debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\n',' ')}...")
         _append_session_log(self._log_path, "generation", parts, text, False)
         s = _strip_code_fences(text)
         try:
@@ -121,7 +121,7 @@ class LecternAIClient:
         parts: List[Dict[str, Any]] = [{"text": prompt}]
         response = self._chat.send_message(parts, request_options={"timeout": 180})
         text = getattr(response, "text", None) or ""
-        vprint(f"[Chat/Reflect] Response snippet: {text[:200].replace('\n',' ')}...", level=2)
+        debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\n',' ')}...")
         _append_session_log(self._log_path, "reflection", parts, text, False)
         s = _strip_code_fences(text)
         try:
