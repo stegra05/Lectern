@@ -14,7 +14,7 @@ requests>=2.31.0,<2.33
 
 # Optional CLI enhancements (not strictly required at runtime)
 # argcomplete>=3.3.0,<4.0
-# rich>=13.7.1,<14.0
+rich>=13.7.1,<14.0
 
 
 
