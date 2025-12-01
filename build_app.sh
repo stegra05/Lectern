@@ -4,14 +4,9 @@ set -e
 echo "Building Frontend..."
 cd gui/frontend
 
-# Only install if package.json changed or node_modules doesn't exist
-if [ package.json -nt node_modules/.package-lock.json ] || [ ! -d "node_modules" ]; then
-    echo "Installing npm dependencies..."
-    npm install
-    touch node_modules/.package-lock.json
-else
-    echo "Skipping npm install (dependencies up to date)"
-fi
+# Ensure dependencies are installed and up to date
+echo "Installing npm dependencies..."
+npm install
 
 npm run build
 cd ../..
@@ -55,6 +50,7 @@ pyinstaller --name Lectern \
     --add-data "gui/backend:backend" \
     --paths . \
     --paths gui/backend \
+    --hidden-import=pywebview \
     --hidden-import=uvicorn \
     --hidden-import=uvicorn.logging \
     --hidden-import=uvicorn.loops \

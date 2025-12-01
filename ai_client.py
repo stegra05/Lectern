@@ -63,6 +63,7 @@ _ANKI_CARD_SCHEMA = {
         },
         "tags": {"type": "array", "items": {"type": "string"}},
         "slide_topic": {"type": "string", "nullable": True},
+        "slide_number": {"type": "integer", "nullable": True},
         "rationale": {"type": "string", "nullable": True},
         "media": {
             "type": "array", 
@@ -203,6 +204,7 @@ class LecternAIClient:
             "- Metadata:\\n"
             "    - `tags`: 1-2 concise, hierarchical tags (kebab-case, max 3 words). Avoid generic terms.\\n"
             "    - `slide_topic`: The specific section/header (Title Case).\\n"
+            "    - `slide_number`: The integer page number where this concept is primarily found.\\n"
             "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\\n"
             "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
             "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
@@ -328,5 +330,15 @@ class LecternAIClient:
             debug(f"[AI] Restored history with {len(history)} turns")
         except Exception as e:
             debug(f"[AI] Failed to restore history: {e}")
+
+    def count_tokens(self, content: List[Dict[str, Any]]) -> int:
+        """Count tokens for a given content list."""
+        try:
+            response = self._model.count_tokens(content)
+            return response.total_tokens
+        except Exception as e:
+            debug(f"[AI] Token counting failed: {e}")
+            # Fallback to 0 or raise? Let's return 0 and handle upstream
+            return 0
 
 

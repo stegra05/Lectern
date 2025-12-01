@@ -13,6 +13,10 @@ fastapi>=0.109.0
 uvicorn>=0.27.0
 python-multipart>=0.0.9
 
+# GUI
+pywebview>=5.0
+pyobjc-framework-Cocoa>=10.0
+
 
 # Load environment variables from .env (optional, see README)
 # python-dotenv>=1.0.1,<2.0
