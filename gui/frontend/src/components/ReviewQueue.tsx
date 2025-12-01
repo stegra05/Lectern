@@ -1,0 +1,254 @@
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, Trash2, Edit2, Save, X, UploadCloud, AlertCircle } from 'lucide-react';
+import { api, type ProgressEvent } from '../api';
+import { GlassCard } from './GlassCard';
+
+interface ReviewQueueProps {
+    initialCards: any[];
+    onSyncComplete: () => void;
+}
+
+export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) {
+    const [cards, setCards] = useState<any[]>(initialCards);
+    const [editingIndex, setEditingIndex] = useState<number | null>(null);
+    const [editForm, setEditForm] = useState<any>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+    const [syncLogs, setSyncLogs] = useState<ProgressEvent[]>([]);
+
+    useEffect(() => {
+        setCards(initialCards);
+    }, [initialCards]);
+
+    const handleDelete = async (index: number) => {
+        try {
+            await api.deleteDraft(index);
+            const newCards = [...cards];
+            newCards.splice(index, 1);
+            setCards(newCards);
+        } catch (e) {
+            console.error("Failed to delete draft", e);
+        }
+    };
+
+    const startEdit = (index: number) => {
+        setEditingIndex(index);
+        setEditForm(JSON.parse(JSON.stringify(cards[index]))); // Deep copy
+    };
+
+    const cancelEdit = () => {
+        setEditingIndex(null);
+        setEditForm(null);
+    };
+
+    const saveEdit = async (index: number) => {
+        try {
+            await api.updateDraft(index, editForm);
+            const newCards = [...cards];
+            newCards[index] = editForm;
+            setCards(newCards);
+            setEditingIndex(null);
+            setEditForm(null);
+        } catch (e) {
+            console.error("Failed to update draft", e);
+        }
+    };
+
+    const handleFieldChange = (field: string, value: string) => {
+        if (!editForm) return;
+        setEditForm({
+            ...editForm,
+            fields: {
+                ...editForm.fields,
+                [field]: value
+            }
+        });
+    };
+
+    const handleSync = async () => {
+        setIsSyncing(true);
+        setSyncLogs([]);
+        try {
+            await api.syncDrafts((event) => {
+                setSyncLogs(prev => [...prev, event]);
+                if (event.type === 'progress_start') {
+                    setSyncProgress({ current: 0, total: event.data.total });
+                } else if (event.type === 'progress_update') {
+                    setSyncProgress(prev => ({ ...prev, current: event.data.current }));
+                } else if (event.type === 'done') {
+                    onSyncComplete();
+                }
+            });
+        } catch (e) {
+            console.error("Sync failed", e);
+            setIsSyncing(false);
+        }
+    };
+
+    if (isSyncing) {
+        return (
+            <div className="space-y-6">
+                <GlassCard className="border-primary/20 bg-primary/5">
+                    <div className="flex flex-col items-center justify-center py-12 gap-6">
+                        <div className="relative w-16 h-16">
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                    className="text-primary/20"
+                                />
+                                <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                    className="text-primary transition-all duration-300 ease-out"
+                                    strokeDasharray={175.93}
+                                    strokeDashoffset={175.93 - (175.93 * syncProgress.current) / (syncProgress.total || 1)}
+                                />
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center font-mono text-sm font-bold text-primary">
+                                {Math.round((syncProgress.current / (syncProgress.total || 1)) * 100)}%
+                            </div>
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-zinc-200">Syncing to Anki...</h3>
+                            <p className="text-zinc-500 mt-2">Exporting {cards.length} cards to your collection</p>
+                        </div>
+                    </div>
+                </GlassCard>
+
+                <div className="max-h-60 overflow-y-auto space-y-2 font-mono text-xs pr-2 scrollbar-thin scrollbar-thumb-zinc-700">
+                    {syncLogs.map((log, i) => (
+                        <div key={i} className="text-zinc-500">
+                            <span className="opacity-50 mr-2">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
+                            {log.message}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-zinc-100">Review Queue</h2>
+                    <p className="text-zinc-500">Review, edit, or delete cards before syncing to Anki.</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="text-sm font-mono text-zinc-500 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800">
+                        {cards.length} DRAFTS
+                    </div>
+                    <button
+                        onClick={handleSync}
+                        disabled={cards.length === 0}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-zinc-900 rounded-xl font-bold shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <UploadCloud className="w-4 h-4" />
+                        Sync to Anki
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid gap-4">
+                <AnimatePresence mode="popLayout">
+                    {cards.map((card, index) => (
+                        <motion.div
+                            key={index} // Ideally use a unique ID if available
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="group relative"
+                        >
+                            <GlassCard className={`transition-colors ${editingIndex === index ? 'border-primary/50 bg-primary/5' : 'hover:border-zinc-700'}`}>
+                                {editingIndex === index ? (
+                                    // Edit Mode
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <span className="text-xs font-bold text-primary uppercase tracking-wider">Editing Card #{index + 1}</span>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={cancelEdit} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors">
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => saveEdit(index)} className="p-2 bg-primary hover:bg-primary/90 text-zinc-900 rounded-lg transition-colors">
+                                                    <Save className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid gap-4">
+                                            {Object.entries(editForm.fields || {}).map(([key, value]) => (
+                                                <div key={key}>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">{key}</label>
+                                                    <textarea
+                                                        value={value as string}
+                                                        onChange={(e) => handleFieldChange(key, e.target.value)}
+                                                        className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-200 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none min-h-[100px] font-mono"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // View Mode
+                                    <div className="relative pr-12">
+                                        <div className="absolute top-0 right-0 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={() => startEdit(index)}
+                                                className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-primary transition-colors"
+                                                title="Edit"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(index)}
+                                                className="p-2 hover:bg-red-500/10 rounded-lg text-zinc-400 hover:text-red-400 transition-colors"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {Object.entries(card.fields || {}).map(([key, value]) => (
+                                                <div key={key}>
+                                                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">{key}</div>
+                                                    <div className="text-sm text-zinc-300 leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: String(value) }} />
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="mt-4 flex flex-wrap gap-2">
+                                            {(card.tags || []).map((tag: string) => (
+                                                <span key={tag} className="px-2 py-0.5 bg-zinc-800 text-zinc-500 text-[10px] rounded-md font-medium border border-zinc-700/50 uppercase tracking-wide">
+                                                    #{tag}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </GlassCard>
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
+
+                {cards.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-zinc-500 border-2 border-dashed border-zinc-800 rounded-xl">
+                        <AlertCircle className="w-8 h-8 mb-3 opacity-20" />
+                        <p>No drafts remaining.</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

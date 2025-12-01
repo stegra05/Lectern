@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw } from 'lucide-react';
+import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw, Clock, ChevronRight, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
-import { api, type ProgressEvent } from './api';
+import { api, type ProgressEvent, type HistoryEntry } from './api';
 import { GlassCard } from './components/GlassCard';
 import { FilePicker } from './components/FilePicker';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingFlow } from './components/OnboardingFlow';
+import { ReviewQueue } from './components/ReviewQueue';
 
 function App() {
-  const [step, setStep] = useState<'config' | 'generating' | 'done'>('config');
+  const [step, setStep] = useState<'dashboard' | 'config' | 'generating' | 'review' | 'done'>('dashboard');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [deckName, setDeckName] = useState('');
   const [logs, setLogs] = useState<ProgressEvent[]>([]);
@@ -19,6 +20,10 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isCheckingHealth, setIsCheckingHealth] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [estimation, setEstimation] = useState<{ tokens: number, cost: number } | null>(null);
+  const [isEstimating, setIsEstimating] = useState(false);
+  const [previewSlide, setPreviewSlide] = useState<number | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const refreshHealth = async () => {
@@ -49,6 +54,10 @@ function App() {
       } else {
         setShowOnboarding(false);
       }
+
+      // Fetch history
+      const hist = await api.getHistory();
+      setHistory(hist);
     };
 
     // Initial check
@@ -82,6 +91,26 @@ function App() {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  useEffect(() => {
+    const fetchEstimate = async () => {
+      if (!pdfFile) {
+        setEstimation(null);
+        return;
+      }
+      setIsEstimating(true);
+      try {
+        const est = await api.estimateCost(pdfFile);
+        setEstimation(est);
+      } catch (e) {
+        console.error(e);
+        setEstimation(null);
+      } finally {
+        setIsEstimating(false);
+      }
+    };
+    fetchEstimate();
+  }, [pdfFile]);
+
   const handleGenerate = async () => {
     if (!pdfFile || !deckName) return;
     setStep('generating');
@@ -100,7 +129,7 @@ function App() {
           } else if (event.type === 'card_generated') {
             setCards(prev => [event.data.card, ...prev]);
           } else if (event.type === 'done') {
-            setStep('done');
+            setStep('review');
           }
         }
       );
@@ -111,12 +140,14 @@ function App() {
   };
 
   const handleReset = () => {
-    setStep('config');
+    setStep('dashboard');
     setPdfFile(null);
     setDeckName('');
     setLogs([]);
     setCards([]);
     setProgress({ current: 0, total: 0 });
+    // Refresh history
+    api.getHistory().then(setHistory);
   };
 
   const containerVariants = {
@@ -204,6 +235,90 @@ function App() {
         </header>
 
         <AnimatePresence mode="wait">
+          {step === 'dashboard' && !showOnboarding && (
+            <motion.div
+              key="dashboard"
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              exit={{ opacity: 0, y: -20 }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+            >
+              {/* Sidebar: Recent Files */}
+              <motion.div variants={itemVariants} className="lg:col-span-4 space-y-6">
+                <GlassCard className="h-full min-h-[500px] flex flex-col">
+                  <div className="flex items-center gap-3 mb-6">
+                    <Clock className="w-5 h-5 text-primary" />
+                    <h2 className="text-lg font-semibold text-zinc-200">Recent Sessions</h2>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2 scrollbar-thin scrollbar-thumb-zinc-800">
+                    {history.length === 0 ? (
+                      <div className="text-zinc-500 text-sm italic text-center py-10">
+                        No recent sessions found.
+                      </div>
+                    ) : (
+                      history.map((entry) => (
+                        <button
+                          key={entry.id}
+                          onClick={() => {
+                            setDeckName(entry.deck);
+                            setStep('config');
+                            // Ideally we'd set the file too, but browser security prevents it.
+                            // We could show a hint to re-select the file.
+                          }}
+                          className="w-full text-left p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-primary/50 hover:bg-zinc-800/50 transition-all group"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="font-medium text-zinc-300 truncate w-full pr-2">{entry.filename}</span>
+                            {entry.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />}
+                            {entry.status === 'draft' && <div className="w-2 h-2 rounded-full bg-yellow-500 mt-1.5 shrink-0" />}
+                            {entry.status === 'error' && <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />}
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-zinc-500">
+                            <span className="truncate max-w-[120px]">{entry.deck}</span>
+                            <span>{entry.card_count} cards</span>
+                          </div>
+                          <div className="mt-2 text-[10px] text-zinc-600 font-mono">
+                            {new Date(entry.date).toLocaleDateString()}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </GlassCard>
+              </motion.div>
+
+              {/* Main Area: New Generation */}
+              <motion.div variants={itemVariants} className="lg:col-span-8">
+                <GlassCard className="h-full flex flex-col justify-center items-center text-center p-12 border-primary/20 bg-primary/5 relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+                  <div className="w-20 h-20 bg-primary/20 rounded-3xl flex items-center justify-center mb-8 text-primary shadow-[0_0_30px_rgba(0,0,0,0.2)] shadow-primary/20">
+                    <Plus className="w-10 h-10" />
+                  </div>
+
+                  <h2 className="text-3xl font-bold text-white mb-4">Start New Generation</h2>
+                  <p className="text-zinc-400 max-w-md mb-10 leading-relaxed">
+                    Create a new Anki deck from your lecture slides. Lectern uses AI to extract concepts and generate high-quality cards.
+                  </p>
+
+                  <button
+                    onClick={() => {
+                      setDeckName('');
+                      setPdfFile(null);
+                      setStep('config');
+                    }}
+                    className="px-8 py-4 bg-primary hover:bg-primary/90 text-zinc-900 rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all flex items-center gap-3"
+                  >
+                    Create New Deck
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </GlassCard>
+              </motion.div>
+            </motion.div>
+          )}
+
           {step === 'config' && !showOnboarding && (
             <motion.div
               key="config"
@@ -213,6 +328,15 @@ function App() {
               exit={{ opacity: 0, y: -20 }}
               className="grid grid-cols-1 lg:grid-cols-12 gap-8"
             >
+              <motion.div variants={itemVariants} className="lg:col-span-12 mb-4">
+                <button
+                  onClick={() => setStep('dashboard')}
+                  className="flex items-center gap-2 text-zinc-500 hover:text-zinc-300 transition-colors text-sm font-medium"
+                >
+                  <RotateCcw className="w-4 h-4" /> Back to Dashboard
+                </button>
+              </motion.div>
+
               <motion.div variants={itemVariants} className="lg:col-span-7 space-y-8">
                 <GlassCard className="space-y-6">
                   <div className="flex items-center justify-between">
@@ -253,6 +377,29 @@ function App() {
                     Lectern will analyze your slides, extract key concepts, and generate high-quality Anki cards using the configured Gemini model.
                   </p>
 
+                  {(estimation || isEstimating) && (
+                    <div className="mb-6 p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Estimated Cost</span>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          {isEstimating ? (
+                            <div className="h-6 w-24 bg-zinc-800 animate-pulse rounded" />
+                          ) : (
+                            <>
+                              <span className="text-xl font-bold text-zinc-200">
+                                ${estimation?.cost.toFixed(2)}
+                              </span>
+                              <span className="text-sm text-zinc-500 font-mono">
+                                (~{(estimation?.tokens! / 1000).toFixed(1)}k tokens)
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {isEstimating && <Loader2 className="w-4 h-4 text-zinc-500 animate-spin" />}
+                    </div>
+                  )}
+
                   <button
                     onClick={handleGenerate}
                     disabled={!pdfFile || !deckName || !health?.anki_connected}
@@ -275,7 +422,7 @@ function App() {
             </motion.div>
           )}
 
-          {step !== 'config' && (
+          {(step === 'generating' || step === 'done' || step === 'review') && (
             <motion.div
               key="progress"
               initial={{ opacity: 0 }}
@@ -365,59 +512,83 @@ function App() {
                 )}
               </div>
 
-              {/* Right: Live Preview */}
+              {/* Right: Live Preview or Review Queue */}
               <div className="lg:col-span-2 flex flex-col min-h-0 max-h-[calc(100vh-200px)]">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-zinc-300 flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-zinc-500" /> Live Preview
-                  </h3>
-                  <span className="text-xs font-mono text-zinc-600 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
-                    {cards.length} CARDS
-                  </span>
-                </div>
-
-                <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-12 scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">
-                  <AnimatePresence initial={false}>
-                    {cards.map((card, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-lg relative overflow-hidden group hover:border-zinc-700 transition-colors"
-                      >
-                        <div className="absolute top-0 left-0 w-1 h-full bg-primary/50" />
-                        <div className="absolute top-4 right-4 text-[10px] font-bold text-zinc-600 uppercase tracking-wider border border-zinc-800 px-2 py-1 rounded bg-zinc-950">
-                          {card.model_name || 'Basic'}
-                        </div>
-
-                        <div className="space-y-6 mt-2">
-                          {Object.entries(card.fields || {}).map(([key, value]) => (
-                            <div key={key}>
-                              <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{key}</div>
-                              <div className="text-sm text-zinc-300 leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: String(value) }} />
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="mt-6 flex flex-wrap gap-2">
-                          {(card.tags || []).map((tag: string) => (
-                            <span key={tag} className="px-2.5 py-1 bg-zinc-800 text-zinc-400 text-xs rounded-md font-medium border border-zinc-700/50">
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-
-                  {cards.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/20">
-                      <Loader2 className="w-8 h-8 animate-spin mb-4 opacity-20" />
-                      <p className="font-medium">Waiting for cards...</p>
-                      <p className="text-sm opacity-50 mt-1">Generation will start shortly</p>
+                {step === 'review' ? (
+                  <ReviewQueue
+                    initialCards={cards}
+                    onSyncComplete={() => setStep('done')}
+                  />
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-zinc-300 flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-zinc-500" /> Live Preview
+                      </h3>
+                      <span className="text-xs font-mono text-zinc-600 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
+                        {cards.length} CARDS
+                      </span>
                     </div>
-                  )}
-                </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-12 scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">
+                      <AnimatePresence initial={false}>
+                        {cards.map((card, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-lg relative overflow-hidden group hover:border-zinc-700 transition-colors"
+                          >
+                            <div className="absolute top-0 left-0 w-1 h-full bg-primary/50" />
+                            <div className="absolute top-4 right-4 text-[10px] font-bold text-zinc-600 uppercase tracking-wider border border-zinc-800 px-2 py-1 rounded bg-zinc-950">
+                              {card.model_name || 'Basic'}
+                            </div>
+
+                            <div className="space-y-6 mt-2">
+                              {Object.entries(card.fields || {}).map(([key, value]) => (
+                                <div key={key}>
+                                  <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{key}</div>
+                                  <div className="text-sm text-zinc-300 leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: String(value) }} />
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="mt-6 flex flex-wrap gap-2">
+                              {(card.tags || []).map((tag: string) => (
+                                <span key={tag} className="px-2.5 py-1 bg-zinc-800 text-zinc-400 text-xs rounded-md font-medium border border-zinc-700/50">
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+
+                            {card.slide_number && (
+                              <div className="absolute bottom-4 right-4">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewSlide(card.slide_number);
+                                  }}
+                                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[10px] font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+                                >
+                                  <Layers className="w-3 h-3" />
+                                  SLIDE {card.slide_number}
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+
+                      {cards.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-zinc-600 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/20">
+                          <Loader2 className="w-8 h-8 animate-spin mb-4 opacity-20" />
+                          <p className="font-medium">Waiting for cards...</p>
+                          <p className="text-sm opacity-50 mt-1">Generation will start shortly</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           )}
@@ -425,6 +596,47 @@ function App() {
       </div>
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+      {/* Thumbnail Modal */}
+      <AnimatePresence>
+        {previewSlide !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setPreviewSlide(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              className="relative max-w-4xl max-h-full bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
+            >
+              <div className="absolute top-4 right-4 z-10">
+                <button
+                  onClick={() => setPreviewSlide(null)}
+                  className="p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-md transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-1 bg-zinc-800">
+                <img
+                  src={`${api.getApiUrl()}/thumbnail/${previewSlide}`}
+                  alt={`Slide ${previewSlide}`}
+                  className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
+                />
+              </div>
+              <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center">
+                <span className="font-mono text-zinc-400">SLIDE {previewSlide}</span>
+                <span className="text-xs text-zinc-600">Source Context</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

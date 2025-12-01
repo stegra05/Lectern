@@ -24,10 +24,51 @@ class ProgressEvent:
             "timestamp": time.time()
         })
 
+# Singleton for Draft Store
+class DraftStore:
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DraftStore, cls).__new__(cls)
+            cls._instance.cards = []
+            cls._instance.deck_name = ""
+            cls._instance.model_name = ""
+            cls._instance.tags = []
+        return cls._instance
+
+    def set_drafts(self, cards: List[Dict[str, Any]], deck_name: str, model_name: str, tags: List[str]):
+        self.cards = cards
+        self.deck_name = deck_name
+        self.model_name = model_name
+        self.tags = tags
+        
+    def get_drafts(self):
+        return self.cards
+        
+    def update_draft(self, index: int, card: Dict[str, Any]):
+        if 0 <= index < len(self.cards):
+            self.cards[index] = card
+            return True
+        return False
+        
+    def delete_draft(self, index: int):
+        if 0 <= index < len(self.cards):
+            self.cards.pop(index)
+            return True
+        return False
+        
+    def clear(self):
+        self.cards = []
+        self.deck_name = ""
+        self.model_name = ""
+        self.tags = []
+
 class GenerationService:
     def __init__(self):
         self.logger = logging.getLogger("lectern.gui")
         self.core = LecternGenerationService()
+        self.draft_store = DraftStore()
 
     async def run_generation(
         self,
@@ -38,14 +79,8 @@ class GenerationService:
         context_deck: str = ""
     ) -> AsyncGenerator[str, None]:
         
-        # Create the iterator
-        # Note: resume=False for GUI by default as UI doesn't prompt for it yet, 
-        # but state is saved so it could be enabled easily.
-        # The request was "State/Resume should be supported".
-        # Since GUI doesn't have interactive prompt, we can try to resume automatically if state exists?
-        # Or just default False until UI supports it. 
-        # Let's set resume=True. If no state exists, it proceeds. If state exists, it resumes. 
-        # The core service handles the "if path matches" check.
+        # Clear previous drafts on new run
+        self.draft_store.clear()
         
         iterator = self.core.run(
             pdf_path=pdf_path,
@@ -53,7 +88,8 @@ class GenerationService:
             model_name=model_name,
             tags=tags,
             context_deck=context_deck,
-            resume=True 
+            resume=True,
+            skip_export=True  # Always skip export in GUI now
         )
 
         # Helper to run next(iterator) in thread
@@ -75,9 +111,6 @@ class GenerationService:
             
             # Map Core ServiceEvent to GUI ProgressEvent JSON
             
-            # GUI Event Types: "status", "info", "warning", "error", "progress_start", "progress_update", "card_generated", "note_created", "done"
-            # Core Event Types: 'status', 'info', 'warning', 'error', 'step_start', 'step_end', 'progress_start', 'progress_update', 'card', 'note', 'done'
-            
             gui_type = "status"
             gui_msg = event.message
             gui_data = event.data
@@ -94,24 +127,28 @@ class GenerationService:
                 gui_type = "card_generated"
             elif event.type == "note":
                 gui_type = "note_created"
-                # Adjust message to match old GUI expectation if needed, but core message is fine
             elif event.type == "progress_start":
                 gui_type = "progress_start"
             elif event.type == "progress_update":
                 gui_type = "progress_update"
             elif event.type == "done":
                 gui_type = "done"
+                # Capture cards for draft store
+                if gui_data and "cards" in gui_data:
+                    self.draft_store.set_drafts(
+                        gui_data["cards"], 
+                        deck_name, 
+                        model_name, 
+                        tags
+                    )
             elif event.type == "step_start":
-                # Map step start to status
                 gui_type = "status"
                 gui_msg = f"▶ {event.message}"
             elif event.type == "step_end":
-                # Map step end to info or status
                 if event.data.get("success"):
                     gui_type = "info"
                     gui_msg = f"✔ {event.message}"
                 else:
                     gui_type = "warning"
-                    # gui_msg = f"✖ {event.message}" # core might handle text
             
             yield ProgressEvent(gui_type, gui_msg, gui_data).to_json()

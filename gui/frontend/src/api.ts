@@ -1,7 +1,7 @@
 // Auto-detect API URL based on environment
 // If we're served from the packaged app (port 4173), use that
 // Otherwise use dev server default (port 8000)
-const getApiUrl = () => {
+export const getApiUrl = () => {
     if (typeof window !== 'undefined') {
         const port = window.location.port;
         const hostname = window.location.hostname || 'localhost';
@@ -30,6 +30,16 @@ export interface ProgressEvent {
     message: string;
     data?: any;
     timestamp: number;
+}
+
+export interface HistoryEntry {
+    id: string;
+    filename: string;
+    full_path: string;
+    deck: string;
+    date: string;
+    card_count: number;
+    status: "draft" | "completed" | "error";
 }
 
 // Helper to make fetch calls with timeout
@@ -99,6 +109,34 @@ export const api = {
         return res.json();
     },
 
+    getHistory: async () => {
+        try {
+            const res = await fetchWithTimeout(`${API_URL}/history`, {}, 3000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (error) {
+            console.error('Failed to fetch history:', error);
+            return [];
+        }
+    },
+
+    estimateCost: async (file: File) => {
+        const formData = new FormData();
+        formData.append("pdf_file", file);
+
+        try {
+            const res = await fetchWithTimeout(`${API_URL}/estimate`, {
+                method: "POST",
+                body: formData,
+            }, 10000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (error) {
+            console.error('Failed to estimate cost:', error);
+            throw error;
+        }
+    },
+
     generate: async (req: GenerateRequest, onEvent: (event: ProgressEvent) => void) => {
         const formData = new FormData();
         formData.append("pdf_file", req.pdf_file);
@@ -138,4 +176,61 @@ export const api = {
             }
         }
     },
+
+    getDrafts: async () => {
+        const res = await fetch(`${API_URL}/drafts`);
+        return res.json();
+    },
+
+    updateDraft: async (index: number, card: any) => {
+        const res = await fetch(`${API_URL}/drafts/${index}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ card }),
+        });
+        if (!res.ok) throw new Error("Failed to update draft");
+        return res.json();
+    },
+
+    deleteDraft: async (index: number) => {
+        const res = await fetch(`${API_URL}/drafts/${index}`, {
+            method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete draft");
+        return res.json();
+    },
+
+    syncDrafts: async (onEvent: (event: ProgressEvent) => void) => {
+        const res = await fetch(`${API_URL}/drafts/sync`, {
+            method: "POST",
+        });
+
+        if (!res.body) return;
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+                if (line.trim()) {
+                    try {
+                        const event = JSON.parse(line);
+                        onEvent(event);
+                    } catch (e) {
+                        console.error("Failed to parse event:", line, e);
+                    }
+                }
+            }
+        }
+    },
+
+    getApiUrl: () => API_URL,
 };
