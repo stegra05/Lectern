@@ -6,6 +6,7 @@ import { api, type ProgressEvent } from './api';
 import { GlassCard } from './components/GlassCard';
 import { FilePicker } from './components/FilePicker';
 import { SettingsModal } from './components/SettingsModal';
+import { OnboardingFlow } from './components/OnboardingFlow';
 
 function App() {
   const [step, setStep] = useState<'config' | 'generating' | 'done'>('config');
@@ -15,12 +16,67 @@ function App() {
   const [cards, setCards] = useState<any[]>([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [health, setHealth] = useState<any>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
+  const refreshHealth = async () => {
+    try {
+      const h = await api.checkHealth();
+      setHealth(h);
+      if (!h.anki_connected || !h.gemini_configured) {
+        setShowOnboarding(true);
+      } else {
+        setShowOnboarding(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setShowOnboarding(true);
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
+
+  // Auto-polling for health status
   useEffect(() => {
-    api.checkHealth().then(setHealth).catch(console.error);
-  }, []);
+    const checkHealth = async () => {
+      const result = await api.checkHealth();
+      setHealth(result);
+      setIsCheckingHealth(false); // Ensure this is set to false after the first check
+      if (!result.anki_connected || !result.gemini_configured) {
+        setShowOnboarding(true);
+      } else {
+        setShowOnboarding(false);
+      }
+    };
+
+    // Initial check
+    checkHealth();
+
+    // Determine polling interval based on connection status
+    const getInterval = () => {
+      if (!health) return 3000; // Check frequently until first response
+      if (!health.anki_connected || !health.gemini_configured) {
+        return 3000; // Poll every 3s when something is offline
+      }
+      return 30000; // Poll every 30s when everything is online
+    };
+
+    // Set up polling
+    const interval = setInterval(checkHealth, getInterval());
+
+    // Re-check when window gains focus
+    const handleFocus = () => {
+      checkHealth();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [health?.anki_connected, health?.gemini_configured]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -69,6 +125,17 @@ function App() {
     show: { opacity: 1, y: 0 }
   };
 
+  if (isCheckingHealth) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-zinc-500 text-sm font-mono tracking-wider animate-pulse">INITIALIZING LECTERN...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-zinc-100 font-sans selection:bg-primary/20 selection:text-primary">
       {/* Ambient Background */}
@@ -76,6 +143,12 @@ function App() {
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-500/5 rounded-full blur-[120px]" />
       </div>
+
+      <AnimatePresence>
+        {showOnboarding && (
+          <OnboardingFlow onComplete={refreshHealth} />
+        )}
+      </AnimatePresence>
 
       <div className="relative max-w-6xl mx-auto p-6 lg:p-12">
         <header className="mb-16 flex items-center justify-between">
@@ -99,6 +172,18 @@ function App() {
               <StatusDot label="Anki" active={health?.anki_connected} />
               <div className="w-px h-4 bg-zinc-800" />
               <StatusDot label="Gemini" active={health?.gemini_configured} />
+              <button
+                onClick={async () => {
+                  const result = await api.checkHealth();
+                  setHealth(result);
+                }}
+                className="ml-2 text-zinc-500 hover:text-primary transition-colors"
+                title="Refresh status"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
             </div>
             <button
               onClick={() => setIsSettingsOpen(true)}
@@ -110,7 +195,7 @@ function App() {
         </header>
 
         <AnimatePresence mode="wait">
-          {step === 'config' && (
+          {step === 'config' && !showOnboarding && (
             <motion.div
               key="config"
               variants={containerVariants}
@@ -186,11 +271,11 @@ function App() {
               key="progress"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-200px)]"
+              className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[calc(100vh-200px)]"
             >
               {/* Left: Logs & Progress */}
-              <div className="lg:col-span-1 flex flex-col gap-6">
-                <GlassCard className="flex-1 flex flex-col min-h-0 border-zinc-800/80">
+              <div className="lg:col-span-1 flex flex-col gap-6 max-h-[calc(100vh-200px)]">
+                <GlassCard className="flex-1 flex flex-col min-h-0 max-h-[calc(100vh-400px)] border-zinc-800/80">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="font-semibold text-zinc-300 flex items-center gap-2">
                       <Terminal className="w-4 h-4 text-zinc-500" />
@@ -208,7 +293,7 @@ function App() {
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-zinc-700">
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">
                     {logs.map((log, i) => (
                       <motion.div
                         initial={{ opacity: 0, x: -10 }}
@@ -251,7 +336,7 @@ function App() {
               </div>
 
               {/* Right: Live Preview */}
-              <div className="lg:col-span-2 flex flex-col min-h-0">
+              <div className="lg:col-span-2 flex flex-col min-h-0 max-h-[calc(100vh-200px)]">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-zinc-300 flex items-center gap-2">
                     <Layers className="w-5 h-5 text-zinc-500" /> Live Preview
@@ -261,7 +346,7 @@ function App() {
                   </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-12 scrollbar-thin scrollbar-thumb-zinc-700">
+                <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-12 scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">
                   <AnimatePresence initial={false}>
                     {cards.map((card, i) => (
                       <motion.div

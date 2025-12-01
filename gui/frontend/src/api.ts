@@ -1,4 +1,21 @@
-const API_URL = "http://localhost:8000";
+// Auto-detect API URL based on environment
+// If we're served from the packaged app (port 4173), use that
+// Otherwise use dev server default (port 8000)
+const getApiUrl = () => {
+    if (typeof window !== 'undefined') {
+        const port = window.location.port;
+        const hostname = window.location.hostname || 'localhost';
+
+        // If we're on a specific port (packaged app), use same origin
+        if (port && port !== '80' && port !== '443') {
+            return `http://${hostname}:${port}`;
+        }
+    }
+    // Fallback for dev mode
+    return "http://localhost:8000";
+};
+
+const API_URL = getApiUrl();
 
 export interface GenerateRequest {
     pdf_file: File;
@@ -15,19 +32,70 @@ export interface ProgressEvent {
     timestamp: number;
 }
 
+// Helper to make fetch calls with timeout
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs: number = 5000) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        return response;
+    } catch (error) {
+        clearTimeout(timeout);
+        throw error;
+    }
+};
+
 export const api = {
     checkHealth: async () => {
-        const res = await fetch(`${API_URL}/health`);
-        return res.json();
+        try {
+            const res = await fetchWithTimeout(`${API_URL}/health`, {}, 3000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (error) {
+            console.warn('Health check failed:', error);
+            // Return offline status instead of throwing
+            return {
+                status: "error",
+                anki_connected: false,
+                gemini_configured: false,
+                backend_ready: false
+            };
+        }
     },
 
     getConfig: async () => {
-        const res = await fetch(`${API_URL}/config`);
-        return res.json();
+        try {
+            const res = await fetchWithTimeout(`${API_URL}/config`, {}, 3000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (error) {
+            console.error('Failed to fetch config:', error);
+            throw error;
+        }
     },
 
     getDecks: async () => {
-        const res = await fetch(`${API_URL}/decks`);
+        try {
+            const res = await fetchWithTimeout(`${API_URL}/decks`, {}, 3000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (error) {
+            console.error('Failed to fetch decks:', error);
+            return { decks: [] };
+        }
+    },
+
+    saveConfig: async (config: { gemini_api_key: string }) => {
+        const res = await fetch(`${API_URL}/config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+        });
         return res.json();
     },
 
