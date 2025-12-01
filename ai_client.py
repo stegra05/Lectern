@@ -182,10 +182,15 @@ class LecternAIClient:
             return {"concepts": []}
         return data if isinstance(data, dict) else {"concepts": []}
 
-    def generate_more_cards(self, limit: int) -> Dict[str, Any]:
+    def generate_more_cards(self, limit: int, examples: str = "") -> Dict[str, Any]:
         self._prune_history()
+        example_text = ""
+        if examples:
+            example_text = f"\n- Reference Examples (Mimic this style):\n{examples}\n"
+        
         prompt = (
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\\n"
+            f"{example_text}"
             "- Principles:\\n"
             "    - Atomicity: One idea per card.\\n"
             "    - Minimum Information Principle: Keep questions and answers simple and direct.\\n"
