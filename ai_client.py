@@ -12,7 +12,7 @@ from ai_common import (
     _start_session_log,
     _append_session_log,
 )
-from ai_schemas import CardGenerationResponse, ConceptMapResponse, ReflectionResponse
+from ai_schemas import CardGenerationResponse, ConceptMapResponse, ReflectionResponse, AnkiCard
 from ai_cards import _normalize_card_object
 from utils.cli import debug
 
@@ -84,7 +84,9 @@ class LecternAIClient:
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
         
         try:
-            data = json.loads(text)
+            # Pydantic validation
+            data_obj = ConceptMapResponse.model_validate_json(text)
+            data = data_obj.model_dump()
         except Exception:
             return {"concepts": []}
         return data if isinstance(data, dict) else {"concepts": []}
@@ -95,7 +97,7 @@ class LecternAIClient:
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\n"
             "- Avoid duplicates; complement existing coverage.\n"
             "- Prefer cloze when natural; otherwise Basic Front/Back.\n"
-            "- For each note, include a \"tags\" array with 1-2 concise topical tags that categorize the content (lowercase kebab-case, ASCII, hyphens only; avoid generic terms; do not include \"lectern\" or deck/model names).\n"
+            "- For each note, include a \"tags\" array with 1-2 concise topical tags (max 3 words each) that categorize the content (lowercase kebab-case, ASCII, hyphens only; avoid generic terms; do not include \"lectern\" or deck/model names).\n"
             "- Also include a \"slide_topic\" field: a short, human-readable string (Title Case) identifying the specific slide set or section topic this note belongs to (e.g., \"Neural Networks Intro\", \"Market Structures\"). Extract this from slide headers or context.\n"
             "- Use consistent tag names across related notes to cluster them.\n"
             "- Return ONLY JSON: either an array of note objects or {\"cards\": [...], \"done\": bool}. No prose.\n"
@@ -115,12 +117,20 @@ class LecternAIClient:
         _append_session_log(self._log_path, "generation", parts, text, True)
         
         try:
-            data = json.loads(text)
+            # Pydantic validation
+            data_obj = CardGenerationResponse.model_validate_json(text)
+            data = data_obj.model_dump()
         except Exception:
             return {"cards": [], "done": True}
 
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
+            # With Pydantic, the structure is already correct, but _normalize_card_object handles
+            # some extra logic like deducing model if missing (though Pydantic enforces it now).
+            # We can still run it for safety or just trust Pydantic.
+            # However, _normalize_card_object expects specific keys.
+            # Our AnkiCard model has 'model_name', 'fields', 'tags', 'slide_topic'.
+            # _normalize_card_object handles this structure in its first block.
             normalized = [_normalize_card_object(c) for c in cards]
             normalized = [c for c in normalized if c]
             done = bool(data.get("done", len(normalized) == 0))
@@ -133,7 +143,7 @@ class LecternAIClient:
             "You are a reflective and critical learner tasked with creating high-quality Anki flashcards from lecture materials. "
             "Review your last set of cards with a deep and analytical mindset. Goals: coverage, gaps, inaccuracies, depth, clarity/atomicity, and cross-concept connections.\n"
             "First, write a concise reflection (≤1200 chars). Then provide improved or additional cards.\n"
-            "Include a \"tags\" array per note with 1-2 concise topical tags (lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
+            "Include a \"tags\" array per note with 1-2 concise topical tags (max 3 words each, lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
             "Also include a \"slide_topic\" field for each note (Title Case string) identifying the slide set/section topic.\n"
             f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
         )
@@ -152,7 +162,9 @@ class LecternAIClient:
         _append_session_log(self._log_path, "reflection", parts, text, True)
         
         try:
-            data = json.loads(text)
+            # Pydantic validation
+            data_obj = ReflectionResponse.model_validate_json(text)
+            data = data_obj.model_dump()
         except Exception:
             return {"reflection": "", "cards": [], "done": True}
 
@@ -163,5 +175,43 @@ class LecternAIClient:
             done = bool(data.get("done", False)) or (len(normalized) == 0)
             return {"reflection": str(data.get("reflection", "")), "cards": normalized, "done": done}
         return {"reflection": "", "cards": [], "done": True}
+
+    def get_history(self) -> List[Dict[str, Any]]:
+        """Export chat history as a list of dicts."""
+        serialized = []
+        try:
+            for item in self._chat.history:
+                # item is likely a Content object
+                role = getattr(item, "role", "user")
+                parts = []
+                for part in getattr(item, "parts", []):
+                    p_dict = {}
+                    # Check for text
+                    text = getattr(part, "text", None)
+                    if text:
+                        p_dict["text"] = text
+                    
+                    # Check for inline_data
+                    inline_data = getattr(part, "inline_data", None)
+                    if inline_data:
+                        p_dict["inline_data"] = {
+                            "mime_type": getattr(inline_data, "mime_type", ""),
+                            "data": getattr(inline_data, "data", "")
+                        }
+                    parts.append(p_dict)
+                serialized.append({"role": role, "parts": parts})
+        except Exception as e:
+            debug(f"[AI] Failed to serialize history: {e}")
+            return []
+        return serialized
+
+    def restore_history(self, history: List[Dict[str, Any]]) -> None:
+        """Restore chat history from a list of dicts."""
+        try:
+            # start_chat accepts list of dicts compatible with Content
+            self._chat = self._model.start_chat(history=history)
+            debug(f"[AI] Restored history with {len(history)} turns")
+        except Exception as e:
+            debug(f"[AI] Failed to restore history: {e}")
 
 

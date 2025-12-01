@@ -56,6 +56,9 @@ def extract_content_from_pdf(pdf_path: str) -> List[PageContent]:
             # Extract text
             text_content: str = page.get_text("text") or ""
 
+            if not text_content.strip():
+                print(f"Warning: Page {page_index + 1} has no text. It might be an image scan.")
+
             # Extract images as original bytes
             images: List[bytes] = []
             for image_info in page.get_images(full=True):
