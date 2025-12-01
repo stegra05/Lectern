@@ -35,13 +35,16 @@ class DraftStore:
             cls._instance.deck_name = ""
             cls._instance.model_name = ""
             cls._instance.tags = []
+            cls._instance.entry_id = None
         return cls._instance
 
-    def set_drafts(self, cards: List[Dict[str, Any]], deck_name: str, model_name: str, tags: List[str]):
+    def set_drafts(self, cards: List[Dict[str, Any]], deck_name: str, model_name: str, tags: List[str], entry_id: str = None):
         self.cards = cards
         self.deck_name = deck_name
         self.model_name = model_name
         self.tags = tags
+        if entry_id:
+            self.entry_id = entry_id
         
     def get_drafts(self):
         return self.cards
@@ -63,6 +66,7 @@ class DraftStore:
         self.deck_name = ""
         self.model_name = ""
         self.tags = []
+        self.entry_id = None
 
 class GenerationService:
     def __init__(self):
@@ -80,7 +84,8 @@ class GenerationService:
         deck_name: str,
         model_name: str,
         tags: List[str],
-        context_deck: str = ""
+        context_deck: str = "",
+        entry_id: str = None
     ) -> AsyncGenerator[str, None]:
         
         # Clear previous drafts on new run
@@ -147,7 +152,8 @@ class GenerationService:
                         gui_data["cards"], 
                         deck_name, 
                         model_name, 
-                        tags
+                        tags,
+                        entry_id
                     )
             elif event.type == "step_start":
                 gui_type = "status"
