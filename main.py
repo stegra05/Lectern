@@ -24,6 +24,8 @@ from pdf_parser import extract_content_from_pdf
 from ai_client import LecternAIClient
 from utils.cli import StepTimer, set_verbosity, is_quiet, Progress, info, warn, error, success, setup_logging, debug
 from utils.tags import build_grouped_tags
+from utils.state import load_state, save_state, clear_state
+from utils.notify import beep, send_notification
 
 
 # CLI helpers are now provided by utils.cli
@@ -85,6 +87,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
 
 
 def _prompt(prompt: str, default: str = "") -> str:
+    beep()
     suffix = f" [{default}]" if default else ""
     value = input(f"{prompt}{suffix}: ").strip()
     return value or default
@@ -137,6 +140,32 @@ def main(argv: List[str]) -> int:
         info(f"GEMINI_API_KEY: {masked_key}")
         debug(f"(Config) batch={config.MAX_NOTES_PER_BATCH} reflection_rounds={config.REFLECTION_MAX_ROUNDS} reflection_enabled={config.ENABLE_REFLECTION}")
 
+    # Check for resume state
+    resume_state = load_state()
+    resuming = False
+    if resume_state:
+        saved_pdf = resume_state.get("pdf_path", "")
+        # If interactive or if the PDF matches (or user didn't specify one yet)
+        if args.interactive or (args.pdf_path and os.path.abspath(args.pdf_path) == saved_pdf):
+            if args.interactive:
+                should_resume = _prompt(f"Found unfinished session for {os.path.basename(saved_pdf)}. Resume? (Y/n)", "Y").lower() in ("y", "yes")
+            else:
+                # Non-interactive: if paths match, maybe auto-resume or warn?
+                # Let's auto-resume if paths match exactly, or just log it.
+                # For safety, let's only resume if explicitly interactive or if we decide a policy.
+                # The user request implies a prompt: "Resume from page 50? [Y/n]"
+                # So we should probably only do this in interactive mode or if a flag is set.
+                # But let's assume interactive for the prompt as per request.
+                should_resume = False
+                if args.pdf_path and os.path.abspath(args.pdf_path) == saved_pdf:
+                    info(f"Found unfinished session for {saved_pdf}. Use --interactive to resume.")
+
+            if should_resume:
+                resuming = True
+                args.pdf_path = saved_pdf
+                args.deck_name = resume_state.get("deck_name", args.deck_name)
+                info(f"Resuming session for {saved_pdf}...")
+
     # Start total timer
     _run_start = time.perf_counter()
 
@@ -186,6 +215,10 @@ def main(argv: List[str]) -> int:
     with StepTimer("Start AI session"):
         ai = LecternAIClient()
         session_log = ai.log_path
+        if resuming and resume_state:
+            history = resume_state.get("history", [])
+            if history:
+                ai.restore_history(history)
 
     # Helpers for dedupe
     def _normalize_card_key(card: Dict[str, str]) -> str:
@@ -197,19 +230,32 @@ def main(argv: List[str]) -> int:
 
     # Phase 0: Concept map in chat
     concept_map: Dict = {}
-    with StepTimer("Build global concept map") as t:
-        try:
-            concept_map = ai.concept_map([p.__dict__ for p in pages])
-            obj = concept_map.get("objectives") if isinstance(concept_map, dict) else None
-            concept_count = len(concept_map.get("concepts", [])) if isinstance(concept_map, dict) else 0
-            debug(f"[ConceptMap] objectives={len(obj) if isinstance(obj, list) else 0} concepts={concept_count}")
-        except Exception as exc:
-            warn(f"Concept map failed ({exc}); proceeding without it.")
-            concept_map = {}
+    if resuming and resume_state and resume_state.get("concept_map"):
+        concept_map = resume_state["concept_map"]
+        debug("[ConceptMap] Restored from state")
+    else:
+        with StepTimer("Build global concept map") as t:
+            try:
+                concept_map = ai.concept_map([p.__dict__ for p in pages])
+                obj = concept_map.get("objectives") if isinstance(concept_map, dict) else None
+                concept_count = len(concept_map.get("concepts", [])) if isinstance(concept_map, dict) else 0
+                debug(f"[ConceptMap] objectives={len(obj) if isinstance(obj, list) else 0} concepts={concept_count}")
+            except Exception as exc:
+                warn(f"Concept map failed ({exc}); proceeding without it.")
+                concept_map = {}
 
     # Phase 1: Generation turns in chat
     all_cards: List[Dict] = []
     seen_keys = set()
+    
+    if resuming and resume_state:
+        all_cards = resume_state.get("cards", [])
+        for card in all_cards:
+            key = _normalize_card_key(card)
+            if key:
+                seen_keys.add(key)
+        debug(f"[Resume] Loaded {len(all_cards)} cards from state")
+
     # Track creation results early so we can surface counts during earlier phases
     created = 0
     failed = 0
@@ -239,6 +285,17 @@ def main(argv: List[str]) -> int:
                     additions += 1
             debug(f"[Gen] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}")
             p.update(turn_idx + 1)
+            
+            # Save state
+            save_state(
+                pdf_path=os.path.abspath(args.pdf_path),
+                deck_name=args.deck_name,
+                cards=all_cards,
+                concept_map=concept_map,
+                history=ai.get_history(),
+                log_path=ai.log_path
+            )
+
             # Surface real-time counts in basic mode
             debug(f"[Gen] Status gen={len(all_cards)} created={created}")
             if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
@@ -265,6 +322,17 @@ def main(argv: List[str]) -> int:
                             additions += 1
                     debug(f"[Reflect] Added {additions} unique cards (total {len(all_cards)}) done={bool(out.get('done'))}")
                     p.update(round_idx + 1)
+                    
+                    # Save state
+                    save_state(
+                        pdf_path=os.path.abspath(args.pdf_path),
+                        deck_name=args.deck_name,
+                        cards=all_cards,
+                        concept_map=concept_map,
+                        history=ai.get_history(),
+                        log_path=ai.log_path
+                    )
+
                     # Surface real-time counts in basic mode
                     debug(f"[Reflect] Status gen={len(all_cards)} created={created}")
                     if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
@@ -352,9 +420,14 @@ def main(argv: List[str]) -> int:
     total_elapsed = time.perf_counter() - _run_start
     if not is_quiet():
         success("Done.")
-        info(
-            f"Summary: pages={len(pages)} generated={len(cards)} created={created} failed={failed} elapsed={total_elapsed:.2f}s"
-        )
+        summary = f"Summary: pages={len(pages)} generated={len(cards)} created={created} failed={failed} elapsed={total_elapsed:.2f}s"
+        info(summary)
+        beep()
+        send_notification("Lectern Job Complete", f"Created {created} notes from {len(pages)} pages.")
+    
+    # Clear state on success
+    clear_state()
+    
     return 0
 
 

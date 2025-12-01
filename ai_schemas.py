@@ -1,34 +1,35 @@
-from typing import TypedDict, List, Optional
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
 
-class Concept(TypedDict):
+class Concept(BaseModel):
     id: str
     name: str
     definition: str
     category: str
 
-class Relation(TypedDict):
+class Relation(BaseModel):
     source: str
     target: str
     type: str
-    page_reference: Optional[str]
+    page_reference: Optional[str] = None
 
-class ConceptMapResponse(TypedDict):
+class ConceptMapResponse(BaseModel):
     objectives: List[str]
     concepts: List[Concept]
     relations: List[Relation]
 
-class Card(TypedDict):
-    front: str
-    back: str
-    text: str
-    tags: List[str]
-    slide_topic: str
+class AnkiCard(BaseModel):
+    model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")
+    fields: Dict[str, str]
+    tags: List[str] = []
+    slide_topic: Optional[str] = None
+    media: Optional[List[Dict[str, Any]]] = None
 
-class CardGenerationResponse(TypedDict):
-    cards: List[Card]
+class CardGenerationResponse(BaseModel):
+    cards: List[AnkiCard]
     done: bool
 
-class ReflectionResponse(TypedDict):
+class ReflectionResponse(BaseModel):
     reflection: str
-    cards: List[Card]
+    cards: List[AnkiCard]
     done: bool
