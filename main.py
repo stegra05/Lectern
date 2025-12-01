@@ -259,13 +259,26 @@ def main(argv: List[str]) -> int:
     # Track creation results early so we can surface counts during earlier phases
     created = 0
     failed = 0
-    max_batch = int(getattr(args, "max_notes_per_batch", config.MAX_NOTES_PER_BATCH))
+    
+    # Dynamic parameter calculation based on page count
+    page_count = len(pages)
+    
+    # Dynamically determine batch size: scale with page count but keep reasonable bounds
+    dynamic_batch_size = min(50, max(20, page_count // 2))
+    max_batch = int(getattr(args, "max_notes_per_batch", dynamic_batch_size))
+    
     with StepTimer("Generate cards") as t:
         # Compute total cap based on slides and optional hard cap
-        total_cards_cap = int(len(pages) * getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+        total_cards_cap = int(page_count * getattr(config, "CARDS_PER_SLIDE_TARGET", 1.0))
         hard_cap = int(getattr(config, "MAX_TOTAL_NOTES", 0))
         if hard_cap > 0:
             total_cards_cap = min(total_cards_cap, hard_cap)
+        
+        # Calculate minimum required cards (enforced threshold)
+        min_cards_required = int(page_count * getattr(config, "MIN_CARDS_PER_SLIDE", 0.8))
+        
+        debug(f"[Gen] Targets: min={min_cards_required} target={total_cards_cap} batch_size={max_batch} pages={page_count}")
+        
         # Examples and concept map are already incorporated via dedicated stages
         # Iteratively request more cards until the model indicates done or no additions
         # Make turns cap proportional to desired total cards
@@ -298,15 +311,34 @@ def main(argv: List[str]) -> int:
 
             # Surface real-time counts in basic mode
             debug(f"[Gen] Status gen={len(all_cards)} created={created}")
-            if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
+            
+            # Only respect "done" signal after meeting minimum requirement
+            should_stop = (
+                len(all_cards) >= total_cards_cap or 
+                additions == 0 or
+                (out.get("done") and len(all_cards) >= min_cards_required)
+            )
+            if should_stop:
                 break
 
     # Phase 2: Reflection
     if getattr(args, "enable_reflection", config.ENABLE_REFLECTION) and len(all_cards) > 0 and len(all_cards) < total_cards_cap:
         with StepTimer("Reflection and improvement") as t:
             try:
-                rounds = int(getattr(args, "reflection_rounds", config.REFLECTION_MAX_ROUNDS))
+                # Dynamically determine reflection rounds based on slide count
+                # Small decks (< 20): 1-2 rounds, Medium (20-50): 2-3 rounds, Large (50+): 3-5 rounds
+                if page_count < 20:
+                    dynamic_reflection_rounds = 2
+                elif page_count < 50:
+                    dynamic_reflection_rounds = 3
+                elif page_count < 100:
+                    dynamic_reflection_rounds = 4
+                else:
+                    dynamic_reflection_rounds = 5
+                
+                rounds = int(getattr(args, "reflection_rounds", dynamic_reflection_rounds))
                 total_rounds = max(0, rounds)
+                debug(f"[Reflect] Dynamic rounds: {total_rounds} (for {page_count} pages)")
                 p = Progress(total=total_rounds, label="Reflection rounds")
                 for round_idx in range(total_rounds):
                     remaining = max(0, total_cards_cap - len(all_cards))
@@ -335,7 +367,14 @@ def main(argv: List[str]) -> int:
 
                     # Surface real-time counts in basic mode
                     debug(f"[Reflect] Status gen={len(all_cards)} created={created}")
-                    if len(all_cards) >= total_cards_cap or out.get("done") or additions == 0:
+                    
+                    # Only respect "done" signal after meeting minimum requirement
+                    should_stop = (
+                        len(all_cards) >= total_cards_cap or 
+                        additions == 0 or
+                        (out.get("done") and len(all_cards) >= min_cards_required)
+                    )
+                    if should_stop:
                         break
             except Exception as exc:
                 warn(f"Reflection failed: {exc}")

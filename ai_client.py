@@ -184,21 +184,21 @@ class LecternAIClient:
     def generate_more_cards(self, limit: int) -> Dict[str, Any]:
         self._prune_history()
         prompt = (
-            f"Generate up to {int(limit)} **high-quality, atomic Anki notes** continuing from our prior turns.\n"
-            "- **Principles**:\n"
-            "    - **Atomicity**: One idea per card.\n"
-            "    - **Minimum Information Principle**: Keep questions and answers simple and direct.\n"
-            "    - **Variety**: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\n"
-            "    - **Context**: Use the `slide_topic` to ground the card.\n"
-            "- **Format**:\n"
-            "    - Prefer **Cloze** deletion for definitions and lists.\n"
-            "    - Use **Basic** (Front/Back) for open-ended conceptual questions.\n"
-            "- **Metadata**:\n"
-            "    - `tags`: 1-2 concise, hierarchical tags (kebab-case, max 3 words). Avoid generic terms.\n"
-            "    - `slide_topic`: The specific section/header (Title Case).\n"
-            "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\n"
-            "- Return ONLY JSON: either an array of note objects or {\"cards\": [...], \"done\": bool}. No prose.\n"
-            "- If no more high-quality cards remain, return an empty array or {\"cards\": [], \"done\": true}.\n"
+            f"Generate up to {int(limit)} **high-quality, atomic Anki notes** continuing from our prior turns.\\n"
+            "- **Principles**:\\n"
+            "    - **Atomicity**: One idea per card.\\n"
+            "    - **Minimum Information Principle**: Keep questions and answers simple and direct.\\n"
+            "    - **Variety**: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
+            "    - **Context**: Use the `slide_topic` to ground the card.\\n"
+            "- **Format**:\\n"
+            "    - Prefer **Cloze** deletion for definitions and lists.\\n"
+            "    - Use **Basic** (Front/Back) for open-ended conceptual questions.\\n"
+            "- **Metadata**:\\n"
+            "    - `tags`: 1-2 concise, hierarchical tags (kebab-case, max 3 words). Avoid generic terms.\\n"
+            "    - `slide_topic`: The specific section/header (Title Case).\\n"
+            "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\\n"
+            "- **Important**: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
+            "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
         )
         parts: List[Dict[str, Any]] = [{"text": prompt}]
         response = self._chat.send_message(
