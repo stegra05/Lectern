@@ -42,6 +42,7 @@ app.add_middleware(
 # Global state for the current session's PDF path
 # This allows us to serve thumbnails on demand
 CURRENT_SESSION_PDF_PATH: Optional[str] = None
+CURRENT_GENERATION_SERVICE: Optional[GenerationService] = None
 
 # Configuration Models
 class ConfigUpdate(BaseModel):
@@ -187,7 +188,9 @@ async def generate_cards(
     tags: str = Form("[]"),  # JSON string
     context_deck: str = Form("")
 ):
+    global CURRENT_GENERATION_SERVICE
     service = GenerationService()
+    CURRENT_GENERATION_SERVICE = service
     
     # Parse tags from JSON string
     try:
@@ -229,6 +232,14 @@ async def generate_cards(
             # or cleanup. For now, we keep it for consistency with the session.
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+@app.post("/stop")
+async def stop_generation():
+    global CURRENT_GENERATION_SERVICE
+    if CURRENT_GENERATION_SERVICE:
+        CURRENT_GENERATION_SERVICE.stop()
+        return {"status": "stopped"}
+    return {"status": "no_active_generation"}
 
 # Draft API
 @app.get("/drafts")
