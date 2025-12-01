@@ -26,6 +26,9 @@ else
     echo "Pyinstaller already installed"
 fi
 
+echo "Installing Python dependencies..."
+pip install -r requirements.txt
+
 # Generate icon.icns if icon.png exists
 if [ -f "icon.png" ]; then
     echo "Generating icon.icns..."
@@ -52,6 +55,7 @@ pyinstaller --name Lectern \
     --add-data "gui/backend:backend" \
     --paths . \
     --paths gui/backend \
+    --hidden-import=uvicorn \
     --hidden-import=uvicorn.logging \
     --hidden-import=uvicorn.loops \
     --hidden-import=uvicorn.loops.auto \

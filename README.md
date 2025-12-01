@@ -64,6 +64,15 @@ cp .env.example .env
 # Edit .env and add your GEMINI_API_KEY
 ```
 
+### Build from Source
+
+To create a standalone macOS application (`Lectern.app`):
+
+```bash
+./build_app.sh
+```
+The artifact will be available in `dist/Lectern.app`.
+
 ---
 
 ## Usage
