@@ -26,6 +26,10 @@ pyinstaller --name Lectern \
     --hidden-import=uvicorn.lifespan \
     --hidden-import=uvicorn.lifespan.on \
     --hidden-import=engineio.async_drivers.aiohttp \
+    --hidden-import=pywebview \
+    --hidden-import=objc \
+    --hidden-import=Cocoa \
+    --hidden-import=WebKit \
     gui/launcher.py
 
 echo "Done! App is at dist/Lectern"

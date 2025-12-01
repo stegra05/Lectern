@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict, List, Tuple
 
 import google.generativeai as genai  # type: ignore
+from google.generativeai.types import HarmCategory, HarmBlockThreshold  # type: ignore
 
 import config
 from ai_common import (
@@ -15,6 +16,88 @@ from ai_common import (
 from ai_schemas import CardGenerationResponse, ConceptMapResponse, ReflectionResponse, AnkiCard
 from ai_cards import _normalize_card_object
 from utils.cli import debug
+
+
+# Manual schema definitions for Gemini API to avoid Pydantic/Protobuf mismatches
+# (Gemini SDK does not support 'default', '$defs', 'anyOf', 'additionalProperties', etc.)
+
+_CONCEPT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "definition": {"type": "string"},
+        "category": {"type": "string"},
+    },
+    "required": ["id", "name", "definition", "category"]
+}
+
+_RELATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "source": {"type": "string"},
+        "target": {"type": "string"},
+        "type": {"type": "string"},
+        "page_reference": {"type": "string", "nullable": True},
+    },
+    "required": ["source", "target", "type"]
+}
+
+_CONCEPT_MAP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "objectives": {"type": "array", "items": {"type": "string"}},
+        "concepts": {"type": "array", "items": _CONCEPT_SCHEMA},
+        "relations": {"type": "array", "items": _RELATION_SCHEMA},
+    },
+    "required": ["objectives", "concepts", "relations"]
+}
+
+_ANKI_CARD_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "model_name": {"type": "string"},
+        "fields_json": {
+            "type": "string", 
+            "description": "JSON object string mapping field names to values (e.g. '{\"Front\": \"...\", \"Back\": \"...\"}')"
+        },
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "slide_topic": {"type": "string", "nullable": True},
+        "rationale": {"type": "string", "nullable": True},
+        "media": {
+            "type": "array", 
+            "items": {
+                "type": "object",
+                "properties": {
+                    "filename": {"type": "string"},
+                    "data": {"type": "string"},
+                },
+                "required": ["filename", "data"]
+            }, 
+            "nullable": True
+        }
+    },
+    "required": ["model_name", "fields_json"]
+}
+
+_CARD_GENERATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "cards": {"type": "array", "items": _ANKI_CARD_SCHEMA},
+        "done": {"type": "boolean"},
+    },
+    "required": ["cards", "done"]
+}
+
+_REFLECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reflection": {"type": "string"},
+        "cards": {"type": "array", "items": _ANKI_CARD_SCHEMA},
+        "done": {"type": "boolean"},
+    },
+    "required": ["reflection", "cards", "done"]
+}
 
 
 class LecternAIClient:
@@ -31,6 +114,12 @@ class LecternAIClient:
             model_name or config.DEFAULT_GEMINI_MODEL,
             generation_config=generation_config,
             system_instruction=LATEX_STYLE_GUIDE,
+            safety_settings={
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            },
         )
         self._chat = self._model.start_chat(history=[])
         self._log_path = _start_session_log()
@@ -63,10 +152,10 @@ class LecternAIClient:
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         prompt = (
-            "You are an expert educator. From the following slides, extract a compact global concept map for learning.\n"
-            "- Identify learning objectives (explicit or inferred).\n"
-            "- List key concepts (entities, definitions, categories), assign stable short IDs.\n"
-            "- Extract relations between concepts (is-a, part-of, causes, contrasts-with, depends-on), noting page references.\n"
+            "You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a **comprehensive global concept map** that serves as the backbone for a spaced repetition deck.\n"
+            "- **Objectives**: Extract explicit learning goals and implicit competency targets.\n"
+            "- **Concepts**: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts over trivial examples. Assign stable, short, unique IDs.\n"
+            "- **Relations**: Map the *semantic structure* of the domain. Use precise relation types (e.g., `is_a`, `part_of`, `causes`, `precedes`, `contrasts_with`). Note page references for traceability.\n"
             "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array). No prose.\n"
         )
         parts = _compose_multimodal_content(pdf_content, prompt)
@@ -75,9 +164,10 @@ class LecternAIClient:
             parts,
             generation_config={
                 "response_mime_type": "application/json",
-                "response_schema": ConceptMapResponse,
+                "response_mime_type": "application/json",
+                "response_schema": _CONCEPT_MAP_SCHEMA,
             },
-            request_options={"timeout": 180},
+            request_options={"timeout": 900},  # Increased for large multimodal PDFs
         )
         text = getattr(response, "text", None) or ""
         debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\n',' ')}...")
@@ -94,12 +184,19 @@ class LecternAIClient:
     def generate_more_cards(self, limit: int) -> Dict[str, Any]:
         self._prune_history()
         prompt = (
-            f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\n"
-            "- Avoid duplicates; complement existing coverage.\n"
-            "- Prefer cloze when natural; otherwise Basic Front/Back.\n"
-            "- For each note, include a \"tags\" array with 1-2 concise topical tags (max 3 words each) that categorize the content (lowercase kebab-case, ASCII, hyphens only; avoid generic terms; do not include \"lectern\" or deck/model names).\n"
-            "- Also include a \"slide_topic\" field: a short, human-readable string (Title Case) identifying the specific slide set or section topic this note belongs to (e.g., \"Neural Networks Intro\", \"Market Structures\"). Extract this from slide headers or context.\n"
-            "- Use consistent tag names across related notes to cluster them.\n"
+            f"Generate up to {int(limit)} **high-quality, atomic Anki notes** continuing from our prior turns.\n"
+            "- **Principles**:\n"
+            "    - **Atomicity**: One idea per card.\n"
+            "    - **Minimum Information Principle**: Keep questions and answers simple and direct.\n"
+            "    - **Variety**: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\n"
+            "    - **Context**: Use the `slide_topic` to ground the card.\n"
+            "- **Format**:\n"
+            "    - Prefer **Cloze** deletion for definitions and lists.\n"
+            "    - Use **Basic** (Front/Back) for open-ended conceptual questions.\n"
+            "- **Metadata**:\n"
+            "    - `tags`: 1-2 concise, hierarchical tags (kebab-case, max 3 words). Avoid generic terms.\n"
+            "    - `slide_topic`: The specific section/header (Title Case).\n"
+            "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\n"
             "- Return ONLY JSON: either an array of note objects or {\"cards\": [...], \"done\": bool}. No prose.\n"
             "- If no more high-quality cards remain, return an empty array or {\"cards\": [], \"done\": true}.\n"
         )
@@ -108,9 +205,10 @@ class LecternAIClient:
             parts,
             generation_config={
                 "response_mime_type": "application/json",
-                "response_schema": CardGenerationResponse,
+                "response_schema": _CARD_GENERATION_SCHEMA,
+                "temperature": 0.4,
             },
-            request_options={"timeout": 180},
+            request_options={"timeout": 900},
         )
         text = getattr(response, "text", None) or ""
         debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\n',' ')}...")
@@ -140,11 +238,15 @@ class LecternAIClient:
     def reflect(self, limit: int, reflection_prompt: str | None = None) -> Dict[str, Any]:
         self._prune_history()
         base = (
-            "You are a reflective and critical learner tasked with creating high-quality Anki flashcards from lecture materials. "
-            "Review your last set of cards with a deep and analytical mindset. Goals: coverage, gaps, inaccuracies, depth, clarity/atomicity, and cross-concept connections.\n"
-            "First, write a concise reflection (≤1200 chars). Then provide improved or additional cards.\n"
-            "Include a \"tags\" array per note with 1-2 concise topical tags (max 3 words each, lowercase kebab-case, ASCII, hyphens only; avoid generic terms and \"lectern\"). Use consistent tags across related notes.\n"
-            "Also include a \"slide_topic\" field for each note (Title Case string) identifying the slide set/section topic.\n"
+            "You are a strict **Quality Assurance Specialist** for educational content. Review the last batch of generated cards.\n"
+            "- **Critique Criteria**:\n"
+            "    - **Redundancy**: Are there duplicate or overlapping cards?\n"
+            "    - **Vagueness**: Is the question ambiguous without more context?\n"
+            "    - **Complexity**: Is the answer too long or multi-faceted? (Split it!)\n"
+            "    - **Interference**: Do any cards look too similar, causing confusion?\n"
+            "- **Action**:\n"
+            "    - Write a concise `reflection` summarizing the quality and identifying specific issues.\n"
+            "    - Generate **improved replacements** or **new gap-filling cards** to address the issues.\n"
             f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
         )
         prompt = (reflection_prompt or base)
@@ -153,9 +255,10 @@ class LecternAIClient:
             parts,
             generation_config={
                 "response_mime_type": "application/json",
-                "response_schema": ReflectionResponse,
+                "response_mime_type": "application/json",
+                "response_schema": _REFLECTION_SCHEMA,
             },
-            request_options={"timeout": 180},
+            request_options={"timeout": 900},
         )
         text = getattr(response, "text", None) or ""
         debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\n',' ')}...")
@@ -191,12 +294,16 @@ class LecternAIClient:
                     if text:
                         p_dict["text"] = text
                     
-                    # Check for inline_data
                     inline_data = getattr(part, "inline_data", None)
                     if inline_data:
+                        import base64
+                        data_raw = getattr(inline_data, "data", "")
+                        # Encode bytes as base64 string for JSON serialization
+                        if isinstance(data_raw, bytes):
+                            data_raw = base64.b64encode(data_raw).decode('utf-8')
                         p_dict["inline_data"] = {
                             "mime_type": getattr(inline_data, "mime_type", ""),
-                            "data": getattr(inline_data, "data", "")
+                            "data": data_raw
                         }
                     parts.append(p_dict)
                 serialized.append({"role": role, "parts": parts})
