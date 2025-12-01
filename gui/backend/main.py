@@ -216,6 +216,14 @@ async def generate_cards(
         
     CURRENT_SESSION_PDF_PATH = tmp_path
 
+    # Create history entry
+    history_mgr = HistoryManager()
+    entry_id = history_mgr.add_entry(
+        filename=pdf_file.filename,
+        deck=deck_name,
+        status="draft"
+    )
+
     async def event_generator():
         try:
             async for event_json in service.run_generation(
@@ -223,7 +231,8 @@ async def generate_cards(
                 deck_name=deck_name,
                 model_name=model_name,
                 tags=tags_list,
-                context_deck=context_deck
+                context_deck=context_deck,
+                entry_id=entry_id
             ):
                 yield f"{event_json}\n"
         except Exception as e:
@@ -337,6 +346,15 @@ async def sync_drafts():
 
         yield json.dumps({"type": "done", "message": "Sync Complete", "data": {"created": created, "failed": failed}}) + "\n"
         
+        # Update history entry
+        if store.entry_id:
+            history_mgr = HistoryManager()
+            history_mgr.update_entry(
+                entry_id=store.entry_id,
+                status="completed",
+                card_count=created
+            )
+
         # Clear drafts after successful sync
         store.clear()
 
