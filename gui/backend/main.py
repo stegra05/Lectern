@@ -63,8 +63,19 @@ async def generate_cards(request: GenerateRequest):
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 # Mount static files (Frontend Build)
-# We expect the build to be in ../frontend/dist relative to this file
-frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
+# Helper to locate resources in both Dev and PyInstaller modes
+def get_resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(__file__), relative_path)
+
+# Mount static files (Frontend Build)
+# In Dev: ../frontend/dist (relative to backend/main.py)
+# In Frozen: frontend/dist (relative to sys._MEIPASS root)
+if hasattr(sys, '_MEIPASS'):
+    frontend_dist = os.path.join(sys._MEIPASS, "frontend/dist")
+else:
+    frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 
 if os.path.exists(frontend_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")

@@ -1,212 +1,112 @@
-## Lectern (CLI)
+<div align="center">
 
-Generate Anki flashcards from PDF lecture slides, guided by examples from an existing Anki deck. Lectern parses your slides, composes a multimodal prompt for Google's Gemini, and creates notes in your running Anki via AnkiConnect.
+# LECTERN
 
-### Status
-- Initial functional skeleton. Safe defaults, clear CLI, and modular architecture.
-- Requires: Anki desktop running with the AnkiConnect add‑on, and a Gemini API key.
+**AI-Powered Anki Card Generator**
 
-### Disclaimer
-- This tool is experimental and currently very untested. It may not work with all Anki or AnkiConnect versions.
-- The default note types `prettify-nord-basic` and `prettify-nord-cloze` must exist in your Anki profile. If they don't, either create/import them or override via environment variables (`BASIC_MODEL_NAME`, `CLOZE_MODEL_NAME`) or the `--model-name` flag.
+[![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-black?style=flat-square)](https://www.python.org/)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-black?style=flat-square)](https://github.com/psf/black)
 
-### Project Structure
-```
-lectern/
-  README.md
-  main.py            # CLI orchestrator
-  config.py          # Env-based configuration
-  pdf_parser.py      # Text + image extraction via PyMuPDF
-  (no .apkg reader)  # Examples sampled via AnkiConnect only
-  ai_generator.py    # Gemini prompt + generation
-  utils/             # CLI helpers (colors, timers)
-  anki_connector.py  # AnkiConnect HTTP helpers
-  requirements.txt   # Python dependencies
-  logs/              # Request/response logs (JSON)
-```
+<br>
+
+Lectern transforms PDF lecture slides into high-quality Anki flashcards instantly.  
+It parses your slides, composes a multimodal prompt for Google's Gemini, and creates notes in your running Anki instance via AnkiConnect.
+
+[Get Started](#installation) • [Usage](#usage) • [Configuration](#configuration)
+
+</div>
+
+---
+
+## Features
+
+- **Multimodal Analysis**  
+  Extracts text and images from slides, preserving context for accurate generation.
+
+- **Smart Generation**  
+  Leverages Gemini Pro to create atomic, well-structured cards that adhere to learning best practices.
+
+- **Style Matching**  
+  Intelligently samples existing cards to match your deck's aesthetic and formatting.
+
+- **Dual Interface**  
+  Includes a robust CLI for power users and a sleek, modern GUI for interactive workflows.
+
+- **Safe Execution**  
+  Operates exclusively via the AnkiConnect API, ensuring your collection files remain untouched.
+
+---
+
+## Installation
 
 ### Prerequisites
-- Python 3.9+
-- Anki desktop open with AnkiConnect `https://ankiweb.net/shared/info/2055492159` add‑on enabled
-  - Default URL: `http://localhost:8765` (configurable via `ANKI_CONNECT_URL`)
-- Google Gemini API key `https://aistudio.google.com/api-keys` exported as `GEMINI_API_KEY`
-- Required Anki note types present (by default): `prettify-nord-basic`, `prettify-nord-cloze`.
-  - You can change these defaults via `BASIC_MODEL_NAME` and `CLOZE_MODEL_NAME`.
- - Target deck must already exist in Anki with exactly the same name you pass to `--deck-name`. Create the deck in Anki first; it is not created automatically.
 
-### Installation
+- **Python 3.9+**
+- **Anki** with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed.
+- **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/api-keys).
+
+### Setup
+
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/lectern.git
+cd lectern
+
+# Create virtual environment
 python -m venv .venv && source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
-## Optional: auto-load environment variables from a .env file
-# pip install python-dotenv
-## Optional: shell autocompletion for the CLI
-# pip install argcomplete
-# activate-global-python-argcomplete  # or eval "$(register-python-argcomplete python)"
 
-Rich-based console output is now enabled by default via `requirements.txt`.
+# Configure environment
+cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY
 ```
 
-### Configuration
-- `GEMINI_API_KEY` (required): Your Google Generative AI API key.
-- `DEFAULT_GEMINI_MODEL` (optional): Defaults to `gemini-2.5-pro`.
-- `ANKI_CONNECT_URL` (optional): Defaults to `http://localhost:8765`.
-- `BASIC_MODEL_NAME` (optional): Defaults to `prettify-nord-basic`.
-- `CLOZE_MODEL_NAME` (optional): Defaults to `prettify-nord-cloze`.
-- `DEFAULT_TAG` (optional): Defaults to `lectern`.
-- `ENABLE_DEFAULT_TAG` (optional): `true`/`false` (default `true`).
+---
 
-If `python-dotenv` is installed, `.env` files are auto-loaded from the project root and `~/.env`.
+## Usage
 
-Example (macOS/Linux):
+### Graphical Interface
+
+The recommended way to use Lectern. Launches a local web server with a modern UI.
+
 ```bash
-export GEMINI_API_KEY="your_api_key"
-# export ANKI_CONNECT_URL="http://localhost:8765"  # if non-default
+python gui/launcher.py
 ```
+*Opens automatically at `http://127.0.0.1:8000`*
 
-You can place these in a local shell profile or a `.env` you source before running.
+### Command Line
 
-Example `.env` file:
-```
-GEMINI_API_KEY=your_api_key
-# DEFAULT_GEMINI_MODEL=gemini-2.5-pro
-# ANKI_CONNECT_URL=http://localhost:8765
-# BASIC_MODEL_NAME=prettify-nord-basic
-# CLOZE_MODEL_NAME=prettify-nord-cloze
-# DEFAULT_TAG=lectern
-# ENABLE_DEFAULT_TAG=true
-```
+For automation, batch processing, and headless environments.
 
-### Usage
-Run the CLI (minimum required flags):
 ```bash
-python main.py --pdf-path /path/to/slides.pdf --deck-name "My Deck"
-```
+# Basic usage
+python main.py --pdf-path /path/to/slides.pdf --deck-name "Target Deck"
 
-Note: Ensure a deck named exactly "My Deck" already exists in Anki before running.
-
-With optional parameters:
-```bash
+# With style matching from another deck
 python main.py \
-  --pdf-path /path/to/slides.pdf \
-  --deck-name "My Deck" \
-  --model-name prettify-nord-basic \
-  --tags exam week1
+  --pdf-path lecture_01.pdf \
+  --deck-name "Biology 101" \
+  --context-deck "Biology 101::Previous"
 ```
 
-Interactive mode (prompts for missing inputs and asks to confirm before note creation):
-```bash
-python main.py --interactive
-```
+---
 
-Verbosity controls:
-```bash
-# Detailed status + AI snippets
-python main.py --pdf-path /path/to/slides.pdf --deck-name "My Deck" --verbose
+## Configuration
 
-# Minimal output (errors only)
-python main.py --pdf-path /path/to/slides.pdf --deck-name "My Deck" --quiet
-```
+Configure defaults in `.env` or override via flags.
 
-Arguments:
-- `--pdf-path` (required): Path to the PDF slides.
-- `--deck-name` (required): Destination deck in Anki.
-- `--context-deck` (optional): Deck name to sample 5 notes for style via AnkiConnect. Defaults to `--deck-name`.
-- `--model-name` (optional): Default note type if AI omits it. Default: `prettify-nord-basic`.
-- `--tags` (optional): Space-separated tags to apply (e.g., `--tags exam week1`). Default: `lectern` if `ENABLE_DEFAULT_TAG=true`. To disable auto-tagging, set `ENABLE_DEFAULT_TAG=false`.
-- `--max-notes-per-batch` (optional): Max cards requested per turn. Default from config.
-- `--reflection-rounds` (optional): Number of post-generation refinement rounds. Default from config.
-- `--enable-reflection` (optional): Enable or disable the reflection phase. Default from config.
-- `--interactive` (optional): Prompt for missing inputs and confirm before creating notes.
-- `--verbose` (optional): Show detailed progress and AI response snippets.
-- `--quiet` (optional): Suppress non-essential output; still shows errors and failures.
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | **Required**. Your Google AI API key. | - |
+| `ANKI_CONNECT_URL` | URL of AnkiConnect API. | `http://localhost:8765` |
+| `BASIC_MODEL_NAME` | Anki Note Type for basic cards. | `prettify-nord-basic` |
+| `CLOZE_MODEL_NAME` | Anki Note Type for cloze cards. | `prettify-nord-cloze` |
 
-Quality tip
-- Card quality is typically better for existing decks. The app samples up to 5 notes from `--context-deck` (defaults to `--deck-name`) to guide style and structure. If the referenced deck is empty and no `--context-deck` is provided, generation proceeds without style examples.
+<br>
 
-### What it does
-1. Checks AnkiConnect availability.
-2. Optionally samples a few notes from `--context-deck` via AnkiConnect to guide style.
-3. Extracts text and images from the PDF (original image bytes preserved).
-4. Sends a multimodal prompt to Gemini requesting a strict JSON array of cards. The prompt includes definitive guidelines (atomic cards, cloze priority, wording rules, interference avoidance) and prefers `prettify-nord-cloze` then `prettify-nord-basic`.
-5. Uploads any media specified by the AI and adds notes to Anki.
-
-Progress & feedback
-- Consistent Rich theming and icons: `✔` success (green), `✖` error (red), `⚠` warning (yellow), `ℹ` info (blue), debug is dim.
-- Live progress bars with spinner, bar, `completed/total`, elapsed and ETA for generation, reflection, and note creation.
-- `--verbose` surfaces additional debug lines; `--quiet` hides non-essential messages but still shows errors and failures.
-- Final summary includes parsed pages, generated cards, created/failed notes, and total runtime.
-
-Console output standards
-- Message helpers: `utils.cli.success/info/warn/error/debug` provide consistent styles and cross‑platform output.
-- Tables: `utils.cli.render_table(columns, rows, title=None)` renders data grids with headers.
-- Code: `utils.cli.print_code(code, language="python")` shows syntax‑highlighted snippets.
-- Markdown: `utils.cli.print_markdown(md_text)` renders Markdown sections.
-- Grids: `utils.cli.render_grid(items)` lays out items in responsive columns.
-- Logging: `utils.cli.setup_logging(level)` wires `RichHandler` with levels and tracebacks; use standard `logging` calls.
-- Accessibility: icons plus color cues improve readability; theme can be adjusted centrally in `utils/cli.py`.
-- Performance: Rich rendering is used selectively and respects verbosity to avoid excessive output.
-
-### Output expectations
-The AI is instructed to return a JSON array like:
-```json
-[
-  {
-    "model_name": "prettify-nord-basic",
-    "fields": { "Front": "Question?", "Back": "Answer." },
-    "tags": ["lectern"],
-    "media": [ { "filename": "slide-3.png", "data": "<base64>" } ]
-  }
-]
-```
-
-For cloze deletions:
-```json
-[
-  {
-    "model_name": "prettify-nord-cloze",
-    "fields": { "Text": "{{c1::Einstein}} developed the theory of {{c2::relativity}}." },
-    "tags": ["lectern"]
-  }
-]
-```
-
-Notes:
-- If the response is not valid JSON, Lectern skips creating notes (fail-safe).
-- Images extracted from the PDF are available to the model; it may also return additional media to upload.
-- Model names like `Basic`/`Cloze` are normalized to your configured models.
-
-### Logs & troubleshooting
-- Each run writes a JSON log under `logs/session-*.json` capturing request parts and raw response text. Inspect `exchanges[*].request.parts` for the prompts (including any style examples) and `exchanges[*].response_text` for the raw model output.
-
-Troubleshooting
-- "Could not connect to AnkiConnect":
-  - Ensure Anki desktop is open and the AnkiConnect add‑on is installed/enabled.
-  - Verify `ANKI_CONNECT_URL` (default `http://localhost:8765`).
-- "GEMINI_API_KEY is not set":
-  - Export the key in your shell before running.
-- No cards created:
-  - Check that slides contain extractable text (current version does not OCR).
-  - Try providing `--context-deck` for better style guidance.
-  - Inspect console output for any API errors.
-
-### Roadmap ideas
-- OCR for image-only PDFs (e.g., Tesseract).
-- Schema validation for AI output (e.g., Pydantic) and retries on non-JSON.
-- Tests with mocked AnkiConnect and sample PDFs.
-
-### Safety
-- Lectern never writes Anki collection files directly.
-- All modifications go through AnkiConnect's API.
-
-### Defaults & customization quick reference
-- Default models: `prettify-nord-basic`, `prettify-nord-cloze` (override via env).
-- Default Gemini model: `gemini-2.5-pro` (override via `DEFAULT_GEMINI_MODEL`).
-- Default tag: `lectern` (disable by `ENABLE_DEFAULT_TAG=false`).
-- Examples: pass `--context-deck` to inject style examples into the prompt.
-
-
-### Feedback
-I’d love to hear your feedback, bug reports, and ideas for improvements. Feel free to open an issue or share thoughts on what works well and what doesn’t.
-
-
+<div align="center">
+  <sub>Built by Steffen</sub>
+</div>
