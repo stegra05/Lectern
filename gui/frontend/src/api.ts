@@ -1,7 +1,7 @@
 const API_URL = "http://localhost:8000";
 
 export interface GenerateRequest {
-    pdf_path: string;
+    pdf_file: File;
     deck_name: string;
     model_name?: string;
     tags?: string[];
@@ -21,16 +21,27 @@ export const api = {
         return res.json();
     },
 
+    getConfig: async () => {
+        const res = await fetch(`${API_URL}/config`);
+        return res.json();
+    },
+
     getDecks: async () => {
         const res = await fetch(`${API_URL}/decks`);
         return res.json();
     },
 
     generate: async (req: GenerateRequest, onEvent: (event: ProgressEvent) => void) => {
+        const formData = new FormData();
+        formData.append("pdf_file", req.pdf_file);
+        formData.append("deck_name", req.deck_name);
+        if (req.model_name) formData.append("model_name", req.model_name);
+        if (req.tags) formData.append("tags", JSON.stringify(req.tags));
+        if (req.context_deck) formData.append("context_deck", req.context_deck);
+
         const res = await fetch(`${API_URL}/generate`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(req),
+            body: formData,
         });
 
         if (!res.body) return;

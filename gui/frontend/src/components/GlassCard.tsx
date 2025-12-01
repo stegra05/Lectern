@@ -10,7 +10,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, className, ...pr
     return (
         <div
             className={twMerge(
-                "bg-gray-800/40 backdrop-blur-md border border-white/10 rounded-xl shadow-xl p-6",
+                "bg-zinc-900/40 backdrop-blur-md border border-zinc-800 rounded-2xl shadow-2xl p-6",
                 className
             )}
             {...props}
