@@ -16,7 +16,7 @@ def main():
     server_thread.start()
 
     # Create a native window
-    webview.create_window("Lectern", "http://127.0.0.1:4173", width=1024, height=768, resizable=True)
+    webview.create_window("Lectern", "http://127.0.0.1:4173", width=1024, height=768, resizable=True, fullscreen=False)
     webview.start()
 
 if __name__ == "__main__":

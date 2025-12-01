@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Settings, Save } from 'lucide-react';
+import { X, Settings, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 
@@ -11,14 +11,25 @@ interface SettingsModalProps {
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const [config, setConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadConfig = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await api.getConfig();
+            setConfig(data);
+        } catch (err) {
+            setError('Failed to connect to backend');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
         if (isOpen) {
-            setLoading(true);
-            api.getConfig().then(data => {
-                setConfig(data);
-                setLoading(false);
-            }).catch(console.error);
+            loadConfig();
         }
     }, [isOpen]);
 
@@ -57,6 +68,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 {loading ? (
                                     <div className="flex justify-center py-8">
                                         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                    </div>
+                                ) : error ? (
+                                    <div className="py-8 text-center space-y-4">
+                                        <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+                                        <p className="text-zinc-400">{error}</p>
+                                        <button
+                                            onClick={loadConfig}
+                                            className="px-4 py-2 bg-primary hover:bg-primary/90 text-zinc-900 rounded-lg font-medium transition-colors"
+                                        >
+                                            Retry
+                                        </button>
                                     </div>
                                 ) : (
                                     <>

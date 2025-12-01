@@ -32,16 +32,42 @@ app.add_middleware(
 # Configuration Models
 class ConfigUpdate(BaseModel):
     gemini_api_key: Optional[str] = None
-    default_model: Optional[str] = None
-    anki_url: Optional[str] = None
 
 @app.get("/health")
 async def health_check():
-    anki_status = check_connection()
+    """Health check endpoint that safely checks system status.
+    
+    Returns status even if individual checks fail to prevent blocking the UI.
+    """
+    anki_status = False
+    gemini_configured = False
+    
+    # Safely check Anki connection
+    try:
+        anki_status = check_connection()
+    except Exception as e:
+        print(f"Anki connection check failed: {e}")
+        anki_status = False
+    
+    # Safely reload and check Gemini config
+    try:
+        from importlib import reload
+        reload(config)
+        gemini_configured = bool(getattr(config, 'GEMINI_API_KEY', None))
+    except Exception as e:
+        print(f"Config reload failed: {e}")
+        # Try to read from environment as fallback
+        try:
+            import os
+            gemini_configured = bool(os.getenv('GEMINI_API_KEY'))
+        except:
+            gemini_configured = False
+        
     return {
         "status": "ok",
         "anki_connected": anki_status,
-        "gemini_configured": bool(config.GEMINI_API_KEY)
+        "gemini_configured": gemini_configured,
+        "backend_ready": True
     }
 
 @app.get("/config")
@@ -50,8 +76,46 @@ async def get_config():
         "gemini_model": config.DEFAULT_GEMINI_MODEL,
         "anki_url": config.ANKI_CONNECT_URL,
         "basic_model": config.DEFAULT_BASIC_MODEL,
-        "cloze_model": config.DEFAULT_CLOZE_MODEL
+        "cloze_model": config.DEFAULT_CLOZE_MODEL,
+        "gemini_configured": bool(config.GEMINI_API_KEY)
     }
+
+@app.post("/config")
+async def update_config(cfg: ConfigUpdate):
+    if cfg.gemini_api_key:
+        # Write to .env file in project root
+        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
+        
+        # Read existing content
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                lines = f.readlines()
+        
+        # Update or append GEMINI_API_KEY
+        key_found = False
+        new_lines = []
+        for line in lines:
+            if line.startswith("GEMINI_API_KEY="):
+                new_lines.append(f"GEMINI_API_KEY={cfg.gemini_api_key}\n")
+                key_found = True
+            else:
+                new_lines.append(line)
+        
+        if not key_found:
+            if new_lines and not new_lines[-1].endswith('\n'):
+                new_lines[-1] += '\n'
+            new_lines.append(f"GEMINI_API_KEY={cfg.gemini_api_key}\n")
+            
+        with open(env_path, "w") as f:
+            f.writelines(new_lines)
+            
+        # Reload config module to reflect changes immediately
+        os.environ["GEMINI_API_KEY"] = cfg.gemini_api_key
+        from importlib import reload
+        reload(config)
+        
+    return {"status": "updated"}
 
 @app.post("/generate")
 async def generate_cards(

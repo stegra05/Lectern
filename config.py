@@ -104,7 +104,7 @@ ENABLE_REFLECTION: bool = os.getenv("ENABLE_REFLECTION", "true").lower() not in 
 MIN_CARDS_PER_SLIDE: float = float(os.getenv("MIN_CARDS_PER_SLIDE", "0.8"))
 
 # Target cards per slide (e.g., 1.5 -> ~50% more cards than slides)
-CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.0"))
+CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2"))
 
 # Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))

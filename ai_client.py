@@ -152,10 +152,11 @@ class LecternAIClient:
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         prompt = (
-            "You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a **comprehensive global concept map** that serves as the backbone for a spaced repetition deck.\n"
-            "- **Objectives**: Extract explicit learning goals and implicit competency targets.\n"
-            "- **Concepts**: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts over trivial examples. Assign stable, short, unique IDs.\n"
-            "- **Relations**: Map the *semantic structure* of the domain. Use precise relation types (e.g., `is_a`, `part_of`, `causes`, `precedes`, `contrasts_with`). Note page references for traceability.\n"
+            "You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a comprehensive global concept map that serves as the backbone for a spaced repetition deck.\n"
+            "- Objectives: Extract explicit learning goals and implicit competency targets.\n"
+            "- Concepts: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts over trivial examples. Assign stable, short, unique IDs.\n"
+            "- Relations: Map the *semantic structure* of the domain. Use precise relation types (e.g., `is_a`, `part_of`, `causes`, `precedes`, `contrasts_with`). Note page references for traceability.\n"
+            "- Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>) within any text fields.\n"
             "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array). No prose.\n"
         )
         parts = _compose_multimodal_content(pdf_content, prompt)
@@ -184,20 +185,21 @@ class LecternAIClient:
     def generate_more_cards(self, limit: int) -> Dict[str, Any]:
         self._prune_history()
         prompt = (
-            f"Generate up to {int(limit)} **high-quality, atomic Anki notes** continuing from our prior turns.\\n"
-            "- **Principles**:\\n"
-            "    - **Atomicity**: One idea per card.\\n"
-            "    - **Minimum Information Principle**: Keep questions and answers simple and direct.\\n"
-            "    - **Variety**: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
-            "    - **Context**: Use the `slide_topic` to ground the card.\\n"
-            "- **Format**:\\n"
-            "    - Prefer **Cloze** deletion for definitions and lists.\\n"
-            "    - Use **Basic** (Front/Back) for open-ended conceptual questions.\\n"
-            "- **Metadata**:\\n"
+            f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\\n"
+            "- Principles:\\n"
+            "    - Atomicity: One idea per card.\\n"
+            "    - Minimum Information Principle: Keep questions and answers simple and direct.\\n"
+            "    - Variety: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
+            "    - Context: Use the `slide_topic` to ground the card.\\n"
+            "- Format:\\n"
+            "    - Prefer Cloze deletion for definitions and lists.\\n"
+            "    - Use Basic (Front/Back) for open-ended conceptual questions.\\n"
+            "    - Text Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>, <code>code</code>).\\n"
+            "- Metadata:\\n"
             "    - `tags`: 1-2 concise, hierarchical tags (kebab-case, max 3 words). Avoid generic terms.\\n"
             "    - `slide_topic`: The specific section/header (Title Case).\\n"
             "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\\n"
-            "- **Important**: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
+            "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
             "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
         )
         parts: List[Dict[str, Any]] = [{"text": prompt}]
@@ -238,15 +240,16 @@ class LecternAIClient:
     def reflect(self, limit: int, reflection_prompt: str | None = None) -> Dict[str, Any]:
         self._prune_history()
         base = (
-            "You are a strict **Quality Assurance Specialist** for educational content. Review the last batch of generated cards.\n"
-            "- **Critique Criteria**:\n"
-            "    - **Redundancy**: Are there duplicate or overlapping cards?\n"
-            "    - **Vagueness**: Is the question ambiguous without more context?\n"
-            "    - **Complexity**: Is the answer too long or multi-faceted? (Split it!)\n"
-            "    - **Interference**: Do any cards look too similar, causing confusion?\n"
-            "- **Action**:\n"
+            "You are a strict Quality Assurance Specialist for educational content. Review the last batch of generated cards.\n"
+            "- Critique Criteria:\n"
+            "    - Redundancy: Are there duplicate or overlapping cards?\n"
+            "    - Vagueness: Is the question ambiguous without more context?\n"
+            "    - Complexity: Is the answer too long or multi-faceted? (Split it!)\n"
+            "    - Interference: Do any cards look too similar, causing confusion?\n"
+            "- Action:\n"
             "    - Write a concise `reflection` summarizing the quality and identifying specific issues.\n"
-            "    - Generate **improved replacements** or **new gap-filling cards** to address the issues.\n"
+            "    - Generate improved replacements or new gap-filling cards to address the issues.\n"
+            "    - Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>).\n"
             f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
         )
         prompt = (reflection_prompt or base)
