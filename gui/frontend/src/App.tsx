@@ -292,7 +292,7 @@ function App() {
               {/* Main Area: New Generation */}
               <motion.div variants={itemVariants} className="lg:col-span-8">
                 <GlassCard className="h-full flex flex-col justify-center items-center text-center p-12 border-primary/20 bg-primary/5 relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
                   <div className="w-20 h-20 bg-primary/20 rounded-3xl flex items-center justify-center mb-8 text-primary shadow-[0_0_30px_rgba(0,0,0,0.2)] shadow-primary/20">
                     <Plus className="w-10 h-10" />
@@ -309,7 +309,7 @@ function App() {
                       setPdfFile(null);
                       setStep('config');
                     }}
-                    className="px-8 py-4 bg-primary hover:bg-primary/90 text-zinc-900 rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all flex items-center gap-3"
+                    className="relative z-10 px-8 py-4 bg-primary hover:bg-primary/90 text-zinc-900 rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all flex items-center gap-3"
                   >
                     Create New Deck
                     <ChevronRight className="w-5 h-5" />
@@ -447,6 +447,14 @@ function App() {
                         <CheckCircle2 className="w-3 h-3" />
                         COMPLETE
                       </div>
+                    )}
+                    {step === 'generating' && (
+                      <button
+                        onClick={() => api.stopGeneration()}
+                        className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20"
+                      >
+                        STOP
+                      </button>
                     )}
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">

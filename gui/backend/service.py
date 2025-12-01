@@ -69,6 +69,10 @@ class GenerationService:
         self.logger = logging.getLogger("lectern.gui")
         self.core = LecternGenerationService()
         self.draft_store = DraftStore()
+        self.stop_requested = False
+
+    def stop(self):
+        self.stop_requested = True
 
     async def run_generation(
         self,
@@ -103,6 +107,10 @@ class GenerationService:
                 return ServiceEvent("error", f"Core error: {e}")
 
         while True:
+            if self.stop_requested:
+                yield ProgressEvent("done", "Generation stopped by user", {"cards": self.draft_store.get_drafts()}).to_json()
+                break
+
             # Execute the blocking next() in a thread
             event = await asyncio.to_thread(safe_next)
             

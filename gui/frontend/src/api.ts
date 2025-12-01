@@ -177,6 +177,13 @@ export const api = {
         }
     },
 
+    stopGeneration: async () => {
+        const res = await fetch(`${API_URL}/stop`, {
+            method: "POST",
+        });
+        return res.json();
+    },
+
     getDrafts: async () => {
         const res = await fetch(`${API_URL}/drafts`);
         return res.json();
