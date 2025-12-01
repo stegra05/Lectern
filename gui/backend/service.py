@@ -78,6 +78,9 @@ class GenerationService:
         total_cards_cap = int(len(pages) * getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
         max_batch = config.MAX_NOTES_PER_BATCH
 
+        # Calculate minimum required cards (enforced threshold)
+        min_cards_required = int(len(pages) * getattr(config, "MIN_CARDS_PER_SLIDE", 0.8))
+
         yield ProgressEvent("progress_start", "Generating Cards", data={"total": total_cards_cap}).to_json()
 
         while len(all_cards) < total_cards_cap:
@@ -103,7 +106,15 @@ class GenerationService:
                 
                 yield ProgressEvent("progress_update", data={"current": len(all_cards)}).to_json()
 
-                if out.get("done") or added_count == 0:
+                # Only stop if:
+                # 1. We added no new cards (stuck/exhausted)
+                # 2. OR (AI says done AND we met the minimum requirement)
+                should_stop = (
+                    added_count == 0 or
+                    (out.get("done") and len(all_cards) >= min_cards_required)
+                )
+                
+                if should_stop:
                     break
             except Exception as e:
                 yield ProgressEvent("error", f"Generation error: {e}").to_json()

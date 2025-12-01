@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal } from 'lucide-react';
+import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, type ProgressEvent } from './api';
 import { GlassCard } from './components/GlassCard';
@@ -108,6 +108,15 @@ function App() {
       console.error(e);
       setLogs(prev => [...prev, { type: 'error', message: 'Network error', timestamp: Date.now() }]);
     }
+  };
+
+  const handleReset = () => {
+    setStep('config');
+    setPdfFile(null);
+    setDeckName('');
+    setLogs([]);
+    setCards([]);
+    setProgress({ current: 0, total: 0 });
   };
 
   const containerVariants = {
@@ -333,6 +342,27 @@ function App() {
                     <span>TARGET: {progress.total}</span>
                   </div>
                 </GlassCard>
+
+                {step === 'done' && (
+                  <GlassCard className="border-primary/20 bg-primary/5">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-3 text-primary">
+                        <CheckCircle2 className="w-6 h-6" />
+                        <div>
+                          <h3 className="font-bold">Generation Complete</h3>
+                          <p className="text-xs text-primary/70">All cards have been exported to Anki</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleReset}
+                        className="w-full py-3 bg-primary hover:bg-primary/90 text-zinc-900 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/10 hover:shadow-primary/20"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Start New Session
+                      </button>
+                    </div>
+                  </GlassCard>
+                )}
               </div>
 
               {/* Right: Live Preview */}
