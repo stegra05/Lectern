@@ -305,8 +305,21 @@ def main(argv: List[str]) -> int:
             merged_tags = list(dict.fromkeys(ai_tags + (args.tags or [])))
             if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
                 merged_tags.append(config.DEFAULT_TAG)
+            
+            # Construct deck path for tags: Deck::Slideset (if available)
+            slide_topic = str(card.get("slide_topic") or "").strip()
+            # If we have a slide topic, append it to the deck name for the tag path
+            # User requested: Deck::Slideset::Topic -> but actually just Deck::Slideset as the hierarchy root
+            # "It should be Deck::Slideset::Topic, where Slideset is the new tag to be added."
+            # "No, just insert the Slideset tag, so it is easy to attribute topics / concepts to the slide set when studying."
+            # Interpretation: The tag hierarchy should be DeckName::SlideTopic::ExistingTag
+            
+            tag_deck_path = args.deck_name
+            if slide_topic:
+                tag_deck_path = f"{args.deck_name}::{slide_topic}"
+
             tags = (
-                build_grouped_tags(args.deck_name, merged_tags)
+                build_grouped_tags(tag_deck_path, merged_tags)
                 if getattr(config, "GROUP_TAGS_BY_DECK", False)
                 else merged_tags
             )
