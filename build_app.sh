@@ -17,6 +17,14 @@ warn() { echo -e "${YELLOW}⚠${NC} $1"; }
 error() { echo -e "${RED}✖${NC} $1"; }
 header() { echo -e "\n${BOLD}${BLUE}=== $1 ===${NC}\n"; }
 
+# Check for required tools
+check_tool() {
+    if ! command -v $1 &> /dev/null; then
+        error "$1 is not installed or not in PATH."
+        exit 1
+    fi
+}
+
 # Spinner Function
 spinner() {
     local pid=$1
@@ -71,6 +79,13 @@ echo "Build started at $(date)" > build.log
 
 start_time=$(date +%s)
 
+# Pre-flight checks
+header "Pre-flight Checks"
+check_tool "node"
+check_tool "npm"
+check_tool "python"
+success "All tools found"
+
 # Frontend
 header "Frontend"
 cd gui/frontend
@@ -80,12 +95,13 @@ cd ../..
 
 # Backend
 header "Backend"
-if ! pip show pyinstaller > /dev/null 2>&1; then
-    run_step "Installing PyInstaller" "pip install pyinstaller"
+# Use python -m to ensure we use the current python environment
+if ! python -m pip show pyinstaller > /dev/null 2>&1; then
+    run_step "Installing PyInstaller" "python -m pip install pyinstaller"
 else
     info "PyInstaller already installed"
 fi
-run_step "Installing Python dependencies" "pip install -r requirements.txt"
+run_step "Installing Python dependencies" "python -m pip install -r requirements.txt"
 
 # Icons
 header "Assets"
@@ -114,7 +130,8 @@ header "Packaging"
 run_step "Cleaning previous builds" "rm -rf dist build"
 
 # PyInstaller command
-PYINSTALLER_CMD="pyinstaller --name Lectern \
+# Using python -m PyInstaller to be safe
+PYINSTALLER_CMD="python -m PyInstaller --name Lectern \
     --windowed \
     --icon=icon.icns \
     --add-data 'gui/frontend/dist:frontend/dist' \
@@ -146,11 +163,18 @@ PYINSTALLER_CMD="pyinstaller --name Lectern \
 
 run_step "Compiling Binary - this may take a while" "$PYINSTALLER_CMD"
 
-# Finish
-end_time=$(date +%s)
-duration=$((end_time - start_time))
+# Verify Artifact
+if [ -d "dist/Lectern.app" ]; then
+    # Finish
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
 
-echo -e "\n${GREEN}${BOLD}✨ Build Complete! ✨${NC}"
-echo -e "📂 Location: ${BOLD}dist/Lectern${NC}"
-echo -e "⏱  Time: ${duration}s"
-echo -e "📝 Log: build.log\n"
+    echo -e "\n${GREEN}${BOLD}✨ Build Complete! ✨${NC}"
+    echo -e "📂 App Bundle: ${BOLD}dist/Lectern.app${NC}"
+    echo -e "📂 Executable: ${BOLD}dist/Lectern/Lectern${NC}"
+    echo -e "⏱  Time: ${duration}s"
+    echo -e "📝 Log: build.log\n"
+else
+    error "Build finished but dist/Lectern.app was not found."
+    exit 1
+fi

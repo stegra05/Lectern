@@ -25,6 +25,7 @@ function App() {
   const [isEstimating, setIsEstimating] = useState(false);
   const [previewSlide, setPreviewSlide] = useState<number | null>(null);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -174,7 +175,10 @@ function App() {
     setDeckName('');
     setLogs([]);
     setCards([]);
+    setLogs([]);
+    setCards([]);
     setProgress({ current: 0, total: 0 });
+    setIsCancelling(false);
     // Refresh history
     api.getHistory().then(setHistory);
   };
@@ -519,12 +523,24 @@ function App() {
                         )
                       )}
                       {step === 'generating' && (
-                        <button
-                          onClick={() => api.stopGeneration()}
-                          className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20 font-medium hover:border-red-500/40"
-                        >
-                          CANCEL
-                        </button>
+                        isCancelling ? (
+                          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-3 py-1 rounded-md border border-red-500/20">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span className="font-medium tracking-wide">CANCELLING...</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setIsCancelling(true);
+                              api.stopGeneration();
+                              // Return to dashboard immediately for better UX
+                              setTimeout(() => handleReset(), 500);
+                            }}
+                            className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20 font-medium hover:border-red-500/40"
+                          >
+                            CANCEL
+                          </button>
+                        )
                       )}
                     </div>
                   </div>

@@ -85,6 +85,23 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                             </div>
 
                             <div className="p-6 space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-text-muted">Appearance</label>
+                                    <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface">
+                                        <span className="text-text-main text-sm">Dark Mode</span>
+                                        <button
+                                            onClick={toggleTheme}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background ${theme === 'dark' ? 'bg-primary' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                                        >
+                                            <span
+                                                className={`${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="w-full h-px bg-border my-4" />
+
                                 {loading ? (
                                     <div className="flex justify-center py-8">
                                         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -92,31 +109,16 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                 ) : error ? (
                                     <div className="py-8 text-center space-y-4">
                                         <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
-                                        <p className="text-zinc-400">{error}</p>
+                                        <p className="text-text-muted">{error}</p>
                                         <button
                                             onClick={loadConfig}
-                                            className="px-4 py-2 bg-primary hover:bg-primary/90 text-zinc-900 rounded-lg font-medium transition-colors"
+                                            className="px-4 py-2 bg-primary hover:bg-primary/90 text-background rounded-lg font-medium transition-colors"
                                         >
                                             Retry
                                         </button>
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-text-muted">Appearance</label>
-                                            <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface">
-                                                <span className="text-text-main text-sm">Dark Mode</span>
-                                                <button
-                                                    onClick={toggleTheme}
-                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background ${theme === 'dark' ? 'bg-primary' : 'bg-zinc-700'}`}
-                                                >
-                                                    <span
-                                                        className={`${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
-                                                    />
-                                                </button>
-                                            </div>
-                                        </div>
-
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-text-muted">Gemini Model</label>
                                             <input
@@ -140,7 +142,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                 <button
                                                     onClick={handleSaveKey}
                                                     disabled={!newKey.trim() || isSaving}
-                                                    className="px-4 py-2 bg-surface hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
+                                                    className="px-4 py-2 bg-surface hover:bg-surface/80 disabled:opacity-50 disabled:cursor-not-allowed text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
                                                 >
                                                     {isSaving ? 'Saving...' : 'Update'}
                                                 </button>

@@ -9,7 +9,7 @@ generator. This module is read-only and never mutates user files.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, Callable
 
 # PyMuPDF is imported as fitz
 import fitz  # type: ignore
@@ -35,11 +35,12 @@ class PageContent:
     images: List[bytes]
 
 
-def extract_content_from_pdf(pdf_path: str) -> List[PageContent]:
+def extract_content_from_pdf(pdf_path: str, stop_check: Optional[Callable[[], bool]] = None) -> List[PageContent]:
     """Extract text and images from a PDF.
 
     Parameters:
         pdf_path: Absolute or relative path to the PDF file.
+        stop_check: Optional callback that returns True if processing should stop.
 
     Returns:
         A list of PageContent objects, one per page, preserving the original
@@ -53,7 +54,11 @@ def extract_content_from_pdf(pdf_path: str) -> List[PageContent]:
 
     extracted_pages: List[PageContent] = []
     with fitz.open(pdf_path) as document:
+        print(f"Info: Opened PDF with {document.page_count} pages.")
         for page_index in range(document.page_count):
+            if stop_check and stop_check():
+                print("Info: PDF parsing stopped by user.")
+                break
             page = document.load_page(page_index)
 
             # Extract text

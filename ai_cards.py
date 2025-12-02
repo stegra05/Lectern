@@ -31,6 +31,7 @@ def _normalize_card_object(card: Dict[str, Any]) -> Dict[str, Any] | None:
             "tags": [str(t) for t in (card.get("tags") or []) if isinstance(t, (str, int))],
             "media": [m for m in (card.get("media") or []) if isinstance(m, dict)],
             "slide_topic": str(card.get("slide_topic") or ""),
+            "slide_number": card.get("slide_number"),
         }
 
     # Case-insensitive key accessors
@@ -86,6 +87,7 @@ def _normalize_card_object(card: Dict[str, Any]) -> Dict[str, Any] | None:
             "tags": [str(t) for t in (card.get("tags") or []) if isinstance(t, (str, int))],
             "media": [m for m in (card.get("media") or []) if isinstance(m, dict)],
             "slide_topic": str(card.get("slide_topic") or ""),
+            "slide_number": card.get("slide_number"),
         }
 
     # Basic card
@@ -97,6 +99,7 @@ def _normalize_card_object(card: Dict[str, Any]) -> Dict[str, Any] | None:
         "tags": [str(t) for t in (card.get("tags") or []) if isinstance(t, (str, int))],
         "media": [m for m in (card.get("media") or []) if isinstance(m, dict)],
         "slide_topic": str(card.get("slide_topic") or ""),
+        "slide_number": card.get("slide_number"),
     }
 
 

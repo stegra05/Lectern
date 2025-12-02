@@ -94,7 +94,10 @@ class LecternGenerationService:
 
             yield ServiceEvent("step_start", "Parse PDF")
             try:
-                pages = extract_content_from_pdf(pdf_path)
+                pages = extract_content_from_pdf(pdf_path, stop_check=stop_check)
+                if stop_check and stop_check():
+                     yield ServiceEvent("warning", "PDF parsing stopped by user.")
+                     return
                 yield ServiceEvent("info", f"Parsed {len(pages)} pages")
                 yield ServiceEvent("step_end", "PDF Parsed", {"success": True, "pages": len(pages)})
             except Exception as e:

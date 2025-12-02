@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Edit2, Save, X, UploadCloud, AlertCircle } from 'lucide-react';
+import { Trash2, Edit2, Save, X, UploadCloud, AlertCircle, Layers } from 'lucide-react';
 import { api, type ProgressEvent } from '../api';
 import { GlassCard } from './GlassCard';
 
@@ -16,6 +16,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
     const [syncLogs, setSyncLogs] = useState<ProgressEvent[]>([]);
+    const [previewSlide, setPreviewSlide] = useState<number | null>(null);
 
     useEffect(() => {
         setCards(initialCards);
@@ -235,6 +236,21 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                                                 </span>
                                             ))}
                                         </div>
+
+                                        {card.slide_number && (
+                                            <div className="absolute bottom-0 right-0">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setPreviewSlide(card.slide_number);
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-surface hover:bg-surface/80 border border-border text-[10px] font-medium text-text-muted hover:text-text-main transition-colors"
+                                                >
+                                                    <Layers className="w-3 h-3" />
+                                                    SLIDE {card.slide_number}
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </GlassCard>
@@ -249,6 +265,47 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                     </div>
                 )}
             </div>
+
+            {/* Thumbnail Modal */}
+            <AnimatePresence>
+                {previewSlide !== null && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setPreviewSlide(null)}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                            className="relative max-w-4xl max-h-full bg-surface rounded-xl overflow-hidden shadow-2xl border border-border"
+                        >
+                            <div className="absolute top-4 right-4 z-10">
+                                <button
+                                    onClick={() => setPreviewSlide(null)}
+                                    className="p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-md transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-1 bg-background">
+                                <img
+                                    src={`${api.getApiUrl()}/thumbnail/${previewSlide}`}
+                                    alt={`Slide ${previewSlide}`}
+                                    className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
+                                />
+                            </div>
+                            <div className="p-4 bg-surface border-t border-border flex justify-between items-center">
+                                <span className="font-mono text-text-muted">SLIDE {previewSlide}</span>
+                                <span className="text-xs text-text-muted">Source Context</span>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
