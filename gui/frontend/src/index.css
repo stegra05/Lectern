@@ -4,27 +4,37 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@layer base {
+  :root {
+    /* Light Mode - Zinc/Lime inspired but light */
+    --background: 250 250 250; /* Zinc 50 */
+    --surface: 255 255 255;    /* White */
+    --primary: 132 204 22;     /* Lime 500 (darker for visibility on light) */
+    --secondary: 161 161 170;  /* Zinc 400 */
+    --text-main: 24 24 27;     /* Zinc 950 */
+    --text-muted: 113 113 122; /* Zinc 500 */
+    --border: 228 228 231;     /* Zinc 200 */
+  }
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  .dark {
+    /* Dark Mode - Original Zinc/Lime */
+    --background: 9 9 11;      /* Zinc 950 */
+    --surface: 24 24 27;       /* Zinc 900 */
+    --primary: 163 230 53;     /* Lime 400 */
+    --secondary: 161 161 170;  /* Zinc 400 */
+    --text-main: 244 244 245;  /* Zinc 100 */
+    --text-muted: 161 161 170; /* Zinc 400 */
+    --border: 39 39 42;        /* Zinc 800 */
+  }
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #09090b;
-  /* zinc-950 to match theme */
+  background-color: rgb(var(--background));
+  color: rgb(var(--text-main));
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 @keyframes spin {

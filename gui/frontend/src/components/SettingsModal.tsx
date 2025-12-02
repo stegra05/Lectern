@@ -6,9 +6,11 @@ import { api } from '../api';
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
+    theme: 'light' | 'dark';
+    toggleTheme: () => void;
 }
 
-export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsModalProps) {
     const [config, setConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -68,15 +70,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
                     >
-                        <div className="bg-zinc-900 border border-zinc-800 w-full max-w-lg rounded-2xl shadow-2xl pointer-events-auto overflow-hidden">
-                            <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
-                                <h2 className="text-xl font-semibold text-zinc-100 flex items-center gap-2">
+                        <div className="bg-surface border border-border w-full max-w-lg rounded-2xl shadow-2xl pointer-events-auto overflow-hidden">
+                            <div className="p-6 border-b border-border flex items-center justify-between">
+                                <h2 className="text-xl font-semibold text-text-main flex items-center gap-2">
                                     <Settings className="w-5 h-5 text-primary" />
                                     Settings
                                 </h2>
                                 <button
                                     onClick={onClose}
-                                    className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors"
+                                    className="p-2 hover:bg-background rounded-lg text-text-muted hover:text-text-main transition-colors"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
@@ -101,63 +103,78 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 ) : (
                                     <>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-zinc-400">Gemini Model</label>
+                                            <label className="text-sm font-medium text-text-muted">Appearance</label>
+                                            <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface">
+                                                <span className="text-text-main text-sm">Dark Mode</span>
+                                                <button
+                                                    onClick={toggleTheme}
+                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background ${theme === 'dark' ? 'bg-primary' : 'bg-zinc-700'}`}
+                                                >
+                                                    <span
+                                                        className={`${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                                                    />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-text-muted">Gemini Model</label>
                                             <input
                                                 type="text"
                                                 value={config?.gemini_model || ''}
                                                 readOnly
-                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2.5 px-4 text-zinc-300 focus:ring-2 focus:ring-primary/50 outline-none opacity-60 cursor-not-allowed"
+                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none opacity-60 cursor-not-allowed"
                                             />
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-zinc-400">Update API Key</label>
+                                            <label className="text-sm font-medium text-text-muted">Update API Key</label>
                                             <div className="flex gap-2">
                                                 <input
                                                     type="password"
                                                     value={newKey}
                                                     onChange={(e) => setNewKey(e.target.value)}
                                                     placeholder="Enter new Gemini API Key"
-                                                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg py-2.5 px-4 text-zinc-300 focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-zinc-700"
+                                                    className="flex-1 bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-text-muted"
                                                 />
                                                 <button
                                                     onClick={handleSaveKey}
                                                     disabled={!newKey.trim() || isSaving}
-                                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-200 rounded-lg font-medium transition-colors text-sm"
+                                                    className="px-4 py-2 bg-surface hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
                                                 >
                                                     {isSaving ? 'Saving...' : 'Update'}
                                                 </button>
                                             </div>
-                                            <p className="text-xs text-zinc-500">Securely stored in system keychain</p>
+                                            <p className="text-xs text-text-muted">Securely stored in system keychain</p>
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-zinc-400">Anki Connect URL</label>
+                                            <label className="text-sm font-medium text-text-muted">Anki Connect URL</label>
                                             <input
                                                 type="text"
                                                 value={config?.anki_url || ''}
                                                 readOnly
-                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2.5 px-4 text-zinc-300 focus:ring-2 focus:ring-primary/50 outline-none opacity-60 cursor-not-allowed"
+                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none opacity-60 cursor-not-allowed"
                                             />
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <label className="text-sm font-medium text-zinc-400">Basic Model</label>
+                                                <label className="text-sm font-medium text-text-muted">Basic Model</label>
                                                 <input
                                                     type="text"
                                                     value={config?.basic_model || ''}
                                                     readOnly
-                                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2.5 px-4 text-zinc-300 opacity-60 cursor-not-allowed"
+                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main opacity-60 cursor-not-allowed"
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-sm font-medium text-zinc-400">Cloze Model</label>
+                                                <label className="text-sm font-medium text-text-muted">Cloze Model</label>
                                                 <input
                                                     type="text"
                                                     value={config?.cloze_model || ''}
                                                     readOnly
-                                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2.5 px-4 text-zinc-300 opacity-60 cursor-not-allowed"
+                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main opacity-60 cursor-not-allowed"
                                                 />
                                             </div>
                                         </div>
@@ -165,8 +182,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 )}
                             </div>
 
-                            <div className="p-6 border-t border-zinc-800 bg-zinc-900/50">
-                                <p className="text-sm text-zinc-500 text-center">
+                            <div className="p-6 border-t border-border bg-surface/50">
+                                <p className="text-sm text-text-muted text-center">
                                     Other settings are configured via environment variables.
                                 </p>
                             </div>
