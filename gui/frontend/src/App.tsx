@@ -25,7 +25,26 @@ function App() {
   const [isEstimating, setIsEstimating] = useState(false);
   const [previewSlide, setPreviewSlide] = useState<number | null>(null);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+  });
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
   const refreshHealth = async () => {
     try {
@@ -180,14 +199,14 @@ function App() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-zinc-500 text-sm font-mono tracking-wider animate-pulse">INITIALIZING LECTERN...</p>
+          <p className="text-text-muted text-sm font-mono tracking-wider animate-pulse">INITIALIZING LECTERN...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-zinc-100 font-sans selection:bg-primary/20 selection:text-primary">
+    <div className="min-h-screen bg-background text-text-main font-sans selection:bg-primary/20 selection:text-primary transition-colors duration-300">
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[120px]" />
@@ -207,10 +226,10 @@ function App() {
             animate={{ opacity: 1, x: 0 }}
             className="flex flex-col"
           >
-            <h1 className="text-5xl font-bold tracking-tight text-white">
+            <h1 className="text-5xl font-bold tracking-tight text-text-main">
               Lectern<span className="text-primary">.</span>
             </h1>
-            <p className="text-zinc-500 mt-2 font-medium tracking-wide">AI-POWERED ANKI GENERATOR</p>
+            <p className="text-text-muted mt-2 font-medium tracking-wide">AI-POWERED ANKI GENERATOR</p>
           </motion.div>
 
           <motion.div
@@ -218,9 +237,9 @@ function App() {
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-6"
           >
-            <div className="flex items-center gap-3 bg-zinc-900/50 px-4 py-2 rounded-full border border-zinc-800 backdrop-blur-sm">
+            <div className="flex items-center gap-3 bg-surface/50 px-4 py-2 rounded-full border border-border backdrop-blur-sm">
               <StatusDot label="Anki" active={health?.anki_connected} />
-              <div className="w-px h-4 bg-zinc-800" />
+              <div className="w-px h-4 bg-border" />
               <StatusDot label="Gemini" active={health?.gemini_configured} />
               <button
                 onClick={async () => {
@@ -233,7 +252,7 @@ function App() {
                   }
                 }}
                 disabled={isRefreshingStatus}
-                className="ml-2 text-zinc-500 hover:text-primary transition-colors disabled:opacity-50"
+                className="ml-2 text-text-muted hover:text-primary transition-colors disabled:opacity-50"
                 title="Refresh status"
               >
                 <svg className={clsx("w-3 h-3", isRefreshingStatus && "animate-spin-slow")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,7 +262,7 @@ function App() {
             </div>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-3 bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 rounded-full transition-colors text-zinc-400 hover:text-primary"
+              className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
             >
               <Settings className="w-5 h-5" />
             </button>
@@ -266,7 +285,7 @@ function App() {
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
                       <Clock className="w-5 h-5 text-primary" />
-                      <h2 className="text-lg font-semibold text-zinc-200">Recent Sessions</h2>
+                      <h2 className="text-lg font-semibold text-text-main">Recent Sessions</h2>
                     </div>
                     {history.length > 0 && (
                       <button
@@ -277,7 +296,7 @@ function App() {
                             setHistory([]);
                           }
                         }}
-                        className="text-xs text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1"
+                        className="text-xs text-text-muted hover:text-red-400 transition-colors flex items-center gap-1"
                       >
                         <Trash2 className="w-3 h-3" />
                         Clear All
@@ -285,9 +304,9 @@ function App() {
                     )}
                   </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2 scrollbar-thin scrollbar-thumb-zinc-800 max-h-[60vh]">
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2 scrollbar-thin scrollbar-thumb-border max-h-[60vh]">
                     {history.length === 0 ? (
-                      <div className="text-zinc-500 text-sm italic text-center py-10">
+                      <div className="text-text-muted text-sm italic text-center py-10">
                         No recent sessions found.
                       </div>
                     ) : (
@@ -301,19 +320,19 @@ function App() {
                               setDeckName(entry.deck);
                               setStep('config');
                             }}
-                            className="w-full text-left p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-primary/50 hover:bg-zinc-800/50 transition-all"
+                            className="w-full text-left p-4 rounded-xl bg-surface/50 border border-border hover:border-primary/50 hover:bg-surface transition-all"
                           >
                             <div className="flex justify-between items-start mb-2">
-                              <span className="font-medium text-zinc-300 truncate w-full pr-6">{entry.filename}</span>
+                              <span className="font-medium text-text-main truncate w-full pr-6">{entry.filename}</span>
                               {entry.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />}
                               {entry.status === 'draft' && <div className="w-2 h-2 rounded-full bg-yellow-500 mt-1.5 shrink-0" />}
                               {entry.status === 'error' && <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />}
                             </div>
-                            <div className="flex items-center justify-between text-xs text-zinc-500">
+                            <div className="flex items-center justify-between text-xs text-text-muted">
                               <span className="truncate max-w-[120px]">{entry.deck}</span>
                               <span>{entry.card_count} cards</span>
                             </div>
-                            <div className="mt-2 text-[10px] text-zinc-600 font-mono">
+                            <div className="mt-2 text-[10px] text-text-muted font-mono">
                               {new Date(entry.date).toLocaleDateString()}
                             </div>
                           </button>
@@ -325,7 +344,7 @@ function App() {
                                 setHistory(prev => prev.filter(h => h.id !== entry.id));
                               }
                             }}
-                            className="absolute top-4 right-4 p-1.5 text-zinc-600 hover:text-red-400 hover:bg-zinc-800 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                            className="absolute top-4 right-4 p-1.5 text-text-muted hover:text-red-400 hover:bg-surface rounded-md opacity-0 group-hover:opacity-100 transition-all"
                             title="Delete Session"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -346,8 +365,8 @@ function App() {
                     <Plus className="w-10 h-10" />
                   </div>
 
-                  <h2 className="text-3xl font-bold text-white mb-4">Start New Generation</h2>
-                  <p className="text-zinc-400 max-w-md mb-10 leading-relaxed">
+                  <h2 className="text-3xl font-bold text-text-main mb-4">Start New Generation</h2>
+                  <p className="text-text-muted max-w-md mb-10 leading-relaxed">
                     Create a new Anki deck from your lecture slides. Lectern uses AI to extract concepts and generate high-quality cards.
                   </p>
 
@@ -357,7 +376,7 @@ function App() {
                       setPdfFile(null);
                       setStep('config');
                     }}
-                    className="relative z-10 px-8 py-4 bg-primary hover:bg-primary/90 text-zinc-900 rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all flex items-center gap-3"
+                    className="relative z-10 px-8 py-4 bg-primary hover:bg-primary/90 text-background rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all flex items-center gap-3"
                   >
                     Create New Deck
                     <ChevronRight className="w-5 h-5" />
@@ -379,7 +398,7 @@ function App() {
               <motion.div variants={itemVariants} className="lg:col-span-12 mb-4">
                 <button
                   onClick={() => setStep('dashboard')}
-                  className="flex items-center gap-2 text-zinc-500 hover:text-zinc-300 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 text-text-muted hover:text-text-main transition-colors text-sm font-medium"
                 >
                   <RotateCcw className="w-4 h-4" /> Back to Dashboard
                 </button>
@@ -389,7 +408,7 @@ function App() {
                 <GlassCard className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-semibold flex items-center gap-3">
-                      <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400 font-mono text-sm">01</span>
+                      <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-surface text-text-muted font-mono text-sm">01</span>
                       Source Material
                     </h2>
                   </div>
@@ -399,59 +418,59 @@ function App() {
                 <GlassCard className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-semibold flex items-center gap-3">
-                      <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400 font-mono text-sm">02</span>
+                      <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-surface text-text-muted font-mono text-sm">02</span>
                       Destination
                     </h2>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-500 mb-2 uppercase tracking-wider">Deck Name</label>
+                    <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">Deck Name</label>
                     <input
                       type="text"
                       value={deckName}
                       onChange={(e) => setDeckName(e.target.value)}
                       placeholder="University::Subject::Topic"
-                      className="w-full bg-zinc-950/50 border border-zinc-800 rounded-xl py-4 px-5 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-700"
+                      className="w-full bg-surface/50 border border-border rounded-xl py-4 px-5 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-text-muted"
                     />
                   </div>
                 </GlassCard>
               </motion.div>
 
               <motion.div variants={itemVariants} className="lg:col-span-5 flex flex-col justify-center">
-                <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-3xl p-8 backdrop-blur-sm relative overflow-hidden group">
+                <div className="bg-surface/30 border border-border/50 rounded-3xl p-8 backdrop-blur-sm relative overflow-hidden group">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-                  <h3 className="text-2xl font-bold mb-4 text-zinc-200">Ready to Generate?</h3>
-                  <p className="text-zinc-400 mb-8 leading-relaxed">
+                  <h3 className="text-2xl font-bold mb-4 text-text-main">Ready to Generate?</h3>
+                  <p className="text-text-muted mb-8 leading-relaxed">
                     Lectern will analyze your slides, extract key concepts, and generate high-quality Anki cards using the configured Gemini model.
                   </p>
 
                   {(estimation || isEstimating) && (
-                    <div className="mb-6 p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 flex items-center justify-between">
+                    <div className="mb-6 p-4 rounded-xl bg-surface/50 border border-border/50 flex items-center justify-between">
                       <div className="flex flex-col">
-                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Estimated Cost</span>
+                        <span className="text-xs font-bold text-text-muted uppercase tracking-wider">Estimated Cost</span>
                         <div className="flex items-baseline gap-2 mt-1">
                           {isEstimating ? (
-                            <div className="h-6 w-24 bg-zinc-800 animate-pulse rounded" />
+                            <div className="h-6 w-24 bg-surface animate-pulse rounded" />
                           ) : (
                             <>
-                              <span className="text-xl font-bold text-zinc-200">
+                              <span className="text-xl font-bold text-text-main">
                                 ${estimation?.cost.toFixed(2)}
                               </span>
-                              <span className="text-sm text-zinc-500 font-mono">
+                              <span className="text-sm text-text-muted font-mono">
                                 (~{(estimation?.tokens! / 1000).toFixed(1)}k tokens)
                               </span>
                             </>
                           )}
                         </div>
                       </div>
-                      {isEstimating && <Loader2 className="w-4 h-4 text-zinc-500 animate-spin" />}
+                      {isEstimating && <Loader2 className="w-4 h-4 text-text-muted animate-spin" />}
                     </div>
                   )}
 
                   <button
                     onClick={handleGenerate}
                     disabled={!pdfFile || !deckName || !health?.anki_connected}
-                    className="w-full group relative px-8 py-5 bg-primary hover:bg-primary/90 text-zinc-900 rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none overflow-hidden"
+                    className="w-full group relative px-8 py-5 bg-primary hover:bg-primary/90 text-background rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none overflow-hidden"
                   >
                     <span className="relative z-10 flex items-center justify-center gap-3">
                       <Play className="w-5 h-5 fill-current" />
@@ -479,10 +498,10 @@ function App() {
             >
               {/* Left: Logs & Progress */}
               <div className="lg:col-span-1 flex flex-col gap-6 max-h-[calc(100vh-200px)]">
-                <GlassCard className="flex-1 flex flex-col min-h-0 max-h-[calc(100vh-400px)] border-zinc-800/80">
+                <GlassCard className="flex-1 flex flex-col min-h-0 max-h-[calc(100vh-400px)] border-border/80">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-semibold text-zinc-300 flex items-center gap-2">
-                      <Terminal className="w-4 h-4 text-zinc-500" />
+                    <h3 className="font-semibold text-text-main flex items-center gap-2">
+                      <Terminal className="w-4 h-4 text-text-muted" />
                       Activity Log
                     </h3>
                     <div className="flex items-center gap-3">
@@ -509,18 +528,18 @@ function App() {
                       )}
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-border min-h-0">
                     {logs.map((log, i) => (
                       <motion.div
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         key={i}
-                        className={clsx("flex gap-3 p-2 rounded hover:bg-zinc-800/50 transition-colors", {
+                        className={clsx("flex gap-3 p-2 rounded hover:bg-surface/50 transition-colors", {
                           "text-blue-400": log.type === 'info',
                           "text-yellow-400": log.type === 'warning',
                           "text-red-400": log.type === 'error',
                           "text-primary": log.type === 'note_created',
-                          "text-zinc-500": log.type === 'status',
+                          "text-text-muted": log.type === 'status',
                         })}
                       >
                         <span className="opacity-30 shrink-0">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
@@ -532,11 +551,11 @@ function App() {
                 </GlassCard>
 
                 <GlassCard>
-                  <div className="flex justify-between text-sm mb-3 text-zinc-400">
+                  <div className="flex justify-between text-sm mb-3 text-text-muted">
                     <span className="font-medium">Progress</span>
                     <span className="font-mono">{Math.round((progress.current / (progress.total || 1)) * 100)}%</span>
                   </div>
-                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-2 bg-surface rounded-full overflow-hidden">
                     <motion.div
                       className="h-full bg-primary"
                       initial={{ width: 0 }}
@@ -544,7 +563,7 @@ function App() {
                       transition={{ type: "spring", stiffness: 50 }}
                     />
                   </div>
-                  <div className="mt-4 flex justify-between text-xs text-zinc-500 font-mono">
+                  <div className="mt-4 flex justify-between text-xs text-text-muted font-mono">
                     <span>GENERATED: {cards.length}</span>
                   </div>
                 </GlassCard>
@@ -561,7 +580,7 @@ function App() {
                       </div>
                       <button
                         onClick={handleReset}
-                        className="w-full py-3 bg-primary hover:bg-primary/90 text-zinc-900 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/10 hover:shadow-primary/20"
+                        className="w-full py-3 bg-primary hover:bg-primary/90 text-background rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/10 hover:shadow-primary/20"
                       >
                         <RotateCcw className="w-4 h-4" />
                         Start New Session
@@ -581,40 +600,40 @@ function App() {
                 ) : (
                   <>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-zinc-300 flex items-center gap-2">
-                        <Layers className="w-5 h-5 text-zinc-500" /> Live Preview
+                      <h3 className="text-lg font-semibold text-text-main flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-text-muted" /> Live Preview
                       </h3>
-                      <span className="text-xs font-mono text-zinc-600 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
+                      <span className="text-xs font-mono text-text-muted bg-surface px-2 py-1 rounded border border-border">
                         {cards.length} CARDS
                       </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-12 scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-12 scrollbar-thin scrollbar-thumb-border min-h-0">
                       <AnimatePresence initial={false}>
                         {cards.map((card, i) => (
                           <motion.div
                             key={i}
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-lg relative overflow-hidden group hover:border-zinc-700 transition-colors"
+                            className="bg-surface border border-border rounded-xl p-6 shadow-lg relative overflow-hidden group hover:border-border/80 transition-colors"
                           >
                             <div className="absolute top-0 left-0 w-1 h-full bg-primary/50" />
-                            <div className="absolute top-4 right-4 text-[10px] font-bold text-zinc-600 uppercase tracking-wider border border-zinc-800 px-2 py-1 rounded bg-zinc-950">
+                            <div className="absolute top-4 right-4 text-[10px] font-bold text-text-muted uppercase tracking-wider border border-border px-2 py-1 rounded bg-background">
                               {card.model_name || 'Basic'}
                             </div>
 
                             <div className="space-y-6 mt-2">
                               {Object.entries(card.fields || {}).map(([key, value]) => (
                                 <div key={key}>
-                                  <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{key}</div>
-                                  <div className="text-sm text-zinc-300 leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: String(value) }} />
+                                  <div className="text-[10px] text-text-muted font-bold uppercase tracking-widest mb-1.5">{key}</div>
+                                  <div className="text-sm text-text-main leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: String(value) }} />
                                 </div>
                               ))}
                             </div>
 
                             <div className="mt-6 flex flex-wrap gap-2">
                               {(card.tags || []).map((tag: string) => (
-                                <span key={tag} className="px-2.5 py-1 bg-zinc-800 text-zinc-400 text-xs rounded-md font-medium border border-zinc-700/50">
+                                <span key={tag} className="px-2.5 py-1 bg-background text-text-muted text-xs rounded-md font-medium border border-border">
                                   #{tag}
                                 </span>
                               ))}
@@ -627,7 +646,7 @@ function App() {
                                     e.stopPropagation();
                                     setPreviewSlide(card.slide_number);
                                   }}
-                                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[10px] font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+                                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-background hover:bg-surface border border-border text-[10px] font-medium text-text-muted hover:text-text-main transition-colors"
                                 >
                                   <Layers className="w-3 h-3" />
                                   SLIDE {card.slide_number}
@@ -639,7 +658,7 @@ function App() {
                       </AnimatePresence>
 
                       {cards.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-zinc-600 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/20">
+                        <div className="h-full flex flex-col items-center justify-center text-text-muted border-2 border-dashed border-border rounded-xl bg-surface/20">
                           <Loader2 className="w-8 h-8 animate-spin mb-4 opacity-20" />
                           <p className="font-medium">Waiting for cards...</p>
                           <p className="text-sm opacity-50 mt-1">Generation will start shortly</p>
@@ -654,7 +673,7 @@ function App() {
         </AnimatePresence>
       </div>
 
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} theme={theme} toggleTheme={toggleTheme} />
 
       {/* Thumbnail Modal */}
       <AnimatePresence>
@@ -671,7 +690,7 @@ function App() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              className="relative max-w-4xl max-h-full bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
+              className="relative max-w-4xl max-h-full bg-surface rounded-xl overflow-hidden shadow-2xl border border-border"
             >
               <div className="absolute top-4 right-4 z-10">
                 <button
@@ -681,16 +700,16 @@ function App() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="p-1 bg-zinc-800">
+              <div className="p-1 bg-background">
                 <img
                   src={`${api.getApiUrl()}/thumbnail/${previewSlide}`}
                   alt={`Slide ${previewSlide}`}
                   className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
                 />
               </div>
-              <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center">
-                <span className="font-mono text-zinc-400">SLIDE {previewSlide}</span>
-                <span className="text-xs text-zinc-600">Source Context</span>
+              <div className="p-4 bg-surface border-t border-border flex justify-between items-center">
+                <span className="font-mono text-text-muted">SLIDE {previewSlide}</span>
+                <span className="text-xs text-text-muted">Source Context</span>
               </div>
             </motion.div>
           </motion.div>
@@ -703,7 +722,7 @@ function App() {
 const StatusDot = ({ label, active }: { label: string, active: boolean }) => (
   <div className="flex items-center gap-2">
     <div className={clsx("w-2 h-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]", active ? "bg-primary shadow-primary/50" : "bg-red-500 shadow-red-500/50")} />
-    <span className={clsx("text-xs font-medium tracking-wide", active ? "text-zinc-300" : "text-zinc-500")}>
+    <span className={clsx("text-xs font-medium tracking-wide", active ? "text-text-main" : "text-text-muted")}>
       {label}
     </span>
   </div>

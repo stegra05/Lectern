@@ -119,15 +119,15 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                             </div>
                         </div>
                         <div className="text-center">
-                            <h3 className="text-xl font-bold text-zinc-200">Syncing to Anki...</h3>
-                            <p className="text-zinc-500 mt-2">Exporting {cards.length} cards to your collection</p>
+                            <h3 className="text-xl font-bold text-text-main">Syncing to Anki...</h3>
+                            <p className="text-text-muted mt-2">Exporting {cards.length} cards to your collection</p>
                         </div>
                     </div>
                 </GlassCard>
 
-                <div className="max-h-60 overflow-y-auto space-y-2 font-mono text-xs pr-2 scrollbar-thin scrollbar-thumb-zinc-700">
+                <div className="max-h-60 overflow-y-auto space-y-2 font-mono text-xs pr-2 scrollbar-thin scrollbar-thumb-border">
                     {syncLogs.map((log, i) => (
-                        <div key={i} className="text-zinc-500">
+                        <div key={i} className="text-text-muted">
                             <span className="opacity-50 mr-2">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
                             {log.message}
                         </div>
@@ -141,17 +141,17 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
         <div className="h-full flex flex-col space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-zinc-100">Review Queue</h2>
-                    <p className="text-zinc-500">Review, edit, or delete cards before syncing to Anki.</p>
+                    <h2 className="text-2xl font-bold text-text-main">Review Queue</h2>
+                    <p className="text-text-muted">Review, edit, or delete cards before syncing to Anki.</p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="text-sm font-mono text-zinc-500 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800">
+                    <div className="text-sm font-mono text-text-muted bg-surface px-3 py-1.5 rounded-lg border border-border">
                         {cards.length} DRAFTS
                     </div>
                     <button
                         onClick={handleSync}
                         disabled={cards.length === 0}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-zinc-900 rounded-xl font-bold shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-background rounded-xl font-bold shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <UploadCloud className="w-4 h-4" />
                         Sync to Anki
@@ -159,7 +159,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-thin scrollbar-thumb-zinc-700 grid gap-4 content-start">
+            <div className="flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-thin scrollbar-thumb-border grid gap-4 content-start">
                 <AnimatePresence mode="popLayout">
                     {cards.map((card, index) => (
                         <motion.div
@@ -170,17 +170,17 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="group relative"
                         >
-                            <GlassCard className={`transition-colors ${editingIndex === index ? 'border-primary/50 bg-primary/5' : 'hover:border-zinc-700'}`}>
+                            <GlassCard className={`transition-colors ${editingIndex === index ? 'border-primary/50 bg-primary/5' : 'hover:border-border/80'}`}>
                                 {editingIndex === index ? (
                                     // Edit Mode
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between mb-4">
                                             <span className="text-xs font-bold text-primary uppercase tracking-wider">Editing Card #{index + 1}</span>
                                             <div className="flex items-center gap-2">
-                                                <button onClick={cancelEdit} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors">
+                                                <button onClick={cancelEdit} className="p-2 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors">
                                                     <X className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => saveEdit(index)} className="p-2 bg-primary hover:bg-primary/90 text-zinc-900 rounded-lg transition-colors">
+                                                <button onClick={() => saveEdit(index)} className="p-2 bg-primary hover:bg-primary/90 text-background rounded-lg transition-colors">
                                                     <Save className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -189,11 +189,11 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                                         <div className="grid gap-4">
                                             {Object.entries(editForm.fields || {}).map(([key, value]) => (
                                                 <div key={key}>
-                                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">{key}</label>
+                                                    <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">{key}</label>
                                                     <textarea
                                                         value={value as string}
                                                         onChange={(e) => handleFieldChange(key, e.target.value)}
-                                                        className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-200 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none min-h-[100px] font-mono"
+                                                        className="w-full bg-surface/50 border border-border rounded-lg p-3 text-sm text-text-main focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none min-h-[100px] font-mono"
                                                     />
                                                 </div>
                                             ))}
@@ -205,14 +205,14 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                                         <div className="absolute top-0 right-0 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => startEdit(index)}
-                                                className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-primary transition-colors"
+                                                className="p-2 hover:bg-surface rounded-lg text-text-muted hover:text-primary transition-colors"
                                                 title="Edit"
                                             >
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(index)}
-                                                className="p-2 hover:bg-red-500/10 rounded-lg text-zinc-400 hover:text-red-400 transition-colors"
+                                                className="p-2 hover:bg-red-500/10 rounded-lg text-text-muted hover:text-red-400 transition-colors"
                                                 title="Delete"
                                             >
                                                 <Trash2 className="w-4 h-4" />
@@ -222,15 +222,15 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                                         <div className="space-y-4">
                                             {Object.entries(card.fields || {}).map(([key, value]) => (
                                                 <div key={key}>
-                                                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">{key}</div>
-                                                    <div className="text-sm text-zinc-300 leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: String(value) }} />
+                                                    <div className="text-[10px] text-text-muted font-bold uppercase tracking-widest mb-1">{key}</div>
+                                                    <div className="text-sm text-text-main leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: String(value) }} />
                                                 </div>
                                             ))}
                                         </div>
 
                                         <div className="mt-4 flex flex-wrap gap-2">
                                             {(card.tags || []).map((tag: string) => (
-                                                <span key={tag} className="px-2 py-0.5 bg-zinc-800 text-zinc-500 text-[10px] rounded-md font-medium border border-zinc-700/50 uppercase tracking-wide">
+                                                <span key={tag} className="px-2 py-0.5 bg-surface text-text-muted text-[10px] rounded-md font-medium border border-border uppercase tracking-wide">
                                                     #{tag}
                                                 </span>
                                             ))}
@@ -243,7 +243,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                 </AnimatePresence>
 
                 {cards.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12 text-zinc-500 border-2 border-dashed border-zinc-800 rounded-xl">
+                    <div className="flex flex-col items-center justify-center py-12 text-text-muted border-2 border-dashed border-border rounded-xl">
                         <AlertCircle className="w-8 h-8 mb-3 opacity-20" />
                         <p>No drafts remaining.</p>
                     </div>
