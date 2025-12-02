@@ -4,7 +4,27 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-HISTORY_FILE = "history.json"
+import sys
+from pathlib import Path
+
+def get_history_file_path() -> str:
+    """
+    Determine the appropriate path for history.json.
+    - If Frozen (App Bundle): ~/Library/Application Support/Lectern/history.json
+    - If Dev: Project Root/history.json
+    """
+    if getattr(sys, 'frozen', False):
+        # We are running in a bundle
+        app_support = Path.home() / "Library" / "Application Support" / "Lectern"
+        app_support.mkdir(parents=True, exist_ok=True)
+        return str(app_support / "history.json")
+    else:
+        # We are running in a normal Python environment
+        # Project root is parent of utils
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        return os.path.join(project_root, "history.json")
+
+HISTORY_FILE = get_history_file_path()
 
 class HistoryManager:
     def __init__(self, history_file: str = HISTORY_FILE):
@@ -80,3 +100,17 @@ class HistoryManager:
             if entry["id"] == entry_id:
                 return entry
         return None
+
+    def delete_entry(self, entry_id: str) -> bool:
+        """Delete a specific history entry by ID."""
+        history = self._load()
+        initial_len = len(history)
+        history = [e for e in history if e["id"] != entry_id]
+        if len(history) < initial_len:
+            self._save(history)
+            return True
+        return False
+
+    def clear_all(self) -> None:
+        """Clear all history entries."""
+        self._save([])

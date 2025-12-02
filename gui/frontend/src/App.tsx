@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw, Clock, ChevronRight, Plus } from 'lucide-react';
+import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw, Clock, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, type ProgressEvent, type HistoryEntry } from './api';
 import { GlassCard } from './components/GlassCard';
@@ -24,6 +24,7 @@ function App() {
   const [estimation, setEstimation] = useState<{ tokens: number, cost: number } | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
   const [previewSlide, setPreviewSlide] = useState<number | null>(null);
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const refreshHealth = async () => {
@@ -111,6 +112,13 @@ function App() {
     fetchEstimate();
   }, [pdfFile]);
 
+  // Refresh history when entering specific states
+  useEffect(() => {
+    if (step === 'done' || step === 'dashboard') {
+      api.getHistory().then(setHistory);
+    }
+  }, [step]);
+
   const handleGenerate = async () => {
     if (!pdfFile || !deckName) return;
     setStep('generating');
@@ -190,7 +198,7 @@ function App() {
         )}
       </AnimatePresence>
 
-      <div className="relative max-w-6xl mx-auto p-6 lg:p-12">
+      <div className="relative w-full max-w-[95%] mx-auto p-6 lg:p-8 pt-12 lg:pt-24">
         <header className="mb-16 flex items-center justify-between">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -214,13 +222,19 @@ function App() {
               <StatusDot label="Gemini" active={health?.gemini_configured} />
               <button
                 onClick={async () => {
-                  const result = await api.checkHealth();
-                  setHealth(result);
+                  setIsRefreshingStatus(true);
+                  try {
+                    const result = await api.checkHealth();
+                    setHealth(result);
+                  } finally {
+                    setIsRefreshingStatus(false);
+                  }
                 }}
-                className="ml-2 text-zinc-500 hover:text-primary transition-colors"
+                disabled={isRefreshingStatus}
+                className="ml-2 text-zinc-500 hover:text-primary transition-colors disabled:opacity-50"
                 title="Refresh status"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={clsx("w-3 h-3", isRefreshingStatus && "animate-spin-slow")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </button>
@@ -247,42 +261,74 @@ function App() {
               {/* Sidebar: Recent Files */}
               <motion.div variants={itemVariants} className="lg:col-span-4 space-y-6">
                 <GlassCard className="h-full min-h-[500px] flex flex-col">
-                  <div className="flex items-center gap-3 mb-6">
-                    <Clock className="w-5 h-5 text-primary" />
-                    <h2 className="text-lg font-semibold text-zinc-200">Recent Sessions</h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-primary" />
+                      <h2 className="text-lg font-semibold text-zinc-200">Recent Sessions</h2>
+                    </div>
+                    {history.length > 0 && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm('Are you sure you want to clear all history?')) {
+                            await api.clearHistory();
+                            setHistory([]);
+                          }
+                        }}
+                        className="text-xs text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Clear All
+                      </button>
+                    )}
                   </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2 scrollbar-thin scrollbar-thumb-zinc-800">
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2 scrollbar-thin scrollbar-thumb-zinc-800 max-h-[60vh]">
                     {history.length === 0 ? (
                       <div className="text-zinc-500 text-sm italic text-center py-10">
                         No recent sessions found.
                       </div>
                     ) : (
                       history.map((entry) => (
-                        <button
+                        <div
                           key={entry.id}
-                          onClick={() => {
-                            setDeckName(entry.deck);
-                            setStep('config');
-                            // Ideally we'd set the file too, but browser security prevents it.
-                            // We could show a hint to re-select the file.
-                          }}
-                          className="w-full text-left p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-primary/50 hover:bg-zinc-800/50 transition-all group"
+                          className="relative group"
                         >
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="font-medium text-zinc-300 truncate w-full pr-2">{entry.filename}</span>
-                            {entry.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />}
-                            {entry.status === 'draft' && <div className="w-2 h-2 rounded-full bg-yellow-500 mt-1.5 shrink-0" />}
-                            {entry.status === 'error' && <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />}
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-zinc-500">
-                            <span className="truncate max-w-[120px]">{entry.deck}</span>
-                            <span>{entry.card_count} cards</span>
-                          </div>
-                          <div className="mt-2 text-[10px] text-zinc-600 font-mono">
-                            {new Date(entry.date).toLocaleDateString()}
-                          </div>
-                        </button>
+                          <button
+                            onClick={() => {
+                              setDeckName(entry.deck);
+                              setStep('config');
+                            }}
+                            className="w-full text-left p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-primary/50 hover:bg-zinc-800/50 transition-all"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="font-medium text-zinc-300 truncate w-full pr-6">{entry.filename}</span>
+                              {entry.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />}
+                              {entry.status === 'draft' && <div className="w-2 h-2 rounded-full bg-yellow-500 mt-1.5 shrink-0" />}
+                              {entry.status === 'error' && <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />}
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-zinc-500">
+                              <span className="truncate max-w-[120px]">{entry.deck}</span>
+                              <span>{entry.card_count} cards</span>
+                            </div>
+                            <div className="mt-2 text-[10px] text-zinc-600 font-mono">
+                              {new Date(entry.date).toLocaleDateString()}
+                            </div>
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (confirm('Delete this session?')) {
+                                await api.deleteHistoryEntry(entry.id);
+                                setHistory(prev => prev.filter(h => h.id !== entry.id));
+                              }
+                            }}
+                            className="absolute top-4 right-4 p-1.5 text-zinc-600 hover:text-red-400 hover:bg-zinc-800 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                            title="Delete Session"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       ))
                     )}
                   </div>
@@ -437,25 +483,29 @@ function App() {
                       <Terminal className="w-4 h-4 text-zinc-500" />
                       Activity Log
                     </h3>
-                    {step === 'generating' ? (
-                      <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 px-2 py-1 rounded-md">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        PROCESSING
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-md">
-                        <CheckCircle2 className="w-3 h-3" />
-                        COMPLETE
-                      </div>
-                    )}
-                    {step === 'generating' && (
-                      <button
-                        onClick={() => api.stopGeneration()}
-                        className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20"
-                      >
-                        STOP
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {step === 'generating' ? (
+                        <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 px-2 py-1 rounded-md border border-primary/20">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span className="font-medium tracking-wide">PROCESSING</span>
+                        </div>
+                      ) : (
+                        step === 'done' && (
+                          <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span className="font-medium tracking-wide">COMPLETE</span>
+                          </div>
+                        )
+                      )}
+                      {step === 'generating' && (
+                        <button
+                          onClick={() => api.stopGeneration()}
+                          className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20 font-medium hover:border-red-500/40"
+                        >
+                          CANCEL
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-zinc-700 min-h-0">
                     {logs.map((log, i) => (
@@ -488,13 +538,12 @@ function App() {
                     <motion.div
                       className="h-full bg-primary"
                       initial={{ width: 0 }}
-                      animate={{ width: `${(progress.current / (progress.total || 1)) * 100}%` }}
+                      animate={{ width: `${Math.min(100, (progress.current / (progress.total || 1)) * 100)}%` }}
                       transition={{ type: "spring", stiffness: 50 }}
                     />
                   </div>
                   <div className="mt-4 flex justify-between text-xs text-zinc-500 font-mono">
                     <span>GENERATED: {cards.length}</span>
-                    <span>TARGET: {progress.total}</span>
                   </div>
                 </GlassCard>
 

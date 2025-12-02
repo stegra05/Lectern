@@ -120,6 +120,21 @@ export const api = {
         }
     },
 
+    clearHistory: async () => {
+        const res = await fetch(`${API_URL}/history`, {
+            method: "DELETE",
+        });
+        return res.json();
+    },
+
+    deleteHistoryEntry: async (id: string) => {
+        const res = await fetch(`${API_URL}/history/${id}`, {
+            method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete entry");
+        return res.json();
+    },
+
     estimateCost: async (file: File) => {
         const formData = new FormData();
         formData.append("pdf_file", file);

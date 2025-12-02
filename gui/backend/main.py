@@ -137,6 +137,20 @@ async def get_history():
     mgr = HistoryManager()
     return mgr.get_all()
 
+@app.delete("/history")
+async def clear_history():
+    mgr = HistoryManager()
+    mgr.clear_all()
+    return {"status": "cleared"}
+
+@app.delete("/history/{entry_id}")
+async def delete_history_entry(entry_id: str):
+    mgr = HistoryManager()
+    success = mgr.delete_entry(entry_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"status": "deleted"}
+
 @app.post("/estimate")
 async def estimate_cost(pdf_file: UploadFile = File(...)):
     # Save uploaded file to temp

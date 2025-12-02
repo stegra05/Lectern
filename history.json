@@ -1,0 +1,20 @@
+[
+  {
+    "id": "a68e1fea-d0b8-4ff6-b0cf-fc0c4c5ced78",
+    "filename": "test.pdf",
+    "full_path": "/Users/stef/Documents/Programmieren/unfinished/Lectern/test.pdf",
+    "deck": "Test Deck",
+    "date": "2025-12-02T01:09:11.852252",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "4e4258d2-bc80-43eb-aa38-a310936d6013",
+    "filename": "test.pdf",
+    "full_path": "/Users/stef/Documents/Programmieren/unfinished/Lectern/test.pdf",
+    "deck": "Test Deck",
+    "date": "2025-12-02T01:07:14.127506",
+    "card_count": 0,
+    "status": "draft"
+  }
+]
