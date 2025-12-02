@@ -1,6 +1,7 @@
 # Core dependencies for Lectern CLI
 # PDF parsing and image extraction
 PyMuPDF>=1.24.0,<1.26
+pytesseract>=0.3.10
 
 # Google Gemini API client
 google-generativeai>=0.7.0,<0.9
@@ -27,3 +28,6 @@ rich>=13.7.1,<14.0
 
 
 
+
+# Security
+keyring>=24.0.0

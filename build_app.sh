@@ -138,10 +138,13 @@ PYINSTALLER_CMD="pyinstaller --name Lectern \
     --hidden-import=objc \
     --hidden-import=Cocoa \
     --hidden-import=WebKit \
+    --hidden-import=pytesseract \
+    --hidden-import=PIL \
+    --hidden-import=PIL.Image \
     --noconfirm \
     gui/launcher.py"
 
-run_step "Compiling Binary (this may take a while)" "$PYINSTALLER_CMD"
+run_step "Compiling Binary - this may take a while" "$PYINSTALLER_CMD"
 
 # Finish
 end_time=$(date +%s)

@@ -34,10 +34,10 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
   const startSequence = async () => {
     // Step 1: Anki Check
     setAnkiStatus('active');
-    
+
     // Artificial delay for "Radar" feel
     await new Promise(r => setTimeout(r, 1000));
-    
+
     try {
       const health = await api.checkHealth();
       if (health.anki_connected) {
@@ -64,7 +64,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
 
   const submitApiKey = async () => {
     if (!apiKey.trim()) return;
-    
+
     try {
       await api.saveConfig({ gemini_api_key: apiKey });
       setGeminiStatus('success');
@@ -99,7 +99,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
             className="relative w-full max-w-md group"
           >
             {/* Spotlight Gradient */}
-            <div 
+            <div
               className="absolute pointer-events-none inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
               style={{
                 background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(163, 230, 53, 0.06), transparent 40%)`
@@ -129,22 +129,22 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
               <div className="space-y-8 relative">
                 {/* Connecting Line (Background) */}
                 <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-zinc-800 -z-10" />
-                
+
                 {/* Step 1: Anki Uplink */}
                 <div className="relative">
                   <StepIndicator status={ankiStatus} icon={Server} />
-                  
+
                   <div className="ml-14 pt-1">
                     <h3 className={clsx("font-medium transition-colors", ankiStatus === 'active' ? "text-zinc-200" : "text-zinc-500")}>
                       Anki Uplink
                     </h3>
-                    
+
                     {ankiStatus === 'active' && (
                       <p className="text-sm text-zinc-500 mt-1 animate-pulse">Establishing connection...</p>
                     )}
-                    
+
                     {ankiStatus === 'success' && (
-                      <motion.p 
+                      <motion.p
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         className="text-xs text-primary font-mono mt-1"
@@ -163,7 +163,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                           <p>Connection failed. Is Anki running with AnkiConnect installed?</p>
                         </div>
-                        <button 
+                        <button
                           onClick={retryAnki}
                           className="mt-3 w-full py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded text-xs font-medium transition-colors flex items-center justify-center gap-2"
                         >
@@ -176,18 +176,18 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
 
                 {/* Step 2: Neural Link */}
                 <div className="relative">
-                   <StepIndicator 
-                     status={geminiStatus === 'pending' && ankiStatus !== 'success' ? 'pending' : geminiStatus} 
-                     icon={BrainCircuit} 
-                   />
-                   
-                   <div className="ml-14 pt-1">
+                  <StepIndicator
+                    status={geminiStatus === 'pending' && ankiStatus !== 'success' ? 'pending' : geminiStatus}
+                    icon={BrainCircuit}
+                  />
+
+                  <div className="ml-14 pt-1">
                     <h3 className={clsx("font-medium transition-colors", geminiStatus === 'active' ? "text-zinc-200" : "text-zinc-500")}>
                       Neural Link
                     </h3>
 
                     {geminiStatus === 'active' && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="mt-4"
@@ -202,14 +202,14 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-4 pr-10 text-sm text-zinc-200 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all font-mono"
                           />
                           <div className="absolute right-3 top-3 text-zinc-600 transition-colors duration-300">
-                             {apiKey.length > 10 ? <Unlock className="w-4 h-4 text-primary" /> : <Lock className="w-4 h-4" />}
+                            {apiKey.length > 10 ? <Unlock className="w-4 h-4 text-primary" /> : <Lock className="w-4 h-4" />}
                           </div>
-                          
+
                           {/* Progress Bar Border Effect */}
-                          <div className="absolute bottom-0 left-0 h-[1px] bg-primary transition-all duration-300" 
-                               style={{ width: apiKey.length > 0 ? '100%' : '0%', opacity: apiKey.length > 0 ? 1 : 0 }} />
+                          <div className="absolute bottom-0 left-0 h-[1px] bg-primary transition-all duration-300"
+                            style={{ width: apiKey.length > 0 ? '100%' : '0%', opacity: apiKey.length > 0 ? 1 : 0 }} />
                         </div>
-                        
+
                         <button
                           onClick={submitApiKey}
                           disabled={apiKey.length < 10}
@@ -217,9 +217,9 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         >
                           Initialize <ArrowRight className="w-4 h-4" />
                         </button>
-                        
+
                         <p className="mt-3 text-[10px] text-zinc-600 text-center">
-                          Your key is stored locally in <code className="bg-zinc-800 px-1 rounded">.env</code>
+                          Your key is securely stored in the system keychain.
                         </p>
                       </motion.div>
                     )}
@@ -227,15 +227,16 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                     {geminiStatus === 'success' && (
                       <p className="text-xs text-primary font-mono mt-1">AUTHENTICATED</p>
                     )}
-                   </div>
+                  </div>
                 </div>
               </div>
-              
+
             </GlassCard>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+        )
+        }
+      </AnimatePresence >
+    </motion.div >
   );
 }
 

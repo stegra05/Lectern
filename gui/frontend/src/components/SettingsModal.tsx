@@ -12,6 +12,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const [config, setConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [newKey, setNewKey] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     const loadConfig = async () => {
         setLoading(true);
@@ -19,11 +21,27 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         try {
             const data = await api.getConfig();
             setConfig(data);
+            setNewKey(''); // Reset input
         } catch (err) {
             setError('Failed to connect to backend');
             console.error(err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSaveKey = async () => {
+        if (!newKey.trim()) return;
+        setIsSaving(true);
+        try {
+            await api.saveConfig({ gemini_api_key: newKey });
+            await loadConfig(); // Reload to confirm
+            setNewKey('');
+        } catch (err) {
+            console.error(err);
+            setError('Failed to save key');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -90,7 +108,27 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                                 readOnly
                                                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2.5 px-4 text-zinc-300 focus:ring-2 focus:ring-primary/50 outline-none opacity-60 cursor-not-allowed"
                                             />
-                                            <p className="text-xs text-zinc-500">Configured via environment variables</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-zinc-400">Update API Key</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="password"
+                                                    value={newKey}
+                                                    onChange={(e) => setNewKey(e.target.value)}
+                                                    placeholder="Enter new Gemini API Key"
+                                                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg py-2.5 px-4 text-zinc-300 focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-zinc-700"
+                                                />
+                                                <button
+                                                    onClick={handleSaveKey}
+                                                    disabled={!newKey.trim() || isSaving}
+                                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-200 rounded-lg font-medium transition-colors text-sm"
+                                                >
+                                                    {isSaving ? 'Saving...' : 'Update'}
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-zinc-500">Securely stored in system keychain</p>
                                         </div>
 
                                         <div className="space-y-2">
@@ -129,7 +167,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                             <div className="p-6 border-t border-zinc-800 bg-zinc-900/50">
                                 <p className="text-sm text-zinc-500 text-center">
-                                    To change these settings, update your <code className="text-zinc-300 bg-zinc-800 px-1 py-0.5 rounded">.env</code> file and restart the server.
+                                    Other settings are configured via environment variables.
                                 </p>
                             </div>
                         </div>

@@ -98,39 +98,35 @@ async def get_config():
 @app.post("/config")
 async def update_config(cfg: ConfigUpdate):
     if cfg.gemini_api_key:
-        # Write to .env file in project root
-        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
-        
-        # Read existing content
-        lines = []
-        if os.path.exists(env_path):
-            with open(env_path, "r") as f:
-                lines = f.readlines()
-        
-        # Update or append GEMINI_API_KEY
-        key_found = False
-        new_lines = []
-        for line in lines:
-            if line.startswith("GEMINI_API_KEY="):
-                new_lines.append(f"GEMINI_API_KEY={cfg.gemini_api_key}\n")
-                key_found = True
-            else:
-                new_lines.append(line)
-        
-        if not key_found:
-            if new_lines and not new_lines[-1].endswith('\n'):
-                new_lines[-1] += '\n'
-            new_lines.append(f"GEMINI_API_KEY={cfg.gemini_api_key}\n")
+        try:
+            # Securely store in keychain
+            from utils.keychain_manager import set_gemini_key
+            set_gemini_key(cfg.gemini_api_key)
             
-        with open(env_path, "w") as f:
-            f.writelines(new_lines)
+            # Remove from .env if present to avoid confusion/leaks
+            env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
+            if os.path.exists(env_path):
+                with open(env_path, "r") as f:
+                    lines = f.readlines()
+                
+                new_lines = [line for line in lines if not line.startswith("GEMINI_API_KEY=")]
+                
+                with open(env_path, "w") as f:
+                    f.writelines(new_lines)
+
+            # Reload config module to reflect changes immediately
+            # We need to set the env var temporarily for the current process if config relies on it
+            # But config.py now checks keychain, so we just need to reload it.
+            # However, config.py reads at module level.
+            from importlib import reload
+            reload(config)
             
-        # Reload config module to reflect changes immediately
-        os.environ["GEMINI_API_KEY"] = cfg.gemini_api_key
-        from importlib import reload
-        reload(config)
-        
-    return {"status": "updated"}
+            return {"status": "updated"}
+        except Exception as e:
+            print(f"Failed to update config: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    return {"status": "no_change"}
 
 @app.get("/history")
 async def get_history():
