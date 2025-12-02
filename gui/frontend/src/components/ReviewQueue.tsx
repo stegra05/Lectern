@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Trash2, Edit2, Save, X, UploadCloud, AlertCircle } from 'lucide-react';
+import { Trash2, Edit2, Save, X, UploadCloud, AlertCircle } from 'lucide-react';
 import { api, type ProgressEvent } from '../api';
 import { GlassCard } from './GlassCard';
 
@@ -138,7 +138,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
     }
 
     return (
-        <div className="space-y-6">
+        <div className="h-full flex flex-col space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold text-zinc-100">Review Queue</h2>
@@ -159,7 +159,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                 </div>
             </div>
 
-            <div className="grid gap-4">
+            <div className="flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-thin scrollbar-thumb-zinc-700 grid gap-4 content-start">
                 <AnimatePresence mode="popLayout">
                     {cards.map((card, index) => (
                         <motion.div
