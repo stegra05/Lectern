@@ -105,6 +105,7 @@ def extract_content_from_pdf(pdf_path: str, stop_check: Optional[Callable[[], bo
                 PageContent(page_number=page_index + 1, text=text_content, images=images)
             )
 
+    print(f"Info: PDF parsing complete. Total pages extracted: {len(extracted_pages)}")
     return extracted_pages
 
 
