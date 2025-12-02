@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import logging
+import getpass
 from typing import List, Dict
 
 import config
@@ -19,6 +20,7 @@ from anki_connector import check_connection
 from utils.cli import StepTimer, set_verbosity, is_quiet, Progress, info, warn, error, success, setup_logging, debug
 from utils.state import load_state
 from utils.notify import beep, send_notification
+from utils.keychain_manager import set_gemini_key
 
 # Import shared service
 from lectern_service import LecternGenerationService, ServiceEvent
@@ -67,6 +69,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     verbosity.add_argument("--quiet", action="store_true", help="Reduce output to essential errors only")
     verbosity.add_argument("--verbose", action="store_true", help="Increase output with detailed status and AI snippets")
     parser.add_argument("--interactive", action="store_true", help="Prompt for missing inputs and confirmations")
+    parser.add_argument("--set-key", action="store_true", help="Securely save Gemini API key to system keychain and exit")
 
     try:
         import argcomplete  # type: ignore
@@ -89,6 +92,22 @@ def main(argv: List[str]) -> int:
     # Set verbosity early
     set_verbosity(0 if args.quiet else (2 if args.verbose else 1))
     setup_logging(logging.DEBUG if args.verbose else logging.INFO)
+
+    # Handle key setup
+    if args.set_key:
+        print("Securely storing Gemini API Key in system keychain.")
+        key = getpass.getpass("Enter Gemini API Key: ").strip()
+        if key:
+            try:
+                set_gemini_key(key)
+                success("API Key saved to keychain.")
+                print("You can now remove GEMINI_API_KEY from your .env file.")
+            except Exception as e:
+                error(f"Failed to save key: {e}")
+                return 1
+        else:
+            warn("No key entered. Aborted.")
+        return 0
 
     # Interactive mode: prompt for missing required inputs
     if args.interactive:

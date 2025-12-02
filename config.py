@@ -37,8 +37,10 @@ def _load_environment_files() -> None:
 # Load env files before reading values
 _load_environment_files()
 
-# Google Gemini API key. Must be provided via environment variable for security.
-GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+from utils.keychain_manager import get_gemini_key
+
+# Google Gemini API key. Must be provided via environment variable or keychain for security.
+GEMINI_API_KEY: str = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
 
 # Default Gemini model name for generation.
 # Centralizes the model selection to avoid hardcoding in modules.

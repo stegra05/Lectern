@@ -13,6 +13,9 @@ from typing import List
 
 # PyMuPDF is imported as fitz
 import fitz  # type: ignore
+import pytesseract  # type: ignore
+from PIL import Image
+import io
 
 
 @dataclass
@@ -45,7 +48,7 @@ def extract_content_from_pdf(pdf_path: str) -> List[PageContent]:
     Notes:
         - Implementation prefers fidelity and robustness. Images are extracted
           using PyMuPDF xref lookups to preserve original bytes.
-        - This function does not perform OCR; it relies on embedded text.
+        - This function performs OCR using Tesseract if extracted text is minimal.
     """
 
     extracted_pages: List[PageContent] = []
@@ -56,10 +59,28 @@ def extract_content_from_pdf(pdf_path: str) -> List[PageContent]:
             # Extract text
             text_content: str = page.get_text("text") or ""
 
-            if not text_content.strip():
-                print(f"Warning: Page {page_index + 1} has no text. It might be an image scan.")
+            # NOTE(OCR): If text is minimal (< 50 chars), assume it's a flattened image and try OCR.
+            if len(text_content.strip()) < 50:
+                print(f"Info: Page {page_index + 1} has minimal text. Attempting OCR...")
+                try:
+                    # Render page to an image (pixmap) for OCR
+                    pix = page.get_pixmap()
+                    img_data = pix.tobytes("png")
+                    image = Image.open(io.BytesIO(img_data))
+                    
+                    # Perform OCR
+                    ocr_text = pytesseract.image_to_string(image)
+                    
+                    if ocr_text.strip():
+                        text_content += "\n\n[OCR Extracted Content]\n" + ocr_text
+                        print(f"Info: OCR successful for Page {page_index + 1}.")
+                    else:
+                        print(f"Warning: OCR yielded no text for Page {page_index + 1}.")
+                        
+                except Exception as e:
+                    print(f"Warning: OCR failed for Page {page_index + 1}: {e}")
 
-            # Extract images as original bytes
+            # Extract images
             images: List[bytes] = []
             for image_info in page.get_images(full=True):
                 xref = image_info[0]
@@ -68,14 +89,47 @@ def extract_content_from_pdf(pdf_path: str) -> List[PageContent]:
                 except Exception:
                     # Skip images that cannot be extracted for any reason
                     continue
-                image_bytes = image_dict.get("image")
-                if isinstance(image_bytes, (bytes, bytearray)):
-                    images.append(bytes(image_bytes))
+                
+                raw_bytes = image_dict.get("image")
+                if isinstance(raw_bytes, (bytes, bytearray)):
+                    # NOTE(Cost): Compress images to reduce token usage and latency.
+                    compressed_bytes = _compress_image(bytes(raw_bytes))
+                    images.append(compressed_bytes)
 
             extracted_pages.append(
                 PageContent(page_number=page_index + 1, text=text_content, images=images)
             )
 
     return extracted_pages
+
+
+def _compress_image(image_bytes: bytes, max_dimension: int = 1024, quality: int = 80) -> bytes:
+    """Resizes and compresses an image to reduce token usage and file size.
+    
+    Args:
+        image_bytes: Raw image data.
+        max_dimension: Maximum width or height in pixels.
+        quality: JPEG quality (1-100).
+        
+    Returns:
+        Compressed image bytes (JPEG format).
+    """
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            # Convert to RGB if necessary (e.g. for JPEG saving)
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            
+            # Resize if larger than max_dimension
+            if max(img.size) > max_dimension:
+                img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+            
+            # Compress to JPEG
+            output_buffer = io.BytesIO()
+            img.save(output_buffer, format='JPEG', quality=quality, optimize=True)
+            return output_buffer.getvalue()
+    except Exception as e:
+        print(f"Warning: Image compression failed: {e}")
+        return image_bytes # Fallback to original
 
 

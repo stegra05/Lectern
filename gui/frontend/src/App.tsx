@@ -138,6 +138,8 @@ function App() {
             setCards(prev => [event.data.card, ...prev]);
           } else if (event.type === 'done') {
             setStep('review');
+          } else if (event.type === 'cancelled') {
+            handleReset();
           }
         }
       );

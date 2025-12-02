@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Callable
 
 import config
 from anki_connector import add_note, check_connection, store_media_file, sample_examples_from_deck
@@ -41,6 +41,7 @@ class LecternGenerationService:
         enable_reflection: bool = config.ENABLE_REFLECTION,
         reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
         skip_export: bool = False,
+        stop_check: Optional[Callable[[], bool]] = None,
     ) -> Generator[ServiceEvent, None, None]:
         
         start_time = time.perf_counter()
@@ -88,6 +89,9 @@ class LecternGenerationService:
                  # So we must re-parse.
                  pass
 
+            if stop_check and stop_check():
+                return
+
             yield ServiceEvent("step_start", "Parse PDF")
             try:
                 pages = extract_content_from_pdf(pdf_path)
@@ -100,6 +104,9 @@ class LecternGenerationService:
                 return
 
             # 3. Sample Examples
+            if stop_check and stop_check():
+                return
+
             examples = ""
             yield ServiceEvent("step_start", "Sample examples via AnkiConnect")
             try:
@@ -115,6 +122,9 @@ class LecternGenerationService:
                  yield ServiceEvent("step_end", "Examples Failed", {"success": False})
 
             # 4. AI Session Init
+            if stop_check and stop_check():
+                return
+
             yield ServiceEvent("step_start", "Start AI session")
             ai = LecternAIClient()
             if saved_state:
@@ -129,6 +139,9 @@ class LecternGenerationService:
                 concept_map = saved_state["concept_map"]
                 yield ServiceEvent("info", "Restored Concept Map from state", {"map": concept_map})
             else:
+                if stop_check and stop_check():
+                    return
+
                 yield ServiceEvent("step_start", "Build global concept map")
                 try:
                     concept_map = ai.concept_map([p.__dict__ for p in pages])
@@ -172,6 +185,10 @@ class LecternGenerationService:
                 limit = min(actual_batch_size, remaining)
                 
                 yield ServiceEvent("status", f"Generating batch (limit={limit})...")
+                
+                if stop_check and stop_check():
+                    yield ServiceEvent("warning", "Generation stopped by user.")
+                    return
                 
                 try:
                     # Pass examples only if we are starting fresh (or maybe always? logic said 'continue from prior')
@@ -243,6 +260,10 @@ class LecternGenerationService:
                         
                     yield ServiceEvent("status", f"Reflection Round {round_idx + 1}/{rounds}")
                     
+                    if stop_check and stop_check():
+                        yield ServiceEvent("warning", "Reflection stopped by user.")
+                        return
+
                     try:
                         out = ai.reflect(limit=min(actual_batch_size, remaining))
                         new_cards = out.get("cards", [])
@@ -297,6 +318,9 @@ class LecternGenerationService:
                     "cards": all_cards  # Return cards for draft store
                 })
                  return
+
+            if stop_check and stop_check():
+                return
 
             yield ServiceEvent("step_start", f"Create {len(all_cards)} notes in Anki")
             yield ServiceEvent("progress_start", "Exporting", {"total": len(all_cards), "label": "Notes"})

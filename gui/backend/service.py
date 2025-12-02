@@ -98,7 +98,8 @@ class GenerationService:
             tags=tags,
             context_deck=context_deck,
             resume=True,
-            skip_export=True  # Always skip export in GUI now
+            skip_export=True,  # Always skip export in GUI now
+            stop_check=lambda: self.stop_requested
         )
 
         # Helper to run next(iterator) in thread
@@ -113,7 +114,7 @@ class GenerationService:
 
         while True:
             if self.stop_requested:
-                yield ProgressEvent("done", "Generation stopped by user", {"cards": self.draft_store.get_drafts()}).to_json()
+                yield ProgressEvent("cancelled", "Generation cancelled by user", {}).to_json()
                 break
 
             # Execute the blocking next() in a thread
