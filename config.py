@@ -44,7 +44,11 @@ GEMINI_API_KEY: str = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
 
 # Default Gemini model name for generation.
 # Centralizes the model selection to avoid hardcoding in modules.
-DEFAULT_GEMINI_MODEL: str = os.getenv("DEFAULT_GEMINI_MODEL", "gemini-3-pro-preview")
+DEFAULT_GEMINI_MODEL: str = os.getenv("DEFAULT_GEMINI_MODEL", "gemini-3-flash-preview")
+
+# Thinking level for Gemini 3 Flash models (minimal, low, medium, high).
+# Controls reasoning depth and latency.
+GEMINI_THINKING_LEVEL: str = os.getenv("GEMINI_THINKING_LEVEL", "low")
 
 # AnkiConnect default URL. Can be overridden via environment variable if needed.
 ANKI_CONNECT_URL: str = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")

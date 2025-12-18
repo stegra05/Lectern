@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Tuple
 
-import google.generativeai as genai  # type: ignore
-from google.generativeai.types import HarmCategory, HarmBlockThreshold  # type: ignore
+from google import genai  # type: ignore
+from google.genai import types  # type: ignore
 
 import config
 from ai_common import (
@@ -16,7 +16,6 @@ from ai_common import (
 from ai_schemas import CardGenerationResponse, ConceptMapResponse, ReflectionResponse, AnkiCard
 from ai_cards import _normalize_card_object
 from utils.cli import debug
-
 
 # Manual schema definitions for Gemini API to avoid Pydantic/Protobuf mismatches
 # (Gemini SDK does not support 'default', '$defs', 'anyOf', 'additionalProperties', etc.)
@@ -100,83 +99,88 @@ _REFLECTION_SCHEMA = {
     "required": ["reflection", "cards", "done"]
 }
 
-
 class LecternAIClient:
     def __init__(self, model_name: str | None = None) -> None:
         if not config.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is not set. Export it before running Lectern.")
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        generation_config = {
-            "response_mime_type": "application/json",
-            "temperature": 0.2,
-            "max_output_tokens": 8192,
-        }
-        self._model = genai.GenerativeModel(
-            model_name or config.DEFAULT_GEMINI_MODEL,
-            generation_config=generation_config,
-            system_instruction=LATEX_STYLE_GUIDE,
-            safety_settings={
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            },
+        
+        self._client = genai.Client(
+            api_key=config.GEMINI_API_KEY,
+            http_options={'api_version': 'v1alpha'}
         )
-        self._chat = self._model.start_chat(history=[])
+        
+        self._model_id = model_name or config.DEFAULT_GEMINI_MODEL
+        
+        self._generation_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.2,
+            max_output_tokens=8192,
+            system_instruction=LATEX_STYLE_GUIDE,
+            thinking_config=types.ThinkingConfig(thinking_level=config.GEMINI_THINKING_LEVEL.lower()),
+            safety_settings=[
+                types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE'),
+            ],
+        )
+        
+        self._chat = self._client.chats.create(
+            model=self._model_id,
+            config=self._generation_config
+        )
+        
         self._log_path = _start_session_log()
-        debug("[AI] Started session via LecternAIClient")
+        debug("[AI] Started session via LecternAIClient (google-genai)")
 
     @property
     def log_path(self) -> str:
         return self._log_path
 
     def _prune_history(self) -> None:
-        """Prune chat history to manage token usage (sliding window).
-        
-        Retains the initial context (PDF + Concept Map) and the most recent exchanges.
-        """
+        """Prune chat history to manage token usage (sliding window)."""
         try:
             history = self._chat.history
-            # Threshold: if > 20 items (10 turns), prune.
             if len(history) <= 20:
                 return
 
-            # Keep first 2 (PDF + Concept Map)
-            # Keep last 6 (3 recent exchanges)
-            # Ensure we have enough items to slice safely (covered by len check)
             new_history = history[:2] + history[-6:]
-            
-            self._chat.history = new_history
+            # In google-genai, we might need to recreate the chat or update history if permitted
+            self._chat._history = new_history
             debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
         except Exception as e:
             debug(f"[AI] History pruning failed: {e}")
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         prompt = (
-            "You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a comprehensive global concept map that serves as the backbone for a spaced repetition deck.\n"
-            "- Objectives: Extract explicit learning goals and implicit competency targets.\n"
-            "- Concepts: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts over trivial examples. Assign stable, short, unique IDs.\n"
-            "- Relations: Map the *semantic structure* of the domain. Use precise relation types (e.g., `is_a`, `part_of`, `causes`, `precedes`, `contrasts_with`). Note page references for traceability.\n"
-            "- Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>) within any text fields.\n"
-            "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array). No prose.\n"
+            "You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a comprehensive global concept map that serves as the backbone for a spaced repetition deck.\\n"
+            "- Objectives: Extract explicit learning goals and implicit competency targets.\\n"
+            "- Concepts: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts over trivial examples. Assign stable, short, unique IDs.\\n"
+            "- Relations: Map the *semantic structure* of the domain. Use precise relation types (e.g., `is_a`, `part_of`, `causes`, `precedes`, `contrasts_with`). Note page references for traceability.\\n"
+            "- Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>) within any text fields.\\n"
+            "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array). No prose.\\n"
         )
+        
+        # Adjust _compose_multimodal_content to return types.Content parts if needed, 
+        # but google-genai handles simple dicts/strings well.
         parts = _compose_multimodal_content(pdf_content, prompt)
         debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
+        
+        # Update config for this specific call to include response_schema
+        call_config = self._generation_config.model_copy(update={
+            "response_schema": _CONCEPT_MAP_SCHEMA,
+        })
+
         response = self._chat.send_message(
-            parts,
-            generation_config={
-                "response_mime_type": "application/json",
-                "response_mime_type": "application/json",
-                "response_schema": _CONCEPT_MAP_SCHEMA,
-            },
-            request_options={"timeout": 900},  # Increased for large multimodal PDFs
+            message=parts,
+            config=call_config
         )
-        text = getattr(response, "text", None) or ""
-        debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\n',' ')}...")
+        
+        text = response.text or ""
+        debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
         
         try:
-            # Pydantic validation
             data_obj = ConceptMapResponse.model_validate_json(text)
             data = data_obj.model_dump()
         except Exception:
@@ -187,7 +191,7 @@ class LecternAIClient:
         self._prune_history()
         example_text = ""
         if examples:
-            example_text = f"\n- Reference Examples (Mimic this style):\n{examples}\n"
+            example_text = f"\\n- Reference Examples (Mimic this style):\\n{examples}\\n"
         
         prompt = (
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\\n"
@@ -209,22 +213,22 @@ class LecternAIClient:
             "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
             "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
         )
-        parts: List[Dict[str, Any]] = [{"text": prompt}]
+        
+        call_config = self._generation_config.model_copy(update={
+            "response_schema": _CARD_GENERATION_SCHEMA,
+            "temperature": 0.4,
+        })
+
         response = self._chat.send_message(
-            parts,
-            generation_config={
-                "response_mime_type": "application/json",
-                "response_schema": _CARD_GENERATION_SCHEMA,
-                "temperature": 0.4,
-            },
-            request_options={"timeout": 900},
+            message=prompt,
+            config=call_config
         )
-        text = getattr(response, "text", None) or ""
-        debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\n',' ')}...")
-        _append_session_log(self._log_path, "generation", parts, text, True)
+        
+        text = response.text or ""
+        debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
+        _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
         
         try:
-            # Pydantic validation
             data_obj = CardGenerationResponse.model_validate_json(text)
             data = data_obj.model_dump()
         except Exception:
@@ -232,12 +236,6 @@ class LecternAIClient:
 
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
-            # With Pydantic, the structure is already correct, but _normalize_card_object handles
-            # some extra logic like deducing model if missing (though Pydantic enforces it now).
-            # We can still run it for safety or just trust Pydantic.
-            # However, _normalize_card_object expects specific keys.
-            # Our AnkiCard model has 'model_name', 'fields', 'tags', 'slide_topic'.
-            # _normalize_card_object handles this structure in its first block.
             normalized = [_normalize_card_object(c) for c in cards]
             normalized = [c for c in normalized if c]
             done = bool(data.get("done", len(normalized) == 0))
@@ -247,35 +245,34 @@ class LecternAIClient:
     def reflect(self, limit: int, reflection_prompt: str | None = None) -> Dict[str, Any]:
         self._prune_history()
         base = (
-            "You are a strict Quality Assurance Specialist for educational content. Review the last batch of generated cards.\n"
-            "- Critique Criteria:\n"
-            "    - Redundancy: Are there duplicate or overlapping cards?\n"
-            "    - Vagueness: Is the question ambiguous without more context?\n"
-            "    - Complexity: Is the answer too long or multi-faceted? (Split it!)\n"
-            "    - Interference: Do any cards look too similar, causing confusion?\n"
-            "- Action:\n"
-            "    - Write a concise `reflection` summarizing the quality and identifying specific issues.\n"
-            "    - Generate improved replacements or new gap-filling cards to address the issues.\n"
-            "    - Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>).\n"
-            f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\n"
+            "You are a strict Quality Assurance Specialist for educational content. Review the last batch of generated cards.\\n"
+            "- Critique Criteria:\\n"
+            "    - Redundancy: Are there duplicate or overlapping cards?\\n"
+            "    - Vagueness: Is the question ambiguous without more context?\\n"
+            "    - Complexity: Is the answer too long or multi-faceted? (Split it!)\\n"
+            "    - Interference: Do any cards look too similar, causing confusion?\\n"
+            "- Action:\\n"
+            "    - Write a concise `reflection` summarizing the quality and identifying specific issues.\\n"
+            "    - Generate improved replacements or new gap-filling cards to address the issues.\\n"
+            "    - Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>).\\n"
+            f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\\n"
         )
         prompt = (reflection_prompt or base)
-        parts: List[Dict[str, Any]] = [{"text": prompt}]
+        
+        call_config = self._generation_config.model_copy(update={
+            "response_schema": _REFLECTION_SCHEMA,
+        })
+
         response = self._chat.send_message(
-            parts,
-            generation_config={
-                "response_mime_type": "application/json",
-                "response_mime_type": "application/json",
-                "response_schema": _REFLECTION_SCHEMA,
-            },
-            request_options={"timeout": 900},
+            message=prompt,
+            config=call_config
         )
-        text = getattr(response, "text", None) or ""
-        debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\n',' ')}...")
-        _append_session_log(self._log_path, "reflection", parts, text, True)
+        
+        text = response.text or ""
+        debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\\n',' ')}...")
+        _append_session_log(self._log_path, "reflection", [{"text": prompt}], text, True)
         
         try:
-            # Pydantic validation
             data_obj = ReflectionResponse.model_validate_json(text)
             data = data_obj.model_dump()
         except Exception:
@@ -291,32 +288,13 @@ class LecternAIClient:
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""
+        # google-genai history is a list of types.Content objects
+        # We need to serialize them.
         serialized = []
         try:
             for item in self._chat.history:
-                # item is likely a Content object
-                role = getattr(item, "role", "user")
-                parts = []
-                for part in getattr(item, "parts", []):
-                    p_dict = {}
-                    # Check for text
-                    text = getattr(part, "text", None)
-                    if text:
-                        p_dict["text"] = text
-                    
-                    inline_data = getattr(part, "inline_data", None)
-                    if inline_data:
-                        import base64
-                        data_raw = getattr(inline_data, "data", "")
-                        # Encode bytes as base64 string for JSON serialization
-                        if isinstance(data_raw, bytes):
-                            data_raw = base64.b64encode(data_raw).decode('utf-8')
-                        p_dict["inline_data"] = {
-                            "mime_type": getattr(inline_data, "mime_type", ""),
-                            "data": data_raw
-                        }
-                    parts.append(p_dict)
-                serialized.append({"role": role, "parts": parts})
+                # Use model_dump for Pydantic models in google-genai
+                serialized.append(item.model_dump(exclude_none=True))
         except Exception as e:
             debug(f"[AI] Failed to serialize history: {e}")
             return []
@@ -325,8 +303,14 @@ class LecternAIClient:
     def restore_history(self, history: List[Dict[str, Any]]) -> None:
         """Restore chat history from a list of dicts."""
         try:
-            # start_chat accepts list of dicts compatible with Content
-            self._chat = self._model.start_chat(history=history)
+            # Re-create chat with history
+            # Convert list of dicts back to types.Content
+            parsed_history = [types.Content(**item) for item in history]
+            self._chat = self._client.chats.create(
+                model=self._model_id,
+                config=self._generation_config,
+                history=parsed_history
+            )
             debug(f"[AI] Restored history with {len(history)} turns")
         except Exception as e:
             debug(f"[AI] Failed to restore history: {e}")
@@ -334,11 +318,15 @@ class LecternAIClient:
     def count_tokens(self, content: List[Dict[str, Any]]) -> int:
         """Count tokens for a given content list."""
         try:
-            response = self._model.count_tokens(content)
+            # google-genai count_tokens uses model.count_tokens
+            # content should be converted to types.Content if it's a list of dicts
+            parsed_content = [types.Content(**c) if isinstance(c, dict) else c for c in content]
+            response = self._client.models.count_tokens(
+                model=self._model_id,
+                contents=parsed_content,
+                config=self._generation_config
+            )
             return response.total_tokens
         except Exception as e:
             debug(f"[AI] Token counting failed: {e}")
-            # Fallback to 0 or raise? Let's return 0 and handle upstream
             return 0
-
-

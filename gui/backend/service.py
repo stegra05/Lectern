@@ -157,8 +157,8 @@ class GenerationService:
                         entry_id
                     )
             elif event.type == "step_start":
-                gui_type = "status"
-                gui_msg = f"▶ {event.message}"
+                gui_type = "step_start"
+                gui_msg = event.message
             elif event.type == "step_end":
                 if event.data.get("success"):
                     gui_type = "info"

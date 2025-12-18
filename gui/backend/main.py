@@ -223,6 +223,15 @@ async def generate_cards(
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         shutil.copyfileobj(pdf_file.file, tmp)
         tmp_path = tmp.name
+    
+    # Debug: Check file sizes
+    try:
+        uploaded_size = os.fstat(pdf_file.file.fileno()).st_size
+    except:
+        uploaded_size = -1 # Cannot determine
+        
+    temp_size = os.path.getsize(tmp_path)
+    print(f"Info: Uploaded file size: {uploaded_size} bytes. Temp file size: {temp_size} bytes. Path: {tmp_path}")
         
     CURRENT_SESSION_PDF_PATH = tmp_path
 
