@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw, Clock, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw, Clock, ChevronRight, Plus, Trash2, Copy, Check } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, type ProgressEvent, type HistoryEntry } from './api';
 import { GlassCard } from './components/GlassCard';
@@ -36,6 +36,7 @@ function App() {
     }
     return 'dark';
   });
+  const [copied, setCopied] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -193,6 +194,13 @@ function App() {
     setCurrentPhase('idle');
     // Refresh history
     api.getHistory().then(setHistory);
+  };
+
+  const handleCopyLogs = () => {
+    const text = logs.map(l => `[${new Date(l.timestamp * 1000).toLocaleTimeString()}] ${l.type.toUpperCase()}: ${l.message}`).join('\n');
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const containerVariants = {
@@ -530,40 +538,51 @@ function App() {
                       <Terminal className="w-4 h-4 text-text-muted" />
                       Activity Log
                     </h3>
-                    <div className="flex items-center gap-3">
-                      {step === 'generating' ? (
-                        <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 px-2 py-1 rounded-md border border-primary/20">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span className="font-medium tracking-wide">PROCESSING</span>
-                        </div>
-                      ) : (
-                        step === 'done' && (
-                          <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span className="font-medium tracking-wide">COMPLETE</span>
-                          </div>
-                        )
+                    <div className="flex items-center gap-2">
+                      {logs.length > 0 && (
+                        <button
+                          onClick={handleCopyLogs}
+                          className="p-1 text-text-muted hover:text-primary transition-colors rounded-md hover:bg-surface/80"
+                          title="Copy logs"
+                        >
+                          {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
                       )}
-                      {step === 'generating' && (
-                        isCancelling ? (
-                          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-3 py-1 rounded-md border border-red-500/20">
+                      <div className="flex items-center gap-3">
+                        {step === 'generating' ? (
+                          <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 px-2 py-1 rounded-md border border-primary/20">
                             <Loader2 className="w-3 h-3 animate-spin" />
-                            <span className="font-medium tracking-wide">CANCELLING...</span>
+                            <span className="font-medium tracking-wide">PROCESSING</span>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => {
-                              setIsCancelling(true);
-                              api.stopGeneration();
-                              // Return to dashboard immediately for better UX
-                              setTimeout(() => handleReset(), 500);
-                            }}
-                            className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20 font-medium hover:border-red-500/40"
-                          >
-                            CANCEL
-                          </button>
-                        )
-                      )}
+                          step === 'done' && (
+                            <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span className="font-medium tracking-wide">COMPLETE</span>
+                            </div>
+                          )
+                        )}
+                        {step === 'generating' && (
+                          isCancelling ? (
+                            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-3 py-1 rounded-md border border-red-500/20">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span className="font-medium tracking-wide">CANCELLING...</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setIsCancelling(true);
+                                api.stopGeneration();
+                                // Return to dashboard immediately for better UX
+                                setTimeout(() => handleReset(), 500);
+                              }}
+                              className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20 font-medium hover:border-red-500/40"
+                            >
+                              CANCEL
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-border min-h-0">

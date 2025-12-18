@@ -47,9 +47,8 @@ run_step() {
     
     echo -ne "${BOLD}→${NC} $msg... "
     
-    # Run command in background, redirect output to log
-    # We append to log so we don't lose previous steps
-    eval "$cmd" >> build.log 2>&1 &
+    # Run command in background, redirect output to absolute log path
+    eval "$cmd" >> "$LOG_FILE" 2>&1 &
     local pid=$!
     
     # Show spinner
@@ -64,7 +63,7 @@ run_step() {
         echo -e "${RED}FAILED${NC}"
         error "Check build.log for details."
         echo -e "${DIM}Last 10 lines of build.log:${NC}"
-        tail -n 10 build.log
+        tail -n 10 "$LOG_FILE"
         exit 1
     fi
 }
@@ -74,8 +73,10 @@ clear
 echo -e "${BOLD}🚀 Lectern Build System${NC}"
 echo -e "${DIM}Starting build process...${NC}\n"
 
-# Initialize log
-echo "Build started at $(date)" > build.log
+# Initialize absolute log
+PROJECT_ROOT=$(pwd)
+LOG_FILE="$PROJECT_ROOT/build.log"
+echo "Build started at $(date)" > "$LOG_FILE"
 
 start_time=$(date +%s)
 
@@ -86,6 +87,10 @@ check_tool "npm"
 check_tool "python"
 success "All tools found"
 
+# Preparation
+header "Preparation"
+run_step "Cleaning previous builds" "rm -rf dist build gui/frontend/dist"
+
 # Frontend
 header "Frontend"
 cd gui/frontend
@@ -95,7 +100,6 @@ cd ../..
 
 # Backend
 header "Backend"
-# Use python -m to ensure we use the current python environment
 if ! python -m pip show pyinstaller > /dev/null 2>&1; then
     run_step "Installing PyInstaller" "python -m pip install pyinstaller"
 else
@@ -127,10 +131,7 @@ fi
 
 # Packaging
 header "Packaging"
-run_step "Cleaning previous builds" "rm -rf dist build"
 
-# PyInstaller command
-# Using python -m PyInstaller to be safe
 PYINSTALLER_CMD="python -m PyInstaller --name Lectern \
     --windowed \
     --icon=icon.icns \
@@ -138,20 +139,8 @@ PYINSTALLER_CMD="python -m PyInstaller --name Lectern \
     --add-data 'gui/backend:backend' \
     --paths . \
     --paths gui/backend \
-    --hidden-import=pywebview \
+    --hidden-import=webview \
     --hidden-import=uvicorn \
-    --hidden-import=uvicorn.logging \
-    --hidden-import=uvicorn.loops \
-    --hidden-import=uvicorn.loops.auto \
-    --hidden-import=uvicorn.protocols \
-    --hidden-import=uvicorn.protocols.http \
-    --hidden-import=uvicorn.protocols.http.auto \
-    --hidden-import=uvicorn.protocols.websockets \
-    --hidden-import=uvicorn.protocols.websockets.auto \
-    --hidden-import=uvicorn.lifespan \
-    --hidden-import=uvicorn.lifespan.on \
-    --hidden-import=engineio.async_drivers.aiohttp \
-    --hidden-import=pywebview \
     --hidden-import=objc \
     --hidden-import=Cocoa \
     --hidden-import=WebKit \
@@ -165,10 +154,8 @@ run_step "Compiling Binary - this may take a while" "$PYINSTALLER_CMD"
 
 # Verify Artifact
 if [ -d "dist/Lectern.app" ]; then
-    # Finish
     end_time=$(date +%s)
     duration=$((end_time - start_time))
-
     echo -e "\n${GREEN}${BOLD}✨ Build Complete! ✨${NC}"
     echo -e "📂 App Bundle: ${BOLD}dist/Lectern.app${NC}"
     echo -e "📂 Executable: ${BOLD}dist/Lectern/Lectern${NC}"
