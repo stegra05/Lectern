@@ -4,7 +4,7 @@ PyMuPDF>=1.24.0,<1.26
 pytesseract>=0.3.10
 
 # Google Gemini API client
-google-generativeai>=0.7.0,<0.9
+google-genai>=1.0.0
 
 # HTTP requests for AnkiConnect communication
 requests>=2.31.0,<2.33

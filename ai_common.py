@@ -43,49 +43,57 @@ def _infer_mime_type(image_bytes: bytes) -> str:
 
 
 
+from google.genai import types # type: ignore
+
 def _compose_multimodal_content(
     pdf_content: Iterable[Dict[str, Any]], prompt: str
-) -> List[Dict[str, Any]]:
+) -> List[Any]:
     """Compose the list of content parts for Gemini from parsed pages.
 
     Expects each page item to expose 'text' and 'images' (list of bytes).
     """
 
-    parts: List[Dict[str, Any]] = [{"text": prompt}]
+    parts: List[Any] = [prompt]
     for page in pdf_content:
         page_text = str(page.get("text", ""))
         if page_text.strip():
-            parts.append({"text": f"Slide text:\n{page_text}"})
+            parts.append(f"Slide text:\n{page_text}")
         for image_bytes in page.get("images", []) or []:
             mime = _infer_mime_type(image_bytes)
+            # Use Part.from_bytes for google-genai
             parts.append(
-                {
-                    "inline_data": {
-                        "mime_type": mime,
-                        "data": base64.b64encode(image_bytes).decode("utf-8"),
-                    }
-                }
+                types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=mime
+                )
             )
     return parts
 
 
-def _build_loggable_parts(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _build_loggable_parts(parts: List[Any]) -> List[Dict[str, Any]]:
     snapshot: List[Dict[str, Any]] = []
     for part in parts:
-        if "text" in part:
-            txt = str(part.get("text", ""))
-            snapshot.append({"text": txt[:20000]})
-        elif "inline_data" in part:
-            inline = part.get("inline_data", {}) or {}
-            data_str = str(inline.get("data", ""))
+        if isinstance(part, str):
+            snapshot.append({"text": part[:20000]})
+        elif hasattr(part, "text") and part.text:
+            snapshot.append({"text": part.text[:20000]})
+        elif hasattr(part, "inline_data") and part.inline_data:
+            inline = part.inline_data
             snapshot.append(
                 {
                     "inline_data": {
-                        "mime_type": inline.get("mime_type", ""),
-                        "data_len": len(data_str),
+                        "mime_type": inline.mime_type,
+                        "data_len": len(inline.data) if inline.data else 0,
                     }
                 }
             )
+        elif isinstance(part, dict):
+            # Fallback for dicts if any remain
+            if "text" in part:
+                snapshot.append({"text": part["text"][:20000]})
+            elif "inline_data" in part:
+                inline = part["inline_data"]
+                snapshot.append({"inline_data": {"mime_type": inline.get("mime_type"), "data_len": len(inline.get("data", ""))}})
     return snapshot
 
 

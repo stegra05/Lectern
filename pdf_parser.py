@@ -53,6 +53,15 @@ def extract_content_from_pdf(pdf_path: str, stop_check: Optional[Callable[[], bo
     """
 
     extracted_pages: List[PageContent] = []
+    
+    # Debug: Check file info
+    try:
+        import os
+        file_size = os.path.getsize(pdf_path)
+        print(f"Info: Parsing PDF at {pdf_path}. Size: {file_size} bytes.")
+    except Exception as e:
+        print(f"Warning: Could not check file size: {e}")
+
     with fitz.open(pdf_path) as document:
         print(f"Info: Opened PDF with {document.page_count} pages.")
         for page_index in range(document.page_count):

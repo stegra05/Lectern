@@ -52,6 +52,9 @@ class LecternGenerationService:
         if not os.path.exists(pdf_path):
             yield ServiceEvent("error", f"PDF not found: {pdf_path}")
             return
+            
+        file_size = os.path.getsize(pdf_path)
+        yield ServiceEvent("info", f"Processing file: {os.path.basename(pdf_path)} ({file_size} bytes)")
 
         # Initialize History Entry
         if not resume:

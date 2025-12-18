@@ -26,7 +26,7 @@ export interface GenerateRequest {
 }
 
 export interface ProgressEvent {
-    type: "status" | "info" | "warning" | "error" | "progress_start" | "progress_update" | "card_generated" | "note_created" | "done" | "cancelled";
+    type: "status" | "info" | "warning" | "error" | "progress_start" | "progress_update" | "card_generated" | "note_created" | "done" | "cancelled" | "step_start";
     message: string;
     data?: any;
     timestamp: number;

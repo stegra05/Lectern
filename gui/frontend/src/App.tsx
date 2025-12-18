@@ -8,6 +8,7 @@ import { FilePicker } from './components/FilePicker';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { ReviewQueue } from './components/ReviewQueue';
+import { PhaseIndicator, type Phase } from './components/PhaseIndicator';
 
 function App() {
   const [step, setStep] = useState<'dashboard' | 'config' | 'generating' | 'review' | 'done'>('dashboard');
@@ -26,6 +27,7 @@ function App() {
   const [previewSlide, setPreviewSlide] = useState<number | null>(null);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState<Phase>('idle');
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -156,8 +158,17 @@ function App() {
             setProgress(prev => ({ ...prev, current: event.data.current }));
           } else if (event.type === 'card_generated') {
             setCards(prev => [event.data.card, ...prev]);
+          } else if (event.type === 'step_start') {
+            if (event.message.includes('concept map')) {
+              setCurrentPhase('concept');
+            } else if (event.message.includes('Generate cards')) {
+              setCurrentPhase('generating');
+            } else if (event.message.includes('Reflection')) {
+              setCurrentPhase('reflecting');
+            }
           } else if (event.type === 'done') {
             setStep('review');
+            setCurrentPhase('complete');
           } else if (event.type === 'cancelled') {
             handleReset();
           }
@@ -179,6 +190,7 @@ function App() {
     setCards([]);
     setProgress({ current: 0, total: 0 });
     setIsCancelling(false);
+    setCurrentPhase('idle');
     // Refresh history
     api.getHistory().then(setHistory);
   };
@@ -223,8 +235,8 @@ function App() {
         )}
       </AnimatePresence>
 
-      <div className="relative w-full max-w-[95%] mx-auto p-6 lg:p-8 pt-12 lg:pt-24">
-        <header className="mb-16 flex items-center justify-between">
+      <div className="relative w-full max-w-[95%] mx-auto p-6 lg:p-8 pt-6 lg:pt-10">
+        <header className="mb-8 flex items-center justify-between">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -502,6 +514,16 @@ function App() {
             >
               {/* Left: Logs & Progress */}
               <div className="lg:col-span-1 flex flex-col gap-6 max-h-[calc(100vh-200px)]">
+                {step === 'generating' && (
+                  <GlassCard className="shrink-0">
+                    <h3 className="font-semibold text-text-main mb-4 flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-text-muted" />
+                      Generation Status
+                    </h3>
+                    <PhaseIndicator currentPhase={currentPhase} />
+                  </GlassCard>
+                )}
+
                 <GlassCard className="flex-1 flex flex-col min-h-0 max-h-[calc(100vh-400px)] border-border/80">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="font-semibold text-text-main flex items-center gap-2">
@@ -556,6 +578,7 @@ function App() {
                           "text-red-400": log.type === 'error',
                           "text-primary": log.type === 'note_created',
                           "text-text-muted": log.type === 'status',
+                          "text-primary font-bold": log.type === 'step_start',
                         })}
                       >
                         <span className="opacity-30 shrink-0">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
