@@ -14,7 +14,6 @@ from ai_common import (
     _append_session_log,
 )
 from ai_schemas import CardGenerationResponse, ConceptMapResponse, ReflectionResponse, AnkiCard
-from ai_cards import _normalize_card_object
 from utils.cli import debug
 
 # Manual schema definitions for Gemini API to avoid Pydantic/Protobuf mismatches
@@ -180,11 +179,8 @@ class LecternAIClient:
         debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
         
-        try:
-            data_obj = ConceptMapResponse.model_validate_json(text)
-            data = data_obj.model_dump()
-        except Exception:
-            return {"concepts": []}
+        data_obj = ConceptMapResponse.model_validate_json(text)
+        data = data_obj.model_dump()
         return data if isinstance(data, dict) else {"concepts": []}
 
     def generate_more_cards(self, limit: int, examples: str = "") -> Dict[str, Any]:
@@ -228,18 +224,14 @@ class LecternAIClient:
         debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
         
-        try:
-            data_obj = CardGenerationResponse.model_validate_json(text)
-            data = data_obj.model_dump()
-        except Exception:
-            return {"cards": [], "done": True}
+        data_obj = CardGenerationResponse.model_validate_json(text)
+        data = data_obj.model_dump()
 
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
-            normalized = [_normalize_card_object(c) for c in cards]
-            normalized = [c for c in normalized if c]
-            done = bool(data.get("done", len(normalized) == 0))
-            return {"cards": normalized, "done": done}
+            # Direct usage of Pydantic-validated cards
+            done = bool(data.get("done", len(cards) == 0))
+            return {"cards": cards, "done": done}
         return {"cards": [], "done": True}
 
     def reflect(self, limit: int, reflection_prompt: str | None = None) -> Dict[str, Any]:
@@ -272,18 +264,13 @@ class LecternAIClient:
         debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "reflection", [{"text": prompt}], text, True)
         
-        try:
-            data_obj = ReflectionResponse.model_validate_json(text)
-            data = data_obj.model_dump()
-        except Exception:
-            return {"reflection": "", "cards": [], "done": True}
+        data_obj = ReflectionResponse.model_validate_json(text)
+        data = data_obj.model_dump()
 
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
-            normalized = [_normalize_card_object(c) for c in cards]
-            normalized = [c for c in normalized if c]
-            done = bool(data.get("done", False)) or (len(normalized) == 0)
-            return {"reflection": str(data.get("reflection", "")), "cards": normalized, "done": done}
+            done = bool(data.get("done", False)) or (len(cards) == 0)
+            return {"reflection": str(data.get("reflection", "")), "cards": cards, "done": done}
         return {"reflection": "", "cards": [], "done": True}
 
     def get_history(self) -> List[Dict[str, Any]]:

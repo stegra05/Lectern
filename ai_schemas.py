@@ -33,11 +33,8 @@ class AnkiCard(BaseModel):
         if isinstance(data, dict):
             # If AI returns fields_json (string), parse it into fields (dict)
             if 'fields_json' in data:
-                try:
-                    data['fields'] = json.loads(data.pop('fields_json'))
-                except Exception:
-                    # Fallback or let validation fail if fields is missing
-                    pass
+                # Let json.loads raise directly if invalid; Pydantic will report it.
+                data['fields'] = json.loads(data.pop('fields_json'))
         return data
 
 class CardGenerationResponse(BaseModel):
