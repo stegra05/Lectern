@@ -6,8 +6,8 @@ export default defineConfig({
   plugins: [react()],
 
   build: {
-    // Enable/configure caching - don't empty dist on every build
-    emptyOutDir: false,
+    // Enable/configure caching - empty dist on every build
+    emptyOutDir: true,
 
     // Optimize chunk splitting for faster rebuilds
     rollupOptions: {

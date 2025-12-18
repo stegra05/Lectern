@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import imghdr
 import json
 import os
 from datetime import datetime
@@ -27,15 +26,13 @@ def _infer_mime_type(image_bytes: bytes) -> str:
 
     Falls back to application/octet-stream when type is unknown.
     """
-
-    kind = imghdr.what(None, h=image_bytes)
-    if kind == "png":
+    if image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
         return "image/png"
-    if kind in ("jpeg", "jpg"):
+    if image_bytes.startswith(b'\xff\xd8\xff'):
         return "image/jpeg"
-    if kind == "gif":
+    if image_bytes.startswith(b'GIF87a') or image_bytes.startswith(b'GIF89a'):
         return "image/gif"
-    if kind == "webp":
+    if image_bytes.startswith(b'RIFF') and image_bytes[8:12] == b'WEBP':
         return "image/webp"
     return "application/octet-stream"
 
