@@ -86,11 +86,7 @@ class LecternGenerationService:
 
             # 2. Parse PDF
             pages = []
-            if saved_state and not pages:
-                 # Ideally we re-parse to be safe, or cache pages in state. 
-                 # State doesn't currently save raw page text, only parsed concepts/cards.
-                 # So we must re-parse.
-                 pass
+
 
             if stop_check and stop_check():
                 return
