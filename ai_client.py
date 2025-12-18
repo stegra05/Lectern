@@ -13,7 +13,13 @@ from ai_common import (
     _start_session_log,
     _append_session_log,
 )
-from ai_schemas import CardGenerationResponse, ConceptMapResponse, ReflectionResponse, AnkiCard
+from ai_schemas import (
+    CardGenerationResponse,
+    ConceptMapResponse,
+    ReflectionResponse,
+    AnkiCard,
+    preprocess_fields_json_escapes,
+)
 from utils.cli import debug
 
 # Manual schema definitions for Gemini API to avoid Pydantic/Protobuf mismatches
@@ -224,7 +230,8 @@ class LecternAIClient:
         debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
         
-        data_obj = CardGenerationResponse.model_validate_json(text)
+        fixed_text = preprocess_fields_json_escapes(text)
+        data_obj = CardGenerationResponse.model_validate_json(fixed_text)
         data = data_obj.model_dump()
 
         if isinstance(data, dict):
@@ -264,7 +271,8 @@ class LecternAIClient:
         debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "reflection", [{"text": prompt}], text, True)
         
-        data_obj = ReflectionResponse.model_validate_json(text)
+        fixed_text = preprocess_fields_json_escapes(text)
+        data_obj = ReflectionResponse.model_validate_json(fixed_text)
         data = data_obj.model_dump()
 
         if isinstance(data, dict):
