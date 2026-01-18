@@ -36,43 +36,46 @@ def _fix_escape_sequences(s: str) -> str:
 
 def preprocess_fields_json_escapes(raw_json: str) -> str:
     """
-    Pre-process raw API response JSON to fix escape sequences inside fields_json.
+    Pre-process raw API response JSON to fix escape sequences in string fields.
     
-    The AI returns fields_json as a nested JSON string. During outer JSON parsing,
-    sequences like backslash-t in 'theta' get interpreted as tab characters.
+    The AI returns fields_json as a nested JSON string, and reflection/other fields
+    may contain LaTeX. During JSON parsing, sequences like \\theta get interpreted
+    as invalid escapes.
     
-    This function finds all fields_json values and:
+    This function finds string values in known fields and:
     1. Escapes backslashes followed by valid escape chars + letters (LaTeX commands)
        e.g., 'theta' has 't' which is valid JSON escape, but 'heta' follows = LaTeX
     2. Escapes backslashes NOT followed by valid JSON escape chars
     """
-    def fix_match(m: re.Match) -> str:
-        prefix = m.group(1)  # "fields_json": "
-        content = m.group(2)  # the actual JSON string content
-        suffix = m.group(3)   # closing "
-        
-        # Apply the same fixing logic as _fix_escape_sequences to the raw content
-        # Note: Content here is the RAW string from the file, so it behaves slightly differently
-        # than the parsed string, but the goal is to make it a valid JSON string value.
-        
+    def _fix_string_content(content: str) -> str:
+        """Apply escape fixes to raw JSON string content."""
         fixed = content
         # 1. LaTeX starting with valid escape (excluding u)
         fixed = re.sub(r'\\([bfnrt])([a-zA-Z])', r'\\\\' + r'\1\2', fixed)
-        
-        # 2. Invalid unicode
+        # 2. Invalid unicode escapes
         fixed = re.sub(r'\\u(?![0-9a-fA-F]{4})', r'\\\\u', fixed)
-        
         # 3. General invalid escapes
         fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', fixed)
-        
-        return prefix + fixed + suffix
+        return fixed
     
-    # Match "fields_json": "..." handling escaped quotes
-    pattern = r'("fields_json"\s*:\s*")((?:[^"\\]|\\.)*)(")'
-    result = re.sub(pattern, fix_match, raw_json)
+    def fix_match(m: re.Match) -> str:
+        prefix = m.group(1)   # e.g. "fields_json": "
+        content = m.group(2)  # the actual string content
+        suffix = m.group(3)   # closing "
+        return prefix + _fix_string_content(content) + suffix
+    
+    result = raw_json
+    
+    # NOTE(Escape-Fix): Fields that commonly contain LaTeX or special chars
+    # fields_json is a nested JSON string, reflection contains prose with math
+    fields_to_fix = ["fields_json", "reflection", "rationale"]
+    
+    for field_name in fields_to_fix:
+        pattern = rf'("{field_name}"\s*:\s*")((?:[^"\\]|\\.)*)(")'
+        result = re.sub(pattern, fix_match, result)
     
     # Also fix any remaining invalid escapes in the entire JSON that slipped through
-    # This catches cases where invalid escapes are OUTSIDE fields_json
+    # This catches cases where invalid escapes are OUTSIDE the targeted fields
     # We only fix obvious invalid ones: \. \, \= \# \@ \( \) \{ \} etc.
     result = re.sub(r'\\([.=,#@(){}[\]<>])', r'\\\\\1', result)
     

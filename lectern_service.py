@@ -285,11 +285,29 @@ class LecternGenerationService:
                             if isinstance(card, dict) and str(card.get("slide_number", "")).isdigit()
                         }
                     )
+
+                    # NOTE(Pacing): Calculate real-time feedback for the AI
+                    pacing_hint = ""
+                    if covered_slides and len(all_cards) > 10:
+                        last_slide = max(covered_slides)
+                        actual_density = len(all_cards) / last_slide
+                        pacing_hint = (
+                            f"Progress: Slide {last_slide} of {len(pages)}.\\n"
+                            f"Status: You have generated {len(all_cards)} cards so far (~{actual_density:.1f} per slide).\\n"
+                        )
+                        if exam_mode:
+                            target = 0.9
+                            if actual_density > target * 1.2:
+                                pacing_hint += f"ADVICE: Density is too high (Target: {target}). Increase your filtering threshold! Focus ONLY on the most complex, exam-critical nuances."
+                            elif actual_density < target * 0.8:
+                                pacing_hint += f"ADVICE: Density is low (Target: {target}). You may capture more application-based nuances if they are high-yield."
+
                     out = ai.generate_more_cards(
                         limit=limit,
                         examples=current_examples,
                         avoid_fronts=recent_keys,
                         covered_slides=covered_slides,
+                        pacing_hint=pacing_hint,
                     )
                     new_cards = out.get("cards", [])
                     

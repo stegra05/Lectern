@@ -295,6 +295,7 @@ class LecternAIClient:
         examples: str = "",
         avoid_fronts: List[str] | None = None,
         covered_slides: List[int] | None = None,
+        pacing_hint: str = "",
     ) -> Dict[str, Any]:
         self._prune_history()
         example_text = ""
@@ -316,6 +317,11 @@ class LecternAIClient:
                 "    - Prefer uncovered slides and topics when possible.\\n"
             )
         
+        # NOTE(Pacing): Inject real-time feedback on density
+        pacing_text = ""
+        if pacing_hint:
+            pacing_text = f"\\n- Pacing & Density Feedback:\\n{pacing_hint}\\n"
+        
         # NOTE(Tags): Build context string for hierarchical tagging
         tag_context = self._build_tag_context()
         
@@ -327,6 +333,7 @@ class LecternAIClient:
         prompt = (
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\\n"
             "CRITICAL: Consult the Global Concept Map generated in the first turn. Ensure you cover the 'Relations' identified there.\\n"
+            f"{pacing_text}"
             f"{example_text}"
             f"{principles_text}"
             "- Format:\\n"
