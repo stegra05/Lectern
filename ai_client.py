@@ -9,6 +9,8 @@ from google.genai import types  # type: ignore
 import config
 from ai_common import (
     LATEX_STYLE_GUIDE,
+    EXAM_PREP_CONTEXT,
+    EXAM_REFLECTION_CONTEXT,
     _compose_multimodal_content,
     _start_session_log,
     _append_session_log,
@@ -105,7 +107,12 @@ _REFLECTION_SCHEMA = {
 }
 
 class LecternAIClient:
-    def __init__(self, model_name: str | None = None) -> None:
+    def __init__(
+        self, 
+        model_name: str | None = None, 
+        exam_mode: bool = False,
+        slide_set_context: Dict[str, Any] | None = None,
+    ) -> None:
         if not config.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is not set. Export it before running Lectern.")
         
@@ -115,12 +122,23 @@ class LecternAIClient:
         )
         
         self._model_id = model_name or config.DEFAULT_GEMINI_MODEL
+        self._exam_mode = exam_mode  # Store for use in reflection
+        
+        # NOTE(Tags): Store slide set context for hierarchical tagging
+        # Contains: deck_name, slide_set_name, pattern_info, pdf_title
+        self._slide_set_context = slide_set_context or {}
+        
+        # NOTE(Exam-Mode): Combine base formatting with exam context when exam_mode is enabled
+        system_instruction = LATEX_STYLE_GUIDE
+        if exam_mode:
+            system_instruction = EXAM_PREP_CONTEXT + LATEX_STYLE_GUIDE
+            debug("[AI] Exam mode ENABLED - prioritizing comparison/application cards")
         
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=0.2,
             max_output_tokens=8192,
-            system_instruction=LATEX_STYLE_GUIDE,
+            system_instruction=system_instruction,
             thinking_config=types.ThinkingConfig(thinking_level=config.GEMINI_THINKING_LEVEL.lower()),
             safety_settings=[
                 types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
@@ -141,6 +159,50 @@ class LecternAIClient:
     @property
     def log_path(self) -> str:
         return self._log_path
+
+    def _build_tag_context(self) -> str:
+        """Build the tag instruction context for AI prompts based on slide set context.
+        
+        Returns a string with tagging instructions that will be inserted into the prompt.
+        """
+        ctx = self._slide_set_context
+        
+        if not ctx:
+            # Fallback to simple tagging instructions
+            return (
+                "- Metadata:\\n"
+                "    - `tags`: 1-2 concise tags (kebab-case, max 3 words). These will be added to a hierarchical tag structure.\\n"
+            )
+        
+        deck_name = ctx.get('deck_name', '')
+        slide_set_name = ctx.get('slide_set_name', '')
+        pattern_info = ctx.get('pattern_info', {})
+        
+        # Build example tag
+        example_parts = []
+        if deck_name:
+            example_parts.append(deck_name.replace(' ', '-').lower()[:30])
+        if slide_set_name:
+            example_parts.append(slide_set_name.replace(' ', '-').lower()[:30])
+        example_parts.append("[slide_topic]")
+        example_parts.append("[your-tag]")
+        example_tag = "::".join(example_parts)
+        
+        # Build full context
+        existing_sets = pattern_info.get('slide_sets', [])
+        existing_context = ""
+        if existing_sets:
+            sample = existing_sets[:3]
+            existing_context = f" Existing slide sets in this deck: {', '.join(sample)}."
+        
+        return (
+            "- Metadata (Hierarchical Tagging System):\\n"
+            f"    - Tag Structure: Deck::SlideSet::Topic::Tag (this slide set: '{slide_set_name}'){existing_context}\\n"
+            "    - `tags`: 1-2 concise, specific tags (kebab-case, max 3 words) for the LEAF level only.\\n"
+            "      Examples: 'preprocessing', 'gradient-descent', 'bias-variance', 'hyperparameter-tuning'\\n"
+            f"      Full tag will become: {example_tag}\\n"
+            "    - AVOID generic tags like 'definition', 'concept', 'important', 'basics'.\\n"
+        )
 
     def _prune_history(self) -> None:
         """Prune chat history to manage token usage (sliding window)."""
@@ -195,6 +257,9 @@ class LecternAIClient:
         if examples:
             example_text = f"\\n- Reference Examples (Mimic this style):\\n{examples}\\n"
         
+        # NOTE(Tags): Build context string for hierarchical tagging
+        tag_context = self._build_tag_context()
+        
         prompt = (
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\\n"
             f"{example_text}"
@@ -202,14 +267,13 @@ class LecternAIClient:
             "    - Atomicity: One idea per card.\\n"
             "    - Minimum Information Principle: Keep questions and answers simple and direct.\\n"
             "    - Variety: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
-            "    - Context: Use the `slide_topic` to ground the card.\\n"
+            "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
             "- Format:\\n"
             "    - Prefer Cloze deletion for definitions and lists.\\n"
             "    - Use Basic (Front/Back) for open-ended conceptual questions.\\n"
             "    - Text Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>, <code>code</code>).\\n"
-            "- Metadata:\\n"
-            "    - `tags`: 1-2 concise, hierarchical tags (kebab-case, max 3 words). Avoid generic terms.\\n"
-            "    - `slide_topic`: The specific section/header (Title Case).\\n"
+            f"{tag_context}"
+            "    - `slide_topic`: The specific section/topic within this slide set (Title Case, e.g., 'Image Classification', 'Gradient Descent').\\n"
             "    - `slide_number`: The integer page number where this concept is primarily found.\\n"
             "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\\n"
             "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
@@ -230,8 +294,48 @@ class LecternAIClient:
         debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
         
-        fixed_text = preprocess_fields_json_escapes(text)
-        data_obj = CardGenerationResponse.model_validate_json(fixed_text)
+        # Try multiple parsing strategies
+        data_obj = None
+        
+        # Strategy 1: Standard preprocessing
+        try:
+            fixed_text = preprocess_fields_json_escapes(text)
+            data_obj = CardGenerationResponse.model_validate_json(fixed_text)
+        except Exception as e1:
+            debug(f"[Chat/Gen] Standard parsing failed: {e1}")
+            
+            # Strategy 2: Aggressive backslash normalization
+            try:
+                # Replace all backslashes with double backslashes, then fix valid escapes
+                aggressive_fix = text.replace('\\', '\\\\')
+                # Restore valid JSON escapes: after doubling, \" became \\", \n became \\n, etc.
+                # We need to restore them to single-backslash form for valid JSON.
+                # Search: 2 backslashes + char → Replace: 1 backslash + char
+                for char in ['"', 'n', 't', 'r', '/']:
+                    aggressive_fix = aggressive_fix.replace('\\\\' + char, '\\' + char)
+                # Special case: escaped backslash \\ became \\\\ after doubling, restore to \\
+                aggressive_fix = aggressive_fix.replace('\\\\\\\\', '\\\\')
+                data_obj = CardGenerationResponse.model_validate_json(aggressive_fix)
+                debug("[Chat/Gen] Aggressive parsing succeeded")
+            except Exception as e2:
+                debug(f"[Chat/Gen] Aggressive parsing failed: {e2}")
+                
+                # Strategy 3: Try to extract whatever valid cards we can
+                try:
+                    import re
+                    # Extract cards array manually
+                    cards_match = re.search(r'"cards"\s*:\s*\[(.*)\]', text, re.DOTALL)
+                    if cards_match:
+                        # Return an empty but valid structure so generation can continue
+                        debug("[Chat/Gen] Falling back to empty cards due to parse errors")
+                        data_obj = CardGenerationResponse(cards=[], done=False)
+                except Exception as e3:
+                    debug(f"[Chat/Gen] All parsing strategies failed: {e3}")
+                    raise e1  # Re-raise original error
+        
+        if data_obj is None:
+            return {"cards": [], "done": True}
+            
         data = data_obj.model_dump()
 
         if isinstance(data, dict):
@@ -243,19 +347,37 @@ class LecternAIClient:
 
     def reflect(self, limit: int, reflection_prompt: str | None = None) -> Dict[str, Any]:
         self._prune_history()
-        base = (
-            "You are a strict Quality Assurance Specialist for educational content. Review the last batch of generated cards.\\n"
-            "- Critique Criteria:\\n"
-            "    - Redundancy: Are there duplicate or overlapping cards?\\n"
-            "    - Vagueness: Is the question ambiguous without more context?\\n"
-            "    - Complexity: Is the answer too long or multi-faceted? (Split it!)\\n"
-            "    - Interference: Do any cards look too similar, causing confusion?\\n"
-            "- Action:\\n"
-            "    - Write a concise `reflection` summarizing the quality and identifying specific issues.\\n"
-            "    - Generate improved replacements or new gap-filling cards to address the issues.\\n"
-            "    - Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>).\\n"
-            f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\\n"
-        )
+        
+        # NOTE(Exam-Mode): Use specialized reflection prompt when exam mode is enabled
+        if self._exam_mode:
+            base = (
+                EXAM_REFLECTION_CONTEXT +
+                "Review the last batch of generated cards with the above priorities in mind.\\n"
+                "- Critique Criteria:\\n"
+                "    - Card Type Balance: Is the distribution close to 30% comparison, 25% application, 25% intuition, 20% definition?\\n"
+                "    - Depth: Do application cards present realistic scenarios with multi-step reasoning?\\n"
+                "    - Redundancy: Are there duplicate or overlapping cards?\\n"
+                "    - Formula Recitation: Are there cards that just ask to recite formulas? (Convert to application!)\\n"
+                "- Action:\\n"
+                "    - Write a concise `reflection` summarizing the quality and card type distribution.\\n"
+                "    - Generate improved replacements or new gap-filling cards, prioritizing comparison/application types.\\n"
+                "    - Formatting: STRICTLY AVOID Markdown. Use HTML tags for formatting.\\n"
+                f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\\n"
+            )
+        else:
+            base = (
+                "You are a strict Quality Assurance Specialist for educational content. Review the last batch of generated cards.\\n"
+                "- Critique Criteria:\\n"
+                "    - Redundancy: Are there duplicate or overlapping cards?\\n"
+                "    - Vagueness: Is the question ambiguous without more context?\\n"
+                "    - Complexity: Is the answer too long or multi-faceted? (Split it!)\\n"
+                "    - Interference: Do any cards look too similar, causing confusion?\\n"
+                "- Action:\\n"
+                "    - Write a concise `reflection` summarizing the quality and identifying specific issues.\\n"
+                "    - Generate improved replacements or new gap-filling cards to address the issues.\\n"
+                "    - Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>).\\n"
+                f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\\n"
+            )
         prompt = (reflection_prompt or base)
         
         call_config = self._generation_config.model_copy(update={

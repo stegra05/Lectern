@@ -64,19 +64,12 @@ async def health_check():
         print(f"Anki connection check failed: {e}")
         anki_status = False
     
-    # Safely reload and check Gemini config
+    # Safely check Gemini config without reloading the entire module (which is expensive)
     try:
-        from importlib import reload
-        reload(config)
-        gemini_configured = bool(getattr(config, 'GEMINI_API_KEY', None))
+        gemini_configured = bool(config.GEMINI_API_KEY)
     except Exception as e:
-        print(f"Config reload failed: {e}")
-        # Try to read from environment as fallback
-        try:
-            import os
-            gemini_configured = bool(os.getenv('GEMINI_API_KEY'))
-        except:
-            gemini_configured = False
+        print(f"Gemini config check failed: {e}")
+        gemini_configured = False
         
     return {
         "status": "ok",
@@ -149,14 +142,22 @@ async def delete_history_entry(entry_id: str):
 
 @app.post("/estimate")
 async def estimate_cost(pdf_file: UploadFile = File(...)):
-    # Save uploaded file to temp
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        shutil.copyfileobj(pdf_file.file, tmp)
-        tmp_path = tmp.name
+    from starlette.concurrency import run_in_threadpool
+    
+    # Save uploaded file to temp in threadpool to avoid blocking
+    def save_to_temp():
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            shutil.copyfileobj(pdf_file.file, tmp)
+            return tmp.name
+            
+    tmp_path = await run_in_threadpool(save_to_temp)
 
     try:
-        # Extract text
-        pages = pdf_parser.extract_content_from_pdf(tmp_path)
+        from starlette.concurrency import run_in_threadpool
+        
+        # Extract text in a separate thread to avoid blocking the main loop
+        # For estimation, we skip OCR to be fast.
+        pages = await run_in_threadpool(pdf_parser.extract_content_from_pdf, tmp_path, skip_ocr=True)
         
         # Convert to dict for ai_common
         pdf_content = [{"text": p.text, "images": p.images} for p in pages]
@@ -196,11 +197,17 @@ async def generate_cards(
     deck_name: str = Form(...),
     model_name: str = Form(config.DEFAULT_BASIC_MODEL),
     tags: str = Form("[]"),  # JSON string
-    context_deck: str = Form("")
+    context_deck: str = Form(""),
+    exam_mode: bool = Form(False)  # NEW: Enable exam-focused card generation
 ):
     global CURRENT_GENERATION_SERVICE
     service = GenerationService()
     CURRENT_GENERATION_SERVICE = service
+    
+    # NOTE(Exam-Mode): exam_mode is now passed through the service chain,
+    # not set as a global config mutation. This is thread-safe.
+    if exam_mode:
+        print("Info: Exam mode ENABLED - prioritizing comparison/application cards")
     
     # Parse tags from JSON string
     try:
@@ -220,9 +227,14 @@ async def generate_cards(
 
     # Save uploaded file to temp
     # We use delete=False so it persists for thumbnail generation
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        shutil.copyfileobj(pdf_file.file, tmp)
-        tmp_path = tmp.name
+    # Run in threadpool to avoid blocking
+    from starlette.concurrency import run_in_threadpool
+    def save_generate_temp():
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            shutil.copyfileobj(pdf_file.file, tmp)
+            return tmp.name
+            
+    tmp_path = await run_in_threadpool(save_generate_temp)
     
     # Debug: Check file sizes
     try:
@@ -251,7 +263,8 @@ async def generate_cards(
                 model_name=model_name,
                 tags=tags_list,
                 context_deck=context_deck,
-                entry_id=entry_id
+                entry_id=entry_id,
+                exam_mode=exam_mode,  # NOTE(Exam-Mode): Pass through to service
             ):
                 yield f"{event_json}\n"
         except Exception as e:

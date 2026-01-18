@@ -5,14 +5,33 @@ import re
 
 
 def _fix_escape_sequences(s: str) -> str:
-    """
+    r"""
     Sanitize invalid JSON escape sequences in a string.
     
-    Escapes lone backslashes that are NOT part of valid JSON escapes
-    by doubling them. Valid escapes: backslash, quote, slash, b, f, n, r, t, uXXXX.
+    This handles three cases:
+    1. LaTeX commands starting with valid escape chars (\times, \theta, \beta)
+    2. Invalid unicode escapes (e.g. \u not followed by 4 hex digits, used for \unit, \user)
+    3. General invalid escapes (\alpha, \sigma, etc.)
+    
+    Valid JSON escapes: \\ \" \/ \b \f \n \r \t \uXXXX
     """
-    # Pattern: backslash followed by something that is NOT a valid escape char.
-    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+    # 1. Catch LaTeX commands that START with a valid JSON escape letter (excluding 'u')
+    # Examples: \times (\t), \theta, \rho, \beta (\b), \phi, \newline (\n)
+    # Pattern: backslash + one of [bfnrt] + at least one more letter
+    # We exclude 'u' here because we handle it specifically in step 2
+    s = re.sub(r'\\([bfnrt])([a-zA-Z_])', r'\\\\\1\2', s)
+    
+    # 2. Catch \u sequences that are NOT valid unicode escapes (not followed by 4 hex digits)
+    # This catches \unit, \user, C:\u, \u123 (short), etc.
+    # We use negative lookahead to check if the next 4 chars are NOT hex
+    s = re.sub(r'\\u(?![0-9a-fA-F]{4})', r'\\\\u', s)
+    
+    # 3. Catch all remaining invalid escapes (backslash + non-valid char)
+    # Examples: \alpha, \(, \), \lambda, \gamma, \., etc.
+    # Valid chars allowed after backslash: " \ / b f n r t u
+    s = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+    
+    return s
 
 
 def preprocess_fields_json_escapes(raw_json: str) -> str:
@@ -32,20 +51,32 @@ def preprocess_fields_json_escapes(raw_json: str) -> str:
         content = m.group(2)  # the actual JSON string content
         suffix = m.group(3)   # closing "
         
-        # First: escape \X where X is a valid JSON escape char followed by letters
-        # This catches \theta, \nu, \beta, \textit, etc.
-        # r'\\' matches one backslash, capture the letter, then require more letters
-        # Replace with double backslash + the captured chars
-        fixed = re.sub(r'\\([bfnrtu])([a-zA-Z])', r'\\\\' + r'\1\2', content)
+        # Apply the same fixing logic as _fix_escape_sequences to the raw content
+        # Note: Content here is the RAW string from the file, so it behaves slightly differently
+        # than the parsed string, but the goal is to make it a valid JSON string value.
         
-        # Second: escape \X where X is NOT a valid JSON escape char at all
+        fixed = content
+        # 1. LaTeX starting with valid escape (excluding u)
+        fixed = re.sub(r'\\([bfnrt])([a-zA-Z])', r'\\\\' + r'\1\2', fixed)
+        
+        # 2. Invalid unicode
+        fixed = re.sub(r'\\u(?![0-9a-fA-F]{4})', r'\\\\u', fixed)
+        
+        # 3. General invalid escapes
         fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', fixed)
         
         return prefix + fixed + suffix
     
     # Match "fields_json": "..." handling escaped quotes
     pattern = r'("fields_json"\s*:\s*")((?:[^"\\]|\\.)*)(")'
-    return re.sub(pattern, fix_match, raw_json)
+    result = re.sub(pattern, fix_match, raw_json)
+    
+    # Also fix any remaining invalid escapes in the entire JSON that slipped through
+    # This catches cases where invalid escapes are OUTSIDE fields_json
+    # We only fix obvious invalid ones: \. \, \= \# \@ \( \) \{ \} etc.
+    result = re.sub(r'\\([.=,#@(){}[\]<>])', r'\\\\\1', result)
+    
+    return result
 
 
 class Concept(BaseModel):
@@ -79,10 +110,27 @@ class AnkiCard(BaseModel):
         if isinstance(data, dict):
             # If AI returns fields_json (string), parse it into fields (dict)
             if 'fields_json' in data:
-                # Sanitize LaTeX-style escapes before JSON parsing
                 raw_json = data.pop('fields_json')
-                fixed_json = _fix_escape_sequences(raw_json)
-                data['fields'] = json.loads(fixed_json)
+                # Try to clean up and parse
+                try:
+                    fixed_json = _fix_escape_sequences(raw_json)
+                    data['fields'] = json.loads(fixed_json)
+                except Exception as e:
+                    # Fallback: If parsing fails, try to salvage or provide error field
+                    # Don't crash the whole batch for one bad card
+                    print(f"WARNING: Failed to parse fields_json for card: {e}. Raw: {raw_json[:50]}...")
+                    # Attempt a super-aggressive fix as last resort?
+                    try:
+                        # Replace all backslashes with double backslashes
+                        aggressive = raw_json.replace('\\', '\\\\')
+                        data['fields'] = json.loads(aggressive)
+                    except:
+                        # Final fallback
+                        data['fields'] = {
+                            "Front": "Error parsing generated card content",
+                            "Back": f"Raw content: {raw_json}",
+                            "Error": str(e)
+                        }
         return data
 
 class CardGenerationResponse(BaseModel):

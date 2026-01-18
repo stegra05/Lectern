@@ -28,6 +28,13 @@ function App() {
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<Phase>('idle');
+  const [examMode, setExamMode] = useState(() => {
+    // Persist exam mode preference
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('examMode') === 'true';
+    }
+    return false;
+  });
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -116,23 +123,32 @@ function App() {
   }, [logs]);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchEstimate = async () => {
       if (!pdfFile) {
         setEstimation(null);
+        setIsEstimating(false);  // Reset stuck state when file cleared
         return;
       }
       setIsEstimating(true);
       try {
-        const est = await api.estimateCost(pdfFile);
-        setEstimation(est);
+        const est = await api.estimateCost(pdfFile, controller.signal);
+        if (est) setEstimation(est);
       } catch (e) {
-        console.error(e);
-        setEstimation(null);
+        if ((e as Error).name !== 'AbortError') {
+          console.error(e);
+          setEstimation(null);
+        }
       } finally {
-        setIsEstimating(false);
+        if (!controller.signal.aborted) {
+          setIsEstimating(false);
+        }
       }
     };
+
     fetchEstimate();
+    return () => controller.abort();
   }, [pdfFile]);
 
   // Refresh history when entering specific states
@@ -150,7 +166,7 @@ function App() {
 
     try {
       await api.generate(
-        { pdf_file: pdfFile, deck_name: deckName },
+        { pdf_file: pdfFile, deck_name: deckName, exam_mode: examMode },
         (event) => {
           setLogs(prev => [...prev, event]);
           if (event.type === 'progress_start') {
@@ -455,6 +471,55 @@ function App() {
                       placeholder="University::Subject::Topic"
                       className="w-full bg-surface/50 border border-border rounded-xl py-4 px-5 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-text-muted"
                     />
+                  </div>
+
+                  {/* Exam Mode Toggle */}
+                  <div className="pt-4 border-t border-border/50">
+                    <button
+                      onClick={() => {
+                        const newValue = !examMode;
+                        setExamMode(newValue);
+                        localStorage.setItem('examMode', String(newValue));
+                      }}
+                      className={clsx(
+                        "w-full flex items-center justify-between p-4 rounded-xl border transition-all",
+                        examMode
+                          ? "bg-primary/10 border-primary/30 hover:border-primary/50"
+                          : "bg-surface/30 border-border/50 hover:border-border"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={clsx(
+                          "w-10 h-10 rounded-lg flex items-center justify-center text-lg",
+                          examMode ? "bg-primary/20 text-primary" : "bg-surface text-text-muted"
+                        )}>
+                          🎯
+                        </div>
+                        <div className="text-left">
+                          <div className={clsx(
+                            "font-semibold",
+                            examMode ? "text-primary" : "text-text-main"
+                          )}>Exam Mode</div>
+                          <div className="text-xs text-text-muted">
+                            {examMode ? "Comparison & application cards" : "Standard card generation"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className={clsx(
+                        "w-12 h-6 rounded-full p-1 transition-colors",
+                        examMode ? "bg-primary" : "bg-surface"
+                      )}>
+                        <div className={clsx(
+                          "w-4 h-4 rounded-full bg-white shadow transition-transform",
+                          examMode ? "translate-x-6" : "translate-x-0"
+                        )} />
+                      </div>
+                    </button>
+                    {examMode && (
+                      <p className="mt-2 text-xs text-primary/70 px-2">
+                        🎓 Prioritizes understanding over memorization. 30% comparison, 25% application, 25% intuition, 20% definition cards.
+                      </p>
+                    )}
                   </div>
                 </GlassCard>
               </motion.div>

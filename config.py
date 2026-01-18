@@ -68,8 +68,14 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
     "no",
 )
 
-# Group tags under the destination deck using Anki's hierarchical tag separator '::'.
-# Example: deck "Econ::Macro", tag "gdp" -> "econ::macro::gdp".
+# DEPRECATED: GROUP_TAGS_BY_DECK is no longer used.
+# The new hierarchical tagging system always creates tags in the format:
+#   Deck::SlideSet::Topic::Tag
+# Example: "Introduction to Machine Learning::Lecture 1 Supervised Learning::Image Classification::preprocessing"
+# The system automatically:
+#   - Detects existing slide set naming patterns in the deck
+#   - Extracts PDF titles for context-aware naming
+#   - Uses Topic from slide_topic metadata provided by AI
 GROUP_TAGS_BY_DECK: bool = os.getenv("GROUP_TAGS_BY_DECK", "true").lower() not in (
     "0",
     "false",
@@ -114,4 +120,9 @@ CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2")
 
 # Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
+
+# Exam preparation mode - prioritizes understanding/comparison cards over memorization
+# Set EXAM_MODE=true to activate exam-focused card generation
+EXAM_MODE: bool = os.getenv("EXAM_MODE", "false").lower() in ("1", "true", "yes")
+
 

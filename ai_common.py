@@ -21,6 +21,52 @@ LATEX_STYLE_GUIDE = (
     '{{c1::\\(n x^{n-1}\\)}}."},"tags":["calculus"]}\n'
 )
 
+# NOTE(Exam-Prep): Optional context for exam-focused card generation.
+# Prioritizes understanding and application over rote memorization.
+# Activate by setting EXAM_MODE=true in environment.
+EXAM_PREP_CONTEXT = (
+    "EXAM PREPARATION MODE:\n"
+    "You are generating flashcards for a university exam that tests UNDERSTANDING, not memorization.\n"
+    "The exam format is 40% MCQ + 60% written conceptual questions.\n"
+    "\n"
+    "CARD TYPE PRIORITIES (generate in this ratio):\n"
+    "1. COMPARISON cards (30%): 'Compare A vs B in terms of [property]' or 'What is the difference between X and Y?'\n"
+    "   Example: Front='Compare K-Means vs DBSCAN', Back='K-Means: requires K, spherical clusters. DBSCAN: no K, arbitrary shapes, handles outliers.'\n"
+    "2. APPLICATION cards (25%): 'Given [scenario], which method would you use and why?' or 'Your model shows [symptom], what is the issue?'\n"
+    "   Example: Front='Training loss decreasing but validation loss increasing. Diagnosis?', Back='Overfitting. Solutions: regularization, more data, simpler model.'\n"
+    "3. INTUITION cards (25%): 'Explain [concept] in your own words' or 'Why does [thing] work?'\n"
+    "   Example: Front='Why do Random Forests outperform single Decision Trees?', Back='Bagging + feature randomness reduce variance. Diverse trees make different errors that cancel out.'\n"
+    "4. DEFINITION cards (20%): Only for core terminology that must be precisely understood.\n"
+    "\n"
+    "CRITICAL RULES:\n"
+    "- NEVER create cards that ask to recite formulas verbatim (e.g., 'What is the MSE formula?')\n"
+    "- NEVER create cards with single-word answers\n"
+    "- ALWAYS test transferable understanding, not surface recall\n"
+    "- Focus on the 'why' and 'when to use', not the 'what'\n"
+    "\n"
+)
+
+# NOTE(Exam-Prep): Specialized reflection prompt for exam mode.
+# Ensures reflection phase doesn't degrade application/comparison cards into simple definitions.
+EXAM_REFLECTION_CONTEXT = (
+    "EXAM MODE REFLECTION:\n"
+    "You are reviewing cards for university exam preparation. The exam tests UNDERSTANDING, not memorization.\n"
+    "\n"
+    "REFLECTION PRIORITIES:\n"
+    "1. PRESERVE card type distribution: Aim for 30% comparison, 25% application, 25% intuition, 20% definition.\n"
+    "2. DO NOT simplify application/comparison cards into definitions. If a card asks 'Compare X vs Y', keep it that way.\n"
+    "3. ENHANCE scenario-based cards: Make 'Given [situation]...' cards more realistic and multi-step.\n"
+    "4. ADD missing comparisons: If the material contrasts two methods/concepts, there should be a comparison card.\n"
+    "5. CHECK for conceptual gaps: Identify 'why does this work?' intuition cards that are missing.\n"
+    "\n"
+    "RED FLAGS TO FIX:\n"
+    "- Cards that ask to recite a formula verbatim\n"
+    "- Single-word or trivial answers\n"
+    "- Duplicate cards covering the same comparison from different angles (consolidate them)\n"
+    "- Definition cards for concepts that would be better tested via application\n"
+    "\n"
+)
+
 def _infer_mime_type(image_bytes: bytes) -> str:
     """Best-effort inference of image MIME type from raw bytes.
 

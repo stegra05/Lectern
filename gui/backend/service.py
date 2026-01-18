@@ -85,7 +85,8 @@ class GenerationService:
         model_name: str,
         tags: List[str],
         context_deck: str = "",
-        entry_id: str = None
+        entry_id: str = None,
+        exam_mode: bool = False,  # NOTE(Exam-Mode): Pass through to core service
     ) -> AsyncGenerator[str, None]:
         
         # Clear previous drafts on new run
@@ -99,7 +100,8 @@ class GenerationService:
             context_deck=context_deck,
             resume=True,
             skip_export=True,  # Always skip export in GUI now
-            stop_check=lambda: self.stop_requested
+            stop_check=lambda: self.stop_requested,
+            exam_mode=exam_mode,  # NOTE(Exam-Mode): Pass through to core
         )
 
         # Helper to run next(iterator) in thread
