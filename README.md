@@ -13,7 +13,7 @@
 Lectern transforms PDF lecture slides into high-quality Anki flashcards instantly.  
 It parses your slides, composes a multimodal prompt for Google's Gemini, and creates notes in your running Anki instance via AnkiConnect.
 
-[Get Started](#installation) • [Usage](#usage) • [Configuration](#configuration)
+[Get Started](#installation) • [Usage](#usage) • [Tech Stack](#tech-stack) • [Configuration](#configuration)
 
 </div>
 
@@ -22,19 +22,33 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 ## Features
 
 - **Multimodal Analysis**  
-  Extracts text and images from slides, preserving context for accurate generation.
+  Extracts text and images from slides using `PyMuPDF`, preserving context for accurate generation.
 
 - **Smart Generation**  
-  Leverages Gemini Pro to create atomic, well-structured cards that adhere to learning best practices.
+  Leverages **Gemini Pro 1.5** to create atomic, well-structured cards that adhere to learning best practices.
 
 - **Style Matching**  
   Intelligently samples existing cards to match your deck's aesthetic and formatting.
 
 - **Dual Interface**  
-  Includes a robust CLI for power users and a sleek, modern GUI for interactive workflows.
+  - **Native GUI:** A standalone desktop app (via `pywebview`) with a modern React/Tailwind frontend.
+  - **Power CLI:** A robust command-line interface for batch processing and automation.
 
 - **Safe Execution**  
   Operates exclusively via the AnkiConnect API, ensuring your collection files remain untouched.
+
+---
+
+## Tech Stack
+
+Lectern is built with a modern, type-safe, and performant stack:
+
+- **AI Core:** Google Gemini Pro 1.5 (Multimodal)
+- **Backend:** Python, FastAPI, Uvicorn
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion
+- **Desktop Wrapper:** PyWebView (Cocoa/WebKit)
+- **PDF Engine:** PyMuPDF
+- **CLI Utilities:** Rich, Keyring
 
 ---
 
@@ -58,10 +72,6 @@ python -m venv .venv && source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
 ```
 
 ### Build from Source
@@ -77,16 +87,31 @@ The artifact will be available in `dist/Lectern.app`.
 
 ## Usage
 
-### Graphical Interface
+### 1. Setup API Key
 
-The recommended way to use Lectern. Launches a local web server with a modern UI.
+You can store your API key securely in the system keychain (recommended) or use a `.env` file.
+
+**Option A: System Keychain (Secure)**
+```bash
+python main.py --set-key
+# Follow the prompt to enter your Gemini API Key
+```
+
+**Option B: Environment File**
+```bash
+cp .env.example .env
+# Edit .env and add GEMINI_API_KEY=...
+```
+
+### 2. Graphical Interface
+
+The recommended way to use Lectern. Launches a native window with a modern UI.
 
 ```bash
 python gui/launcher.py
 ```
-*Opens automatically at `http://127.0.0.1:8000`*
 
-### Command Line
+### 3. Command Line
 
 For automation, batch processing, and headless environments.
 
@@ -98,8 +123,15 @@ python main.py --pdf-path /path/to/slides.pdf --deck-name "Target Deck"
 python main.py \
   --pdf-path lecture_01.pdf \
   --deck-name "Biology 101" \
-  --context-deck "Biology 101::Previous"
+  --context-deck "Biology 101::Previous" \
+  --verbose
 ```
+
+**Common Flags:**
+- `--interactive`: Prompts for missing arguments.
+- `--exam-mode`: Prioritizes application and comparison cards.
+- `--estimate`: Calculates token usage and estimated cost without generating.
+- `--quiet`: Minimal output.
 
 ---
 
@@ -109,10 +141,18 @@ Configure defaults in `.env` or override via flags.
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | **Required**. Your Google AI API key. | - |
+| `GEMINI_API_KEY` | **Required**. (Or set via `main.py --set-key`) | - |
 | `ANKI_CONNECT_URL` | URL of AnkiConnect API. | `http://localhost:8765` |
 | `BASIC_MODEL_NAME` | Anki Note Type for basic cards. | `prettify-nord-basic` |
 | `CLOZE_MODEL_NAME` | Anki Note Type for cloze cards. | `prettify-nord-cloze` |
+
+---
+
+## Documentation & Contribution
+
+- **[System Architecture](docs/ARCHITECTURE.md):** A high-level overview of how Lectern works under the hood.
+- **[Contributing Guide](CONTRIBUTING.md):** Guidelines for developers who want to improve Lectern.
+- **[Frontend Docs](gui/frontend/README.md):** Specific documentation for the React-based GUI.
 
 <br>
 
