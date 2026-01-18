@@ -14,6 +14,9 @@ LATEX_STYLE_GUIDE = (
     "- For math bold: \\textbf{...} (text), \\mathbf{...} or \\boldsymbol{...} (symbols). Do not use HTML inside math.\n"
     "- Never use Markdown (no **bold**, headers, or code fences).\n"
     "- JSON must escape backslashes (e.g., \\\\frac, \\\\alpha).\n"
+)
+
+BASIC_EXAMPLES = (
     "Examples:\n"
     '  Basic: {"model_name":"Basic","fields":{"Front":"State the quadratic formula.", '
     '"Back":"Key idea: <b>roots</b>. Formula: \\(x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\\)."},"tags":["algebra"]}\n'
@@ -21,49 +24,61 @@ LATEX_STYLE_GUIDE = (
     '{{c1::\\(n x^{n-1}\\)}}."},"tags":["calculus"]}\n'
 )
 
+EXAM_EXAMPLES = (
+    "Examples (Exam Mode):\n"
+    '  Scenario: {"model_name":"Basic","fields":{"Front":"Loss oscillates wildly during training. What is the most likely cause?", '
+    '"Back":"<b>Learning rate is too high</b>. The steps overshoot the minimum."}, "tags":["optimization"]}\n'
+    '  Comparison: {"model_name":"Basic","fields":{"Front":"Compare <b>L1</b> and <b>L2</b> regularization effects.", '
+    '"Back":"<b>L1</b>: Yields sparse weights (feature selection).\\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."}, "tags":["regularization"]}\n'
+)
+
 # NOTE(Exam-Prep): Optional context for exam-focused card generation.
 # Prioritizes understanding and application over rote memorization.
 # Activate by setting EXAM_MODE=true in environment.
 EXAM_PREP_CONTEXT = (
-    "EXAM PREPARATION MODE:\n"
-    "You are generating flashcards for a university exam that tests UNDERSTANDING, not memorization.\n"
-    "The exam format is 40% MCQ + 60% written conceptual questions.\n"
+    "EXAM CRAM MODE (HIGH YIELD ONLY):\n"
+    "You are generating flashcards for a high-stakes university exam in 8 days. Time is limited.\n"
+    "IGNORE basic definitions, trivial facts, and simple lists. Focus ONLY on what distinguishes concepts.\n"
     "\n"
-    "CARD TYPE PRIORITIES (generate in this ratio):\n"
-    "1. COMPARISON cards (30%): 'Compare A vs B in terms of [property]' or 'What is the difference between X and Y?'\n"
-    "   Example: Front='Compare K-Means vs DBSCAN', Back='K-Means: requires K, spherical clusters. DBSCAN: no K, arbitrary shapes, handles outliers.'\n"
-    "2. APPLICATION cards (25%): 'Given [scenario], which method would you use and why?' or 'Your model shows [symptom], what is the issue?'\n"
-    "   Example: Front='Training loss decreasing but validation loss increasing. Diagnosis?', Back='Overfitting. Solutions: regularization, more data, simpler model.'\n"
-    "3. INTUITION cards (25%): 'Explain [concept] in your own words' or 'Why does [thing] work?'\n"
-    "   Example: Front='Why do Random Forests outperform single Decision Trees?', Back='Bagging + feature randomness reduce variance. Diverse trees make different errors that cancel out.'\n"
-    "4. DEFINITION cards (20%): Only for core terminology that must be precisely understood.\n"
+    "CARD TYPE PRIORITIES (Strict Ratio):\n"
+    "1. SCENARIO / APPLICATION (50%): 'Given [situation], what is the problem/solution?'\n"
+    "   - Real-world diagnosis (e.g., 'Loss is oscillating. Why? -> Learning rate too high.')\n"
+    "   - Design choices (e.g., 'Small dataset, high dims. Which model? -> Linear/Ridge, not Neural Net.')\n"
+    "2. COMPARISON / CONTRAST (40%): 'Compare X vs Y'.\n"
+    "   - Nuance is key. (e.g., 'L1 vs L2 regularization: L1 yields sparsity/feature selection; L2 shrinks all weights.')\n"
+    "3. DEEP INTUITION (10%): 'Why does this mechanism work?'\n"
+    "   - (e.g., 'Why does adding noise to inputs act as regularization? -> Smooths the decision boundary.')\n"
     "\n"
-    "CRITICAL RULES:\n"
-    "- NEVER create cards that ask to recite formulas verbatim (e.g., 'What is the MSE formula?')\n"
-    "- NEVER create cards with single-word answers\n"
-    "- ALWAYS test transferable understanding, not surface recall\n"
-    "- Focus on the 'why' and 'when to use', not the 'what'\n"
+    "CRITICAL FILTERING RULES (DENSITY HEURISTIC):\n"
+    "- TIERED GENERATION LOGIC (Strictly Follow):\n"
+    "   * SPARSE SLIDES (Titles, Transitions, Image-only): Generate 0-1 card maximum.\n"
+    "   * STANDARD SLIDES (Bullet points, basic definitions): Generate Max 2 cards.\n"
+    "   * DENSE SLIDES (Walls of text, complex diagrams, multi-step proofs): Generate Max 3 cards.\n"
+    "- GLOBAL TARGET: Average ~0.9 cards per slide. Quality > Quantity.\n"
+    "- SYNTHESIZE: Combine related bullet points into one robust card. Do NOT make 1 card per bullet.\n"
+    "- REJECT: 'What is X?' (Unless X is a highly complex, non-obvious concept).\n"
+    "- REJECT: Formulas without context. (Instead: 'How does term X in the formula affect the output?')\n"
+    "- REJECT: Slide headers or table of contents items.\n"
+    "- REJECT: Anything obvious to a attentive student (e.g., 'Supervised learning uses labels').\n"
     "\n"
 )
 
 # NOTE(Exam-Prep): Specialized reflection prompt for exam mode.
 # Ensures reflection phase doesn't degrade application/comparison cards into simple definitions.
 EXAM_REFLECTION_CONTEXT = (
-    "EXAM MODE REFLECTION:\n"
-    "You are reviewing cards for university exam preparation. The exam tests UNDERSTANDING, not memorization.\n"
+    "EXAM CRAM REFLECTION:\n"
+    "You are a ruthless tutor preparing a student for a hard exam in 8 days.\n"
+    "Review the generated cards. DELETE/REWRITE any that are 'fluff' or low-yield.\n"
     "\n"
-    "REFLECTION PRIORITIES:\n"
-    "1. PRESERVE card type distribution: Aim for 30% comparison, 25% application, 25% intuition, 20% definition.\n"
-    "2. DO NOT simplify application/comparison cards into definitions. If a card asks 'Compare X vs Y', keep it that way.\n"
-    "3. ENHANCE scenario-based cards: Make 'Given [situation]...' cards more realistic and multi-step.\n"
-    "4. ADD missing comparisons: If the material contrasts two methods/concepts, there should be a comparison card.\n"
-    "5. CHECK for conceptual gaps: Identify 'why does this work?' intuition cards that are missing.\n"
+    "QUALITY CHECKS:\n"
+    "1. IS IT TRIVIAL? -> Delete it. (e.g. 'ML stands for Machine Learning')\n"
+    "2. IS IT ISOLATED? -> Connect it. (Don't just define 'Stride'; ask 'How does Stride=2 affect output size vs Stride=1?')\n"
+    "3. IS IT A FORMULA? -> converting to Intuition. (Don't ask to type the Softmax formula; ask why it's used over standard normalization for probabilities.)\n"
     "\n"
-    "RED FLAGS TO FIX:\n"
-    "- Cards that ask to recite a formula verbatim\n"
-    "- Single-word or trivial answers\n"
-    "- Duplicate cards covering the same comparison from different angles (consolidate them)\n"
-    "- Definition cards for concepts that would be better tested via application\n"
+    "ACTION:\n"
+    "- If the batch is too simple, rewrite the cards to be scenario-based.\n"
+    "- Consolidate multiple simple cards into one robust comparison card.\n"
+    "- Ensure the 50% Application / 40% Comparison ratio is met.\n"
     "\n"
 )
 
