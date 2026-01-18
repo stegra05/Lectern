@@ -87,7 +87,6 @@ class LecternGenerationService:
             # 2. Parse PDF
             pages = []
             total_text_chars = 0
-            avg_chars_per_page = 0.0
 
 
             if stop_check and stop_check():
@@ -110,7 +109,6 @@ class LecternGenerationService:
                     if page.images:
                         image_pages += 1
                 total_text_chars = total_chars
-                avg_chars_per_page = (total_chars / len(pages)) if pages else 0.0
                 yield ServiceEvent("info", f"Parsed {len(pages)} pages")
                 yield ServiceEvent("step_end", "PDF Parsed", {"success": True, "pages": len(pages)})
             except Exception as e:
@@ -246,32 +244,6 @@ class LecternGenerationService:
                 total_cards_cap = text_cap
                 target_reason = f"{target_reason}+text_density"
 
-            # region agent log
-            _debug_log({
-                "sessionId": "debug-session",
-                "runId": "baseline",
-                "hypothesisId": "B",
-                "location": "lectern_service.py:cap_calc",
-                "message": "Computed card caps",
-                "data": {
-                    "pages": len(pages),
-                    "total_cards_cap": total_cards_cap,
-                    "min_cards_required": min_cards_required,
-                    "hard_cap": hard_cap,
-                    "max_notes_per_batch": max_notes_per_batch,
-                    "actual_batch_size": actual_batch_size,
-                    "cards_per_slide_target": getattr(config, "CARDS_PER_SLIDE_TARGET", None),
-                    "effective_target": effective_target,
-                    "target_reason": target_reason,
-                        "total_text_chars": total_text_chars,
-                        "avg_chars_per_page": avg_chars_per_page,
-                        "chars_per_card_target": chars_per_card_target,
-                        "text_cap": text_cap,
-                },
-                "timestamp": int(time.time() * 1000),
-            })
-            # endregion
-
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})
 
             yield ServiceEvent("step_start", "Generate cards")
@@ -283,24 +255,6 @@ class LecternGenerationService:
                 
                 yield ServiceEvent("status", f"Generating batch (limit={limit})...")
 
-                # region agent log
-                _debug_log({
-                    "sessionId": "debug-session",
-                    "runId": "baseline",
-                    "hypothesisId": "C",
-                    "location": "lectern_service.py:gen_batch_start",
-                    "message": "Starting generation batch",
-                    "data": {
-                        "current_cards": len(all_cards),
-                        "remaining": remaining,
-                        "limit": limit,
-                        "examples_used": len(all_cards) == 0,
-                        "seen_keys": len(seen_keys),
-                    },
-                    "timestamp": int(time.time() * 1000),
-                })
-                # endregion
-                
                 if stop_check and stop_check():
                     yield ServiceEvent("warning", "Generation stopped by user.")
                     return
@@ -322,21 +276,6 @@ class LecternGenerationService:
                             if isinstance(card, dict) and str(card.get("slide_number", "")).isdigit()
                         }
                     )
-                    # region agent log
-                    _debug_log({
-                        "sessionId": "debug-session",
-                        "runId": "baseline",
-                        "hypothesisId": "G",
-                        "location": "lectern_service.py:gen_prompt_context",
-                        "message": "Prepared anti-duplication context",
-                        "data": {
-                            "recent_keys_count": len(recent_keys),
-                            "covered_slides_count": len(covered_slides),
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    })
-                    # endregion
-                    
                     out = ai.generate_more_cards(
                         limit=limit,
                         examples=current_examples,
@@ -346,43 +285,13 @@ class LecternGenerationService:
                     new_cards = out.get("cards", [])
                     
                     added_count = 0
-                    duplicate_count = 0
-                    sample_unique = []
-                    sample_duplicate = []
                     for card in new_cards:
                         key = self._get_card_key(card)
-                        if key:
-                            key_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
-                            if key in seen_keys:
-                                duplicate_count += 1
-                                if len(sample_duplicate) < 3:
-                                    sample_duplicate.append(key_hash)
-                            else:
-                                seen_keys.add(key)
-                                all_cards.append(card)
-                                added_count += 1
-                                if len(sample_unique) < 3:
-                                    sample_unique.append(key_hash)
-                                yield ServiceEvent("card", "New card", {"card": card})
-                    # region agent log
-                    _debug_log({
-                        "sessionId": "debug-session",
-                        "runId": "baseline",
-                        "hypothesisId": "F",
-                        "location": "lectern_service.py:gen_batch_result",
-                        "message": "Batch generation results",
-                        "data": {
-                            "new_cards_raw": len(new_cards),
-                            "added_count": added_count,
-                            "done_flag": bool(out.get("done")),
-                            "empty_keys": sum(1 for c in new_cards if not self._get_card_key(c)),
-                            "duplicate_count": duplicate_count,
-                            "sample_unique_hashes": sample_unique,
-                            "sample_duplicate_hashes": sample_duplicate,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    })
-                    # endregion
+                        if key and key not in seen_keys:
+                            seen_keys.add(key)
+                            all_cards.append(card)
+                            added_count += 1
+                            yield ServiceEvent("card", "New card", {"card": card})
                     
                     yield ServiceEvent("progress_update", "", {"current": len(all_cards)})
                     history_mgr.update_entry(history_id, card_count=len(all_cards))
@@ -399,24 +308,6 @@ class LecternGenerationService:
 
                     should_stop = added_count == 0
                     
-                    # region agent log
-                    _debug_log({
-                        "sessionId": "debug-session",
-                        "runId": "baseline",
-                        "hypothesisId": "E",
-                        "location": "lectern_service.py:gen_should_stop",
-                        "message": "Stop condition evaluated",
-                        "data": {
-                            "should_stop": should_stop,
-                            "added_count": added_count,
-                            "done_flag": bool(out.get("done")),
-                            "cards_so_far": len(all_cards),
-                            "min_cards_required": min_cards_required,
-                            "total_cards_cap": total_cards_cap,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    })
-                    # endregion
                     if should_stop:
                         break
                 except Exception as e:
