@@ -125,4 +125,16 @@ MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 # GUI: Configurable per-run via checkbox
 EXAM_MODE: bool = os.getenv("EXAM_MODE", "false").lower() in ("1", "true", "yes")
 
+# Temperature settings for Gemini 3 structured output (optimal range: 0.8-0.9 per docs)
+# Base temperature for card generation (normal mode)
+GEMINI_GENERATION_TEMPERATURE: float = float(os.getenv("GEMINI_GENERATION_TEMPERATURE", "0.8"))
+# Temperature for exam mode (slightly lower for strictness)
+GEMINI_EXAM_MODE_TEMPERATURE: float = float(os.getenv("GEMINI_EXAM_MODE_TEMPERATURE", "0.7"))
+# Temperature for normal mode (higher for variety)
+GEMINI_NORMAL_MODE_TEMPERATURE: float = float(os.getenv("GEMINI_NORMAL_MODE_TEMPERATURE", "0.9"))
+
+# Exam mode safety cap: maximum cards per slide in exam mode
+# Prevents truncation while relying on prompt for ~0.9 avg target
+EXAM_MODE_SAFETY_CAP: float = float(os.getenv("EXAM_MODE_SAFETY_CAP", "1.5"))
+
 

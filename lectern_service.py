@@ -224,9 +224,9 @@ class LecternGenerationService:
             # NOTE(Exam-Mode): In exam mode, we strictly cap density to prioritize high-yield concepts.
             # We disable the "Large Deck Boost" which would otherwise flood the user with details.
             if exam_mode:
-                effective_target = 1.5  # Safety cap: prevent truncation, rely on Prompt for 0.9 avg
+                effective_target = config.EXAM_MODE_SAFETY_CAP  # Safety cap: prevent truncation, rely on Prompt for 0.9 avg
                 target_reason = "exam_mode_safety_cap"
-                yield ServiceEvent("info", "Exam Mode active: safety cap 1.5 cards/slide (Prompt targets 0.9)")
+                yield ServiceEvent("info", f"Exam Mode active: safety cap {config.EXAM_MODE_SAFETY_CAP} cards/slide (Prompt targets 0.9)")
             else:
                 if len(pages) >= 100 and effective_target < 2.0:
                     effective_target = 2.0
