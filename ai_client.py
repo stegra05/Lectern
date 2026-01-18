@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import Any, Dict, List, Tuple
 
 from google import genai  # type: ignore
@@ -24,14 +23,6 @@ from ai_schemas import (
     preprocess_fields_json_escapes,
 )
 from utils.cli import debug
-
-
-def _debug_log(payload: Dict[str, Any]) -> None:
-    try:
-        with open("/Users/stef/Documents/Programmieren/unfinished/Lectern/.cursor/debug.log", "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
-    except Exception:
-        pass
 
 # Manual schema definitions for Gemini API to avoid Pydantic/Protobuf mismatches
 # (Gemini SDK does not support 'default', '$defs', 'anyOf', 'additionalProperties', etc.)
@@ -325,20 +316,6 @@ class LecternAIClient:
         text = response.text or ""
         debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
-        # region agent log
-        _debug_log({
-            "sessionId": "debug-session",
-            "runId": "baseline",
-            "hypothesisId": "G",
-            "location": "ai_client.py:generate_more_cards",
-            "message": "Prompt anti-dup context",
-            "data": {
-                "avoid_fronts_count": len(avoid_fronts or []),
-                "covered_slides_count": len(covered_slides or []),
-            },
-            "timestamp": int(time.time() * 1000),
-        })
-        # endregion
         
         # Try multiple parsing strategies
         data_obj = None
@@ -384,20 +361,6 @@ class LecternAIClient:
                     raise e1  # Re-raise original error
         
         if data_obj is None:
-            # region agent log
-            _debug_log({
-                "sessionId": "debug-session",
-                "runId": "baseline",
-                "hypothesisId": "C",
-                "location": "ai_client.py:generate_more_cards",
-                "message": "Card parsing failed; returning empty done",
-                "data": {
-                    "parse_strategy": parse_strategy,
-                    "response_len": len(text),
-                },
-                "timestamp": int(time.time() * 1000),
-            })
-            # endregion
             return {"cards": [], "done": True}
             
         data = data_obj.model_dump()
@@ -406,22 +369,6 @@ class LecternAIClient:
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             # Direct usage of Pydantic-validated cards
             done = bool(data.get("done", len(cards) == 0))
-            # region agent log
-            _debug_log({
-                "sessionId": "debug-session",
-                "runId": "baseline",
-                "hypothesisId": "C",
-                "location": "ai_client.py:generate_more_cards",
-                "message": "Parsed card generation response",
-                "data": {
-                    "parse_strategy": parse_strategy,
-                    "cards_count": len(cards),
-                    "done_flag": done,
-                    "response_len": len(text),
-                },
-                "timestamp": int(time.time() * 1000),
-            })
-            # endregion
             return {"cards": cards, "done": done}
         return {"cards": [], "done": True}
 
