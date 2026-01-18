@@ -35,21 +35,22 @@ class PageContent:
     images: List[bytes]
 
 
-def extract_content_from_pdf(pdf_path: str, stop_check: Optional[Callable[[], bool]] = None) -> List[PageContent]:
+def extract_content_from_pdf(
+    pdf_path: str, 
+    stop_check: Optional[Callable[[], bool]] = None,
+    skip_ocr: bool = False,
+    skip_images: bool = False
+) -> List[PageContent]:
     """Extract text and images from a PDF.
 
     Parameters:
         pdf_path: Absolute or relative path to the PDF file.
         stop_check: Optional callback that returns True if processing should stop.
+        skip_ocr: If True, skips Tesseract OCR on minimal-text pages.
+        skip_images: If True, skips image extraction and compression.
 
     Returns:
-        A list of PageContent objects, one per page, preserving the original
-        order of pages.
-
-    Notes:
-        - Implementation prefers fidelity and robustness. Images are extracted
-          using PyMuPDF xref lookups to preserve original bytes.
-        - This function performs OCR using Tesseract if extracted text is minimal.
+       A list of PageContent objects, one per page.
     """
 
     extracted_pages: List[PageContent] = []
@@ -74,7 +75,7 @@ def extract_content_from_pdf(pdf_path: str, stop_check: Optional[Callable[[], bo
             text_content: str = page.get_text("text") or ""
 
             # NOTE(OCR): If text is minimal (< 50 chars), assume it's a flattened image and try OCR.
-            if len(text_content.strip()) < 50:
+            if not skip_ocr and len(text_content.strip()) < 50:
                 print(f"Info: Page {page_index + 1} has minimal text. Attempting OCR...")
                 try:
                     # Render page to an image (pixmap) for OCR
@@ -96,19 +97,20 @@ def extract_content_from_pdf(pdf_path: str, stop_check: Optional[Callable[[], bo
 
             # Extract images
             images: List[bytes] = []
-            for image_info in page.get_images(full=True):
-                xref = image_info[0]
-                try:
-                    image_dict = document.extract_image(xref)
-                except Exception:
-                    # Skip images that cannot be extracted for any reason
-                    continue
-                
-                raw_bytes = image_dict.get("image")
-                if isinstance(raw_bytes, (bytes, bytearray)):
-                    # NOTE(Cost): Compress images to reduce token usage and latency.
-                    compressed_bytes = _compress_image(bytes(raw_bytes))
-                    images.append(compressed_bytes)
+            if not skip_images:
+                for image_info in page.get_images(full=True):
+                    xref = image_info[0]
+                    try:
+                        image_dict = document.extract_image(xref)
+                    except Exception:
+                        # Skip images that cannot be extracted for any reason
+                        continue
+                    
+                    raw_bytes = image_dict.get("image")
+                    if isinstance(raw_bytes, (bytes, bytearray)):
+                        # NOTE(Cost): Compress images to reduce token usage and latency.
+                        compressed_bytes = _compress_image(bytes(raw_bytes))
+                        images.append(compressed_bytes)
 
             extracted_pages.append(
                 PageContent(page_number=page_index + 1, text=text_content, images=images)
@@ -116,6 +118,128 @@ def extract_content_from_pdf(pdf_path: str, stop_check: Optional[Callable[[], bo
 
     print(f"Info: PDF parsing complete. Total pages extracted: {len(extracted_pages)}")
     return extracted_pages
+
+
+def extract_pdf_title(pdf_path: str, max_pages: int = 3) -> str:
+    """Extract a likely title from the first few pages of a PDF.
+    
+    Uses heuristics to find the most prominent text that could be a title:
+    - Looks at first few pages (title slides often have the lecture name)
+    - Prioritizes larger text blocks and centered content
+    - Filters out common noise like dates, page numbers, logos
+    
+    Parameters:
+        pdf_path: Path to the PDF file.
+        max_pages: Number of pages to scan (default 3).
+        
+    Returns:
+        Best-guess title string, or empty string if none found.
+    """
+    import re
+    
+    candidates: list[tuple[str, float]] = []  # (text, score)
+    
+    # Common noise patterns to filter out
+    noise_patterns = [
+        r'^\d+$',  # Just numbers (page numbers)
+        r'^\d{1,2}[./]\d{1,2}[./]\d{2,4}$',  # Dates
+        r'^page\s*\d+',  # Page indicators
+        r'^©',  # Copyright
+        r'^http',  # URLs
+        r'^\s*$',  # Empty/whitespace
+    ]
+    noise_re = re.compile('|'.join(noise_patterns), re.IGNORECASE)
+    
+    # Patterns that suggest a lecture/chapter title
+    title_patterns = [
+        r'^lecture\s*\d+',
+        r'^chapter\s*\d+',
+        r'^week\s*\d+',
+        r'^module\s*\d+',
+        r'^session\s*\d+',
+        r'^topic\s*\d*:',
+        r'^unit\s*\d+',
+    ]
+    title_boost_re = re.compile('|'.join(title_patterns), re.IGNORECASE)
+    
+    try:
+        with fitz.open(pdf_path) as doc:
+            pages_to_scan = min(max_pages, doc.page_count)
+            
+            for page_idx in range(pages_to_scan):
+                page = doc.load_page(page_idx)
+                
+                # Get text with positional info using "dict" output
+                text_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+                page_height = page.rect.height
+                page_width = page.rect.width
+                
+                for block in text_dict.get("blocks", []):
+                    if block.get("type") != 0:  # Skip non-text blocks
+                        continue
+                    
+                    # Get block position (y0 = top of block)
+                    y0 = block.get("bbox", [0, 0, 0, 0])[1]
+                    x0 = block.get("bbox", [0, 0, 0, 0])[0]
+                    x1 = block.get("bbox", [0, 0, 0, 0])[2]
+                    
+                    for line in block.get("lines", []):
+                        for span in line.get("spans", []):
+                            text = span.get("text", "").strip()
+                            font_size = span.get("size", 12)
+                            
+                            # Skip noise
+                            if not text or len(text) < 3 or noise_re.match(text):
+                                continue
+                            
+                            # Skip very long text (paragraphs, not titles)
+                            if len(text) > 120:
+                                continue
+                            
+                            # Calculate score based on heuristics
+                            score = 0.0
+                            
+                            # Larger font = more likely title
+                            score += min(font_size / 10, 5.0)
+                            
+                            # Higher on page = more likely title (first page especially)
+                            if page_idx == 0:
+                                position_score = max(0, (page_height - y0) / page_height) * 3
+                                score += position_score + 2  # Bonus for first page
+                            else:
+                                position_score = max(0, (page_height - y0) / page_height) * 1.5
+                                score += position_score
+                            
+                            # Centered text bonus
+                            center_x = (x0 + x1) / 2
+                            if abs(center_x - page_width / 2) < page_width * 0.2:
+                                score += 1.5
+                            
+                            # Title pattern boost
+                            if title_boost_re.match(text):
+                                score += 4.0
+                            
+                            # Penalize if too short (single words are often not titles)
+                            if len(text.split()) < 2:
+                                score -= 1.0
+                            
+                            candidates.append((text, score))
+        
+        if not candidates:
+            return ""
+        
+        # Sort by score descending, return best candidate
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        best_title = candidates[0][0]
+        
+        # Clean up the title
+        best_title = re.sub(r'\s+', ' ', best_title).strip()
+        
+        return best_title
+        
+    except Exception as e:
+        print(f"Warning: Title extraction failed: {e}")
+        return ""
 
 
 def _compress_image(image_bytes: bytes, max_dimension: int = 1024, quality: int = 80) -> bytes:

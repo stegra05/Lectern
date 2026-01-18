@@ -8,10 +8,16 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Generator, List, Optional, Callable
 
 import config
-from anki_connector import add_note, check_connection, store_media_file, sample_examples_from_deck
-from pdf_parser import extract_content_from_pdf
+from anki_connector import (
+    add_note, 
+    check_connection, 
+    store_media_file, 
+    sample_examples_from_deck,
+    get_deck_slide_set_patterns,
+)
+from pdf_parser import extract_content_from_pdf, extract_pdf_title
 from ai_client import LecternAIClient
-from utils.tags import build_grouped_tags
+from utils.tags import build_hierarchical_tags, infer_slide_set_name
 from utils.state import save_state, clear_state, load_state
 from utils.history import HistoryManager
 
@@ -42,6 +48,7 @@ class LecternGenerationService:
         reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
+        exam_mode: bool = False,  # NOTE(Exam-Mode): Pass through to AI client
     ) -> Generator[ServiceEvent, None, None]:
         
         start_time = time.perf_counter()
@@ -105,30 +112,60 @@ class LecternGenerationService:
                 history_mgr.update_entry(history_id, status="error")
                 return
 
-            # 3. Sample Examples
+            # 3. Sample Examples & Analyze Deck Patterns
             if stop_check and stop_check():
                 return
 
             examples = ""
-            yield ServiceEvent("step_start", "Sample examples via AnkiConnect")
+            pattern_info: Dict[str, Any] = {}
+            yield ServiceEvent("step_start", "Sample examples & analyze deck patterns")
             try:
                 deck_for_examples = (context_deck or deck_name)
                 examples = sample_examples_from_deck(deck_name=deck_for_examples, sample_size=5)
+                # NOTE(Tags): Analyze existing tags to detect naming patterns
+                pattern_info = get_deck_slide_set_patterns(deck_name)
                 if examples.strip():
                     yield ServiceEvent("info", "Loaded style examples from Anki")
-                    yield ServiceEvent("step_end", "Examples Loaded", {"success": True})
-                else:
-                    yield ServiceEvent("step_end", "No Examples Found", {"success": False}) # Not fatal
+                if pattern_info.get('slide_sets'):
+                    yield ServiceEvent("info", f"Found {len(pattern_info['slide_sets'])} existing slide sets in deck")
+                yield ServiceEvent("step_end", "Examples & Patterns Analyzed", {"success": True})
             except Exception as e:
                  yield ServiceEvent("warning", f"Failed to sample examples: {e}")
-                 yield ServiceEvent("step_end", "Examples Failed", {"success": False})
+                 yield ServiceEvent("step_end", "Analysis Failed", {"success": False})
+
+            # 3b. Extract PDF Title for Slide Set Naming
+            pdf_title = ""
+            pdf_filename = os.path.splitext(os.path.basename(pdf_path))[0]
+            try:
+                pdf_title = extract_pdf_title(pdf_path)
+                if pdf_title:
+                    yield ServiceEvent("info", f"Extracted PDF title: '{pdf_title}'")
+            except Exception as e:
+                yield ServiceEvent("warning", f"PDF title extraction failed: {e}")
+
+            # 3c. Infer Slide Set Name
+            slide_set_name = infer_slide_set_name(pdf_title, pattern_info, pdf_filename)
+            if slide_set_name:
+                yield ServiceEvent("info", f"Slide Set Name: '{slide_set_name}'")
+            else:
+                # Fallback to filename if inference failed
+                slide_set_name = pdf_filename.replace('_', ' ').replace('-', ' ').title()
+                yield ServiceEvent("info", f"Using filename as Slide Set Name: '{slide_set_name}'")
+
+            # Build slide set context for AI
+            slide_set_context = {
+                'deck_name': deck_name,
+                'slide_set_name': slide_set_name,
+                'pattern_info': pattern_info,
+                'pdf_title': pdf_title,
+            }
 
             # 4. AI Session Init
             if stop_check and stop_check():
                 return
 
             yield ServiceEvent("step_start", "Start AI session")
-            ai = LecternAIClient()
+            ai = LecternAIClient(model_name=model_name, exam_mode=exam_mode, slide_set_context=slide_set_context)
             if saved_state:
                 history = saved_state.get("history", [])
                 if history:
@@ -353,21 +390,21 @@ class LecternGenerationService:
                     
                     note_fields = {str(k): str(v) for k, v in (card.get("fields") or {}).items()}
                     
-                    # Tags handling
+                    # NOTE(Tags): Build hierarchical tags using new 4-level format
+                    # Format: Deck::SlideSet::Topic::Tag
                     ai_tags = [str(t) for t in (card.get("tags") or [])]
                     merged_tags = list(dict.fromkeys(ai_tags + tags))
                     if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
                         merged_tags.append(config.DEFAULT_TAG)
                     
                     slide_topic = str(card.get("slide_topic") or "").strip()
-                    tag_deck_path = deck_name
-                    if slide_topic:
-                        tag_deck_path = f"{deck_name}::{slide_topic}"
                     
-                    final_tags = (
-                        build_grouped_tags(tag_deck_path, merged_tags)
-                        if getattr(config, "GROUP_TAGS_BY_DECK", False)
-                        else merged_tags
+                    # Build hierarchical tags: Deck::SlideSet::Topic::Tag
+                    final_tags = build_hierarchical_tags(
+                        deck_name=deck_name,
+                        slide_set_name=slide_set_name,
+                        topic=slide_topic,
+                        tags=merged_tags,
                     )
                     
                     note_id = add_note(deck_name, card_model, note_fields, final_tags)

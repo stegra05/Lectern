@@ -23,6 +23,7 @@ export interface GenerateRequest {
     model_name?: string;
     tags?: string[];
     context_deck?: string;
+    exam_mode?: boolean;  // NEW: Enable exam-focused card generation
 }
 
 export interface ProgressEvent {
@@ -135,18 +136,23 @@ export const api = {
         return res.json();
     },
 
-    estimateCost: async (file: File) => {
+    estimateCost: async (file: File, signal?: AbortSignal) => {
         const formData = new FormData();
         formData.append("pdf_file", file);
 
         try {
-            const res = await fetchWithTimeout(`${API_URL}/estimate`, {
+            const res = await fetch(`${API_URL}/estimate`, {
                 method: "POST",
                 body: formData,
-            }, 10000);
+                signal: signal
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return await res.json();
         } catch (error) {
+            if ((error as Error).name === 'AbortError') {
+                console.log('Estimation aborted');
+                return null;
+            }
             console.error('Failed to estimate cost:', error);
             throw error;
         }
@@ -159,6 +165,7 @@ export const api = {
         if (req.model_name) formData.append("model_name", req.model_name);
         if (req.tags) formData.append("tags", JSON.stringify(req.tags));
         if (req.context_deck) formData.append("context_deck", req.context_deck);
+        formData.append("exam_mode", String(req.exam_mode ?? false));  // NEW: Include exam_mode
 
         const res = await fetch(`${API_URL}/generate`, {
             method: "POST",

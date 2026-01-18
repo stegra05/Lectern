@@ -123,6 +123,124 @@ def notes_info(note_ids: List[int]) -> List[Dict[str, Any]]:
     return [ri for ri in result if isinstance(ri, dict)]
 
 
+def get_all_tags() -> List[str]:
+    """Fetch all tags from Anki via AnkiConnect."""
+    try:
+        result = _invoke("getTags")
+        if isinstance(result, list):
+            return [str(t) for t in result]
+        return []
+    except Exception:
+        return []
+
+
+def get_deck_slide_set_patterns(deck_name: str) -> Dict[str, Any]:
+    """Analyze existing tags in a deck to detect slide set naming patterns.
+    
+    Looks for hierarchical tags matching: DeckName::SlideSetName::...
+    Extracts the SlideSetName level and identifies common naming patterns.
+    
+    Parameters:
+        deck_name: Name of the deck to analyze.
+        
+    Returns:
+        Dict with:
+        - 'slide_sets': List of existing slide set names found
+        - 'pattern': Detected pattern type ('lecture', 'week', 'chapter', 'custom', or None)
+        - 'next_number': Suggested next number if pattern detected
+        - 'example': Example of the pattern for AI context
+    """
+    import re
+    
+    result = {
+        'slide_sets': [],
+        'pattern': None,
+        'next_number': None,
+        'example': None,
+    }
+    
+    try:
+        all_tags = get_all_tags()
+        if not all_tags:
+            return result
+        
+        # Normalize deck name for matching
+        deck_lower = deck_name.lower().replace(' ', '-').replace('_', '-')
+        deck_parts = [p.strip().lower().replace(' ', '-') for p in deck_name.split('::')]
+        
+        # Find tags that start with this deck's hierarchy
+        matching_slide_sets: List[str] = []
+        
+        for tag in all_tags:
+            tag_parts = tag.split('::')
+            if len(tag_parts) < 2:
+                continue
+            
+            # Check if tag starts with deck name (case-insensitive, normalized)
+            tag_deck_parts = [p.strip().lower().replace(' ', '-').replace('_', '-') 
+                             for p in tag_parts[:len(deck_parts)]]
+            
+            if tag_deck_parts == deck_parts and len(tag_parts) > len(deck_parts):
+                # Extract the slide set level (next level after deck)
+                slide_set = tag_parts[len(deck_parts)]
+                if slide_set and slide_set not in matching_slide_sets:
+                    matching_slide_sets.append(slide_set)
+        
+        result['slide_sets'] = matching_slide_sets
+        
+        if not matching_slide_sets:
+            return result
+        
+        # Detect naming patterns
+        patterns = {
+            'lecture': re.compile(r'^lecture[-_\s]*(\d+)', re.IGNORECASE),
+            'week': re.compile(r'^week[-_\s]*(\d+)', re.IGNORECASE),
+            'chapter': re.compile(r'^chapter[-_\s]*(\d+)', re.IGNORECASE),
+            'module': re.compile(r'^module[-_\s]*(\d+)', re.IGNORECASE),
+            'session': re.compile(r'^session[-_\s]*(\d+)', re.IGNORECASE),
+            'unit': re.compile(r'^unit[-_\s]*(\d+)', re.IGNORECASE),
+        }
+        
+        pattern_counts: Dict[str, List[int]] = {k: [] for k in patterns}
+        
+        for slide_set in matching_slide_sets:
+            for pattern_name, pattern_re in patterns.items():
+                match = pattern_re.match(slide_set)
+                if match:
+                    pattern_counts[pattern_name].append(int(match.group(1)))
+                    break
+        
+        # Find the dominant pattern
+        best_pattern = None
+        best_count = 0
+        best_numbers: List[int] = []
+        
+        for pattern_name, numbers in pattern_counts.items():
+            if len(numbers) > best_count:
+                best_pattern = pattern_name
+                best_count = len(numbers)
+                best_numbers = numbers
+        
+        if best_pattern and best_count > 0:
+            result['pattern'] = best_pattern
+            result['next_number'] = max(best_numbers) + 1 if best_numbers else 1
+            
+            # Provide example for AI context
+            example_set = next(
+                (s for s in matching_slide_sets 
+                 if patterns[best_pattern].match(s)), 
+                None
+            )
+            if example_set:
+                result['example'] = example_set
+        
+        return result
+        
+    except Exception as e:
+        print(f"Warning: Failed to analyze deck patterns: {e}")
+        return result
+
+
 def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
     """Sample a few notes' fields from a deck via AnkiConnect and format as examples.
 
