@@ -139,7 +139,7 @@ class LecternAIClient:
         
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=0.8,  # NOTE(Temperature): Optimized for Gemini 3 structured output (0.8-0.9 range per docs)
+            temperature=config.GEMINI_GENERATION_TEMPERATURE,  # NOTE(Temperature): Optimized for Gemini 3 structured output (0.8-0.9 range per docs)
             max_output_tokens=8192,
             system_instruction=system_instruction,
             thinking_config=types.ThinkingConfig(thinking_level=config.GEMINI_THINKING_LEVEL.lower()),
@@ -206,6 +206,41 @@ class LecternAIClient:
             f"      Full tag will become: {example_tag}\\n"
             "    - AVOID generic tags like 'definition', 'concept', 'important', 'basics'.\\n"
         )
+
+    def _build_exam_mode_prompt_parts(self) -> Tuple[str, str, float]:
+        """Build prompt parts and temperature based on exam mode setting.
+        
+        Returns:
+            Tuple of (principles_text, completion_text, temperature)
+        """
+        if self._exam_mode:
+            principles_text = (
+                "- Principles (CRAM MODE):\\n"
+                "    - STRICTLY FILTER: If a concept is trivial (e.g. 'Definition of Supervised Learning'), DO NOT create a card.\\n"
+                "    - Focus on 'Scenario' (Application) and 'Comparison' cards.\\n"
+                "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
+            )
+            completion_text = (
+                "- Important: Only generate cards for concepts that are EXAM-CRITICAL and NON-OBVIOUS.\\n"
+                "- If you have covered the high-yield core of the material, set 'done' to true immediately. Do not pad with filler.\\n"
+                "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}.\\n"
+            )
+            gen_temperature = config.GEMINI_EXAM_MODE_TEMPERATURE
+        else:
+            principles_text = (
+                "- Principles:\\n"
+                "    - Atomicity: One idea per card.\\n"
+                "    - Minimum Information Principle: Keep questions and answers simple and direct.\\n"
+                "    - Variety: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
+                "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
+            )
+            completion_text = (
+                "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
+                "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
+            )
+            gen_temperature = config.GEMINI_NORMAL_MODE_TEMPERATURE
+        
+        return principles_text, completion_text, gen_temperature
 
     def _prune_history(self) -> None:
         """Prune chat history to manage token usage (sliding window)."""
@@ -287,32 +322,7 @@ class LecternAIClient:
         # NOTE(Exam-Mode): Use different prompts based on exam_mode setting.
         # Exam mode: aggressive filtering, early termination, scenario/comparison focus.
         # Normal mode: comprehensive coverage, variety of card types, exhaust all content.
-        if self._exam_mode:
-            principles_text = (
-                "- Principles (CRAM MODE):\\n"
-                "    - STRICTLY FILTER: If a concept is trivial (e.g. 'Definition of Supervised Learning'), DO NOT create a card.\\n"
-                "    - Focus on 'Scenario' (Application) and 'Comparison' cards.\\n"
-                "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
-            )
-            completion_text = (
-                "- Important: Only generate cards for concepts that are EXAM-CRITICAL and NON-OBVIOUS.\\n"
-                "- If you have covered the high-yield core of the material, set 'done' to true immediately. Do not pad with filler.\\n"
-                "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}.\\n"
-            )
-            gen_temperature = 0.7  # NOTE(Temperature): Slightly lower for exam mode strictness, but within Gemini 3 optimal range
-        else:
-            principles_text = (
-                "- Principles:\\n"
-                "    - Atomicity: One idea per card.\\n"
-                "    - Minimum Information Principle: Keep questions and answers simple and direct.\\n"
-                "    - Variety: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
-                "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
-            )
-            completion_text = (
-                "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
-                "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
-            )
-            gen_temperature = 0.9  # NOTE(Temperature): Higher for variety while maintaining structured output quality (Gemini 3 optimal)
+        principles_text, completion_text, gen_temperature = self._build_exam_mode_prompt_parts()
         
         prompt = (
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\\n"
