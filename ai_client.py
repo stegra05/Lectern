@@ -9,6 +9,8 @@ from google.genai import types  # type: ignore
 import config
 from ai_common import (
     LATEX_STYLE_GUIDE,
+    BASIC_EXAMPLES,
+    EXAM_EXAMPLES,
     EXAM_PREP_CONTEXT,
     EXAM_REFLECTION_CONTEXT,
     _compose_multimodal_content,
@@ -129,14 +131,15 @@ class LecternAIClient:
         self._slide_set_context = slide_set_context or {}
         
         # NOTE(Exam-Mode): Combine base formatting with exam context when exam_mode is enabled
-        system_instruction = LATEX_STYLE_GUIDE
         if exam_mode:
-            system_instruction = EXAM_PREP_CONTEXT + LATEX_STYLE_GUIDE
+            system_instruction = EXAM_PREP_CONTEXT + LATEX_STYLE_GUIDE + EXAM_EXAMPLES
             debug("[AI] Exam mode ENABLED - prioritizing comparison/application cards")
+        else:
+            system_instruction = LATEX_STYLE_GUIDE + BASIC_EXAMPLES
         
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=0.2,
+            temperature=0.8,  # NOTE(Temperature): Optimized for Gemini 3 structured output (0.8-0.9 range per docs)
             max_output_tokens=8192,
             system_instruction=system_instruction,
             thinking_config=types.ThinkingConfig(thinking_level=config.GEMINI_THINKING_LEVEL.lower()),
@@ -281,14 +284,41 @@ class LecternAIClient:
         # NOTE(Tags): Build context string for hierarchical tagging
         tag_context = self._build_tag_context()
         
+        # NOTE(Exam-Mode): Use different prompts based on exam_mode setting.
+        # Exam mode: aggressive filtering, early termination, scenario/comparison focus.
+        # Normal mode: comprehensive coverage, variety of card types, exhaust all content.
+        if self._exam_mode:
+            principles_text = (
+                "- Principles (CRAM MODE):\\n"
+                "    - STRICTLY FILTER: If a concept is trivial (e.g. 'Definition of Supervised Learning'), DO NOT create a card.\\n"
+                "    - Focus on 'Scenario' (Application) and 'Comparison' cards.\\n"
+                "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
+            )
+            completion_text = (
+                "- Important: Only generate cards for concepts that are EXAM-CRITICAL and NON-OBVIOUS.\\n"
+                "- If you have covered the high-yield core of the material, set 'done' to true immediately. Do not pad with filler.\\n"
+                "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}.\\n"
+            )
+            gen_temperature = 0.7  # NOTE(Temperature): Slightly lower for exam mode strictness, but within Gemini 3 optimal range
+        else:
+            principles_text = (
+                "- Principles:\\n"
+                "    - Atomicity: One idea per card.\\n"
+                "    - Minimum Information Principle: Keep questions and answers simple and direct.\\n"
+                "    - Variety: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
+                "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
+            )
+            completion_text = (
+                "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
+                "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
+            )
+            gen_temperature = 0.9  # NOTE(Temperature): Higher for variety while maintaining structured output quality (Gemini 3 optimal)
+        
         prompt = (
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\\n"
+            "CRITICAL: Consult the Global Concept Map generated in the first turn. Ensure you cover the 'Relations' identified there.\\n"
             f"{example_text}"
-            "- Principles:\\n"
-            "    - Atomicity: One idea per card.\\n"
-            "    - Minimum Information Principle: Keep questions and answers simple and direct.\\n"
-            "    - Variety: Mix card types: Definitions, Comparisons (A vs B), Applications (Scenario -> Concept), and 'Why/How' questions.\\n"
-            "    - Context: Use the `slide_topic` to identify the specific section/topic within the slide set.\\n"
+            f"{principles_text}"
             "- Format:\\n"
             "    - Prefer Cloze deletion for definitions and lists.\\n"
             "    - Use Basic (Front/Back) for open-ended conceptual questions.\\n"
@@ -299,13 +329,12 @@ class LecternAIClient:
             "    - `slide_topic`: The specific section/topic within this slide set (Title Case, e.g., 'Image Classification', 'Gradient Descent').\\n"
             "    - `slide_number`: The integer page number where this concept is primarily found.\\n"
             "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\\n"
-            "- Important: Continue generating cards to cover ALL concepts in the material. Do NOT set 'done' to true until you have exhausted the content.\\n"
-            "- Return ONLY JSON: {\\\"cards\\\": [...], \\\"done\\\": bool}. Generate the full limit of cards if possible.\\n"
+            f"{completion_text}"
         )
         
         call_config = self._generation_config.model_copy(update={
             "response_schema": _CARD_GENERATION_SCHEMA,
-            "temperature": 0.4,
+            "temperature": gen_temperature,
         })
 
         response = self._chat.send_message(
@@ -380,15 +409,10 @@ class LecternAIClient:
             base = (
                 EXAM_REFLECTION_CONTEXT +
                 "Review the last batch of generated cards with the above priorities in mind.\\n"
-                "- Critique Criteria:\\n"
-                "    - Card Type Balance: Is the distribution close to 30% comparison, 25% application, 25% intuition, 20% definition?\\n"
-                "    - Depth: Do application cards present realistic scenarios with multi-step reasoning?\\n"
-                "    - Redundancy: Are there duplicate or overlapping cards?\\n"
-                "    - Formula Recitation: Are there cards that just ask to recite formulas? (Convert to application!)\\n"
-                "- Action:\\n"
-                "    - Write a concise `reflection` summarizing the quality and card type distribution.\\n"
-                "    - Generate improved replacements or new gap-filling cards, prioritizing comparison/application types.\\n"
-                "    - Formatting: STRICTLY AVOID Markdown. Use HTML tags for formatting.\\n"
+                "- Write a concise `reflection` summarizing quality issues found.\\n"
+                "- Generate improved replacements or gap-filling cards.\\n"
+                "- IMPORTANT: In the `rationale` field of the new card, state 'REPLACEMENT FOR: [Old Card Concept]' so it can be deduplicated.\\n"
+                "- Formatting: STRICTLY AVOID Markdown. Use HTML tags for formatting.\\n"
                 f"Return ONLY JSON: {{\"reflection\": str, \"cards\": [...], \"done\": bool}}. Limit to at most {int(limit)} cards.\\n"
             )
         else:
