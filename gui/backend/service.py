@@ -33,14 +33,24 @@ class DraftStore:
             cls._instance = super(DraftStore, cls).__new__(cls)
             cls._instance.cards = []
             cls._instance.deck_name = ""
+            cls._instance.slide_set_name = ""  # NOTE(Tags): Required for hierarchical tagging
             cls._instance.model_name = ""
             cls._instance.tags = []
             cls._instance.entry_id = None
         return cls._instance
 
-    def set_drafts(self, cards: List[Dict[str, Any]], deck_name: str, model_name: str, tags: List[str], entry_id: str = None):
+    def set_drafts(
+        self, 
+        cards: List[Dict[str, Any]], 
+        deck_name: str, 
+        model_name: str, 
+        tags: List[str], 
+        entry_id: str = None,
+        slide_set_name: str = "",  # NOTE(Tags): Pass through for hierarchical tagging
+    ):
         self.cards = cards
         self.deck_name = deck_name
+        self.slide_set_name = slide_set_name
         self.model_name = model_name
         self.tags = tags
         if entry_id:
@@ -64,6 +74,7 @@ class DraftStore:
     def clear(self):
         self.cards = []
         self.deck_name = ""
+        self.slide_set_name = ""
         self.model_name = ""
         self.tags = []
         self.entry_id = None
@@ -86,7 +97,10 @@ class GenerationService:
         tags: List[str],
         context_deck: str = "",
         entry_id: str = None,
-        exam_mode: bool = False,  # NOTE(Exam-Mode): Pass through to core service
+        exam_mode: bool = False,
+        max_notes_per_batch: int = config.MAX_NOTES_PER_BATCH,
+        reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
+        enable_reflection: bool = config.ENABLE_REFLECTION,
     ) -> AsyncGenerator[str, None]:
         
         # Clear previous drafts on new run
@@ -101,7 +115,10 @@ class GenerationService:
             resume=True,
             skip_export=True,  # Always skip export in GUI now
             stop_check=lambda: self.stop_requested,
-            exam_mode=exam_mode,  # NOTE(Exam-Mode): Pass through to core
+            exam_mode=exam_mode,
+            max_notes_per_batch=max_notes_per_batch,
+            reflection_rounds=reflection_rounds,
+            enable_reflection=enable_reflection,
         )
 
         # Helper to run next(iterator) in thread
@@ -156,7 +173,8 @@ class GenerationService:
                         deck_name, 
                         model_name, 
                         tags,
-                        entry_id
+                        entry_id,
+                        slide_set_name=gui_data.get("slide_set_name", ""),  # NOTE(Tags): Pass through for hierarchical tagging
                     )
             elif event.type == "step_start":
                 gui_type = "step_start"

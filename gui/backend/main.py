@@ -21,9 +21,7 @@ import io
 from anki_connector import check_connection
 import config
 from service import GenerationService, DraftStore
-from anki_connector import add_note, check_connection, store_media_file
-from utils.tags import build_grouped_tags
-import base64
+from utils.note_export import export_card_to_anki
 from utils.history import HistoryManager
 import pdf_parser
 from ai_client import LecternAIClient
@@ -153,37 +151,9 @@ async def estimate_cost(pdf_file: UploadFile = File(...)):
     tmp_path = await run_in_threadpool(save_to_temp)
 
     try:
-        from starlette.concurrency import run_in_threadpool
-        
-        # Extract text in a separate thread to avoid blocking the main loop
-        # For estimation, we skip OCR to be fast.
-        pages = await run_in_threadpool(pdf_parser.extract_content_from_pdf, tmp_path, skip_ocr=True)
-        
-        # Convert to dict for ai_common
-        pdf_content = [{"text": p.text, "images": p.images} for p in pages]
-        
-        # Compose content (mimicking a standard request to get realistic input token count)
-        # We use a placeholder prompt to represent the instructions
-        content = _compose_multimodal_content(pdf_content, "Analyze this PDF.")
-        
-        # Count tokens using Gemini API
-        try:
-            client = LecternAIClient()
-            token_count = client.count_tokens(content)
-        except Exception as e:
-            print(f"Gemini token counting failed: {e}")
-            # Fallback to heuristic if API fails (e.g. no key)
-            total_text = " ".join([p.text for p in pages])
-            word_count = len(total_text.split())
-            token_count = int(word_count * 1.3)
-        
-        # Calculate cost ($0.50 per 1M tokens)
-        estimated_cost = (token_count / 1_000_000) * 0.50
-        
-        return {
-            "tokens": token_count,
-            "cost": estimated_cost
-        }
+        service = LecternGenerationService()
+        data = await service.estimate_cost(tmp_path)
+        return data
     except Exception as e:
         print(f"Estimation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -195,10 +165,13 @@ async def estimate_cost(pdf_file: UploadFile = File(...)):
 async def generate_cards(
     pdf_file: UploadFile = File(...),
     deck_name: str = Form(...),
-    model_name: str = Form(config.DEFAULT_BASIC_MODEL),
+    model_name: str = Form(config.DEFAULT_GEMINI_MODEL),
     tags: str = Form("[]"),  # JSON string
     context_deck: str = Form(""),
-    exam_mode: bool = Form(False)  # NEW: Enable exam-focused card generation
+    exam_mode: bool = Form(False),  # NEW: Enable exam-focused card generation
+    max_notes_per_batch: int = Form(config.MAX_NOTES_PER_BATCH),
+    reflection_rounds: int = Form(config.REFLECTION_MAX_ROUNDS),
+    enable_reflection: bool = Form(config.ENABLE_REFLECTION),
 ):
     global CURRENT_GENERATION_SERVICE
     service = GenerationService()
@@ -264,7 +237,10 @@ async def generate_cards(
                 tags=tags_list,
                 context_deck=context_deck,
                 entry_id=entry_id,
-                exam_mode=exam_mode,  # NOTE(Exam-Mode): Pass through to service
+                exam_mode=exam_mode,
+                max_notes_per_batch=max_notes_per_batch,
+                reflection_rounds=reflection_rounds,
+                enable_reflection=enable_reflection,
             ):
                 yield f"{event_json}\n"
         except Exception as e:
@@ -331,48 +307,21 @@ async def sync_drafts():
         yield json.dumps({"type": "progress_start", "message": "Syncing to Anki...", "data": {"total": len(cards)}}) + "\n"
         
         for idx, card in enumerate(cards, start=1):
-            try:
-                # Media handling
-                for media in card.get("media", []) or []:
-                    filename = media.get("filename", f"lectern-draft-{idx}.png")
-                    data_b64 = media.get("data", "")
-                    if data_b64:
-                        data_bytes = base64.b64decode(data_b64) if isinstance(data_b64, str) else data_b64
-                        store_media_file(filename, data_bytes)
-
-                # Note creation
-                card_model = str(card.get("model_name") or model_name).strip()
-                lower_model = card_model.lower()
-                if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
-                    card_model = config.DEFAULT_BASIC_MODEL
-                elif lower_model in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
-                    card_model = config.DEFAULT_CLOZE_MODEL
-                
-                note_fields = {str(k): str(v) for k, v in (card.get("fields") or {}).items()}
-                
-                ai_tags = [str(t) for t in (card.get("tags") or [])]
-                merged_tags = list(dict.fromkeys(ai_tags + tags))
-                if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG and config.DEFAULT_TAG not in merged_tags:
-                    merged_tags.append(config.DEFAULT_TAG)
-                
-                slide_topic = str(card.get("slide_topic") or "").strip()
-                tag_deck_path = deck_name
-                if slide_topic:
-                    tag_deck_path = f"{deck_name}::{slide_topic}"
-                
-                final_tags = (
-                    build_grouped_tags(tag_deck_path, merged_tags)
-                    if getattr(config, "GROUP_TAGS_BY_DECK", False)
-                    else merged_tags
-                )
-                
-                note_id = add_note(deck_name, card_model, note_fields, final_tags)
+            result = export_card_to_anki(
+                card=card,
+                card_index=idx,
+                deck_name=deck_name,
+                slide_set_name=store.slide_set_name,
+                fallback_model=config.DEFAULT_BASIC_MODEL,  # NOTE: Anki note type, not Gemini model
+                additional_tags=tags,
+            )
+            
+            if result.success:
                 created += 1
-                yield json.dumps({"type": "note_created", "message": f"Created note {note_id}", "data": {"id": note_id}}) + "\n"
-                
-            except Exception as e:
+                yield json.dumps({"type": "note_created", "message": f"Created note {result.note_id}", "data": {"id": result.note_id}}) + "\n"
+            else:
                 failed += 1
-                yield json.dumps({"type": "warning", "message": f"Failed to create note: {e}"}) + "\n"
+                yield json.dumps({"type": "warning", "message": f"Failed to create note: {result.error}"}) + "\n"
             
             yield json.dumps({"type": "progress_update", "message": "", "data": {"current": created + failed}}) + "\n"
 
