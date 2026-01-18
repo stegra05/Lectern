@@ -1,73 +1,76 @@
-# React + TypeScript + Vite
+# Lectern GUI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+<div align="center">
+  <h3>The Visual Interface for Lectern</h3>
+  <p>A modern, glassmorphism-inspired React application for interacting with the Lectern engine.</p>
+</div>
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🎨 Design Philosophy
 
-## React Compiler
+The GUI is designed to be **atmospheric and focused**. It eschews standard Bootstrap/Material "flat" designs for a more tactile, frosted-glass aesthetic ("Glassmorphism").
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Dark Mode Default:** The interface is dark-first to reduce eye strain during late-night study sessions.
+- **Visual Feedback:** Every action has a transition. Progress is visualized.
+- **Simplicity:** The complex configuration of the CLI is abstracted into a guided "Onboarding Flow".
 
-## Expanding the ESLint configuration
+## 🛠 Tech Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Framework:** React 18 + TypeScript
+- **Build Tool:** Vite
+- **Styling:** Tailwind CSS + Custom CSS Variables (for the glass effects)
+- **Icons:** Lucide React
+- **Animation:** Framer Motion
+- **State Management:** React Hooks (Local state mostly, as the app is a simple flow)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 📂 Project Structure
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+├── api.ts              # Typed API client for the Python backend
+├── App.tsx             # Main layout and routing logic
+├── assets/             # Static assets (images, SVGs)
+├── components/         # UI Components
+│   ├── FilePicker.tsx  # Drag-and-drop PDF uploader
+│   ├── GlassCard.tsx   # Base container component with glass effect
+│   ├── OnboardingFlow.tsx # The main wizard (Upload -> Config -> Generate)
+│   ├── PhaseIndicator.tsx # Progress stepper
+│   ├── ReviewQueue.tsx # Draft review interface (Swipe/Grid view)
+│   └── SettingsModal.tsx # Global settings (API keys, etc.)
+└── main.tsx            # Entry point
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🚀 Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The frontend is served by the Python backend in production, but for development, you run it as a standalone Vite server that proxies requests to the backend.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 1. Start the Backend
+(In the root directory of the repo)
+```bash
+# Ensure venv is active
+uvicorn gui.backend.main:app --reload --port 8000
+# Backend runs on http://localhost:8000
 ```
+
+### 2. Start the Frontend
+(In this directory `gui/frontend`)
+```bash
+npm install
+npm run dev
+# Frontend runs on http://localhost:5173
+```
+
+## 🔌 API Integration
+
+The frontend communicates with the backend via `src/api.ts`. All heavy lifting (PDF parsing, AI generation) happens on the server. The frontend listens for Server-Sent Events (SSE) or NDJSON streams to show real-time progress.
+
+## 📦 Building for Production
+
+The build artifact (`dist/`) is meant to be embedded into the Python application (via PyWebView or just serving static files).
+
+```bash
+npm run build
+```
+
+This populates `gui/frontend/dist`, which the Python `build_app.sh` script picks up.
