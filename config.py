@@ -50,6 +50,10 @@ DEFAULT_GEMINI_MODEL: str = os.getenv("DEFAULT_GEMINI_MODEL", "gemini-3-flash-pr
 # Controls reasoning depth and latency.
 GEMINI_THINKING_LEVEL: str = os.getenv("GEMINI_THINKING_LEVEL", "low")
 
+# Lightweight model for fast, cheap inference tasks like naming and classification.
+# Uses flash-lite by default for speed and cost efficiency.
+LIGHTWEIGHT_MODEL: str = os.getenv("LIGHTWEIGHT_MODEL", "gemini-2.0-flash-lite")
+
 # AnkiConnect default URL. Can be overridden via environment variable if needed.
 ANKI_CONNECT_URL: str = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
 
@@ -68,19 +72,10 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
     "no",
 )
 
-# DEPRECATED: GROUP_TAGS_BY_DECK is no longer used.
-# The new hierarchical tagging system always creates tags in the format:
+# NOTE(Tags): The legacy GROUP_TAGS_BY_DECK option has been removed.
+# The hierarchical tagging system now always uses the 4-level format:
 #   Deck::SlideSet::Topic::Tag
 # Example: "Introduction to Machine Learning::Lecture 1 Supervised Learning::Image Classification::preprocessing"
-# The system automatically:
-#   - Detects existing slide set naming patterns in the deck
-#   - Extracts PDF titles for context-aware naming
-#   - Uses Topic from slide_topic metadata provided by AI
-GROUP_TAGS_BY_DECK: bool = os.getenv("GROUP_TAGS_BY_DECK", "true").lower() not in (
-    "0",
-    "false",
-    "no",
-)
 
 
 def assert_required_config() -> None:
@@ -118,11 +113,16 @@ MIN_CARDS_PER_SLIDE: float = float(os.getenv("MIN_CARDS_PER_SLIDE", "0.8"))
 # Target cards per slide (e.g., 1.5 -> ~50% more cards than slides)
 CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2"))
 
+# Heuristic for text density: target this many characters per card
+CHARS_PER_CARD_TARGET: int = int(os.getenv("CHARS_PER_CARD_TARGET", "200"))
+
 # Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 
 # Exam preparation mode - prioritizes understanding/comparison cards over memorization
-# Set EXAM_MODE=true to activate exam-focused card generation
+# Set EXAM_MODE=true to make exam mode the default (can be overridden with --exam-mode flag)
+# CLI: --exam-mode flag defaults to this value
+# GUI: Configurable per-run via checkbox
 EXAM_MODE: bool = os.getenv("EXAM_MODE", "false").lower() in ("1", "true", "yes")
 
 

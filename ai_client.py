@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Dict, List, Tuple
 
 from google import genai  # type: ignore
@@ -23,6 +24,14 @@ from ai_schemas import (
     preprocess_fields_json_escapes,
 )
 from utils.cli import debug
+
+
+def _debug_log(payload: Dict[str, Any]) -> None:
+    try:
+        with open("/Users/stef/Documents/Programmieren/unfinished/Lectern/.cursor/debug.log", "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except Exception:
+        pass
 
 # Manual schema definitions for Gemini API to avoid Pydantic/Protobuf mismatches
 # (Gemini SDK does not support 'default', '$defs', 'anyOf', 'additionalProperties', etc.)
@@ -251,11 +260,32 @@ class LecternAIClient:
         data = data_obj.model_dump()
         return data if isinstance(data, dict) else {"concepts": []}
 
-    def generate_more_cards(self, limit: int, examples: str = "") -> Dict[str, Any]:
+    def generate_more_cards(
+        self,
+        limit: int,
+        examples: str = "",
+        avoid_fronts: List[str] | None = None,
+        covered_slides: List[int] | None = None,
+    ) -> Dict[str, Any]:
         self._prune_history()
         example_text = ""
         if examples:
             example_text = f"\\n- Reference Examples (Mimic this style):\\n{examples}\\n"
+        avoid_text = ""
+        if avoid_fronts:
+            trimmed = [f"- {front[:160]}" for front in avoid_fronts[:30]]
+            avoid_text = (
+                "\\n- Already covered (DO NOT repeat these prompts or cloze texts):\\n"
+                + "\\n".join(trimmed)
+                + "\\n"
+            )
+        slide_text = ""
+        if covered_slides:
+            slide_text = (
+                "\\n- Coverage guidance:\\n"
+                f"    - Already covered slide numbers: {', '.join(str(s) for s in covered_slides[:80])}.\\n"
+                "    - Prefer uncovered slides and topics when possible.\\n"
+            )
         
         # NOTE(Tags): Build context string for hierarchical tagging
         tag_context = self._build_tag_context()
@@ -273,6 +303,8 @@ class LecternAIClient:
             "    - Use Basic (Front/Back) for open-ended conceptual questions.\\n"
             "    - Text Formatting: STRICTLY AVOID Markdown (e.g., **bold**). Use HTML tags for formatting (e.g., <b>bold</b>, <i>italic</i>, <code>code</code>).\\n"
             f"{tag_context}"
+            f"{avoid_text}"
+            f"{slide_text}"
             "    - `slide_topic`: The specific section/topic within this slide set (Title Case, e.g., 'Image Classification', 'Gradient Descent').\\n"
             "    - `slide_number`: The integer page number where this concept is primarily found.\\n"
             "    - `rationale`: A brief (1 sentence) explanation of why this card is valuable.\\n"
@@ -293,14 +325,30 @@ class LecternAIClient:
         text = response.text or ""
         debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
+        # region agent log
+        _debug_log({
+            "sessionId": "debug-session",
+            "runId": "baseline",
+            "hypothesisId": "G",
+            "location": "ai_client.py:generate_more_cards",
+            "message": "Prompt anti-dup context",
+            "data": {
+                "avoid_fronts_count": len(avoid_fronts or []),
+                "covered_slides_count": len(covered_slides or []),
+            },
+            "timestamp": int(time.time() * 1000),
+        })
+        # endregion
         
         # Try multiple parsing strategies
         data_obj = None
+        parse_strategy = "none"
         
         # Strategy 1: Standard preprocessing
         try:
             fixed_text = preprocess_fields_json_escapes(text)
             data_obj = CardGenerationResponse.model_validate_json(fixed_text)
+            parse_strategy = "standard"
         except Exception as e1:
             debug(f"[Chat/Gen] Standard parsing failed: {e1}")
             
@@ -316,6 +364,7 @@ class LecternAIClient:
                 # Special case: escaped backslash \\ became \\\\ after doubling, restore to \\
                 aggressive_fix = aggressive_fix.replace('\\\\\\\\', '\\\\')
                 data_obj = CardGenerationResponse.model_validate_json(aggressive_fix)
+                parse_strategy = "aggressive"
                 debug("[Chat/Gen] Aggressive parsing succeeded")
             except Exception as e2:
                 debug(f"[Chat/Gen] Aggressive parsing failed: {e2}")
@@ -329,11 +378,26 @@ class LecternAIClient:
                         # Return an empty but valid structure so generation can continue
                         debug("[Chat/Gen] Falling back to empty cards due to parse errors")
                         data_obj = CardGenerationResponse(cards=[], done=False)
+                        parse_strategy = "fallback_empty"
                 except Exception as e3:
                     debug(f"[Chat/Gen] All parsing strategies failed: {e3}")
                     raise e1  # Re-raise original error
         
         if data_obj is None:
+            # region agent log
+            _debug_log({
+                "sessionId": "debug-session",
+                "runId": "baseline",
+                "hypothesisId": "C",
+                "location": "ai_client.py:generate_more_cards",
+                "message": "Card parsing failed; returning empty done",
+                "data": {
+                    "parse_strategy": parse_strategy,
+                    "response_len": len(text),
+                },
+                "timestamp": int(time.time() * 1000),
+            })
+            # endregion
             return {"cards": [], "done": True}
             
         data = data_obj.model_dump()
@@ -342,6 +406,22 @@ class LecternAIClient:
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             # Direct usage of Pydantic-validated cards
             done = bool(data.get("done", len(cards) == 0))
+            # region agent log
+            _debug_log({
+                "sessionId": "debug-session",
+                "runId": "baseline",
+                "hypothesisId": "C",
+                "location": "ai_client.py:generate_more_cards",
+                "message": "Parsed card generation response",
+                "data": {
+                    "parse_strategy": parse_strategy,
+                    "cards_count": len(cards),
+                    "done_flag": done,
+                    "response_len": len(text),
+                },
+                "timestamp": int(time.time() * 1000),
+            })
+            # endregion
             return {"cards": cards, "done": done}
         return {"cards": [], "done": True}
 

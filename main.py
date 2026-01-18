@@ -69,6 +69,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     verbosity.add_argument("--quiet", action="store_true", help="Reduce output to essential errors only")
     verbosity.add_argument("--verbose", action="store_true", help="Increase output with detailed status and AI snippets")
     parser.add_argument("--interactive", action="store_true", help="Prompt for missing inputs and confirmations")
+    parser.add_argument("--exam-mode", action="store_true", default=config.EXAM_MODE, 
+                        help="Enable exam-focused card generation (prioritizes comparison/application cards)")
+    parser.add_argument("--estimate", action="store_true", help="Estimate cost and tokens for the PDF and exit")
     parser.add_argument("--set-key", action="store_true", help="Securely save Gemini API key to system keychain and exit")
 
     try:
@@ -132,8 +135,30 @@ def main(argv: List[str]) -> int:
     if not is_quiet():
         info("Lectern starting...")
         info(f"PDF: {args.pdf_path}")
-        info(f"Deck: {args.deck_name}  Model: {args.model_name}")
+        if not args.estimate:
+            info(f"Deck: {args.deck_name}  Model: {args.model_name}")
         info(f"GEMINI_API_KEY: {masked_key}")
+
+    # Initialize Service
+    service = LecternGenerationService()
+
+    # Handle Estimation
+    if args.estimate:
+        if not os.path.exists(args.pdf_path):
+            error(f"PDF not found: {args.pdf_path}")
+            return 1
+            
+        import asyncio
+        data = asyncio.run(service.estimate_cost(args.pdf_path))
+        
+        print("\n" + "="*40)
+        print(f"Estimation for: {os.path.basename(args.pdf_path)}")
+        print("="*40)
+        print(f"Pages:  {data['pages']}")
+        print(f"Tokens: {data['tokens']:,}")
+        print(f"Cost:   ${data['cost']:.4f}")
+        print("="*40 + "\n")
+        return 0
 
     # Resume logic
     should_resume = False
@@ -155,7 +180,6 @@ def main(argv: List[str]) -> int:
         pass
 
     # Initialize Service
-    service = LecternGenerationService()
     generator = service.run(
         pdf_path=args.pdf_path,
         deck_name=args.deck_name,
@@ -165,7 +189,8 @@ def main(argv: List[str]) -> int:
         resume=should_resume,
         max_notes_per_batch=args.max_notes_per_batch,
         enable_reflection=args.enable_reflection,
-        reflection_rounds=args.reflection_rounds
+        reflection_rounds=args.reflection_rounds,
+        exam_mode=args.exam_mode,
     )
 
     # Output Loop
