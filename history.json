@@ -1,5 +1,113 @@
 [
   {
+    "id": "80f5d1de-f5bf-49b9-be1b-df7eda08ddcd",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:32:02.966652",
+    "card_count": 1,
+    "status": "draft"
+  },
+  {
+    "id": "f2537251-3321-4caf-b697-745c52c4c33c",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:32:02.961809",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "6a2d7726-3438-4bf0-9a56-5ce2852c81cf",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:32:02.960628",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "10b3ca24-46e9-4d53-bf26-69f36aa1a619",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:23:10.548683",
+    "card_count": 1,
+    "status": "draft"
+  },
+  {
+    "id": "902749c6-d914-46ee-b57c-baeb35ffb894",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:23:10.545369",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "d1672fe6-8d1f-4757-95c9-d99330a32151",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:23:10.544345",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "28e86889-fbfc-4c3b-988e-1de3d3e73219",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:12:56.405555",
+    "card_count": 1,
+    "status": "draft"
+  },
+  {
+    "id": "c6f53649-2893-49a3-80af-b2eb887efe2c",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:12:56.401737",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "8143258b-bfb6-4874-8885-1f11e124bb28",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:12:56.400955",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "4dd28fd9-cf47-4c7a-947f-a95371fd0d11",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:12:52.962996",
+    "card_count": 1,
+    "status": "draft"
+  },
+  {
+    "id": "75cde689-ca1f-4dd4-a2e8-70db0d2ff1f8",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:12:52.959625",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "ce5c0333-4eef-4887-90f0-9da4cda34f31",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-19T14:12:52.958824",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
     "id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
     "filename": "Lecture_01_Introduction.pdf",
     "full_path": "/Users/stef/Documents/University/CS101/Lecture_01_Introduction.pdf",
