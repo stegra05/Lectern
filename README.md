@@ -15,6 +15,10 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 
 [Get Started](#installation) • [Usage](#usage) • [Tech Stack](#tech-stack) • [Configuration](#configuration)
 
+<br>
+
+![Landing Page](docs/screenshots/landing.png)
+
 </div>
 
 ---
