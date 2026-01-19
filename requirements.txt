@@ -31,3 +31,6 @@ rich>=13.7.1,<14.0
 
 # Security
 keyring>=24.0.0
+
+# Testing
+pytest>=8.0.0

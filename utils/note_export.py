@@ -43,7 +43,7 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     Returns:
         Resolved Anki model name
     """
-    model = str(card_model or fallback_model).strip()
+    model = str(card_model or "").strip() or str(fallback_model).strip()
     lower_model = model.lower()
     
     if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):

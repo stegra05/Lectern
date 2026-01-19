@@ -203,8 +203,6 @@ function App() {
     setDeckName('');
     setLogs([]);
     setCards([]);
-    setLogs([]);
-    setCards([]);
     setProgress({ current: 0, total: 0 });
     setIsCancelling(false);
     setCurrentPhase('idle');

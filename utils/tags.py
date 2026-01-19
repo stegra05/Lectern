@@ -77,7 +77,8 @@ def _tag_segment(value: str, title_case: bool = False) -> str:
     s = _normalize_segment(value, preserve_case=True)
     if title_case:
         s = _title_case_segment(s)
-    return s.replace(" ", "-")
+    s = s.replace(" ", "-")
+    return _DUP_DASH.sub("-", s)
 
 
 def build_hierarchical_tag(
@@ -230,7 +231,7 @@ def infer_slide_set_name(
     # Fallback: clean up filename
     if pdf_filename:
         # Remove common prefixes/suffixes
-        clean_name = re.sub(r'[-_]\d{4}[-_]\d{2}[-_]\d{2}', '', pdf_filename)  # Remove dates
+        clean_name = re.sub(r'(?:^|[-_])\d{4}[-_]\d{2}[-_]\d{2}', '', pdf_filename)  # Remove dates
         clean_name = re.sub(r'[-_]?v?\d+$', '', clean_name)  # Remove version numbers
         clean_name = clean_name.replace('_', ' ').replace('-', ' ')
         clean_name = _DUP_SPACE.sub(' ', clean_name).strip()

@@ -27,7 +27,7 @@ import pdf_parser
 from ai_client import LecternAIClient
 from ai_common import _compose_multimodal_content
 
-app = FastAPI()
+app = FastAPI(title='Lectern API', version='1.0.0')
 
 app.add_middleware(
     CORSMiddleware,
