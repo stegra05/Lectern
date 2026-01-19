@@ -1,221 +1,55 @@
-import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Play, Layers, Settings, CheckCircle2, AlertCircle, Terminal, RotateCcw, Clock, ChevronRight, Plus, Trash2, Copy, Check } from 'lucide-react';
 import { clsx } from 'clsx';
-import { api, type ProgressEvent, type HistoryEntry } from './api';
+import { api } from './api';
 import { GlassCard } from './components/GlassCard';
 import { FilePicker } from './components/FilePicker';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { ReviewQueue } from './components/ReviewQueue';
-import { PhaseIndicator, type Phase } from './components/PhaseIndicator';
+import { PhaseIndicator } from './components/PhaseIndicator';
+
+import { useAppState } from './hooks/useAppState';
+import { useGeneration } from './hooks/useGeneration';
+import { useHistory } from './hooks/useHistory';
 
 function App() {
-  const [step, setStep] = useState<'dashboard' | 'config' | 'generating' | 'review' | 'done'>('dashboard');
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [deckName, setDeckName] = useState('');
-  const [logs, setLogs] = useState<ProgressEvent[]>([]);
-  const [cards, setCards] = useState<any[]>([]);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [health, setHealth] = useState<any>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isCheckingHealth, setIsCheckingHealth] = useState(true);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [estimation, setEstimation] = useState<{ tokens: number, cost: number } | null>(null);
-  const [isEstimating, setIsEstimating] = useState(false);
-  const [previewSlide, setPreviewSlide] = useState<number | null>(null);
-  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState<Phase>('idle');
-  const [examMode, setExamMode] = useState(() => {
-    // Persist exam mode preference
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('examMode') === 'true';
-    }
-    return false;
-  });
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('theme');
-      if (saved === 'light' || saved === 'dark') return saved;
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return 'dark';
-  });
-  const [copied, setCopied] = useState(false);
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const { 
+    step, setStep, 
+    health,
+    showOnboarding,
+    isCheckingHealth, 
+    isSettingsOpen, setIsSettingsOpen, 
+    theme, toggleTheme,
+    isRefreshingStatus, refreshHealth 
+  } = useAppState();
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+  const {
+    pdfFile, setPdfFile,
+    deckName, setDeckName,
+    logs,
+    cards,
+    progress,
+    estimation,
+    isEstimating,
+    previewSlide, setPreviewSlide,
+    isCancelling,
+    currentPhase,
+    examMode, toggleExamMode,
+    handleGenerate,
+    handleReset,
+    handleCancel,
+    logsEndRef,
+    handleCopyLogs,
+    copied
+  } = useGeneration(setStep);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
-
-  const refreshHealth = async () => {
-    try {
-      const h = await api.checkHealth();
-      setHealth(h);
-      if (!h.anki_connected || !h.gemini_configured) {
-        setShowOnboarding(true);
-      } else {
-        setShowOnboarding(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setShowOnboarding(true);
-    } finally {
-      setIsCheckingHealth(false);
-    }
-  };
-
-  // Auto-polling for health status
-  useEffect(() => {
-    const checkHealth = async () => {
-      const result = await api.checkHealth();
-      setHealth(result);
-      setIsCheckingHealth(false); // Ensure this is set to false after the first check
-      if (!result.anki_connected || !result.gemini_configured) {
-        setShowOnboarding(true);
-      } else {
-        setShowOnboarding(false);
-      }
-
-      // Fetch history
-      const hist = await api.getHistory();
-      setHistory(hist);
-    };
-
-    // Initial check
-    checkHealth();
-
-    // Determine polling interval based on connection status
-    const getInterval = () => {
-      if (!health) return 3000; // Check frequently until first response
-      if (!health.anki_connected || !health.gemini_configured) {
-        return 3000; // Poll every 3s when something is offline
-      }
-      return 30000; // Poll every 30s when everything is online
-    };
-
-    // Set up polling
-    const interval = setInterval(checkHealth, getInterval());
-
-    // Re-check when window gains focus
-    const handleFocus = () => {
-      checkHealth();
-    };
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [health?.anki_connected, health?.gemini_configured]);
-
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const fetchEstimate = async () => {
-      if (!pdfFile) {
-        setEstimation(null);
-        setIsEstimating(false);  // Reset stuck state when file cleared
-        return;
-      }
-      setIsEstimating(true);
-      try {
-        const est = await api.estimateCost(pdfFile, controller.signal);
-        if (est) setEstimation(est);
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') {
-          console.error(e);
-          setEstimation(null);
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsEstimating(false);
-        }
-      }
-    };
-
-    fetchEstimate();
-    return () => controller.abort();
-  }, [pdfFile]);
-
-  // Refresh history when entering specific states
-  useEffect(() => {
-    if (step === 'done' || step === 'dashboard') {
-      api.getHistory().then(setHistory);
-    }
-  }, [step]);
-
-  const handleGenerate = async () => {
-    if (!pdfFile || !deckName) return;
-    setStep('generating');
-    setLogs([]);
-    setCards([]);
-
-    try {
-      await api.generate(
-        { pdf_file: pdfFile, deck_name: deckName, exam_mode: examMode },
-        (event) => {
-          setLogs(prev => [...prev, event]);
-          if (event.type === 'progress_start') {
-            setProgress({ current: 0, total: event.data.total });
-          } else if (event.type === 'progress_update') {
-            setProgress(prev => ({ ...prev, current: event.data.current }));
-          } else if (event.type === 'card_generated') {
-            setCards(prev => [event.data.card, ...prev]);
-          } else if (event.type === 'step_start') {
-            if (event.message.includes('concept map')) {
-              setCurrentPhase('concept');
-            } else if (event.message.includes('Generate cards')) {
-              setCurrentPhase('generating');
-            } else if (event.message.includes('Reflection')) {
-              setCurrentPhase('reflecting');
-            }
-          } else if (event.type === 'done') {
-            setStep('review');
-            setCurrentPhase('complete');
-          } else if (event.type === 'cancelled') {
-            handleReset();
-          }
-        }
-      );
-    } catch (e) {
-      console.error(e);
-      setLogs(prev => [...prev, { type: 'error', message: 'Network error', timestamp: Date.now() }]);
-    }
-  };
-
-  const handleReset = () => {
-    setStep('dashboard');
-    setPdfFile(null);
-    setDeckName('');
-    setLogs([]);
-    setCards([]);
-    setProgress({ current: 0, total: 0 });
-    setIsCancelling(false);
-    setCurrentPhase('idle');
-    // Refresh history
-    api.getHistory().then(setHistory);
-  };
-
-  const handleCopyLogs = () => {
-    const text = logs.map(l => `[${new Date(l.timestamp * 1000).toLocaleTimeString()}] ${l.type.toUpperCase()}: ${l.message}`).join('\n');
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const {
+    history,
+    setHistory,
+    clearAllHistory,
+    deleteHistoryEntry
+  } = useHistory(step);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -290,15 +124,7 @@ function App() {
               <div className="w-px h-4 bg-border" />
               <StatusDot label="Gemini" active={health?.gemini_configured} />
               <button
-                onClick={async () => {
-                  setIsRefreshingStatus(true);
-                  try {
-                    const result = await api.checkHealth();
-                    setHealth(result);
-                  } finally {
-                    setIsRefreshingStatus(false);
-                  }
-                }}
+                onClick={refreshHealth}
                 disabled={isRefreshingStatus}
                 className="ml-2 text-text-muted hover:text-primary transition-colors disabled:opacity-50"
                 title="Refresh status"
@@ -339,10 +165,7 @@ function App() {
                       <button
                         onClick={async (e) => {
                           e.stopPropagation();
-                          if (confirm('Are you sure you want to clear all history?')) {
-                            await api.clearHistory();
-                            setHistory([]);
-                          }
+                          clearAllHistory();
                         }}
                         className="text-xs text-text-muted hover:text-red-400 transition-colors flex items-center gap-1"
                       >
@@ -387,10 +210,7 @@ function App() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (confirm('Delete this session?')) {
-                                await api.deleteHistoryEntry(entry.id);
-                                setHistory(prev => prev.filter(h => h.id !== entry.id));
-                              }
+                              deleteHistoryEntry(entry.id);
                             }}
                             className="absolute top-4 right-4 p-1.5 text-text-muted hover:text-red-400 hover:bg-surface rounded-md opacity-0 group-hover:opacity-100 transition-all"
                             title="Delete Session"
@@ -484,11 +304,7 @@ function App() {
                   {/* Exam Mode Toggle */}
                   <div className="pt-4 border-t border-border/50">
                     <button
-                      onClick={() => {
-                        const newValue = !examMode;
-                        setExamMode(newValue);
-                        localStorage.setItem('examMode', String(newValue));
-                      }}
+                      onClick={toggleExamMode}
                       className={clsx(
                         "w-full flex items-center justify-between p-4 rounded-xl border transition-all",
                         examMode
@@ -643,12 +459,7 @@ function App() {
                             </div>
                           ) : (
                             <button
-                              onClick={() => {
-                                setIsCancelling(true);
-                                api.stopGeneration();
-                                // Return to dashboard immediately for better UX
-                                setTimeout(() => handleReset(), 500);
-                              }}
+                              onClick={handleCancel}
                               className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded-md transition-colors border border-red-500/20 font-medium hover:border-red-500/40"
                             >
                               CANCEL
