@@ -47,7 +47,7 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 
 Lectern is built with a modern, type-safe, and performant stack:
 
-- **AI Core:** Google Gemini Pro 1.5 (Multimodal)
+- **AI Core:** Google Gemini 3.0 Flash  (Multimodal)
 - **Backend:** Python, FastAPI, Uvicorn
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion
 - **Desktop Wrapper:** PyWebView (Cocoa/WebKit)
