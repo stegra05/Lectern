@@ -81,3 +81,11 @@ A global context object kept in the AI's "mind" (and saved to disk) to guide gen
 
 - **AnkiConnect:** We treat Anki as an external service. We never write to the SQLite database directly. This prevents corruption.
 - **API Keys:** Stored in the system Keychain (via `keyring`), never in plain text configuration files if possible.
+
+## Logging & Diagnostics
+
+Lectern writes AI session logs as JSON for debugging and traceability.
+
+- **Path (macOS):** `~/Library/Application Support/Lectern/logs/session-*.json`
+- **Lifecycle:** Created at AI session start; appended after concept map, generation, and reflection stages.
+- **Use cases:** Inspect model prompts/responses when debugging quality issues or validation errors.

@@ -135,6 +135,17 @@ python main.py \
 
 ---
 
+## Logs
+
+Lectern writes AI session logs to a fixed location:
+
+- **Path (macOS):** `~/Library/Application Support/Lectern/logs/session-*.json`
+- **When created:** At the start of each AI session.
+- **What they contain:** Request/response snapshots for concept map, generation, and reflection.
+- **When to check:** If card generation fails, reflection errors occur, or you need to inspect prompts/responses.
+
+---
+
 ## Configuration
 
 Configure defaults in `.env` or override via flags.

@@ -266,10 +266,20 @@ function App() {
             animate={{ opacity: 1, x: 0 }}
             className="flex flex-col"
           >
-            <h1 className="text-5xl font-bold tracking-tight text-text-main">
-              Lectern<span className="text-primary">.</span>
-            </h1>
-            <p className="text-text-muted mt-2 font-medium tracking-wide">AI-POWERED ANKI GENERATOR</p>
+            <button
+              onClick={() => {
+                if (step !== 'dashboard') {
+                  api.stopGeneration();
+                  handleReset();
+                }
+              }}
+              className="group text-left transition-transform active:scale-95"
+            >
+              <h1 className="text-5xl font-bold tracking-tight text-text-main group-hover:text-primary transition-colors">
+                Lectern<span className="text-primary group-hover:text-text-main transition-colors">.</span>
+              </h1>
+              <p className="text-text-muted mt-2 font-medium tracking-wide group-hover:text-primary/70 transition-colors">AI-POWERED ANKI GENERATOR</p>
+            </button>
           </motion.div>
 
           <motion.div

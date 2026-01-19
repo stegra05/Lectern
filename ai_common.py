@@ -157,7 +157,8 @@ def _build_loggable_parts(parts: List[Any]) -> List[Dict[str, Any]]:
 
 def _start_session_log() -> str:
     try:
-        logs_dir = os.path.join(os.getcwd(), "logs")
+        home_dir = os.path.expanduser("~")
+        logs_dir = os.path.join(home_dir, "Library", "Application Support", "Lectern", "logs")
         os.makedirs(logs_dir, exist_ok=True)
         ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
         log_path = os.path.join(logs_dir, f"session-{ts}.json")

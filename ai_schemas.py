@@ -14,7 +14,14 @@ def _fix_escape_sequences(s: str) -> str:
     3. General invalid escapes (\alpha, \sigma, etc.)
     
     Valid JSON escapes: \\ \" \/ \b \f \n \r \t \uXXXX
+    
+    NOTE(Escape-Fix): We must protect already-escaped backslashes (\\) first,
+    otherwise \\alpha (valid) becomes \\\alpha (invalid).
     """
+    # Step 0: Protect already-escaped backslashes with a placeholder
+    placeholder = '\x00ESC_BS\x00'
+    s = s.replace('\\\\', placeholder)
+    
     # 1. Catch LaTeX commands that START with a valid JSON escape letter (excluding 'u')
     # Examples: \times (\t), \theta, \rho, \beta (\b), \phi, \newline (\n)
     # Pattern: backslash + one of [bfnrt] + at least one more letter
@@ -30,6 +37,9 @@ def _fix_escape_sequences(s: str) -> str:
     # Examples: \alpha, \(, \), \lambda, \gamma, \., etc.
     # Valid chars allowed after backslash: " \ / b f n r t u
     s = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+    
+    # Step 4: Restore the protected escaped backslashes
+    s = s.replace(placeholder, '\\\\')
     
     return s
 
@@ -48,14 +58,29 @@ def preprocess_fields_json_escapes(raw_json: str) -> str:
     2. Escapes backslashes NOT followed by valid JSON escape chars
     """
     def _fix_string_content(content: str) -> str:
-        """Apply escape fixes to raw JSON string content."""
-        fixed = content
-        # 1. LaTeX starting with valid escape (excluding u)
+        """Apply escape fixes to raw JSON string content.
+        
+        NOTE(Escape-Fix): We must protect already-escaped backslashes (\\) first,
+        otherwise \\alpha (valid: escaped backslash + alpha) gets incorrectly 
+        turned into \\\alpha (invalid: escaped backslash + invalid \a escape).
+        """
+        # Step 0: Protect already-escaped backslashes with a placeholder
+        placeholder = '\x00ESC_BS\x00'
+        fixed = content.replace('\\\\', placeholder)
+        
+        # Step 1: LaTeX starting with valid JSON escape char (excluding u)
+        # e.g., \theta (\t + heta), \beta (\b + eta), \rho (\r + ho)
         fixed = re.sub(r'\\([bfnrt])([a-zA-Z])', r'\\\\' + r'\1\2', fixed)
-        # 2. Invalid unicode escapes
+        
+        # Step 2: Invalid unicode escapes (\u not followed by 4 hex digits)
         fixed = re.sub(r'\\u(?![0-9a-fA-F]{4})', r'\\\\u', fixed)
-        # 3. General invalid escapes
+        
+        # Step 3: All remaining invalid escapes (backslash + non-valid char)
         fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', fixed)
+        
+        # Step 4: Restore the protected escaped backslashes
+        fixed = fixed.replace(placeholder, '\\\\')
+        
         return fixed
     
     def fix_match(m: re.Match) -> str:
