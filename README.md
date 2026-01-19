@@ -17,7 +17,7 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 
 <br>
 
-![Landing Page](docs/screenshots/landing.png)
+![Dashboard](docs/screenshots/dashboard.png)
 
 </div>
 
@@ -114,6 +114,8 @@ The recommended way to use Lectern. Launches a native window with a modern UI.
 ```bash
 python gui/launcher.py
 ```
+
+![Card Generation](docs/screenshots/generation.png)
 
 ### 3. Command Line
 
