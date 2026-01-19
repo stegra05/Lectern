@@ -1,0 +1,19 @@
+{
+  "pdf_path": "/fake/path.pdf",
+  "deck_name": "Test Deck",
+  "cards": [
+    {
+      "model_name": "Basic",
+      "fields": {
+        "Front": "Q1",
+        "Back": "A1"
+      }
+    }
+  ],
+  "concept_map": {
+    "concepts": [],
+    "relations": []
+  },
+  "history": [],
+  "log_path": "/tmp/test.log"
+}

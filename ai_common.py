@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Dict, Iterable, List
 
 
@@ -160,7 +160,7 @@ def _start_session_log() -> str:
         home_dir = os.path.expanduser("~")
         logs_dir = os.path.join(home_dir, "Library", "Application Support", "Lectern", "logs")
         os.makedirs(logs_dir, exist_ok=True)
-        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
         log_path = os.path.join(logs_dir, f"session-{ts}.json")
         header = {
             "timestamp_utc": ts,

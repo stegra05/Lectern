@@ -460,9 +460,29 @@ class LecternAIClient:
         text = response.text or ""
         debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "reflection", [{"text": prompt}], text, True)
-        
-        fixed_text = preprocess_fields_json_escapes(text)
-        data_obj = ReflectionResponse.model_validate_json(fixed_text)
+
+        data_obj = None
+        parse_strategy = "none"
+        try:
+            fixed_text = preprocess_fields_json_escapes(text)
+            data_obj = ReflectionResponse.model_validate_json(fixed_text)
+            parse_strategy = "standard"
+        except Exception as e1:
+            debug(f"[Chat/Reflect] Standard parsing failed: {e1}")
+            try:
+                aggressive_fix = text.replace('\\', '\\\\')
+                for char in ['"', 'n', 't', 'r', '/']:
+                    aggressive_fix = aggressive_fix.replace('\\\\' + char, '\\' + char)
+                aggressive_fix = aggressive_fix.replace('\\\\\\\\', '\\\\')
+                data_obj = ReflectionResponse.model_validate_json(aggressive_fix)
+                parse_strategy = "aggressive"
+                debug("[Chat/Reflect] Aggressive parsing succeeded")
+            except Exception as e2:
+                debug(f"[Chat/Reflect] Aggressive parsing failed: {e2}")
+                data_obj = ReflectionResponse(reflection="", cards=[], done=True)
+                parse_strategy = "fallback_empty"
+
+        debug(f"[Chat/Reflect] Parse strategy: {parse_strategy}")
         data = data_obj.model_dump()
 
         if isinstance(data, dict):
