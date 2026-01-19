@@ -29,7 +29,7 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
   Extracts text and images from slides using `PyMuPDF`, preserving context for accurate generation.
 
 - **Smart Generation**  
-  Leverages **Gemini Pro 1.5** to create atomic, well-structured cards that adhere to learning best practices.
+  Leverages **Gemini 3.0 Flash** to create atomic, well-structured cards that adhere to learning best practices.
 
 - **Style Matching**  
   Intelligently samples existing cards to match your deck's aesthetic and formatting.
