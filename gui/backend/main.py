@@ -252,11 +252,22 @@ async def generate_cards(
 
 @app.post("/stop")
 async def stop_generation():
-    global CURRENT_GENERATION_SERVICE
+    global CURRENT_GENERATION_SERVICE, CURRENT_SESSION_PDF_PATH
     if CURRENT_GENERATION_SERVICE:
         CURRENT_GENERATION_SERVICE.stop()
-        return {"status": "stopped"}
-    return {"status": "no_active_generation"}
+    
+    # Explicitly clear draft store to ensure a clean slate
+    DraftStore().clear()
+    
+    # Cleanup session PDF
+    if CURRENT_SESSION_PDF_PATH and os.path.exists(CURRENT_SESSION_PDF_PATH):
+        try:
+            os.remove(CURRENT_SESSION_PDF_PATH)
+            CURRENT_SESSION_PDF_PATH = None
+        except Exception as e:
+            print(f"Warning: Failed to cleanup PDF on stop: {e}")
+            
+    return {"status": "stopped"}
 
 # Draft API
 @app.get("/drafts")
