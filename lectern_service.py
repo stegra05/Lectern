@@ -301,6 +301,12 @@ class LecternGenerationService:
                                 pacing_hint += f"ADVICE: Density is too high (Target: {target}). Increase your filtering threshold! Focus ONLY on the most complex, exam-critical nuances."
                             elif actual_density < target * 0.8:
                                 pacing_hint += f"ADVICE: Density is low (Target: {target}). You may capture more application-based nuances if they are high-yield."
+                        else:
+                            # Normal mode feedback using the effective_target calculated earlier
+                            if actual_density > effective_target * 1.25:
+                                pacing_hint += f"ADVICE: Density is too high (Target: ~{effective_target:.1f}). Raise your bar for importance. Focus on more substantial concepts to avoid bloat."
+                            elif actual_density < effective_target * 0.75:
+                                pacing_hint += f"ADVICE: Density is low (Target: ~{effective_target:.1f}). Look closer at the slides for missed details or defined terms."
 
                     out = ai.generate_more_cards(
                         limit=limit,
