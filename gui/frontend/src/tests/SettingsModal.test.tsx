@@ -1,0 +1,60 @@
+import { render, screen } from '@testing-library/react';
+import { SettingsModal } from '../components/SettingsModal';
+import { vi, describe, it, expect } from 'vitest';
+
+// Mock the API
+vi.mock('../api', () => ({
+    api: {
+        getConfig: vi.fn().mockResolvedValue({}),
+        saveConfig: vi.fn(),
+    },
+}));
+
+describe('SettingsModal', () => {
+    const mockOnClose = vi.fn();
+    const mockToggleTheme = vi.fn();
+
+    it('renders with accessible close button', () => {
+        render(
+            <SettingsModal
+                isOpen={true}
+                onClose={mockOnClose}
+                theme="light"
+                toggleTheme={mockToggleTheme}
+            />
+        );
+
+        const closeButton = screen.getByLabelText('Close settings');
+        expect(closeButton).toBeInTheDocument();
+    });
+
+    it('renders with accessible theme toggle', () => {
+        render(
+            <SettingsModal
+                isOpen={true}
+                onClose={mockOnClose}
+                theme="light"
+                toggleTheme={mockToggleTheme}
+            />
+        );
+
+        const toggleButton = screen.getByLabelText('Toggle dark mode');
+        expect(toggleButton).toBeInTheDocument();
+        expect(toggleButton).toHaveAttribute('role', 'switch');
+        expect(toggleButton).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('reflects dark mode state in accessible attributes', () => {
+        render(
+            <SettingsModal
+                isOpen={true}
+                onClose={mockOnClose}
+                theme="dark"
+                toggleTheme={mockToggleTheme}
+            />
+        );
+
+        const toggleButton = screen.getByLabelText('Toggle dark mode');
+        expect(toggleButton).toHaveAttribute('aria-checked', 'true');
+    });
+});

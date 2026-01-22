@@ -78,6 +78,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                 </h2>
                                 <button
                                     onClick={onClose}
+                                    aria-label="Close settings"
                                     className="p-2 hover:bg-background rounded-lg text-text-muted hover:text-text-main transition-colors"
                                 >
                                     <X className="w-5 h-5" />
@@ -91,6 +92,9 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                         <span className="text-text-main text-sm">Dark Mode</span>
                                         <button
                                             onClick={toggleTheme}
+                                            role="switch"
+                                            aria-checked={theme === 'dark'}
+                                            aria-label="Toggle dark mode"
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background ${theme === 'dark' ? 'bg-primary' : 'bg-zinc-300 dark:bg-zinc-700'}`}
                                         >
                                             <span
