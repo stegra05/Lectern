@@ -271,3 +271,63 @@ class TestServiceIntegration:
         # Should end with done
         assert events[-1].type == "done"
         assert events[-1].data["total"] >= 1
+
+    @patch('lectern_service.check_connection')
+    @patch('lectern_service.sample_examples_from_deck')
+    @patch('lectern_service.get_deck_slide_set_patterns')
+    @patch('lectern_service.extract_content_from_pdf')
+    @patch('lectern_service.extract_pdf_title')
+    @patch('lectern_service.infer_slide_set_name_with_ai')
+    @patch('lectern_service.LecternAIClient')
+    @patch('os.path.exists')
+    @patch('os.path.getsize')
+    def test_exam_mode_passed_to_ai_client(
+        self,
+        mock_getsize,
+        mock_exists,
+        mock_ai_client_class,
+        mock_infer_name,
+        mock_extract_title,
+        mock_extract_pdf,
+        mock_patterns,
+        mock_examples,
+        mock_check,
+        service,
+        mock_pdf_pages
+    ):
+        """Test that exam_mode=True is correctly passed to LecternAIClient."""
+        # Setup mocks
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
+        mock_examples.return_value = ""
+        mock_patterns.return_value = {"slide_sets": []}
+        mock_extract_pdf.return_value = mock_pdf_pages
+        mock_extract_title.return_value = "Test Lecture"
+        mock_infer_name.return_value = "Lecture 1 Introduction"
+
+        # Mock AI client
+        mock_ai = MagicMock()
+        mock_ai.log_path = "/tmp/test.log"
+        mock_ai.concept_map.return_value = {"concepts": [], "relations": []}
+        mock_ai.generate_more_cards.return_value = {
+            "cards": [],
+            "done": True
+        }
+        mock_ai.get_history.return_value = []
+        mock_ai_client_class.return_value = mock_ai
+
+        # Run with exam_mode=True
+        list(service.run(
+            pdf_path="/fake/path.pdf",
+            deck_name="Test Deck",
+            model_name="gemini-3-flash-preview",
+            tags=[],
+            skip_export=True,
+            exam_mode=True
+        ))
+
+        # Verify LecternAIClient was initialized with exam_mode=True
+        mock_ai_client_class.assert_called()
+        _, kwargs = mock_ai_client_class.call_args
+        assert kwargs.get("exam_mode") is True
