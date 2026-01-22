@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(__file__))
 
 import fitz # type: ignore
 import io
+from starlette.concurrency import run_in_threadpool
 
 from anki_connector import check_connection
 import config
@@ -57,7 +58,7 @@ async def health_check():
     
     # Safely check Anki connection
     try:
-        anki_status = check_connection()
+        anki_status = await run_in_threadpool(check_connection)
     except Exception as e:
         print(f"Anki connection check failed: {e}")
         anki_status = False
