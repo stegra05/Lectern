@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 from PIL import Image
 import fitz
+import pytesseract
 
 from pdf_parser import (
     extract_content_from_pdf,
@@ -268,3 +269,84 @@ def test_image_extraction_success(mock_compress, mock_fitz_open, sample_image_by
     assert len(pages[0].images) == 1
     assert pages[0].images[0] == sample_image_bytes
     mock_compress.assert_called_once()
+
+@patch('fitz.open')
+@patch('pytesseract.image_to_string')
+@patch('PIL.Image.open')
+def test_ocr_boundary_condition(mock_image_open, mock_ocr, mock_fitz_open):
+    """Test the boundary condition for OCR fallback (50 chars)."""
+    # Setup Mock PDF
+    mock_doc = MagicMock()
+    mock_fitz_open.return_value.__enter__.return_value = mock_doc
+    mock_doc.page_count = 2
+
+    mock_page_1 = MagicMock()
+    mock_page_2 = MagicMock()
+
+    def load_page_side_effect(page_index):
+        if page_index == 0:
+            return mock_page_1
+        else:
+            return mock_page_2
+
+    mock_doc.load_page.side_effect = load_page_side_effect
+
+    # Page 1: 49 chars (should trigger OCR)
+    text_49 = "a" * 49
+    mock_page_1.get_text.return_value = text_49
+
+    # Page 2: 50 chars (should NOT trigger OCR)
+    text_50 = "a" * 50
+    mock_page_2.get_text.return_value = text_50
+
+    # Mock pixmap for image generation (needed for OCR)
+    mock_pix = MagicMock()
+    mock_pix.tobytes.return_value = b"fake_image_data"
+    mock_page_1.get_pixmap.return_value = mock_pix
+    mock_page_2.get_pixmap.return_value = mock_pix # Should not be called, but just in case
+
+    # Mock OCR result
+    mock_ocr.return_value = "OCR Result"
+
+    # Run
+    pages = extract_content_from_pdf("dummy.pdf", skip_ocr=False)
+
+    assert len(pages) == 2
+
+    # Check Page 1 (49 chars)
+    # The OCR text is appended to the original text
+    assert "[OCR Extracted Content]" in pages[0].text
+
+    # Check Page 2 (50 chars)
+    assert "[OCR Extracted Content]" not in pages[1].text
+
+    # Verify OCR was called exactly once (only for page 1)
+    mock_ocr.assert_called_once()
+
+@patch('fitz.open')
+@patch('pytesseract.image_to_string')
+@patch('PIL.Image.open')
+def test_ocr_tesseract_not_found(mock_image_open, mock_ocr, mock_fitz_open):
+    """Test that TesseractNotFoundError is handled gracefully."""
+
+    mock_doc = MagicMock()
+    mock_fitz_open.return_value.__enter__.return_value = mock_doc
+    mock_doc.page_count = 1
+
+    mock_page = MagicMock()
+    mock_doc.load_page.return_value = mock_page
+    mock_page.get_text.return_value = "   "
+
+    mock_pix = MagicMock()
+    mock_pix.tobytes.return_value = b"fake_image_data"
+    mock_page.get_pixmap.return_value = mock_pix
+
+    # Mock OCR to raise TesseractNotFoundError
+    mock_ocr.side_effect = pytesseract.TesseractNotFoundError()
+
+    pages = extract_content_from_pdf("dummy.pdf", skip_ocr=False)
+
+    assert len(pages) == 1
+    # Ensure it didn't crash and text is just the original
+    assert "[OCR Extracted Content]" not in pages[0].text
+    assert pages[0].text.strip() == ""

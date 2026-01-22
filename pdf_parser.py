@@ -92,6 +92,8 @@ def extract_content_from_pdf(
                     else:
                         print(f"Warning: OCR yielded no text for Page {page_index + 1}.")
                         
+                except pytesseract.TesseractNotFoundError:
+                    print(f"Warning: OCR failed for Page {page_index + 1}. Tesseract not found. Please install Tesseract-OCR.")
                 except Exception as e:
                     print(f"Warning: OCR failed for Page {page_index + 1}: {e}")
 
