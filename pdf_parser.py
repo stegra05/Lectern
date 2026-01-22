@@ -110,7 +110,7 @@ def extract_content_from_pdf(
                     
                     raw_bytes = image_dict.get("image")
                     if isinstance(raw_bytes, (bytes, bytearray)):
-                        # NOTE(Cost): Compress images to reduce token usage and latency.
+                        # Compress images to reduce token usage and latency.
                         compressed_bytes = _compress_image(bytes(raw_bytes))
                         images.append(compressed_bytes)
 
@@ -258,7 +258,8 @@ def _compress_image(image_bytes: bytes, max_dimension: int = 1024, quality: int 
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:
             # Convert to RGB if necessary (e.g. for JPEG saving)
-            if img.mode in ('RGBA', 'P'):
+            # CMYK needs to be converted to RGB for JPEG compatibility
+            if img.mode in ('RGBA', 'P', 'CMYK'):
                 img = img.convert('RGB')
             
             # Resize if larger than max_dimension
