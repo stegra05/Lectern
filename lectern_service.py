@@ -47,7 +47,7 @@ class LecternGenerationService:
         reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
-        exam_mode: bool = False,  # NOTE(Exam-Mode): Pass through to AI client
+        exam_mode: bool = False,
     ) -> Generator[ServiceEvent, None, None]:
         
         start_time = time.perf_counter()
