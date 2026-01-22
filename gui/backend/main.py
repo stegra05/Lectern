@@ -95,15 +95,20 @@ async def update_config(cfg: ConfigUpdate):
             set_gemini_key(cfg.gemini_api_key)
             
             # Remove from .env if present to avoid confusion/leaks
-            env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
-            if os.path.exists(env_path):
-                with open(env_path, "r") as f:
-                    lines = f.readlines()
-                
-                new_lines = [line for line in lines if not line.startswith("GEMINI_API_KEY=")]
-                
-                with open(env_path, "w") as f:
-                    f.writelines(new_lines)
+            from starlette.concurrency import run_in_threadpool
+
+            def update_env():
+                env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
+                if os.path.exists(env_path):
+                    with open(env_path, "r") as f:
+                        lines = f.readlines()
+
+                    new_lines = [line for line in lines if not line.startswith("GEMINI_API_KEY=")]
+
+                    with open(env_path, "w") as f:
+                        f.writelines(new_lines)
+
+            await run_in_threadpool(update_env)
 
             # Reload config module to reflect changes immediately
             # We need to set the env var temporarily for the current process if config relies on it
