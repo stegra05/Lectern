@@ -51,8 +51,8 @@ DEFAULT_GEMINI_MODEL: str = os.getenv("DEFAULT_GEMINI_MODEL", "gemini-3-flash-pr
 GEMINI_THINKING_LEVEL: str = os.getenv("GEMINI_THINKING_LEVEL", "low")
 
 # Lightweight model for fast, cheap inference tasks like naming and classification.
-# Uses flash-lite by default for speed and cost efficiency.
-LIGHTWEIGHT_MODEL: str = os.getenv("LIGHTWEIGHT_MODEL", "gemini-2.0-flash-lite")
+# Uses Gemini 3 Flash by default for speed and cost efficiency.
+LIGHTWEIGHT_MODEL: str = os.getenv("LIGHTWEIGHT_MODEL", "gemini-3-flash-preview")
 
 # AnkiConnect default URL. Can be overridden via environment variable if needed.
 ANKI_CONNECT_URL: str = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
