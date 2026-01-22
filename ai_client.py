@@ -257,8 +257,15 @@ class LecternAIClient:
             debug(f"[AI] History pruning failed: {e}")
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
+        exam_context = ""
+        if self._exam_mode:
+            exam_context = (
+                "- Focus: EXAM MODE ENABLED. Prioritize concepts that are likely to be tested (definitions, key distinctions, causal relationships). Ignore trivial background info.\\n"
+            )
+
         prompt = (
             "You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a comprehensive global concept map that serves as the backbone for a spaced repetition deck.\\n"
+            f"{exam_context}"
             "- Objectives: Extract explicit learning goals and implicit competency targets.\\n"
             "- Concepts: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts over trivial examples. Assign stable, short, unique IDs.\\n"
             "- Relations: Map the *semantic structure* of the domain. Use precise relation types (e.g., `is_a`, `part_of`, `causes`, `precedes`, `contrasts_with`). Note page references for traceability.\\n"
