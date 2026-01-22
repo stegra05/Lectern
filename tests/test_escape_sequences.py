@@ -159,5 +159,22 @@ class TestPreprocessFieldsJsonEscapes(unittest.TestCase):
         expected = r'{"other": "Value with \\. and \\#"}'
         self.assertEqual(preprocess_fields_json_escapes(raw_json), expected)
 
+    def test_preprocess_new_fields(self):
+        """Test that new fields (definition, name, slide_topic) are processed."""
+        # slide_topic
+        raw = r'{"slide_topic": "Topic \theta"}'
+        expected = r'{"slide_topic": "Topic \\theta"}'
+        self.assertEqual(preprocess_fields_json_escapes(raw), expected)
+
+        # definition
+        raw = r'{"definition": "Def \rho"}'
+        expected = r'{"definition": "Def \\rho"}'
+        self.assertEqual(preprocess_fields_json_escapes(raw), expected)
+
+        # name
+        raw = r'{"name": "Name \phi"}'
+        expected = r'{"name": "Name \\phi"}'
+        self.assertEqual(preprocess_fields_json_escapes(raw), expected)
+
 if __name__ == '__main__':
     unittest.main()

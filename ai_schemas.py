@@ -128,7 +128,8 @@ def preprocess_fields_json_escapes(raw_json: str) -> str:
     
     # NOTE(Escape-Fix): Fields that commonly contain LaTeX or special chars
     # fields_json is a nested JSON string, reflection contains prose with math
-    fields_to_fix = ["fields_json", "reflection", "rationale"]
+    # definition/name/slide_topic often contain LaTeX math
+    fields_to_fix = ["fields_json", "reflection", "rationale", "definition", "name", "slide_topic"]
     
     for field_name in fields_to_fix:
         pattern = rf'("{field_name}"\s*:\s*")((?:[^"\\]|\\.)*)(")'
