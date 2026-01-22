@@ -5,7 +5,42 @@ import os
 # Add project root to sys.path to allow imports if run directly
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from ai_schemas import _fix_escape_sequences, preprocess_fields_json_escapes
+from ai_schemas import _fix_escape_sequences, preprocess_fields_json_escapes, _aggressive_escape_fix
+
+class TestAggressiveEscapeFix(unittest.TestCase):
+    def test_preserves_escaped_quotes(self):
+        """Test that escaped quotes \" are preserved (crucial for JSON)."""
+        inp = r'{"a": "Say \"Hello\""}'
+        exp = r'{"a": "Say \"Hello\""}'
+        self.assertEqual(_aggressive_escape_fix(inp), exp)
+
+    def test_preserves_double_backslashes(self):
+        """Test that escaped backslashes \\ are preserved."""
+        inp = r'{"a": "Backslash \\"}'
+        exp = r'{"a": "Backslash \\"}'
+        self.assertEqual(_aggressive_escape_fix(inp), exp)
+
+    def test_escapes_newlines_and_tabs(self):
+        """Test that it neutralizes control char escapes like \n, \t."""
+        inp = r'{"a": "Line\nBreak\tTab"}'
+        # \n becomes \\n, \t becomes \\t
+        exp = r'{"a": "Line\\nBreak\\tTab"}'
+        self.assertEqual(_aggressive_escape_fix(inp), exp)
+
+    def test_escapes_unescaped_backslashes(self):
+        """Test that it escapes lone backslashes."""
+        inp = r'{"a": "\alpha"}'
+        exp = r'{"a": "\\alpha"}'
+        self.assertEqual(_aggressive_escape_fix(inp), exp)
+
+    def test_mixed_content(self):
+        """Test mixed valid and invalid sequences."""
+        inp = r'{"a": "Say \"Hi\"\nThen \beta"}'
+        # \" preserved
+        # \n -> \\n
+        # \beta -> \\beta
+        exp = r'{"a": "Say \"Hi\"\\nThen \\beta"}'
+        self.assertEqual(_aggressive_escape_fix(inp), exp)
 
 class TestFixEscapeSequences(unittest.TestCase):
     def test_latex_commands_starting_with_valid_escapes(self):
