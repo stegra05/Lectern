@@ -285,7 +285,19 @@ class LecternAIClient:
         debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
         
-        data_obj = ConceptMapResponse.model_validate_json(text)
+        # Attempt to fix escape sequences (common in LaTeX content)
+        try:
+            fixed_text = preprocess_fields_json_escapes(text)
+            data_obj = ConceptMapResponse.model_validate_json(fixed_text)
+        except Exception as e:
+            debug(f"[Chat/ConceptMap] Standard parsing failed, trying aggressive fix: {e}")
+            # Aggressive fallback matching other methods
+            aggressive_fix = text.replace('\\', '\\\\')
+            for char in ['"', 'n', 't', 'r', '/']:
+                aggressive_fix = aggressive_fix.replace('\\\\' + char, '\\' + char)
+            aggressive_fix = aggressive_fix.replace('\\\\\\\\', '\\\\')
+            data_obj = ConceptMapResponse.model_validate_json(aggressive_fix)
+
         data = data_obj.model_dump()
         return data if isinstance(data, dict) else {"concepts": []}
 
