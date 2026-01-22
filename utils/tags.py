@@ -265,11 +265,20 @@ def infer_slide_set_name_with_ai(
     import config
     
     # Build context for the AI
-    slides_context = "\n---\n".join(first_slides_text[:3]) if first_slides_text else ""
-    
-    # Truncate if too long (keep it cheap)
-    if len(slides_context) > 2000:
-        slides_context = slides_context[:2000] + "..."
+    slides_context = ""
+    if first_slides_text:
+        # Filter out empty strings and join
+        valid_text = [t.strip() for t in first_slides_text[:3] if t and t.strip()]
+        if valid_text:
+            slides_context = "\n---\n".join(valid_text)
+
+            # Truncate if too long (keep it cheap)
+            if len(slides_context) > 2000:
+                slides_context = slides_context[:2000] + "..."
+        else:
+            slides_context = "(No text content available from first slides)"
+    else:
+        slides_context = "(No slides available)"
     
     # Existing pattern context
     pattern_hint = ""
@@ -295,6 +304,7 @@ RULES:
 3. Focus on the TOPIC, not generic labels like "Week 1" or "Introduction"
 4. Max 8 words
 5. If filename is more informative than extracted title, prefer the filename's semantics
+6. Do NOT include file extensions (e.g., .pdf, .pptx) in the name
 
 EXAMPLES of good names:
 - "Lecture 2 Supervised Learning And Classification"
