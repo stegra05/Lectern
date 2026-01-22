@@ -1,5 +1,23 @@
 [
   {
+    "id": "3ddc41a9-939f-446f-a72d-0d05ad9efe2c",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-22T19:15:44.813728",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "5f8c75fd-f9d0-4e30-b54e-aec7b2dc93c4",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-01-22T19:15:44.804596",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
     "id": "80f5d1de-f5bf-49b9-be1b-df7eda08ddcd",
     "filename": "path.pdf",
     "full_path": "/fake/path.pdf",

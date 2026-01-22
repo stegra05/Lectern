@@ -225,7 +225,7 @@ class LecternGenerationService:
             if exam_mode:
                 effective_target = config.EXAM_MODE_SAFETY_CAP  # Safety cap: prevent truncation, rely on Prompt for 0.9 avg
                 target_reason = "exam_mode_safety_cap"
-                yield ServiceEvent("info", f"Exam Mode active: safety cap {config.EXAM_MODE_SAFETY_CAP} cards/slide (Prompt targets 0.9)")
+                yield ServiceEvent("info", f"Exam Mode active: strictly capping density at {config.EXAM_MODE_SAFETY_CAP} cards/slide (Prompt targets 0.9)")
             else:
                 if len(pages) >= 100 and effective_target < 2.0:
                     effective_target = 2.0
