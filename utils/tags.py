@@ -333,7 +333,7 @@ EXAMPLES of bad names (avoid these):
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=_SLIDE_SET_NAME_SCHEMA,
-                temperature=0.3,  # NOTE(Temperature): Conservative increase for Gemini 2.0 Flash Lite (lightweight model)
+                temperature=0.3,  # NOTE(Temperature): Conservative increase for Gemini 3.0 Flash (lightweight model)
                 max_output_tokens=100,
             )
         )
