@@ -127,7 +127,6 @@ class LecternGenerationService:
             try:
                 deck_for_examples = (context_deck or deck_name)
                 examples = sample_examples_from_deck(deck_name=deck_for_examples, sample_size=5)
-                # NOTE(Tags): Analyze existing tags to detect naming patterns
                 pattern_info = get_deck_slide_set_patterns(deck_name)
                 if examples.strip():
                     yield ServiceEvent("info", "Loaded style examples from Anki")

@@ -193,11 +193,11 @@ def get_deck_slide_set_patterns(deck_name: str) -> Dict[str, Any]:
         
         # Detect naming patterns
         patterns = {
-            'lecture': re.compile(r'^lecture[-_\s]*(\d+)', re.IGNORECASE),
-            'week': re.compile(r'^week[-_\s]*(\d+)', re.IGNORECASE),
-            'chapter': re.compile(r'^chapter[-_\s]*(\d+)', re.IGNORECASE),
-            'module': re.compile(r'^module[-_\s]*(\d+)', re.IGNORECASE),
-            'session': re.compile(r'^session[-_\s]*(\d+)', re.IGNORECASE),
+            'lecture': re.compile(r'^(?:lecture|lec)[-_\s]*(\d+)', re.IGNORECASE),
+            'week': re.compile(r'^(?:week|wk)[-_\s]*(\d+)', re.IGNORECASE),
+            'chapter': re.compile(r'^(?:chapter|ch|chap)[-_\s]*(\d+)', re.IGNORECASE),
+            'module': re.compile(r'^(?:module|mod)[-_\s]*(\d+)', re.IGNORECASE),
+            'session': re.compile(r'^(?:session|sess)[-_\s]*(\d+)', re.IGNORECASE),
             'unit': re.compile(r'^unit[-_\s]*(\d+)', re.IGNORECASE),
         }
         
