@@ -44,6 +44,41 @@ def _fix_escape_sequences(s: str) -> str:
     return s
 
 
+def _aggressive_escape_fix(s: str) -> str:
+    r"""
+    Aggressively sanitize string for JSON parsing as a last resort.
+
+    This function assumes that IF normal parsing failed, it is likely due to
+    invalid escape sequences or control characters. It attempts to neutralize
+    all backslashes except those that are clearly protecting other backslashes or quotes.
+
+    It preserves:
+    1. Double backslashes (\\)
+    2. Escaped quotes (\")
+
+    It escapes:
+    1. EVERYTHING else, including valid escapes like \n, \t, etc.
+       This turns \n (newline char) into \\n (literal string "\n").
+    """
+    # Step 1: Protect double backslashes
+    placeholder_bs = '\x00ESC_BS\x00'
+    s = s.replace('\\\\', placeholder_bs)
+
+    # Step 2: Protect escaped quotes
+    placeholder_qt = '\x00ESC_QT\x00'
+    s = s.replace('\\"', placeholder_qt)
+
+    # Step 3: Escape ALL remaining backslashes
+    # This catches \n, \t, \alpha, etc. and turns them into \\n, \\t, \\alpha
+    s = s.replace('\\', '\\\\')
+
+    # Step 4: Restore placeholders
+    s = s.replace(placeholder_qt, '\\"')
+    s = s.replace(placeholder_bs, '\\\\')
+
+    return s
+
+
 def preprocess_fields_json_escapes(raw_json: str) -> str:
     """
     Pre-process raw API response JSON to fix escape sequences in string fields.
@@ -142,16 +177,17 @@ class AnkiCard(BaseModel):
                 # Try to clean up and parse
                 try:
                     fixed_json = _fix_escape_sequences(raw_json)
-                    data['fields'] = json.loads(fixed_json)
+                    # strict=False allows control characters (like newlines) inside strings
+                    data['fields'] = json.loads(fixed_json, strict=False)
                 except Exception as e:
                     # Fallback: If parsing fails, try to salvage or provide error field
                     # Don't crash the whole batch for one bad card
                     print(f"WARNING: Failed to parse fields_json for card: {e}. Raw: {raw_json[:50]}...")
                     # Attempt a super-aggressive fix as last resort?
                     try:
-                        # Replace all backslashes with double backslashes
-                        aggressive = raw_json.replace('\\', '\\\\')
-                        data['fields'] = json.loads(aggressive)
+                        # Neutralize most backslashes but preserve quotes
+                        aggressive = _aggressive_escape_fix(raw_json)
+                        data['fields'] = json.loads(aggressive, strict=False)
                     except:
                         # Final fallback
                         data['fields'] = {
