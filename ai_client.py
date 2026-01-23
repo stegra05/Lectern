@@ -245,13 +245,12 @@ class LecternAIClient:
     def _prune_history(self) -> None:
         """Prune chat history to manage token usage (sliding window)."""
         try:
-            history = self._chat.history
+            history = self.get_history()
             if len(history) <= 20:
                 return
 
             new_history = history[:2] + history[-6:]
-            # In google-genai, we might need to recreate the chat or update history if permitted
-            self._chat._history = new_history
+            self.restore_history(new_history)
             debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
         except Exception as e:
             debug(f"[AI] History pruning failed: {e}")

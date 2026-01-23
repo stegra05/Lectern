@@ -25,6 +25,13 @@ check_tool() {
     fi
 }
 
+# Warn-only tool check (non-fatal)
+warn_tool() {
+    if ! command -v $1 &> /dev/null; then
+        warn "$1 not found. Some PDF features may be unavailable."
+    fi
+}
+
 # Spinner Function
 spinner() {
     local pid=$1
@@ -89,6 +96,8 @@ header "Pre-flight Checks"
 check_tool "node"
 check_tool "npm"
 check_tool "python"
+warn_tool "pdftoppm"
+warn_tool "tesseract"
 success "All tools found"
 
 # Preparation

@@ -19,10 +19,13 @@ python-multipart>=0.0.9
 
 # GUI
 pywebview>=5.0
-pyobjc-framework-Cocoa>=10.0
+pyobjc-framework-Cocoa>=10.0; platform_system=="Darwin"
 
 # CLI enhancements
 rich>=13.7.1,<14.0
+
+# Environment file support (optional)
+python-dotenv>=1.0.1
 
 # Security
 keyring>=24.0.0

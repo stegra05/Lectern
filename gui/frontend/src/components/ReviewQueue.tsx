@@ -7,9 +7,10 @@ import { GlassCard } from './GlassCard';
 interface ReviewQueueProps {
     initialCards: any[];
     onSyncComplete: () => void;
+    sessionId?: string | null;
 }
 
-export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) {
+export function ReviewQueue({ initialCards, onSyncComplete, sessionId }: ReviewQueueProps) {
     const [cards, setCards] = useState<any[]>(initialCards);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<any>(null);
@@ -24,7 +25,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
 
     const handleDelete = async (index: number) => {
         try {
-            await api.deleteDraft(index);
+            await api.deleteDraft(index, sessionId ?? undefined);
             const newCards = [...cards];
             newCards.splice(index, 1);
             setCards(newCards);
@@ -45,7 +46,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
 
     const saveEdit = async (index: number) => {
         try {
-            await api.updateDraft(index, editForm);
+            await api.updateDraft(index, editForm, sessionId ?? undefined);
             const newCards = [...cards];
             newCards[index] = editForm;
             setCards(newCards);
@@ -80,7 +81,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                 } else if (event.type === 'done') {
                     onSyncComplete();
                 }
-            });
+            }, sessionId ?? undefined);
         } catch (e) {
             console.error("Sync failed", e);
             setIsSyncing(false);
@@ -293,7 +294,7 @@ export function ReviewQueue({ initialCards, onSyncComplete }: ReviewQueueProps) 
                             </div>
                             <div className="p-1 bg-background">
                                 <img
-                                    src={`${api.getApiUrl()}/thumbnail/${previewSlide}`}
+                                    src={`${api.getApiUrl()}/thumbnail/${previewSlide}${sessionId ? `?session_id=${sessionId}` : ""}`}
                                     alt={`Slide ${previewSlide}`}
                                     className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
                                 />

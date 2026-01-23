@@ -44,7 +44,7 @@ const HealthStatus = ({ health, isChecking, onRefresh }: any) => (
   </div>
 );
 
-const PDFViewer = ({ pageNumber, onClose }: { pageNumber: number, onClose: () => void }) => (
+const PDFViewer = ({ pageNumber, sessionId, onClose }: { pageNumber: number, sessionId?: string | null, onClose: () => void }) => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
@@ -71,7 +71,7 @@ const PDFViewer = ({ pageNumber, onClose }: { pageNumber: number, onClose: () =>
       </div>
       <div className="p-1 bg-background">
         <img
-          src={`${api.getApiUrl()}/thumbnail/${pageNumber}`}
+          src={`${api.getApiUrl()}/thumbnail/${pageNumber}${sessionId ? `?session_id=${sessionId}` : ""}`}
           alt={`Slide ${pageNumber}`}
           className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
         />
@@ -114,7 +114,8 @@ function App() {
     handleCancel,
     logsEndRef,
     handleCopyLogs,
-    copied
+    copied,
+    sessionId
   } = useGeneration(setStep);
 
   const {
@@ -152,7 +153,7 @@ function App() {
             <button
               onClick={() => {
                 if (step !== 'dashboard') {
-                  api.stopGeneration();
+                  api.stopGeneration(sessionId ?? undefined);
                   handleReset();
                 }
               }}
@@ -250,6 +251,7 @@ function App() {
                       handleReset={handleReset}
                       setPreviewSlide={setPreviewSlide}
                       logsEndRef={logsEndRef}
+                      sessionId={sessionId}
                     />
                   )}
                 </AnimatePresence>
@@ -275,6 +277,7 @@ function App() {
           <PDFViewer
             key="pdf-viewer"
             pageNumber={previewSlide}
+            sessionId={sessionId}
             onClose={() => setPreviewSlide(null)}
           />
         )}

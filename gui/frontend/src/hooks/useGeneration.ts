@@ -15,6 +15,7 @@ export function useGeneration(setStep: (step: Step) => void) {
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<Phase>('idle');
   const [copied, setCopied] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const [examMode, setExamMode] = useState(() => {
     // Persist exam mode preference
@@ -78,6 +79,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     setProgress({ current: 0, total: 0 });
     setIsCancelling(false);
     setCurrentPhase('idle');
+    setSessionId(null);
   };
 
   const handleGenerate = async () => {
@@ -85,13 +87,16 @@ export function useGeneration(setStep: (step: Step) => void) {
     setStep('generating');
     setLogs([]);
     setCards([]);
+    setSessionId(null);
 
     try {
       await api.generate(
         { pdf_file: pdfFile, deck_name: deckName, exam_mode: examMode },
         (event) => {
           setLogs(prev => [...prev, event]);
-          if (event.type === 'progress_start') {
+          if (event.type === 'session_start') {
+            setSessionId(event.data?.session_id ?? null);
+          } else if (event.type === 'progress_start') {
             setProgress({ current: 0, total: event.data.total });
           } else if (event.type === 'progress_update') {
             setProgress(prev => ({ ...prev, current: event.data.current }));
@@ -128,7 +133,7 @@ export function useGeneration(setStep: (step: Step) => void) {
 
   const handleCancel = () => {
     setIsCancelling(true);
-    api.stopGeneration();
+    api.stopGeneration(sessionId ?? undefined);
     // Return to dashboard immediately for better UX
     setTimeout(() => handleReset(), 500);
   };
@@ -144,6 +149,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     previewSlide, setPreviewSlide,
     isCancelling,
     currentPhase,
+    sessionId,
     examMode, toggleExamMode,
     handleGenerate,
     handleReset,

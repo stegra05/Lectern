@@ -48,6 +48,7 @@ class LecternGenerationService:
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
         exam_mode: bool = False,
+        session_id: Optional[str] = None,
     ) -> Generator[ServiceEvent, None, None]:
         
         start_time = time.perf_counter()
@@ -78,7 +79,7 @@ class LecternGenerationService:
             # State Resume Check
             saved_state = None
             if resume:
-                saved_state = load_state()
+                saved_state = load_state(session_id=session_id)
                 if saved_state and saved_state.get("pdf_path") == os.path.abspath(pdf_path):
                      yield ServiceEvent("info", f"Resuming session for {os.path.basename(pdf_path)}")
                 else:
@@ -248,9 +249,9 @@ class LecternGenerationService:
             # Text-density-based cap
             chars_per_card_target = max(50, int(getattr(config, "CHARS_PER_CARD_TARGET", 200)))
             text_cap = int(total_text_chars / chars_per_card_target) if total_text_chars else 0
-            if text_cap > total_cards_cap:
+            if text_cap > 0 and text_cap < total_cards_cap:
                 total_cards_cap = text_cap
-                target_reason = f"{target_reason}+text_density"
+                target_reason = f"{target_reason}+text_density_cap"
 
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})
 
@@ -335,7 +336,8 @@ class LecternGenerationService:
                         cards=all_cards,
                         concept_map=concept_map,
                         history=ai.get_history(),
-                        log_path=ai.log_path
+                        log_path=ai.log_path,
+                        session_id=session_id,
                     )
 
                     should_stop = added_count == 0
@@ -401,7 +403,8 @@ class LecternGenerationService:
                             cards=all_cards,
                             concept_map=concept_map,
                             history=ai.get_history(),
-                            log_path=ai.log_path
+                            log_path=ai.log_path,
+                            session_id=session_id,
                         )
 
                         should_stop = len(all_cards) >= total_cards_cap or added_count == 0
@@ -465,7 +468,7 @@ class LecternGenerationService:
             yield ServiceEvent("step_end", "Export Complete", {"success": True, "created": created, "failed": failed})
             
             # Clear state on success
-            clear_state()
+            clear_state(session_id=session_id)
             history_mgr.update_entry(history_id, status="completed")
             
             elapsed = time.perf_counter() - start_time

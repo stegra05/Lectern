@@ -22,6 +22,12 @@ export const getApiUrl = () => {
 
 const API_URL = getApiUrl();
 
+const withSessionId = (url: string, sessionId?: string) => {
+    if (!sessionId) return url;
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}session_id=${encodeURIComponent(sessionId)}`;
+};
+
 export interface GenerateRequest {
     pdf_file: File;
     deck_name: string;
@@ -32,7 +38,7 @@ export interface GenerateRequest {
 }
 
 export interface ProgressEvent {
-    type: "status" | "info" | "warning" | "error" | "progress_start" | "progress_update" | "card_generated" | "note_created" | "done" | "cancelled" | "step_start";
+    type: "session_start" | "status" | "info" | "warning" | "error" | "progress_start" | "progress_update" | "card_generated" | "note_created" | "done" | "cancelled" | "step_start";
     message: string;
     data?: any;
     timestamp: number;
@@ -204,20 +210,20 @@ export const api = {
         }
     },
 
-    stopGeneration: async () => {
-        const res = await fetch(`${API_URL}/stop`, {
+    stopGeneration: async (sessionId?: string) => {
+        const res = await fetch(withSessionId(`${API_URL}/stop`, sessionId), {
             method: "POST",
         });
         return res.json();
     },
 
-    getDrafts: async () => {
-        const res = await fetch(`${API_URL}/drafts`);
+    getDrafts: async (sessionId?: string) => {
+        const res = await fetch(withSessionId(`${API_URL}/drafts`, sessionId));
         return res.json();
     },
 
-    updateDraft: async (index: number, card: any) => {
-        const res = await fetch(`${API_URL}/drafts/${index}`, {
+    updateDraft: async (index: number, card: any, sessionId?: string) => {
+        const res = await fetch(withSessionId(`${API_URL}/drafts/${index}`, sessionId), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ card }),
@@ -226,16 +232,16 @@ export const api = {
         return res.json();
     },
 
-    deleteDraft: async (index: number) => {
-        const res = await fetch(`${API_URL}/drafts/${index}`, {
+    deleteDraft: async (index: number, sessionId?: string) => {
+        const res = await fetch(withSessionId(`${API_URL}/drafts/${index}`, sessionId), {
             method: "DELETE",
         });
         if (!res.ok) throw new Error("Failed to delete draft");
         return res.json();
     },
 
-    syncDrafts: async (onEvent: (event: ProgressEvent) => void) => {
-        const res = await fetch(`${API_URL}/drafts/sync`, {
+    syncDrafts: async (onEvent: (event: ProgressEvent) => void, sessionId?: string) => {
+        const res = await fetch(withSessionId(`${API_URL}/drafts/sync`, sessionId), {
             method: "POST",
         });
 

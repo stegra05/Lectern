@@ -4,7 +4,7 @@ import logging
 import os
 import time
 import base64
-from typing import AsyncGenerator, Dict, List, Any
+from typing import AsyncGenerator, Dict, List, Any, Optional
 
 import config
 from lectern_service import LecternGenerationService, ServiceEvent
@@ -24,20 +24,14 @@ class ProgressEvent:
             "timestamp": time.time()
         })
 
-# Singleton for Draft Store
 class DraftStore:
-    _instance = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(DraftStore, cls).__new__(cls)
-            cls._instance.cards = []
-            cls._instance.deck_name = ""
-            cls._instance.slide_set_name = ""  # NOTE(Tags): Required for hierarchical tagging
-            cls._instance.model_name = ""
-            cls._instance.tags = []
-            cls._instance.entry_id = None
-        return cls._instance
+    def __init__(self):
+        self.cards = []
+        self.deck_name = ""
+        self.slide_set_name = ""  # NOTE(Tags): Required for hierarchical tagging
+        self.model_name = ""
+        self.tags = []
+        self.entry_id = None
 
     def set_drafts(
         self, 
@@ -80,10 +74,10 @@ class DraftStore:
         self.entry_id = None
 
 class GenerationService:
-    def __init__(self):
+    def __init__(self, draft_store: DraftStore):
         self.logger = logging.getLogger("lectern.gui")
         self.core = LecternGenerationService()
-        self.draft_store = DraftStore()
+        self.draft_store = draft_store
         self.stop_requested = False
 
     def stop(self):
@@ -101,6 +95,7 @@ class GenerationService:
         max_notes_per_batch: int = config.MAX_NOTES_PER_BATCH,
         reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
         enable_reflection: bool = config.ENABLE_REFLECTION,
+        session_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         
         # Clear previous drafts on new run
@@ -119,6 +114,7 @@ class GenerationService:
             max_notes_per_batch=max_notes_per_batch,
             reflection_rounds=reflection_rounds,
             enable_reflection=enable_reflection,
+            session_id=session_id,
         )
 
         # Helper to run next(iterator) in thread

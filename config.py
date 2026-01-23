@@ -57,6 +57,16 @@ LIGHTWEIGHT_MODEL: str = os.getenv("LIGHTWEIGHT_MODEL", "gemini-3-flash-preview"
 # AnkiConnect default URL. Can be overridden via environment variable if needed.
 ANKI_CONNECT_URL: str = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
 
+# Allowed origins for the GUI backend CORS configuration.
+FRONTEND_ORIGINS: list[str] = [
+    origin.strip()
+    for origin in os.getenv(
+        "LECTERN_FRONTEND_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000",
+    ).split(",")
+    if origin.strip()
+]
+
 
 # Default Anki note models to use. These can be overridden via environment.
 # Intended to steer AI output and to map generic model names returned by the AI.
@@ -136,5 +146,13 @@ GEMINI_NORMAL_MODE_TEMPERATURE: float = float(os.getenv("GEMINI_NORMAL_MODE_TEMP
 # Exam mode safety cap: maximum cards per slide in exam mode
 # Prevents truncation while relying on prompt for ~0.9 avg target
 EXAM_MODE_SAFETY_CAP: float = float(os.getenv("EXAM_MODE_SAFETY_CAP", "1.5"))
+
+# Session logging controls
+LOG_SESSION_CONTENT: bool = os.getenv("LOG_SESSION_CONTENT", "true").lower() not in (
+    "0",
+    "false",
+    "no",
+)
+LOG_MAX_RESPONSE_CHARS: int = int(os.getenv("LOG_MAX_RESPONSE_CHARS", "20000"))
 
 

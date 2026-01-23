@@ -71,16 +71,20 @@ def extract_content_from_pdf(
     total_pages = len(reader.pages)
     print(f"Info: Opened PDF with {total_pages} pages.")
 
-    # Pre-render all pages as images if we need OCR or image extraction
-    # pdf2image is more efficient when converting multiple pages at once
-    page_images: List[Image.Image] = []
-    if not skip_ocr or not skip_images:
+    def render_page_image(page_number: int, dpi: int = 150) -> Optional[Image.Image]:
         try:
-            # NOTE: Lower DPI trades quality for speed. 150 is good for OCR.
-            page_images = convert_from_path(pdf_path, dpi=150)
+            images = convert_from_path(
+                pdf_path,
+                first_page=page_number,
+                last_page=page_number,
+                dpi=dpi,
+            )
+            if images:
+                return images[0]
         except Exception as e:
-            print(f"Warning: Could not render PDF pages as images: {e}")
+            print(f"Warning: Could not render page {page_number} as image: {e}")
             print("Hint: Ensure Poppler is installed (`brew install poppler` on macOS)")
+        return None
 
     for page_index, page in enumerate(reader.pages):
         if stop_check and stop_check():
@@ -91,11 +95,13 @@ def extract_content_from_pdf(
         text_content: str = page.extract_text() or ""
 
         # NOTE(OCR): If text is minimal (<50 chars), assume it's a flattened image and try OCR.
-        if not skip_ocr and len(text_content.strip()) < 50 and page_index < len(page_images):
+        page_img: Optional[Image.Image] = None
+        if not skip_ocr and len(text_content.strip()) < 50:
             print(f"Info: Page {page_index + 1} has minimal text. Attempting OCR...")
             try:
-                page_img = page_images[page_index]
-
+                page_img = render_page_image(page_index + 1, dpi=150)
+                if page_img is None:
+                    raise RuntimeError("Page render failed for OCR")
                 # Perform OCR
                 ocr_text = pytesseract.image_to_string(page_img)
 
@@ -129,9 +135,12 @@ def extract_content_from_pdf(
 
             # Method 2: If no embedded images found, use rendered page image
             # This catches diagrams, charts, etc. that are drawn, not embedded
-            if not images and page_index < len(page_images):
+            if not images:
                 try:
-                    page_img = page_images[page_index]
+                    if page_img is None:
+                        page_img = render_page_image(page_index + 1, dpi=120)
+                    if page_img is None:
+                        raise RuntimeError("Page render failed for images")
                     img_buffer = io.BytesIO()
                     page_img.save(img_buffer, format="JPEG", quality=85)
                     compressed = _compress_image(img_buffer.getvalue())

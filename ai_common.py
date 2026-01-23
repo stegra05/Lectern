@@ -6,6 +6,7 @@ import os
 from datetime import datetime, UTC
 from typing import Any, Dict, Iterable, List
 
+import config
 
 LATEX_STYLE_GUIDE = (
     "Formatting policy:\n"
@@ -156,6 +157,8 @@ def _build_loggable_parts(parts: List[Any]) -> List[Dict[str, Any]]:
 
 
 def _start_session_log() -> str:
+    if not getattr(config, "LOG_SESSION_CONTENT", True):
+        return ""
     try:
         home_dir = os.path.expanduser("~")
         logs_dir = os.path.join(home_dir, "Library", "Application Support", "Lectern", "logs")
@@ -178,7 +181,11 @@ def _append_session_log(
 ) -> None:
     if not log_path:
         return
+    if not getattr(config, "LOG_SESSION_CONTENT", True):
+        return
     try:
+        max_response_chars = getattr(config, "LOG_MAX_RESPONSE_CHARS", 20000)
+        truncated_response = response_text[:max_response_chars] if response_text else ""
         with open(log_path, "r+", encoding="utf-8") as f:
             payload = json.load(f)
             exchanges = payload.get("exchanges", [])
@@ -187,7 +194,7 @@ def _append_session_log(
                     "stage": stage,
                     "schema_used": schema_used,
                     "request": {"role": "user", "parts": _build_loggable_parts(parts)},
-                    "response_text": response_text,
+                    "response_text": truncated_response,
                 }
             )
             payload["exchanges"] = exchanges

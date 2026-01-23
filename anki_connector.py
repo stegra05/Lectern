@@ -134,6 +134,17 @@ def get_all_tags() -> List[str]:
         return []
 
 
+def get_deck_names() -> List[str]:
+    """Fetch all deck names from Anki via AnkiConnect."""
+    try:
+        result = _invoke("deckNames")
+        if isinstance(result, list):
+            return [str(name) for name in result]
+        return []
+    except Exception:
+        return []
+
+
 def get_deck_slide_set_patterns(deck_name: str) -> Dict[str, Any]:
     """Analyze existing tags in a deck to detect slide set naming patterns.
     
