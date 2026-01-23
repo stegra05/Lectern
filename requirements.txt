@@ -1,6 +1,9 @@
 # Core dependencies for Lectern CLI
-# PDF parsing and image extraction
-PyMuPDF>=1.24.0,<1.26
+
+# PDF parsing and image extraction (lightweight alternative to PyMuPDF)
+# NOTE: Requires Poppler system dependency (`brew install poppler` on macOS)
+pypdf>=4.0.0
+pdf2image>=1.16.0
 pytesseract>=0.3.10
 
 # Google Gemini API client
@@ -18,19 +21,11 @@ python-multipart>=0.0.9
 pywebview>=5.0
 pyobjc-framework-Cocoa>=10.0
 
-
-# Load environment variables from .env (optional, see README)
-# python-dotenv>=1.0.1,<2.0
-
-# Optional CLI enhancements (not strictly required at runtime)
-# argcomplete>=3.3.0,<4.0
+# CLI enhancements
 rich>=13.7.1,<14.0
-
-
-
 
 # Security
 keyring>=24.0.0
 
-# Testing
+# Testing (dev only, excluded from bundle)
 pytest>=8.0.0
