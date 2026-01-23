@@ -23,6 +23,7 @@ interface ProgressViewProps {
     handleReset: () => void;
     setPreviewSlide: (slide: number | null) => void;
     logsEndRef: React.RefObject<HTMLDivElement>;
+    sessionId?: string | null;
 }
 
 export function ProgressView({
@@ -38,7 +39,8 @@ export function ProgressView({
     cards,
     handleReset,
     setPreviewSlide,
-    logsEndRef
+    logsEndRef,
+    sessionId
 }: ProgressViewProps) {
     return (
         <motion.div
@@ -175,6 +177,7 @@ export function ProgressView({
                     <ReviewQueue
                         initialCards={cards}
                         onSyncComplete={() => setStep('done')}
+                        sessionId={sessionId}
                     />
                 ) : (
                     <>

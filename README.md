@@ -26,7 +26,7 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 ## Features
 
 - **Multimodal Analysis**  
-  Extracts text and images from slides using `PyMuPDF`, preserving context for accurate generation.
+  Extracts text and images from slides using `pypdf` + `pdf2image`, preserving context for accurate generation.
 
 - **Smart Generation**  
   Leverages **Gemini 3.0 Flash** to create atomic, well-structured cards that adhere to learning best practices.
@@ -51,7 +51,7 @@ Lectern is built with a modern, type-safe, and performant stack:
 - **Backend:** Python, FastAPI, Uvicorn
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion
 - **Desktop Wrapper:** PyWebView (Cocoa/WebKit)
-- **PDF Engine:** PyMuPDF
+- **PDF Engine:** pypdf + pdf2image (Poppler)
 - **CLI Utilities:** Rich, Keyring
 
 ---
@@ -63,6 +63,8 @@ Lectern is built with a modern, type-safe, and performant stack:
 - **Python 3.9+**
 - **Anki** with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed.
 - **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/api-keys).
+- **Poppler** (required for PDF rendering): `brew install poppler`
+- **Tesseract** (optional, for OCR): `brew install tesseract`
 
 ### Setup
 

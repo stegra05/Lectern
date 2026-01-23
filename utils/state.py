@@ -1,9 +1,21 @@
 
 import json
 import os
+import tempfile
 from typing import Dict, Any, List, Optional
 
-STATE_FILE = ".lectern_state.json"
+STATE_FILENAME = "lectern_state.json"
+LEGACY_STATE_FILE = ".lectern_state.json"
+
+def _get_state_path(session_id: Optional[str] = None) -> str:
+    home_dir = os.path.expanduser("~")
+    state_dir = os.path.join(home_dir, "Library", "Application Support", "Lectern", "state")
+    os.makedirs(state_dir, exist_ok=True)
+    if session_id:
+        filename = f"session-{session_id}.json"
+    else:
+        filename = STATE_FILENAME
+    return os.path.join(state_dir, filename)
 
 def save_state(
     pdf_path: str,
@@ -11,7 +23,8 @@ def save_state(
     cards: List[Dict[str, Any]],
     concept_map: Dict[str, Any],
     history: List[Dict[str, Any]],
-    log_path: str
+    log_path: str,
+    session_id: Optional[str] = None,
 ) -> None:
     """Save the current session state to a JSON file."""
     state = {
@@ -23,25 +36,41 @@ def save_state(
         "log_path": log_path
     }
     try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
+        state_path = _get_state_path(session_id)
+        with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", dir=os.path.dirname(state_path)) as tmp:
+            json.dump(state, tmp, ensure_ascii=False, indent=2)
+            temp_path = tmp.name
+        os.replace(temp_path, state_path)
     except Exception as e:
         print(f"Warning: Failed to save state: {e}")
 
-def load_state() -> Optional[Dict[str, Any]]:
+def load_state(session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Load the session state from the JSON file if it exists."""
-    if not os.path.exists(STATE_FILE):
+    state_path = _get_state_path(session_id)
+    if not os.path.exists(state_path):
+        if session_id is None and os.path.exists(LEGACY_STATE_FILE):
+            try:
+                with open(LEGACY_STATE_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                return None
         return None
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
+        with open(state_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return None
 
-def clear_state() -> None:
+def clear_state(session_id: Optional[str] = None) -> None:
     """Remove the state file."""
-    if os.path.exists(STATE_FILE):
+    state_path = _get_state_path(session_id)
+    if os.path.exists(state_path):
         try:
-            os.remove(STATE_FILE)
+            os.remove(state_path)
+        except Exception:
+            pass
+    if session_id is None and os.path.exists(LEGACY_STATE_FILE):
+        try:
+            os.remove(LEGACY_STATE_FILE)
         except Exception:
             pass

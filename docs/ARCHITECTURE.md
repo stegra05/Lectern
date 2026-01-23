@@ -19,7 +19,7 @@ graph LR
 
 ### 1. PDF Parser (`pdf_parser.py`)
 - **Role:** Extract text and images from slides.
-- **Tech:** `PyMuPDF` (fitz).
+- **Tech:** `pypdf` + `pdf2image` (Poppler-backed rendering).
 - **Key Logic:**
     - Extracts text per page.
     - Extracts images and converts them to base64 for multimodal prompting.
