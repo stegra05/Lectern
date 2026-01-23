@@ -32,10 +32,10 @@ spinner() {
     local spinstr='|/-\'
     while kill -0 $pid 2>/dev/null; do
         local temp=${spinstr#?}
-        printf " [%c]  " "$spinstr"
+        printf " [%c] " "$spinstr"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
-        printf "\b\b\b\b\b\b"
+        printf "\b\b\b\b\b"
     done
     printf "    \b\b\b\b"
 }
@@ -47,15 +47,19 @@ run_step() {
     
     echo -ne "${BOLD}→${NC} $msg... "
     
-    # Run command in background, redirect output to absolute log path
-    eval "$cmd" >> "$LOG_FILE" 2>&1 &
+    # Run command in background
+    # We use a subshell to capture exit code correctly
+    (eval "$cmd") >> "$LOG_FILE" 2>&1 &
     local pid=$!
     
     # Show spinner
     spinner $pid
     
+    # Wait and capture exit code without 'set -e' killing the script
+    set +e
     wait $pid
     local exit_code=$?
+    set -e
     
     if [ $exit_code -eq 0 ]; then
         echo -e "${GREEN}DONE${NC}"
@@ -89,7 +93,8 @@ success "All tools found"
 
 # Preparation
 header "Preparation"
-run_step "Cleaning previous builds" "rm -rf dist build gui/frontend/dist"
+# Keep build/ for PyInstaller cache to speed up subsequent builds
+run_step "Cleaning previous builds" "rm -rf dist gui/frontend/dist"
 
 # Frontend
 header "Frontend"
@@ -132,23 +137,7 @@ fi
 # Packaging
 header "Packaging"
 
-PYINSTALLER_CMD="python -m PyInstaller --name Lectern \
-    --windowed \
-    --icon=icon.icns \
-    --add-data 'gui/frontend/dist:frontend/dist' \
-    --add-data 'gui/backend:backend' \
-    --paths . \
-    --paths gui/backend \
-    --hidden-import=webview \
-    --hidden-import=uvicorn \
-    --hidden-import=objc \
-    --hidden-import=Cocoa \
-    --hidden-import=WebKit \
-    --hidden-import=pytesseract \
-    --hidden-import=PIL \
-    --hidden-import=PIL.Image \
-    --noconfirm \
-    gui/launcher.py"
+PYINSTALLER_CMD="python -m PyInstaller Lectern.spec --noconfirm"
 
 run_step "Compiling Binary - this may take a while" "$PYINSTALLER_CMD"
 
@@ -158,7 +147,6 @@ if [ -d "dist/Lectern.app" ]; then
     duration=$((end_time - start_time))
     echo -e "\n${GREEN}${BOLD}✨ Build Complete! ✨${NC}"
     echo -e "📂 App Bundle: ${BOLD}dist/Lectern.app${NC}"
-    echo -e "📂 Executable: ${BOLD}dist/Lectern/Lectern${NC}"
     echo -e "⏱  Time: ${duration}s"
     echo -e "📝 Log: build.log\n"
 else

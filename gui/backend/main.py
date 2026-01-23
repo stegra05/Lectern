@@ -15,7 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 # Add current directory to path to import local modules (service.py)
 sys.path.append(os.path.dirname(__file__))
 
-import fitz # type: ignore
+from pdf2image import convert_from_path
 import io
 from starlette.concurrency import run_in_threadpool
 
@@ -41,45 +41,16 @@ app.add_middleware(
 # Global state for the current session's PDF path
 # This allows us to serve thumbnails on demand
 CURRENT_SESSION_PDF_PATH: Optional[str] = None
-# Cache the fitz Document to avoid repeated blocking I/O
-CURRENT_SESSION_DOC: Optional[fitz.Document] = None
-CURRENT_SESSION_DOC_PATH: Optional[str] = None
+# Cache for rendered thumbnails to avoid repeated Poppler calls
+# Format: {page_num: bytes}
+THUMBNAIL_CACHE: Dict[int, bytes] = {}
 
 CURRENT_GENERATION_SERVICE: Optional[GenerationService] = None
 
-def _close_session_doc():
-    """Closes the current cached document safely."""
-    global CURRENT_SESSION_DOC, CURRENT_SESSION_DOC_PATH
-    if CURRENT_SESSION_DOC:
-        try:
-            CURRENT_SESSION_DOC.close()
-        except Exception as e:
-            print(f"Warning: Failed to close PDF doc: {e}")
-        finally:
-            CURRENT_SESSION_DOC = None
-            CURRENT_SESSION_DOC_PATH = None
-
-def _get_session_doc() -> Optional[fitz.Document]:
-    """Retrieves or opens the cached document for the current session."""
-    global CURRENT_SESSION_PDF_PATH, CURRENT_SESSION_DOC, CURRENT_SESSION_DOC_PATH
-
-    if not CURRENT_SESSION_PDF_PATH or not os.path.exists(CURRENT_SESSION_PDF_PATH):
-        return None
-
-    # If we have a cached doc for this path, return it
-    if CURRENT_SESSION_DOC and CURRENT_SESSION_DOC_PATH == CURRENT_SESSION_PDF_PATH:
-        return CURRENT_SESSION_DOC
-
-    # Otherwise, close old and open new
-    _close_session_doc()
-
-    try:
-        CURRENT_SESSION_DOC = fitz.open(CURRENT_SESSION_PDF_PATH)
-        CURRENT_SESSION_DOC_PATH = CURRENT_SESSION_PDF_PATH
-        return CURRENT_SESSION_DOC
-    except Exception as e:
-        print(f"Error opening PDF: {e}")
-        return None
+def _clear_session_cache():
+    """Clears the current session's thumbnail cache."""
+    global THUMBNAIL_CACHE
+    THUMBNAIL_CACHE = {}
 
 # Configuration Models
 class ConfigUpdate(BaseModel):
@@ -237,8 +208,8 @@ async def generate_cards(
     
     # Cleanup previous session file if it exists and is different
     if CURRENT_SESSION_PDF_PATH and os.path.exists(CURRENT_SESSION_PDF_PATH):
-        # Close cached doc before removing file
-        _close_session_doc()
+        # Clear cache before removing file
+        _clear_session_cache()
         try:
             os.remove(CURRENT_SESSION_PDF_PATH)
         except Exception as e:
@@ -307,8 +278,8 @@ async def stop_generation():
     
     # Cleanup session PDF
     if CURRENT_SESSION_PDF_PATH and os.path.exists(CURRENT_SESSION_PDF_PATH):
-        # Close cached doc before removing file
-        _close_session_doc()
+        # Clear cache before removing file
+        _clear_session_cache()
         try:
             os.remove(CURRENT_SESSION_PDF_PATH)
             CURRENT_SESSION_PDF_PATH = None
@@ -403,27 +374,41 @@ async def sync_drafts():
 @app.get("/thumbnail/{page_num}")
 async def get_thumbnail(page_num: int):
     """Serve a PNG thumbnail of the specified PDF page (1-based index)."""
-    
-    doc = _get_session_doc()
+    global CURRENT_SESSION_PDF_PATH, THUMBNAIL_CACHE
 
-    if not doc:
-        # Check if it was because session path is missing
-        global CURRENT_SESSION_PDF_PATH
-        if not CURRENT_SESSION_PDF_PATH or not os.path.exists(CURRENT_SESSION_PDF_PATH):
-            raise HTTPException(status_code=404, detail="No active PDF session")
-        # Or opening failed
-        raise HTTPException(status_code=500, detail="Failed to open PDF document")
+    if not CURRENT_SESSION_PDF_PATH or not os.path.exists(CURRENT_SESSION_PDF_PATH):
+        raise HTTPException(status_code=404, detail="No active PDF session")
+
+    # Check cache first
+    if page_num in THUMBNAIL_CACHE:
+        return StreamingResponse(io.BytesIO(THUMBNAIL_CACHE[page_num]), media_type="image/png")
 
     try:
-        # page_num is 1-based, fitz is 0-based
-        if page_num < 1 or page_num > doc.page_count:
-             raise HTTPException(status_code=404, detail="Page out of range")
-             
-        page = doc.load_page(page_num - 1)
-        pix = page.get_pixmap(matrix=fitz.Matrix(0.5, 0.5)) # 0.5 scale for thumbnail
-        img_data = pix.tobytes("png")
+        def render_page():
+            # Convert just the specific page. pdf2image uses 1-based indexing for first_page/last_page
+            # 300 DPI is standard, but for thumbnails we can go lower (e.g. 100)
+            images = convert_from_path(
+                CURRENT_SESSION_PDF_PATH, 
+                first_page=page_num, 
+                last_page=page_num,
+                dpi=100, 
+                size=(400, None) # Limit width to 400px for thumbnails
+            )
+            if not images:
+                return None
+            
+            img_byte_arr = io.BytesIO()
+            images[0].save(img_byte_arr, format='PNG')
+            return img_byte_arr.getvalue()
+
+        img_data = await run_in_threadpool(render_page)
         
-        return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
+        if img_data:
+            THUMBNAIL_CACHE[page_num] = img_data
+            return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
+        else:
+            raise HTTPException(status_code=404, detail="Page not found")
+            
     except Exception as e:
         print(f"Thumbnail generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
