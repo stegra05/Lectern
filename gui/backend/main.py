@@ -297,6 +297,7 @@ async def generate_cards(
     tags: str = Form("[]"),  # JSON string
     context_deck: str = Form(""),
     exam_mode: bool = Form(False),  # NEW: Enable exam-focused card generation
+    source_type: str = Form("auto"),  # NEW: "auto", "slides", "script"
     max_notes_per_batch: int = Form(config.MAX_NOTES_PER_BATCH),
     reflection_rounds: int = Form(config.REFLECTION_MAX_ROUNDS),
     enable_reflection: bool = Form(config.ENABLE_REFLECTION),
@@ -308,6 +309,9 @@ async def generate_cards(
     # not set as a global config mutation. This is thread-safe.
     if exam_mode:
         print("Info: Exam mode ENABLED - prioritizing comparison/application cards")
+    
+    if source_type != "auto":
+        print(f"Info: Source type override: {source_type}")
     
     # Parse tags from JSON string
     try:
@@ -365,6 +369,7 @@ async def generate_cards(
                 context_deck=context_deck,
                 entry_id=entry_id,
                 exam_mode=exam_mode,
+                source_type=source_type,
                 max_notes_per_batch=max_notes_per_batch,
                 reflection_rounds=reflection_rounds,
                 enable_reflection=enable_reflection,

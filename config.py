@@ -126,6 +126,16 @@ CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2")
 # Heuristic for text density: target this many characters per card
 CHARS_PER_CARD_TARGET: int = int(os.getenv("CHARS_PER_CARD_TARGET", "200"))
 
+# Density thresholds (chars per page) for auto-detection
+# "script" mode: > 1500 chars/page
+# "normal" mode: 400-1500 chars/page
+# "slides" mode: < 400 chars/page
+DENSE_THRESHOLD_CHARS_PER_PAGE: int = int(os.getenv("DENSE_THRESHOLD_CHARS_PER_PAGE", "1500"))
+NORMAL_THRESHOLD_CHARS_PER_PAGE: int = int(os.getenv("NORMAL_THRESHOLD_CHARS_PER_PAGE", "400"))
+
+# Cards per character in dense mode (e.g., 500 -> ~1 card per paragraph)
+SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
+
 # Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 

@@ -1,5 +1,59 @@
 [
   {
+    "id": "a66fc8c3-5969-45fa-ad15-6cbe9d4d00ed",
+    "filename": "mock.pdf",
+    "full_path": "/Users/stef/Dev/Lectern/mock.pdf",
+    "deck": "Deck",
+    "date": "2026-02-07T15:45:55.354677",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "2e822287-742e-4ea7-ab66-2d28f9af93aa",
+    "filename": "mock.pdf",
+    "full_path": "/Users/stef/Dev/Lectern/mock.pdf",
+    "deck": "Deck",
+    "date": "2026-02-07T15:45:55.352204",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "8817991d-7dfd-41fa-803d-dae6dd2c54c8",
+    "filename": "mock.pdf",
+    "full_path": "/Users/stef/Dev/Lectern/mock.pdf",
+    "deck": "Deck",
+    "date": "2026-02-07T15:45:55.349337",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "c6b62081-20f1-4f65-9e6d-66af3237ed3d",
+    "filename": "mock.pdf",
+    "full_path": "/Users/stef/Dev/Lectern/mock.pdf",
+    "deck": "Deck",
+    "date": "2026-02-07T15:45:34.750636",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "f65c843e-8f94-4cf2-b82d-71a2e61dc5f2",
+    "filename": "mock.pdf",
+    "full_path": "/Users/stef/Dev/Lectern/mock.pdf",
+    "deck": "Deck",
+    "date": "2026-02-07T15:45:34.747622",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "61ad4843-d201-4c70-b0d5-19527315bea2",
+    "filename": "mock.pdf",
+    "full_path": "/Users/stef/Dev/Lectern/mock.pdf",
+    "deck": "Deck",
+    "date": "2026-02-07T15:45:21.013467",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
     "id": "9dc04a30-e099-4e85-b776-f28c86e07d37",
     "filename": "path.pdf",
     "full_path": "/fake/path.pdf",

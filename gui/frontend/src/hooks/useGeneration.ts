@@ -25,6 +25,14 @@ export function useGeneration(setStep: (step: Step) => void) {
     return false;
   });
 
+  const [sourceType, setSourceType] = useState<'auto' | 'slides' | 'script'>(() => {
+    // Persist source type preference
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('sourceType') as any) || 'auto';
+    }
+    return 'auto';
+  });
+
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs
@@ -64,9 +72,9 @@ export function useGeneration(setStep: (step: Step) => void) {
 
   const toggleExamMode = () => {
     setExamMode(prev => {
-        const newValue = !prev;
-        localStorage.setItem('examMode', String(newValue));
-        return newValue;
+      const newValue = !prev;
+      localStorage.setItem('examMode', String(newValue));
+      return newValue;
     });
   };
 
@@ -91,7 +99,12 @@ export function useGeneration(setStep: (step: Step) => void) {
 
     try {
       await api.generate(
-        { pdf_file: pdfFile, deck_name: deckName, exam_mode: examMode },
+        {
+          pdf_file: pdfFile,
+          deck_name: deckName,
+          exam_mode: examMode,
+          source_type: sourceType
+        },
         (event) => {
           setLogs(prev => [...prev, event]);
           if (event.type === 'session_start') {
@@ -151,6 +164,10 @@ export function useGeneration(setStep: (step: Step) => void) {
     currentPhase,
     sessionId,
     examMode, toggleExamMode,
+    sourceType, setSourceType: (type: 'auto' | 'slides' | 'script') => {
+      setSourceType(type);
+      localStorage.setItem('sourceType', type);
+    },
     handleGenerate,
     handleReset,
     handleCancel,
