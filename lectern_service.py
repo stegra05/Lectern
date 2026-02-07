@@ -48,7 +48,7 @@ class LecternGenerationService:
         reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
-        exam_mode: bool = False,
+        focus_prompt: Optional[str] = None,
         source_type: str = "auto",  # "auto", "slides", "script"
         density_target: Optional[float] = None,  # Override for CARDS_PER_SLIDE_TARGET
         session_id: Optional[str] = None,
@@ -182,7 +182,7 @@ class LecternGenerationService:
                 return
 
             yield ServiceEvent("step_start", "Start AI session")
-            ai = LecternAIClient(model_name=model_name, exam_mode=exam_mode, slide_set_context=slide_set_context)
+            ai = LecternAIClient(model_name=model_name, focus_prompt=focus_prompt, slide_set_context=slide_set_context)
             if saved_state:
                 history = saved_state.get("history", [])
                 if history:
@@ -225,19 +225,13 @@ class LecternGenerationService:
             effective_target = base_target
             target_reason = "user_override" if density_target is not None else "config_default"
             
-            # NOTE(Exam-Mode): In exam mode, we strictly cap density to prioritize high-yield concepts.
-            # We disable the "Large Deck Boost" which would otherwise flood the user with details.
-            if exam_mode:
-                effective_target = config.EXAM_MODE_SAFETY_CAP  # Safety cap: prevent truncation, rely on Prompt for 0.9 avg
-                target_reason = "exam_mode_safety_cap"
-                yield ServiceEvent("info", f"Exam Mode active: strictly capping density at {config.EXAM_MODE_SAFETY_CAP} cards/slide (Prompt targets 0.9)")
-            else:
-                if len(pages) >= 100 and effective_target < 2.0:
-                    effective_target = 2.0
-                    target_reason = "large_deck_boost_100"
-                elif len(pages) >= 50 and effective_target < 1.8:
-                    effective_target = 1.8
-                    target_reason = "large_deck_boost_50"
+            # Boost for large decks (unless density explicitly low)
+            if len(pages) >= 100 and effective_target < 2.0:
+                effective_target = 2.0
+                target_reason = "large_deck_boost_100"
+            elif len(pages) >= 50 and effective_target < 1.8:
+                effective_target = 1.8
+                target_reason = "large_deck_boost_50"
             
             # === Density Detection ===
             chars_per_page = total_text_chars / len(pages) if len(pages) > 0 else 0
@@ -283,14 +277,6 @@ class LecternGenerationService:
                     total_cards_cap = text_cap
                     target_reason += "+text_density_cap"
 
-            # Safety clamps
-            if exam_mode:
-                # In exam mode, we still cap by page count to prevent infinite extraction
-                exam_cap = int(len(pages) * config.EXAM_MODE_SAFETY_CAP)
-                if total_cards_cap > exam_cap:
-                    total_cards_cap = exam_cap
-                    target_reason += "+exam_mode_cap"
-
             # Dynamic batching logic
             dynamic_batch_size = min(50, max(20, len(pages) // 2))
             actual_batch_size = int(max_notes_per_batch or dynamic_batch_size)
@@ -333,8 +319,8 @@ class LecternGenerationService:
                         current_cards=len(all_cards),
                         covered_slides=covered_slides,
                         total_pages=len(pages),
-                        exam_mode=exam_mode,
-                        target_density=effective_target if not exam_mode else 0.9,
+                        focus_prompt=focus_prompt or "",
+                        target_density=effective_target,
                     ).hint
 
                     out = ai.generate_more_cards(

@@ -34,10 +34,13 @@ export interface GenerateRequest {
     model_name?: string;
     tags?: string[];
     context_deck?: string;
-    exam_mode?: boolean;
+    focus_prompt?: string;
     source_type?: string;  // "auto", "slides", "script"
     density_target?: number;  // Detail level: 0.8 (concise) to 2.5 (comprehensive)
 }
+
+// ... (omitting ProgressEvent and others for brevity)
+
 
 export interface ProgressEvent {
     type: "session_start" | "status" | "info" | "warning" | "error" | "progress_start" | "progress_update" | "card_generated" | "note_created" | "done" | "cancelled" | "step_start";
@@ -196,7 +199,7 @@ export const api = {
         if (req.model_name) formData.append("model_name", req.model_name);
         if (req.tags) formData.append("tags", JSON.stringify(req.tags));
         if (req.context_deck) formData.append("context_deck", req.context_deck);
-        formData.append("exam_mode", String(req.exam_mode ?? false));
+        formData.append("focus_prompt", req.focus_prompt || "");
         formData.append("source_type", req.source_type ?? "auto");
         if (req.density_target !== undefined) {
             formData.append("density_target", String(req.density_target));

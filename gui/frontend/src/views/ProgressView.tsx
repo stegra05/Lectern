@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Terminal, Copy, Check, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Layers, Terminal, Copy, Check, Loader2, CheckCircle2, RotateCcw, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { PhaseIndicator } from '../components/PhaseIndicator';
@@ -28,6 +28,8 @@ interface ProgressViewProps {
     sessionId?: string | null;
     sortBy: SortOption;
     setSortBy: (opt: SortOption) => void;
+    searchQuery: string;
+    setSearchQuery: (query: string) => void;
 }
 
 export function ProgressView({
@@ -46,10 +48,46 @@ export function ProgressView({
     logsEndRef,
     sessionId,
     sortBy,
-    setSortBy
+    setSortBy,
+    searchQuery,
+    setSearchQuery
 }: ProgressViewProps) {
+    const filteredCards = useMemo(() => {
+        if (!searchQuery.trim()) return cards;
+
+        let regex: RegExp;
+        try {
+            // Advanced syntax: if starts with /, treat as regex
+            // Otherwise, treat as case-insensitive substring
+            if (searchQuery.startsWith('/') && searchQuery.length > 1) {
+                const pattern = searchQuery.replace(/^\/|\/$/g, '');
+                regex = new RegExp(pattern, 'i');
+            } else {
+                // Escape special regex chars for literal match
+                const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                regex = new RegExp(escaped, 'i');
+            }
+        } catch (e) {
+            // If regex invalid, fallback to literal substring
+            const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            regex = new RegExp(escaped, 'i');
+        }
+
+        return cards.filter(card => {
+            const content = [
+                card.front,
+                card.back,
+                card.tag,
+                ...(card.tags || []),
+                card.model_name,
+                ...(Object.values(card.fields || {}))
+            ].join(' ');
+            return regex.test(content);
+        });
+    }, [cards, searchQuery]);
+
     const sortedCards = useMemo(() => {
-        const sorted = [...cards];
+        const sorted = [...filteredCards];
         switch (sortBy) {
             case 'topic':
                 return sorted.sort((a, b) => (a.slide_topic || '').localeCompare(b.slide_topic || ''));
@@ -60,7 +98,7 @@ export function ProgressView({
             default:
                 return sorted; // creation order
         }
-    }, [cards, sortBy]);
+    }, [filteredCards, sortBy]);
 
     return (
         <motion.div
@@ -221,6 +259,23 @@ export function ProgressView({
                                             {opt}
                                         </button>
                                     ))}
+                                </div>
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                                        <Search className="h-3.5 w-3.5 text-text-muted group-focus-within:text-primary transition-colors" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="Search..."
+                                        className="pl-8 pr-3 py-1 text-xs bg-surface/50 border border-border/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 w-32 focus:w-48 transition-all duration-300 placeholder:text-text-muted/50"
+                                    />
+                                    {filteredCards.length !== cards.length && (
+                                        <div className="absolute -bottom-5 right-0 text-[9px] text-text-muted whitespace-nowrap">
+                                            {filteredCards.length} matches
+                                        </div>
+                                    )}
                                 </div>
                                 <span className="text-xs font-mono text-text-muted bg-surface px-2 py-1 rounded border border-border">
                                     {cards.length} CARDS

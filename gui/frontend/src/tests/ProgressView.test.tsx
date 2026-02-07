@@ -38,6 +38,8 @@ describe('ProgressView', () => {
         logsEndRef: { current: document.createElement('div') },
         sortBy: 'creation' as const,
         setSortBy: vi.fn(),
+        searchQuery: '',
+        setSearchQuery: vi.fn(),
     };
 
     it('renders progress indicators', () => {
@@ -101,5 +103,39 @@ describe('ProgressView', () => {
         render(<ProgressView {...props} />);
         expect(screen.getByText(/Generation Complete/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
+    });
+
+    it('filters cards based on search query', () => {
+        const cards = [
+            { front: 'Apple', back: 'Fruit', model_name: 'Basic', fields: { Front: 'Apple', Back: 'Fruit' } },
+            { front: 'Banana', back: 'Fruit', model_name: 'Basic', fields: { Front: 'Banana', Back: 'Fruit' } },
+            { front: 'Carrot', back: 'Vegetable', model_name: 'Basic', fields: { Front: 'Carrot', Back: 'Vegetable' } },
+        ];
+
+        // Match "Apple"
+        const { rerender } = render(<ProgressView {...defaultProps} cards={cards} searchQuery="Apple" />);
+        expect(screen.getByText('Apple')).toBeInTheDocument();
+        expect(screen.queryByText('Banana')).not.toBeInTheDocument();
+        expect(screen.queryByText('Carrot')).not.toBeInTheDocument();
+
+        // Match "fruit" (case insensitive)
+        rerender(<ProgressView {...defaultProps} cards={cards} searchQuery="fruit" />);
+        expect(screen.getByText('Apple')).toBeInTheDocument(); // Back is Fruit
+        expect(screen.getByText('Banana')).toBeInTheDocument(); // Back is Fruit
+        expect(screen.queryByText('Carrot')).not.toBeInTheDocument();
+    });
+
+    it('supports regex search', () => {
+        const cards = [
+            { front: 'Cat', back: 'Animal', fields: { Front: 'Cat', Back: 'Animal' }, model_name: 'Basic' },
+            { front: 'Bat', back: 'Animal', fields: { Front: 'Bat', Back: 'Animal' }, model_name: 'Basic' },
+            { front: 'Rat', back: 'Animal', fields: { Front: 'Rat', Back: 'Animal' }, model_name: 'Basic' },
+        ];
+
+        // Regex /^[CB]at/ -> Cat, Bat
+        render(<ProgressView {...defaultProps} cards={cards} searchQuery="/^[CB]at/" />);
+        expect(screen.getByText('Cat')).toBeInTheDocument();
+        expect(screen.getByText('Bat')).toBeInTheDocument();
+        expect(screen.queryByText('Rat')).not.toBeInTheDocument();
     });
 });

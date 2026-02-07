@@ -5,7 +5,7 @@ and enforce language consistency.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import json
 
@@ -30,8 +30,8 @@ def _make_example_str(examples_data: List[Dict[str, Any]], title: str) -> str:
         lines.append(f"  {ex.get('model_name', 'Card')}: {json_str}")
     return "\n".join(lines) + "\n"
 
-# Base card examples (Normal Mode)
-_BASIC_DATA = [
+# Unified Card Examples (Definitions, Comparisons, Applications)
+_CARD_DATA = [
     {
         "model_name": "Basic", 
         "fields": {
@@ -46,12 +46,7 @@ _BASIC_DATA = [
             "Text": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}."
         },
         "tags": ["calculus"]
-    }
-]
-BASIC_EXAMPLES = _make_example_str(_BASIC_DATA, "Examples:")
-
-# Exam mode examples (Comparison/Scenario focus)
-_EXAM_DATA = [
+    },
     {
         "model_name": "Basic",
         "fields": {
@@ -69,12 +64,12 @@ _EXAM_DATA = [
         "tags": ["regularization"]
     }
 ]
-EXAM_EXAMPLES = _make_example_str(_EXAM_DATA, "Examples (Exam Mode):")
+CARD_EXAMPLES = _make_example_str(_CARD_DATA, "Examples:")
 
 @dataclass
 class PromptConfig:
     language: str = "en"
-    exam_mode: bool = False
+    focus_prompt: Optional[str] = None
 
 class PromptBuilder:
     def __init__(self, config: PromptConfig):
@@ -84,43 +79,41 @@ class PromptBuilder:
     def system(self) -> str:
         """Build the system instruction."""
         lang_instruction = f"Output language: {self.cfg.language}"
-        mode_context = self._get_mode_context_system()
         
-        examples = EXAM_EXAMPLES if self.cfg.exam_mode else BASIC_EXAMPLES
+        focus_context = ""
+        if self.cfg.focus_prompt:
+            focus_context = (
+                f"USER FOCUS: \"{self.cfg.focus_prompt}\"\n"
+                "Instruction: Prioritize concepts related to this focus. "
+                "Adjust card styles (e.g. more definitions vs. comparisons) to match the user's intent.\n"
+            )
+        
+        context = (
+            "Goal: Create a comprehensive spaced repetition deck.\n"
+            "Principles: Atomicity, Minimum Information Principle, Variety (Definitions, Comparisons, Applications)."
+        )
         
         return (
             f"You are an expert educator creating Anki flashcards.\n"
             f"{lang_instruction}\n"
-            f"{mode_context}\n"
+            f"{focus_context}"
+            f"{context}\n"
             f"Formatting:\n{FORMATTING_RULES}\n"
-            f"{examples}"
-        )
-
-    def _get_mode_context_system(self) -> str:
-        if self.cfg.exam_mode:
-            return (
-                "EXAM CRAM MODE (HIGH YIELD ONLY):\n"
-                "You are generating flashcards for a high-stakes university exam in 8 days. Time is limited.\n"
-                "IGNORE basic definitions, trivial facts, and simple lists. Focus ONLY on what distinguishes concepts.\n"
-                "Card Types: 50% Scenario/Application, 40% Comparison, 10% Deep Intuition."
-            )
-        return (
-            "Goal: Create a comprehensive spaced repetition deck.\n"
-            "Principles: Atomicity, Minimum Information Principle, Variety (Definitions, Comparisons, Applications)."
+            f"{CARD_EXAMPLES}"
         )
 
     def concept_map(self) -> str:
         """Build the concept map prompt."""
-        exam_context = ""
-        if self.cfg.exam_mode:
-            exam_context = (
-                "- Focus: EXAM MODE ENABLED. Prioritize concepts that are likely to be tested "
-                "(definitions, key distinctions, causal relationships). Ignore trivial background info.\n"
+        focus_context = ""
+        if self.cfg.focus_prompt:
+            focus_context = (
+                f"- Focus: USER REQUESTED \"{self.cfg.focus_prompt}\". "
+                "Ensure concepts relevant to this focus are prioritized and detailed.\n"
             )
 
         return (
             "You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a comprehensive global concept map.\n"
-            f"{exam_context}"
+            f"{focus_context}"
             "- Objectives: Extract explicit learning goals and implicit competency targets.\n"
             "- Concepts: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts. Assign stable, short, unique IDs.\n"
             "- Relations: Map the *semantic structure* (e.g., `is_a`, `part_of`, `causes`, `contrasts_with`). Note page references.\n"
@@ -138,14 +131,24 @@ class PromptBuilder:
         slide_coverage: str = "",
     ) -> str:
         """Build the card generation prompt."""
-        mode_instructions = self._get_mode_instructions_gen()
         
+        focus_instruction = ""
+        if self.cfg.focus_prompt:
+            focus_instruction = (
+                f"- User Focus: \"{self.cfg.focus_prompt}\". "
+                "Ensure generated cards align with this goal (e.g. if asking for definitions, prefer Cloze/Basic defs)."
+            )
+
         return (
             f"Generate up to {int(limit)} high-quality, atomic Anki notes continuing from our prior turns.\n"
             "CRITICAL: Consult the Global Concept Map. Cover the 'Relations' identified there.\n"
             f"Language: Ensure all content is in {self.cfg.language}.\n"
             f"{pacing_hint}"
-            f"{mode_instructions}\n"
+            "- Principles:\n"
+            "    - Atomicity: One idea per card.\n"
+            "    - Variety: Mix Definitions, Comparisons, Applications.\n"
+            "- Important: Continue generating cards to cover ALL concepts. Do NOT set 'done' to true until exhausted.\n"
+            f"{focus_instruction}\n"
             "- Format:\n"
             "    - Prefer Cloze for definitions/lists. Basic for open-ended questions.\n"
             "    - STRICTLY AVOID Markdown. Use HTML for formatting.\n"
@@ -157,42 +160,19 @@ class PromptBuilder:
             "    - `rationale`: Brief (1 sentence) value proposition.\n"
         )
 
-    def _get_mode_instructions_gen(self) -> str:
-        if self.cfg.exam_mode:
-            return (
-                "- Principles (CRAM MODE):\n"
-                "    - STRICTLY FILTER: If a concept is trivial, DO NOT create a card.\n"
-                "    - Focus on 'Scenario' (Application) and 'Comparison' cards.\n"
-                "- Important: Only generate cards for concepts that are EXAM-CRITICAL and NON-OBVIOUS.\n"
-                "- If high-yield core is covered, set 'done' to true immediately."
-            )
-        return (
-            "- Principles:\n"
-            "    - Atomicity: One idea per card.\n"
-            "    - Variety: Mix Definitions, Comparisons, Applications.\n"
-            "- Important: Continue generating cards to cover ALL concepts. Do NOT set 'done' to true until exhausted."
-        )
-
     def reflection(self, limit: int) -> str:
         """Build the reflection prompt."""
-        if self.cfg.exam_mode:
-            return (
-                "EXAM CRAM REFLECTION:\n"
-                "You are a ruthless tutor preparing a student for a hard exam.\n"
-                "Review the last batch. DELETE/REWRITE any that are 'fluff' or trivial.\n"
-                "Action:\n"
-                "- If too simple -> Rewrite as scenario-based.\n"
-                "- Consolidate simple cards into robust comparisons.\n"
-                "- Ensure 50% Application / 40% Comparison ratio.\n"
-                f"Language: Ensure all content is in {self.cfg.language}.\n"
-                f"Return ONLY JSON: {{reflection, cards, done}}. Limit {limit} cards."
-            )
+        focus_context = ""
+        if self.cfg.focus_prompt:
+            focus_context = f"- Check alignment with user focus: \"{self.cfg.focus_prompt}\"\n"
+
         return (
             "You are a Quality Assurance Specialist. Review the last batch.\n"
             "Critique Criteria:\n"
             "    - Redundancy: Duplicate/overlapping?\n"
             "    - Vagueness: Ambiguous?\n"
             "    - Complexity: Too long? (Split it!)\n"
+            f"{focus_context}"
             "Action:\n"
             "    - Write a concise `reflection`.\n"
             "    - Generate improved replacements or gap-filling cards.\n"

@@ -30,13 +30,8 @@ export function useGeneration(setStep: (step: Step) => void) {
   const [copied, setCopied] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  const [examMode, setExamMode] = useState(() => {
-    // Persist exam mode preference
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('examMode') === 'true';
-    }
-    return false;
-  });
+  /* New Focus Prompt State */
+  const [focusPrompt, setFocusPrompt] = useState<string>('');
 
   const [sourceType, setSourceType] = useState<'auto' | 'slides' | 'script'>(() => {
     // Persist source type preference
@@ -54,6 +49,9 @@ export function useGeneration(setStep: (step: Step) => void) {
     }
     return 1.5;
   });
+
+  /* Search State */
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [sortBy, setSortBy] = useState<SortOption>(() => {
     // Persist sorting preference
@@ -100,18 +98,11 @@ export function useGeneration(setStep: (step: Step) => void) {
     return () => controller.abort();
   }, [pdfFile]);
 
-  const toggleExamMode = () => {
-    setExamMode(prev => {
-      const newValue = !prev;
-      localStorage.setItem('examMode', String(newValue));
-      return newValue;
-    });
-  };
-
   const handleReset = () => {
     setStep('dashboard');
     setPdfFile(null);
     setDeckName('');
+    setFocusPrompt('');
     setLogs([]);
     setCards([]);
     setProgress({ current: 0, total: 0 });
@@ -132,7 +123,7 @@ export function useGeneration(setStep: (step: Step) => void) {
         {
           pdf_file: pdfFile,
           deck_name: deckName,
-          exam_mode: examMode,
+          focus_prompt: focusPrompt,
           source_type: sourceType,
           density_target: densityTarget
         },
@@ -194,7 +185,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     isCancelling,
     currentPhase,
     sessionId,
-    examMode, toggleExamMode,
+    focusPrompt, setFocusPrompt,
     sourceType, setSourceType: (type: 'auto' | 'slides' | 'script') => {
       setSourceType(type);
       localStorage.setItem('sourceType', type);
@@ -213,6 +204,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     setSortBy: (opt: SortOption) => {
       setSortBy(opt);
       localStorage.setItem('cardSortBy', opt);
-    }
+    },
+    searchQuery, setSearchQuery
   };
 }
