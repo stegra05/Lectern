@@ -102,6 +102,10 @@ success "All tools found"
 
 # Preparation
 header "Preparation"
+# Unmount any mounted Lectern DMGs first (prevents "Directory not empty" errors)
+for vol in /Volumes/Lectern*; do
+    [ -d "$vol" ] && hdiutil detach "$vol" -quiet 2>/dev/null || true
+done
 # Keep build/ for PyInstaller cache to speed up subsequent builds
 run_step "Cleaning previous builds" "rm -rf dist gui/frontend/dist"
 
