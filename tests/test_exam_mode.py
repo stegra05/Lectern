@@ -27,7 +27,9 @@ def mock_pdf_pages_large():
             return {"page_number": self.page_number, "text": self.text, "images": self.images}
 
     # Create 100 pages to trigger large deck boost if not in exam mode
-    return [MockPage(i, f"Page {i}") for i in range(1, 101)]
+    # NOTE: Add enough text to avoid the text-density safety cap (which kicks in for very sparse text)
+    long_text = "Content " * 50  # ~400 chars per page
+    return [MockPage(i, f"Page {i} {long_text}") for i in range(1, 101)]
 
 class TestExamModeCap:
     @patch('lectern_service.check_connection')
