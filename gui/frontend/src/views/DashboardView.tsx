@@ -12,6 +12,7 @@ interface DashboardViewProps {
     setDeckName: (name: string) => void;
     setPdfFile: (file: File | null) => void;
     setStep: (step: Step) => void;
+    loadSession: (sessionId: string) => void;
 }
 
 export function DashboardView({
@@ -21,6 +22,7 @@ export function DashboardView({
     setDeckName,
     setPdfFile,
     setStep,
+    loadSession,
 }: DashboardViewProps) {
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -80,8 +82,7 @@ export function DashboardView({
                                 >
                                     <button
                                         onClick={() => {
-                                            setDeckName(entry.deck);
-                                            setStep('config');
+                                            loadSession(entry.session_id);
                                         }}
                                         className="w-full text-left p-4 rounded-xl bg-surface/50 border border-border hover:border-primary/50 hover:bg-surface transition-all"
                                     >

@@ -25,12 +25,13 @@ from pypdf import PdfReader
 import io
 from starlette.concurrency import run_in_threadpool
 
-from anki_connector import check_connection, get_deck_names
+from anki_connector import check_connection, get_deck_names, notes_info, update_note_fields
 import config
 from service import GenerationService, DraftStore
 from lectern_service import LecternGenerationService
 from utils.note_export import export_card_to_anki
 from utils.history import HistoryManager
+from utils.state import load_state, save_state
 
 app = FastAPI(title='Lectern API', version='1.0.0')
 
@@ -480,12 +481,15 @@ async def sync_drafts(session_id: Optional[str] = None):
                 card_index=idx,
                 deck_name=deck_name,
                 slide_set_name=store.slide_set_name,
-                fallback_model=config.DEFAULT_BASIC_MODEL,  # NOTE: Anki note type, not Gemini model
+                fallback_model=config.DEFAULT_BASIC_MODEL,
                 additional_tags=tags,
             )
             
             if result.success:
                 created += 1
+                card["anki_note_id"] = result.note_id
+                # Update the card in the store so it has the note_id for session state persistence
+                store.update_draft(idx - 1, card)
                 yield json.dumps({"type": "note_created", "message": f"Created note {result.note_id}", "data": {"id": result.note_id}}) + "\n"
             else:
                 failed += 1
@@ -511,6 +515,132 @@ async def sync_drafts(session_id: Optional[str] = None):
             session_manager.cleanup_session(session.session_id)
         else:
             session_manager.mark_status(session.session_id, "error")
+
+    return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
+
+# Session API (View/Edit Past Sessions)
+
+class SessionCardsUpdate(BaseModel):
+    cards: List[dict]
+
+@app.get("/session/{session_id}")
+async def get_session(session_id: str):
+    state = load_state(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return state
+
+@app.put("/session/{session_id}/cards")
+async def update_session_cards(session_id: str, update: SessionCardsUpdate):
+    state = load_state(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Save the updated cards back to the session state
+    save_state(
+        pdf_path=state["pdf_path"],
+        deck_name=state["deck_name"],
+        cards=update.cards,
+        concept_map=state["concept_map"],
+        history=state["history"],
+        log_path=state.get("log_path", ""),
+        session_id=session_id
+    )
+    return {"status": "ok", "session_id": session_id}
+
+@app.post("/session/{session_id}/sync")
+async def sync_session_to_anki(session_id: str):
+    state = load_state(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    cards = state["cards"]
+    if not cards:
+        return {"created": 0, "updated": 0, "failed": 0, "session_id": session_id}
+        
+    deck_name = state["deck_name"]
+    # We need slide_set_name. If missing in state, try to infer from tags or use "Default"
+    # For re-sync, we usually have tags in cards.
+    # Note: history entry in state might have more details.
+    
+    created = 0
+    updated = 0
+    failed = 0
+    
+    async def sync_generator():
+        nonlocal created, updated, failed
+        
+        yield json.dumps({"type": "progress_start", "message": "Syncing to Anki...", "data": {"total": len(cards)}}) + "\n"
+        
+        # We need a slide_set_name for tag building if the card doesn't have it.
+        # Let's try to get it from historical tags if possible.
+        slide_set_name = "Session Sync"
+        if state["history"] and len(state["history"]) > 0:
+             # Try to find a slide set name if stored
+             pass
+
+        for idx, card in enumerate(cards, start=1):
+            note_id = card.get("anki_note_id")
+            
+            try:
+                if note_id:
+                    # Validate existence
+                    info = notes_info([note_id])
+                    if info and info[0].get("noteId"):
+                        # Update
+                        update_note_fields(note_id, card["fields"])
+                        updated += 1
+                        yield json.dumps({"type": "note_updated", "message": f"Updated note {note_id}", "data": {"id": note_id}}) + "\n"
+                    else:
+                        # Re-create (deleted externally)
+                        result = export_card_to_anki(
+                            card=card,
+                            card_index=idx,
+                            deck_name=deck_name,
+                            slide_set_name=slide_set_name,
+                            fallback_model=config.DEFAULT_BASIC_MODEL,
+                            additional_tags=[], # Assume tags already in card
+                        )
+                        if result.success:
+                            card["anki_note_id"] = result.note_id
+                            created += 1
+                            yield json.dumps({"type": "note_recreated", "message": f"Re-created note {result.note_id}", "data": {"id": result.note_id}}) + "\n"
+                        else:
+                            raise RuntimeError(result.error)
+                else:
+                    # New sync
+                    result = export_card_to_anki(
+                        card=card,
+                        card_index=idx,
+                        deck_name=deck_name,
+                        slide_set_name=slide_set_name,
+                        fallback_model=config.DEFAULT_BASIC_MODEL,
+                        additional_tags=[],
+                    )
+                    if result.success:
+                        card["anki_note_id"] = result.note_id
+                        created += 1
+                        yield json.dumps({"type": "note_created", "message": f"Created note {result.note_id}", "data": {"id": result.note_id}}) + "\n"
+                    else:
+                        raise RuntimeError(result.error)
+            except Exception as e:
+                failed += 1
+                yield json.dumps({"type": "warning", "message": f"Sync failed for card {idx}: {str(e)}"}) + "\n"
+            
+            yield json.dumps({"type": "progress_update", "message": "", "data": {"current": created + updated + failed}}) + "\n"
+
+        # Save updated state with new anki_note_ids
+        save_state(
+            pdf_path=state["pdf_path"],
+            deck_name=state["deck_name"],
+            cards=cards,
+            concept_map=state["concept_map"],
+            history=state["history"],
+            log_path=state.get("log_path", ""),
+            session_id=session_id
+        )
+
+        yield json.dumps({"type": "done", "message": "Sync Complete", "data": {"created": created, "updated": updated, "failed": failed}}) + "\n"
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 

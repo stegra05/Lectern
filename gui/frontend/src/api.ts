@@ -51,6 +51,7 @@ export interface ProgressEvent {
 
 export interface HistoryEntry {
     id: string;
+    session_id: string;
     filename: string;
     full_path: string;
     deck: string;
@@ -269,6 +270,54 @@ export const api = {
 
     syncDrafts: async (onEvent: (event: ProgressEvent) => void, sessionId?: string) => {
         const res = await fetch(withSessionId(`${API_URL}/drafts/sync`, sessionId), {
+            method: "POST",
+        });
+
+        if (!res.body) return;
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+                if (line.trim()) {
+                    try {
+                        const event = JSON.parse(line);
+                        onEvent(event);
+                    } catch (e) {
+                        console.error("Failed to parse event:", line, e);
+                    }
+                }
+            }
+        }
+    },
+
+    getSession: async (sessionId: string) => {
+        const res = await fetch(`${API_URL}/session/${sessionId}`);
+        if (!res.ok) throw new Error("Failed to load session");
+        return res.json();
+    },
+
+    updateSessionCards: async (sessionId: string, cards: any[]) => {
+        const res = await fetch(`${API_URL}/session/${sessionId}/cards`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cards }),
+        });
+        if (!res.ok) throw new Error("Failed to update session cards");
+        return res.json();
+    },
+
+    syncSessionToAnki: async (sessionId: string, onEvent: (event: ProgressEvent) => void) => {
+        const res = await fetch(`${API_URL}/session/${sessionId}/sync`, {
             method: "POST",
         });
 

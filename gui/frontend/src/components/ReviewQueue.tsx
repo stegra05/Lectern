@@ -8,9 +8,10 @@ interface ReviewQueueProps {
     initialCards: any[];
     onSyncComplete: () => void;
     sessionId?: string | null;
+    isHistorical?: boolean;
 }
 
-export function ReviewQueue({ initialCards, onSyncComplete, sessionId }: ReviewQueueProps) {
+export function ReviewQueue({ initialCards, onSyncComplete, sessionId, isHistorical }: ReviewQueueProps) {
     const [cards, setCards] = useState<any[]>(initialCards);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<any>(null);
@@ -25,12 +26,18 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId }: ReviewQ
 
     const handleDelete = async (index: number) => {
         try {
-            await api.deleteDraft(index, sessionId ?? undefined);
             const newCards = [...cards];
             newCards.splice(index, 1);
+
+            if (isHistorical && sessionId) {
+                await api.updateSessionCards(sessionId, newCards);
+            } else {
+                await api.deleteDraft(index, sessionId ?? undefined);
+            }
+
             setCards(newCards);
         } catch (e) {
-            console.error("Failed to delete draft", e);
+            console.error("Failed to delete card", e);
         }
     };
 
@@ -46,14 +53,20 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId }: ReviewQ
 
     const saveEdit = async (index: number) => {
         try {
-            await api.updateDraft(index, editForm, sessionId ?? undefined);
             const newCards = [...cards];
             newCards[index] = editForm;
+
+            if (isHistorical && sessionId) {
+                await api.updateSessionCards(sessionId, newCards);
+            } else {
+                await api.updateDraft(index, editForm, sessionId ?? undefined);
+            }
+
             setCards(newCards);
             setEditingIndex(null);
             setEditForm(null);
         } catch (e) {
-            console.error("Failed to update draft", e);
+            console.error("Failed to update card", e);
         }
     };
 
@@ -72,7 +85,11 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId }: ReviewQ
         setIsSyncing(true);
         setSyncLogs([]);
         try {
-            await api.syncDrafts((event) => {
+            const syncFn = isHistorical && sessionId
+                ? (cb: any) => api.syncSessionToAnki(sessionId, cb)
+                : (cb: any) => api.syncDrafts(cb, sessionId ?? undefined);
+
+            await syncFn((event: any) => {
                 setSyncLogs(prev => [...prev, event]);
                 if (event.type === 'progress_start') {
                     setSyncProgress({ current: 0, total: event.data.total });
@@ -80,8 +97,10 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId }: ReviewQ
                     setSyncProgress(prev => ({ ...prev, current: event.data.current }));
                 } else if (event.type === 'done') {
                     onSyncComplete();
+                } else if (event.type === 'note_updated' || event.type === 'note_recreated' || event.type === 'note_created') {
+                    // Note status is implicitly updated via log display
                 }
-            }, sessionId ?? undefined);
+            });
         } catch (e) {
             console.error("Sync failed", e);
             setIsSyncing(false);

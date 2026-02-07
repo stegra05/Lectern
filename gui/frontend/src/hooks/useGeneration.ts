@@ -29,6 +29,7 @@ export function useGeneration(setStep: (step: Step) => void) {
   const [currentPhase, setCurrentPhase] = useState<Phase>('idle');
   const [copied, setCopied] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isHistorical, setIsHistorical] = useState(false);
 
   /* New Focus Prompt State */
   const [focusPrompt, setFocusPrompt] = useState<string>('');
@@ -109,6 +110,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     setIsCancelling(false);
     setCurrentPhase('idle');
     setSessionId(null);
+    setIsHistorical(false);
   };
 
   const handleGenerate = async () => {
@@ -117,6 +119,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     setLogs([]);
     setCards([]);
     setSessionId(null);
+    setIsHistorical(false);
 
     try {
       await api.generate(
@@ -173,6 +176,23 @@ export function useGeneration(setStep: (step: Step) => void) {
     setTimeout(() => handleReset(), 500);
   };
 
+  const loadSession = async (sid: string) => {
+    try {
+      setStep('generating'); // Show progress view while loading if needed, or just jump to review
+      const session = await api.getSession(sid);
+      setCards(session.cards || []);
+      setDeckName(session.deck_name || '');
+      setSessionId(sid);
+      setIsHistorical(true);
+      setStep('review');
+      setCurrentPhase('complete');
+    } catch (e) {
+      console.error('Failed to load session:', e);
+      // Fallback to dashboard if load fails
+      setStep('dashboard');
+    }
+  };
+
   return {
     pdfFile, setPdfFile,
     deckName, setDeckName,
@@ -185,6 +205,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     isCancelling,
     currentPhase,
     sessionId,
+    isHistorical,
     focusPrompt, setFocusPrompt,
     sourceType, setSourceType: (type: 'auto' | 'slides' | 'script') => {
       setSourceType(type);
@@ -197,6 +218,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     handleGenerate,
     handleReset,
     handleCancel,
+    loadSession,
     logsEndRef,
     handleCopyLogs,
     copied,
