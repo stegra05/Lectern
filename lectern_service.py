@@ -52,6 +52,7 @@ class LecternGenerationService:
         source_type: str = "auto",  # "auto", "slides", "script"
         density_target: Optional[float] = None,  # Override for CARDS_PER_SLIDE_TARGET
         session_id: Optional[str] = None,
+        entry_id: Optional[str] = None,
     ) -> Generator[ServiceEvent, None, None]:
         
         start_time = time.perf_counter()
@@ -67,8 +68,12 @@ class LecternGenerationService:
         yield ServiceEvent("info", f"Processing file: {os.path.basename(pdf_path)} ({file_size} bytes)")
 
         # Initialize History Entry
-        # NOTE: Always create a new entry - resume logic uses state file, not history
-        history_id = history_mgr.add_entry(pdf_path, deck_name, status="draft")
+        # If entry_id provided (e.g. from GUI), use it. otherwise create new.
+        if entry_id:
+            history_id = entry_id
+        else:
+            # NOTE: Always create a new entry - resume logic uses state file, not history
+            history_id = history_mgr.add_entry(pdf_path, deck_name, status="draft", session_id=session_id)
 
         try:
             yield ServiceEvent("step_start", "Check AnkiConnect")

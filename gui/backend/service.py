@@ -109,6 +109,7 @@ class GenerationService:
             model_name=model_name,
             tags=tags,
             context_deck=context_deck,
+            entry_id=entry_id,
             resume=True,
             skip_export=True,  # Always skip export in GUI now
             stop_check=lambda: self.stop_requested,
