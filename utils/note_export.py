@@ -34,7 +34,7 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     """Resolve AI-generated model names to configured Anki models.
     
     Maps generic names like "Basic" or "Cloze" to the user's configured
-    note types (e.g., "prettify-nord-basic").
+    note types (e.g., "Basic").
     
     Parameters:
         card_model: Model name from AI or card data

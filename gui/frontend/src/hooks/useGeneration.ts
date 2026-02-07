@@ -11,7 +11,10 @@ export interface Card {
   model_name?: string;
   fields?: Record<string, string>;
   slide_number?: number;
+  slide_topic?: string;
 }
+
+export type SortOption = 'creation' | 'topic' | 'slide' | 'type';
 
 export function useGeneration(setStep: (step: Step) => void) {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -50,6 +53,14 @@ export function useGeneration(setStep: (step: Step) => void) {
       return stored ? parseFloat(stored) : 1.5;
     }
     return 1.5;
+  });
+
+  const [sortBy, setSortBy] = useState<SortOption>(() => {
+    // Persist sorting preference
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('cardSortBy') as SortOption) || 'creation';
+    }
+    return 'creation';
   });
 
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -197,6 +208,11 @@ export function useGeneration(setStep: (step: Step) => void) {
     handleCancel,
     logsEndRef,
     handleCopyLogs,
-    copied
+    copied,
+    sortBy,
+    setSortBy: (opt: SortOption) => {
+      setSortBy(opt);
+      localStorage.setItem('cardSortBy', opt);
+    }
   };
 }
