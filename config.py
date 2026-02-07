@@ -8,7 +8,9 @@ them in the repository.
 
 from __future__ import annotations
 
+import json
 import os
+from typing import Any, Dict, Optional
 
 try:
     # Prefer python-dotenv if available to load .env automatically
@@ -37,6 +39,50 @@ def _load_environment_files() -> None:
 # Load env files before reading values
 _load_environment_files()
 
+# --- User Config (JSON) Loading ---
+# Path for user configuration file (adjacent to config.py or in app data)
+_CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+_USER_CONFIG_PATH = os.path.join(_CONFIG_DIR, "user_config.json")
+_USER_CONFIG: Dict[str, Any] = {}
+
+def _load_user_config() -> Dict[str, Any]:
+    """Load user configuration from JSON file if it exists."""
+    global _USER_CONFIG
+    if os.path.exists(_USER_CONFIG_PATH):
+        try:
+            with open(_USER_CONFIG_PATH, "r") as f:
+                _USER_CONFIG = json.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to load user_config.json: {e}")
+            _USER_CONFIG = {}
+    return _USER_CONFIG
+
+def save_user_config(config: Dict[str, Any]) -> None:
+    """Save user configuration to JSON file."""
+    global _USER_CONFIG
+    _USER_CONFIG.update(config)
+    try:
+        with open(_USER_CONFIG_PATH, "w") as f:
+            json.dump(_USER_CONFIG, f, indent=2)
+    except Exception as e:
+        print(f"Warning: Failed to save user_config.json: {e}")
+
+def _get_config(key: str, default: Any, env_key: Optional[str] = None) -> Any:
+    """Get config value with priority: Env Var > User Config > Default."""
+    # 1. Check environment variable
+    env_name = env_key or key.upper()
+    env_val = os.getenv(env_name)
+    if env_val is not None:
+        return env_val
+    # 2. Check user config
+    if key in _USER_CONFIG:
+        return _USER_CONFIG[key]
+    # 3. Return default
+    return default
+
+# Load user config at module init
+_load_user_config()
+
 from utils.keychain_manager import get_gemini_key
 
 # Google Gemini API key. Must be provided via environment variable or keychain for security.
@@ -44,18 +90,18 @@ GEMINI_API_KEY: str = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
 
 # Default Gemini model name for generation.
 # Centralizes the model selection to avoid hardcoding in modules.
-DEFAULT_GEMINI_MODEL: str = os.getenv("DEFAULT_GEMINI_MODEL", "gemini-3-flash-preview")
+DEFAULT_GEMINI_MODEL: str = _get_config("gemini_model", "gemini-3-flash-preview", "DEFAULT_GEMINI_MODEL")
 
 # Thinking level for Gemini 3 Flash models (minimal, low, medium, high).
 # Controls reasoning depth and latency.
-GEMINI_THINKING_LEVEL: str = os.getenv("GEMINI_THINKING_LEVEL", "low")
+GEMINI_THINKING_LEVEL: str = _get_config("gemini_thinking_level", "low", "GEMINI_THINKING_LEVEL")
 
 # Lightweight model for fast, cheap inference tasks like naming and classification.
 # Uses Gemini 3 Flash by default for speed and cost efficiency.
-LIGHTWEIGHT_MODEL: str = os.getenv("LIGHTWEIGHT_MODEL", "gemini-3-flash-preview")
+LIGHTWEIGHT_MODEL: str = _get_config("lightweight_model", "gemini-3-flash-preview", "LIGHTWEIGHT_MODEL")
 
 # AnkiConnect default URL. Can be overridden via environment variable if needed.
-ANKI_CONNECT_URL: str = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
+ANKI_CONNECT_URL: str = _get_config("anki_url", "http://localhost:8765", "ANKI_CONNECT_URL")
 
 # Allowed origins for the GUI backend CORS configuration.
 FRONTEND_ORIGINS: list[str] = [
@@ -70,8 +116,8 @@ FRONTEND_ORIGINS: list[str] = [
 
 # Default Anki note models to use. These can be overridden via environment.
 # Intended to steer AI output and to map generic model names returned by the AI.
-DEFAULT_BASIC_MODEL: str = os.getenv("BASIC_MODEL_NAME", "prettify-nord-basic")
-DEFAULT_CLOZE_MODEL: str = os.getenv("CLOZE_MODEL_NAME", "prettify-nord-cloze")
+DEFAULT_BASIC_MODEL: str = _get_config("basic_model", "prettify-nord-basic", "BASIC_MODEL_NAME")
+DEFAULT_CLOZE_MODEL: str = _get_config("cloze_model", "prettify-nord-cloze", "CLOZE_MODEL_NAME")
 
 # Default tag behavior. When enabled, the application will ensure this tag is
 # present on every created note unless explicitly disabled via CLI.

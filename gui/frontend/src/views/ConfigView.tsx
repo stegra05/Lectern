@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { RotateCcw, Play, Loader2, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -16,6 +15,8 @@ interface ConfigViewProps {
     toggleExamMode: () => void;
     sourceType: 'auto' | 'slides' | 'script';
     setSourceType: (type: 'auto' | 'slides' | 'script') => void;
+    densityTarget: number;
+    setDensityTarget: (target: number) => void;
     estimation: any;
     isEstimating: boolean;
     handleGenerate: () => void;
@@ -32,6 +33,8 @@ export function ConfigView({
     toggleExamMode,
     sourceType,
     setSourceType,
+    densityTarget,
+    setDensityTarget,
     estimation,
     isEstimating,
     handleGenerate,
@@ -170,6 +173,33 @@ export function ConfigView({
                             {sourceType === 'slides' && 'Optimized for sparse lecture slides (1-2 cards/page).'}
                             {sourceType === 'script' && 'Optimized for dense summaries (many cards/page).'}
                         </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-border/50">
+                        <label className="block text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">
+                            Detail Level
+                        </label>
+                        <div className="space-y-4">
+                            <div className="flex justify-between text-xs text-text-muted">
+                                <span>Concise</span>
+                                <span>Balanced</span>
+                                <span>Comprehensive</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.8"
+                                max="2.5"
+                                step="0.1"
+                                value={densityTarget}
+                                onChange={(e) => setDensityTarget(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
+                            />
+                            <p className="text-xs text-text-muted text-center">
+                                {sourceType === 'script'
+                                    ? `Relative Density: ${(densityTarget / 1.5).toFixed(1)}x`
+                                    : `Target: ~${densityTarget.toFixed(1)} cards per page`}
+                            </p>
+                        </div>
                     </div>
                 </GlassCard>
             </motion.div>

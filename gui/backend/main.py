@@ -159,6 +159,10 @@ def _get_session_or_404(session_id: Optional[str], *, require_session_id: bool =
 # Configuration Models
 class ConfigUpdate(BaseModel):
     gemini_api_key: Optional[str] = None
+    anki_url: Optional[str] = None
+    basic_model: Optional[str] = None
+    cloze_model: Optional[str] = None
+    gemini_model: Optional[str] = None
 
 @app.get("/health")
 async def health_check():
@@ -202,39 +206,57 @@ async def get_config():
 
 @app.post("/config")
 async def update_config(cfg: ConfigUpdate):
+    updated_fields = []
+    
+    # Handle API key separately (Keychain storage)
     if cfg.gemini_api_key:
         try:
-            # Securely store in keychain
             from utils.keychain_manager import set_gemini_key
             set_gemini_key(cfg.gemini_api_key)
             
             # Remove from .env if present to avoid confusion/leaks
-            from starlette.concurrency import run_in_threadpool
-
             def update_env():
                 env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
                 if os.path.exists(env_path):
                     with open(env_path, "r") as f:
                         lines = f.readlines()
-
                     new_lines = [line for line in lines if not line.startswith("GEMINI_API_KEY=")]
-
                     with open(env_path, "w") as f:
                         f.writelines(new_lines)
 
             await run_in_threadpool(update_env)
-
-            # Reload config module to reflect changes immediately
-            # We need to set the env var temporarily for the current process if config relies on it
-            # But config.py now checks keychain, so we just need to reload it.
-            # However, config.py reads at module level.
-            from importlib import reload
-            reload(config)
-            
-            return {"status": "updated"}
+            updated_fields.append("gemini_api_key")
         except Exception as e:
-            print(f"Failed to update config: {e}")
+            print(f"Failed to update API key: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+    
+    # Handle other settings (JSON storage)
+    json_updates = {}
+    if cfg.anki_url:
+        json_updates["anki_url"] = cfg.anki_url
+        updated_fields.append("anki_url")
+    if cfg.basic_model:
+        json_updates["basic_model"] = cfg.basic_model
+        updated_fields.append("basic_model")
+    if cfg.cloze_model:
+        json_updates["cloze_model"] = cfg.cloze_model
+        updated_fields.append("cloze_model")
+    if cfg.gemini_model:
+        json_updates["gemini_model"] = cfg.gemini_model
+        updated_fields.append("gemini_model")
+    
+    if json_updates:
+        try:
+            config.save_user_config(json_updates)
+        except Exception as e:
+            print(f"Failed to save user config: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # Reload config module to reflect changes immediately
+    if updated_fields:
+        from importlib import reload
+        reload(config)
+        return {"status": "updated", "fields": updated_fields}
             
     return {"status": "no_change"}
 
@@ -296,8 +318,9 @@ async def generate_cards(
     model_name: str = Form(config.DEFAULT_GEMINI_MODEL),
     tags: str = Form("[]"),  # JSON string
     context_deck: str = Form(""),
-    exam_mode: bool = Form(False),  # NEW: Enable exam-focused card generation
-    source_type: str = Form("auto"),  # NEW: "auto", "slides", "script"
+    exam_mode: bool = Form(False),  # Enable exam-focused card generation
+    source_type: str = Form("auto"),  # "auto", "slides", "script"
+    density_target: float = Form(config.CARDS_PER_SLIDE_TARGET),  # Detail level
     max_notes_per_batch: int = Form(config.MAX_NOTES_PER_BATCH),
     reflection_rounds: int = Form(config.REFLECTION_MAX_ROUNDS),
     enable_reflection: bool = Form(config.ENABLE_REFLECTION),
@@ -370,6 +393,7 @@ async def generate_cards(
                 entry_id=entry_id,
                 exam_mode=exam_mode,
                 source_type=source_type,
+                density_target=density_target,
                 max_notes_per_batch=max_notes_per_batch,
                 reflection_rounds=reflection_rounds,
                 enable_reflection=enable_reflection,

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Settings, AlertCircle } from 'lucide-react';
+import { X, Settings, AlertCircle, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 
@@ -10,20 +10,38 @@ interface SettingsModalProps {
     toggleTheme: () => void;
 }
 
+interface ConfigState {
+    gemini_model: string;
+    anki_url: string;
+    basic_model: string;
+    cloze_model: string;
+}
+
 export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsModalProps) {
-    const [config, setConfig] = useState<any>(null);
+    const [config, setConfig] = useState<ConfigState | null>(null);
+    const [editedConfig, setEditedConfig] = useState<ConfigState | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [newKey, setNewKey] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+
+    const hasChanges = config && editedConfig && (
+        config.gemini_model !== editedConfig.gemini_model ||
+        config.anki_url !== editedConfig.anki_url ||
+        config.basic_model !== editedConfig.basic_model ||
+        config.cloze_model !== editedConfig.cloze_model
+    );
 
     const loadConfig = async () => {
         setLoading(true);
         setError(null);
+        setSaveSuccess(false);
         try {
             const data = await api.getConfig();
             setConfig(data);
-            setNewKey(''); // Reset input
+            setEditedConfig(data);
+            setNewKey('');
         } catch (err) {
             setError('Failed to connect to backend');
             console.error(err);
@@ -37,7 +55,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
         setIsSaving(true);
         try {
             await api.saveConfig({ gemini_api_key: newKey });
-            await loadConfig(); // Reload to confirm
+            await loadConfig();
             setNewKey('');
         } catch (err) {
             console.error(err);
@@ -45,6 +63,33 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleSaveSettings = async () => {
+        if (!editedConfig || !hasChanges) return;
+        setIsSaving(true);
+        setSaveSuccess(false);
+        try {
+            await api.saveConfig({
+                gemini_model: editedConfig.gemini_model,
+                anki_url: editedConfig.anki_url,
+                basic_model: editedConfig.basic_model,
+                cloze_model: editedConfig.cloze_model,
+            });
+            setConfig(editedConfig);
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 2000);
+        } catch (err) {
+            console.error(err);
+            setError('Failed to save settings');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const updateField = (field: keyof ConfigState, value: string) => {
+        if (!editedConfig) return;
+        setEditedConfig({ ...editedConfig, [field]: value });
     };
 
     useEffect(() => {
@@ -70,8 +115,8 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
                     >
-                        <div className="bg-surface border border-border w-full max-w-lg rounded-2xl shadow-2xl pointer-events-auto overflow-hidden">
-                            <div className="p-6 border-b border-border flex items-center justify-between">
+                        <div className="bg-surface border border-border w-full max-w-lg rounded-2xl shadow-2xl pointer-events-auto overflow-hidden max-h-[90vh] flex flex-col">
+                            <div className="p-6 border-b border-border flex items-center justify-between shrink-0">
                                 <h2 className="text-xl font-semibold text-text-main flex items-center gap-2">
                                     <Settings className="w-5 h-5 text-primary" />
                                     Settings
@@ -85,7 +130,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                 </button>
                             </div>
 
-                            <div className="p-6 space-y-6">
+                            <div className="p-6 space-y-6 overflow-y-auto flex-1">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-text-muted">Appearance</label>
                                     <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface">
@@ -121,15 +166,15 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                             Retry
                                         </button>
                                     </div>
-                                ) : (
+                                ) : editedConfig && (
                                     <>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-text-muted">Gemini Model</label>
                                             <input
                                                 type="text"
-                                                value={config?.gemini_model || ''}
-                                                readOnly
-                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none opacity-60 cursor-not-allowed"
+                                                value={editedConfig.gemini_model}
+                                                onChange={(e) => updateField('gemini_model', e.target.value)}
+                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
                                             />
                                         </div>
 
@@ -158,9 +203,9 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                             <label className="text-sm font-medium text-text-muted">Anki Connect URL</label>
                                             <input
                                                 type="text"
-                                                value={config?.anki_url || ''}
-                                                readOnly
-                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none opacity-60 cursor-not-allowed"
+                                                value={editedConfig.anki_url}
+                                                onChange={(e) => updateField('anki_url', e.target.value)}
+                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
                                             />
                                         </div>
 
@@ -169,18 +214,18 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                 <label className="text-sm font-medium text-text-muted">Basic Model</label>
                                                 <input
                                                     type="text"
-                                                    value={config?.basic_model || ''}
-                                                    readOnly
-                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main opacity-60 cursor-not-allowed"
+                                                    value={editedConfig.basic_model}
+                                                    onChange={(e) => updateField('basic_model', e.target.value)}
+                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
                                                 />
                                             </div>
                                             <div className="space-y-2">
                                                 <label className="text-sm font-medium text-text-muted">Cloze Model</label>
                                                 <input
                                                     type="text"
-                                                    value={config?.cloze_model || ''}
-                                                    readOnly
-                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main opacity-60 cursor-not-allowed"
+                                                    value={editedConfig.cloze_model}
+                                                    onChange={(e) => updateField('cloze_model', e.target.value)}
+                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
                                                 />
                                             </div>
                                         </div>
@@ -188,10 +233,25 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                 )}
                             </div>
 
-                            <div className="p-6 border-t border-border bg-surface/50">
-                                <p className="text-sm text-text-muted text-center">
-                                    Other settings are configured via environment variables.
-                                </p>
+                            <div className="p-6 border-t border-border bg-surface/50 shrink-0">
+                                {hasChanges ? (
+                                    <button
+                                        onClick={handleSaveSettings}
+                                        disabled={isSaving}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-background rounded-lg font-medium transition-colors"
+                                    >
+                                        <Save className="w-4 h-4" />
+                                        {isSaving ? 'Saving...' : 'Save Changes'}
+                                    </button>
+                                ) : saveSuccess ? (
+                                    <p className="text-sm text-primary text-center font-medium">
+                                        ✓ Settings saved successfully
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-text-muted text-center">
+                                        Edit fields above to save changes
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </motion.div>

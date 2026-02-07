@@ -110,6 +110,7 @@ function App() {
     currentPhase,
     examMode, toggleExamMode,
     sourceType, setSourceType,
+    densityTarget, setDensityTarget,
     handleGenerate,
     handleReset,
     handleCancel,
@@ -230,6 +231,8 @@ function App() {
                       toggleExamMode={toggleExamMode}
                       sourceType={sourceType}
                       setSourceType={setSourceType}
+                      densityTarget={densityTarget}
+                      setDensityTarget={setDensityTarget}
                       estimation={estimation}
                       isEstimating={isEstimating}
                       handleGenerate={handleGenerate}

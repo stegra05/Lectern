@@ -35,7 +35,8 @@ export interface GenerateRequest {
     tags?: string[];
     context_deck?: string;
     exam_mode?: boolean;
-    source_type?: string;  // NEW: "auto", "slides", "script"
+    source_type?: string;  // "auto", "slides", "script"
+    density_target?: number;  // Detail level: 0.8 (concise) to 2.5 (comprehensive)
 }
 
 export interface ProgressEvent {
@@ -113,7 +114,13 @@ export const api = {
         }
     },
 
-    saveConfig: async (config: { gemini_api_key: string }) => {
+    saveConfig: async (config: {
+        gemini_api_key?: string;
+        anki_url?: string;
+        basic_model?: string;
+        cloze_model?: string;
+        gemini_model?: string;
+    }) => {
         const res = await fetch(`${API_URL}/config`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -178,7 +185,10 @@ export const api = {
         if (req.tags) formData.append("tags", JSON.stringify(req.tags));
         if (req.context_deck) formData.append("context_deck", req.context_deck);
         formData.append("exam_mode", String(req.exam_mode ?? false));
-        formData.append("source_type", req.source_type ?? "auto");  // NEW: Include source_type
+        formData.append("source_type", req.source_type ?? "auto");
+        if (req.density_target !== undefined) {
+            formData.append("density_target", String(req.density_target));
+        }
 
         const res = await fetch(`${API_URL}/generate`, {
             method: "POST",
