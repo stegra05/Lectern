@@ -264,7 +264,7 @@ async def update_config(cfg: ConfigUpdate):
 @app.get("/history")
 async def get_history():
     mgr = HistoryManager()
-    return mgr.get_all()
+    return await run_in_threadpool(mgr.get_all)
 
 @app.get("/decks")
 async def get_decks():
