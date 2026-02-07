@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Check, Plus, Folder, FolderOpen } from 'lucide-react';
+import { Check, Plus, Folder, FolderOpen } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../api';
 
@@ -76,6 +76,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                 setInputValue(lastUsed);
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Fetch decks (background update)

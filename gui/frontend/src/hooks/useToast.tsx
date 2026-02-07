@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Toast, ToastContainer, ToastData, ToastType } from '../components/Toast';
+import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { Toast, ToastContainer, type ToastData, type ToastType } from '../components/Toast';
 
 interface ToastContextType {
   addToast: (type: ToastType, message: string, duration?: number) => void;
@@ -46,6 +46,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useToast = () => {
   const context = useContext(ToastContext);
   if (context === undefined) {

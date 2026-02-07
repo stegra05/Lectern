@@ -14,7 +14,7 @@ describe('SettingsModal', () => {
     const mockOnClose = vi.fn();
     const mockToggleTheme = vi.fn();
 
-    it('renders with accessible close button', () => {
+    it('renders with accessible close button', async () => {
         render(
             <SettingsModal
                 isOpen={true}
@@ -26,9 +26,12 @@ describe('SettingsModal', () => {
 
         const closeButton = screen.getByLabelText('Close settings');
         expect(closeButton).toBeInTheDocument();
+
+        // Wait for config to load to avoid act warning
+        await screen.findByText('AI Model');
     });
 
-    it('renders with accessible theme toggle', () => {
+    it('renders with accessible theme toggle', async () => {
         render(
             <SettingsModal
                 isOpen={true}
@@ -40,11 +43,14 @@ describe('SettingsModal', () => {
 
         const toggleButton = screen.getByLabelText('Toggle dark mode');
         expect(toggleButton).toBeInTheDocument();
+
+        // Wait for config to load to avoid act warning
+        await screen.findByText('AI Model');
         expect(toggleButton).toHaveAttribute('role', 'switch');
         expect(toggleButton).toHaveAttribute('aria-checked', 'false');
     });
 
-    it('reflects dark mode state in accessible attributes', () => {
+    it('reflects dark mode state in accessible attributes', async () => {
         render(
             <SettingsModal
                 isOpen={true}
@@ -56,5 +62,8 @@ describe('SettingsModal', () => {
 
         const toggleButton = screen.getByLabelText('Toggle dark mode');
         expect(toggleButton).toHaveAttribute('aria-checked', 'true');
+
+        // Wait for config to load to avoid act warning
+        await screen.findByText('AI Model');
     });
 });

@@ -26,11 +26,17 @@ const StatusDot = ({ label, active }: { label: string, active: boolean }) => (
   </div>
 );
 
-const HealthStatus = ({ health, isChecking, onRefresh }: any) => (
+interface HealthStatusProps {
+  health: import('./api').HealthStatus | null;
+  isChecking: boolean;
+  onRefresh: () => void;
+}
+
+const HealthStatus = ({ health, isChecking, onRefresh }: HealthStatusProps) => (
   <div className="flex items-center gap-3 bg-surface/50 px-4 py-2 rounded-full border border-border backdrop-blur-sm">
-    <StatusDot label="Anki" active={health?.anki_connected} />
+    <StatusDot label="Anki" active={health?.anki_connected ?? false} />
     <div className="w-px h-4 bg-border" />
-    <StatusDot label="Gemini" active={health?.gemini_configured} />
+    <StatusDot label="Gemini" active={health?.gemini_configured ?? false} />
     <button
       onClick={onRefresh}
       disabled={isChecking}

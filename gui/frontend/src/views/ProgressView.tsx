@@ -8,8 +8,8 @@ import { ConfirmModal } from '../components/ConfirmModal';
 
 import type { Step } from '../hooks/useAppState';
 import type { Phase } from '../components/PhaseIndicator';
-import type { Card, SortOption } from '../hooks/useGeneration';
-import type { ProgressEvent } from '../api';
+import type { SortOption } from '../hooks/useGeneration';
+import type { ProgressEvent, Card } from '../api';
 
 interface ProgressViewProps {
     step: Step;
@@ -35,7 +35,7 @@ interface ProgressViewProps {
 
     // Review & Edit Props
     editingIndex: number | null;
-    editForm: any;
+    editForm: Card | null;
     isSyncing: boolean;
     syncProgress: { current: number; total: number };
     syncLogs: ProgressEvent[];
@@ -47,7 +47,7 @@ interface ProgressViewProps {
     handleFieldChange: (field: string, value: string) => void;
     handleSync: (onComplete: () => void) => void;
     confirmModal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number; };
-    setConfirmModal: (modal: any) => void;
+    setConfirmModal: (modal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number; }) => void;
 }
 
 export function ProgressView({
@@ -111,7 +111,7 @@ export function ProgressView({
                 const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 regex = new RegExp(escaped, 'i');
             }
-        } catch (e) {
+        } catch {
             // If regex invalid, fallback to literal substring
             const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             regex = new RegExp(escaped, 'i');
@@ -418,7 +418,7 @@ export function ProgressView({
                                             </div>
 
                                             <div className="grid gap-4">
-                                                {Object.entries(editForm.fields || {}).map(([key, value]) => (
+                                                {Object.entries(editForm?.fields || {}).map(([key, value]) => (
                                                     <div key={key}>
                                                         <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">{key}</label>
                                                         <textarea
