@@ -116,8 +116,8 @@ FRONTEND_ORIGINS: list[str] = [
 
 # Default Anki note models to use. These can be overridden via environment.
 # Intended to steer AI output and to map generic model names returned by the AI.
-DEFAULT_BASIC_MODEL: str = _get_config("basic_model", "prettify-nord-basic", "BASIC_MODEL_NAME")
-DEFAULT_CLOZE_MODEL: str = _get_config("cloze_model", "prettify-nord-cloze", "CLOZE_MODEL_NAME")
+DEFAULT_BASIC_MODEL: str = _get_config("basic_model", "Basic", "BASIC_MODEL_NAME")
+DEFAULT_CLOZE_MODEL: str = _get_config("cloze_model", "Cloze", "CLOZE_MODEL_NAME")
 
 # Default tag behavior. When enabled, the application will ensure this tag is
 # present on every created note unless explicitly disabled via CLI.

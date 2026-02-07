@@ -117,7 +117,9 @@ function App() {
     logsEndRef,
     handleCopyLogs,
     copied,
-    sessionId
+    sessionId,
+    sortBy,
+    setSortBy
   } = useGeneration(setStep);
 
   const {
@@ -258,6 +260,8 @@ function App() {
                       setPreviewSlide={setPreviewSlide}
                       logsEndRef={logsEndRef}
                       sessionId={sessionId}
+                      sortBy={sortBy}
+                      setSortBy={setSortBy}
                     />
                   )}
                 </AnimatePresence>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Terminal, Copy, Check, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -8,7 +8,7 @@ import { ReviewQueue } from '../components/ReviewQueue';
 
 import type { Step } from '../hooks/useAppState';
 import type { Phase } from '../components/PhaseIndicator';
-import type { Card } from '../hooks/useGeneration';
+import type { Card, SortOption } from '../hooks/useGeneration';
 import type { ProgressEvent } from '../api';
 
 interface ProgressViewProps {
@@ -26,6 +26,8 @@ interface ProgressViewProps {
     setPreviewSlide: (slide: number | null) => void;
     logsEndRef: React.RefObject<HTMLDivElement>;
     sessionId?: string | null;
+    sortBy: SortOption;
+    setSortBy: (opt: SortOption) => void;
 }
 
 export function ProgressView({
@@ -42,8 +44,24 @@ export function ProgressView({
     handleReset,
     setPreviewSlide,
     logsEndRef,
-    sessionId
+    sessionId,
+    sortBy,
+    setSortBy
 }: ProgressViewProps) {
+    const sortedCards = useMemo(() => {
+        const sorted = [...cards];
+        switch (sortBy) {
+            case 'topic':
+                return sorted.sort((a, b) => (a.slide_topic || '').localeCompare(b.slide_topic || ''));
+            case 'slide':
+                return sorted.sort((a, b) => (a.slide_number || 0) - (b.slide_number || 0));
+            case 'type':
+                return sorted.sort((a, b) => (a.model_name || '').localeCompare(b.model_name || ''));
+            default:
+                return sorted; // creation order
+        }
+    }, [cards, sortBy]);
+
     return (
         <motion.div
             initial={{ opacity: 0 }}
@@ -177,7 +195,7 @@ export function ProgressView({
             <div className="lg:col-span-2 flex flex-col min-h-0 max-h-[calc(100vh-200px)]">
                 {step === 'review' ? (
                     <ReviewQueue
-                        initialCards={cards}
+                        initialCards={sortedCards}
                         onSyncComplete={() => setStep('done')}
                         sessionId={sessionId}
                     />
@@ -187,14 +205,32 @@ export function ProgressView({
                             <h3 className="text-lg font-semibold text-text-main flex items-center gap-2">
                                 <Layers className="w-5 h-5 text-text-muted" /> Live Preview
                             </h3>
-                            <span className="text-xs font-mono text-text-muted bg-surface px-2 py-1 rounded border border-border">
-                                {cards.length} CARDS
-                            </span>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5 bg-surface/50 p-1 rounded-lg border border-border/50">
+                                    {(['creation', 'topic', 'slide', 'type'] as const).map((opt) => (
+                                        <button
+                                            key={opt}
+                                            onClick={() => setSortBy(opt)}
+                                            className={clsx(
+                                                "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
+                                                sortBy === opt
+                                                    ? "bg-primary text-background shadow-lg shadow-primary/20"
+                                                    : "text-text-muted hover:text-text-main hover:bg-surface"
+                                            )}
+                                        >
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+                                <span className="text-xs font-mono text-text-muted bg-surface px-2 py-1 rounded border border-border">
+                                    {cards.length} CARDS
+                                </span>
+                            </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-12 scrollbar-thin scrollbar-thumb-border min-h-0">
                             <AnimatePresence initial={false}>
-                                {cards.map((card, i) => (
+                                {sortedCards.map((card, i) => (
                                     <motion.div
                                         key={i}
                                         initial={{ opacity: 0, scale: 0.95, y: 20 }}

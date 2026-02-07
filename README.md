@@ -142,8 +142,8 @@ For advanced users, defaults can still be set in `.env`:
 | :--- | :--- | :--- |
 | `GEMINI_API_KEY` | **Required**. (Or set via GUI) | - |
 | `ANKI_CONNECT_URL` | URL of AnkiConnect API. | `http://localhost:8765` |
-| `BASIC_MODEL_NAME` | Anki Note Type for basic cards. | `prettify-nord-basic` |
-| `CLOZE_MODEL_NAME` | Anki Note Type for cloze cards. | `prettify-nord-cloze` |
+| `BASIC_MODEL_NAME` | Anki Note Type for basic cards. | `Basic` |
+| `CLOZE_MODEL_NAME` | Anki Note Type for cloze cards. | `Cloze` |
 
 ---
 
