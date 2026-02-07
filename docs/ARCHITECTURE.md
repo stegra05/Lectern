@@ -30,8 +30,10 @@ graph LR
 - **Tech:** `google-genai` SDK.
 - **Key Logic:**
     - **Multimodal:** Sends both text and slide images to the model.
+    - **Prompt Management:** Uses `ai_prompts.py` for centralized, version-controllable system instructions.
     - **Concept Mapping:** First pass builds a JSON graph of concepts to ensure coherence.
     - **Iterative Generation:** Generates cards in batches, maintaining history to avoid duplicates.
+    - **Pacing & Rate Limiting:** Coordinated by `ai_pacing.py` to adjust generation density based on content type.
     - **Reflection:** A self-correction step where the model critiques its own output.
 
 ### 3. Service Layer (`lectern_service.py`)
@@ -42,7 +44,6 @@ graph LR
     - Handles "resume" functionality via state files.
 
 ### 4. Interfaces
-- **CLI (`main.py`):** Direct interaction with the Service Layer.
 - **GUI (`gui/`):**
     - **Backend:** FastAPI wrapper around the Service Layer.
     - **Frontend:** React application communicating via REST/SSE.
