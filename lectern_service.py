@@ -510,7 +510,7 @@ class LecternGenerationService:
             # Do not raise; let the generator exit gracefully so the frontend sees the error event
             return
 
-    async def estimate_cost(self, pdf_path: str) -> Dict[str, Any]:
+    async def estimate_cost(self, pdf_path: str, model_name: str | None = None) -> Dict[str, Any]:
         """Estimate the token count and cost for processing a PDF.
         
         Skips OCR for speed during estimation.
@@ -530,13 +530,34 @@ class LecternGenerationService:
         ai = LecternAIClient()
         token_count = ai.count_tokens(content)
         
-        # Calculate cost ($0.50 per 1M tokens)
-        estimated_cost = (token_count / 1_000_000) * 0.50
+        # Account for overhead (system prompt, concept map prompt, history)
+        input_tokens = token_count + config.ESTIMATION_PROMPT_OVERHEAD
+        
+        # Estimate output tokens (usually much smaller, but not zero)
+        output_tokens = int(input_tokens * config.ESTIMATION_OUTPUT_RATIO)
+        
+        # Determine pricing based on model name
+        model = model_name or config.DEFAULT_GEMINI_MODEL
+        pricing = config.GEMINI_PRICING.get("default")
+        
+        for pattern, rates in config.GEMINI_PRICING.items():
+            if pattern in model.lower():
+                pricing = rates
+                break
+        
+        # Calculate cost
+        input_cost = (input_tokens / 1_000_000) * pricing[0]
+        output_cost = (output_tokens / 1_000_000) * pricing[1]
         
         return {
-            "tokens": token_count,
-            "cost": estimated_cost,
-            "pages": len(pages)
+            "tokens": token_count, # Raw PDF tokens
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "input_cost": input_cost,
+            "output_cost": output_cost,
+            "cost": input_cost + output_cost,
+            "pages": len(pages),
+            "model": model,
         }
 
     def _get_card_key(self, card: Dict[str, Any]) -> str:

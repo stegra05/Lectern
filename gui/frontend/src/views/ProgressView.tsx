@@ -528,7 +528,7 @@ export function ProgressView({
 
                                                 {/* Actions (Only when done) */}
                                                 {step === 'done' && (
-                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
                                                         <button
                                                             onClick={() => startEdit(originalIndex)}
                                                             className="p-1 hover:bg-surface rounded text-text-muted hover:text-primary transition-colors"

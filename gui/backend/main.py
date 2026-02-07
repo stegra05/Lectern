@@ -315,7 +315,7 @@ async def delete_history_entry(entry_id: str):
     return {"status": "deleted"}
 
 @app.post("/estimate")
-async def estimate_cost(pdf_file: UploadFile = File(...)):
+async def estimate_cost(pdf_file: UploadFile = File(...), model_name: Optional[str] = None):
     from starlette.concurrency import run_in_threadpool
     
     # Save uploaded file to temp in threadpool to avoid blocking
@@ -328,7 +328,7 @@ async def estimate_cost(pdf_file: UploadFile = File(...)):
 
     try:
         service = LecternGenerationService()
-        data = await service.estimate_cost(tmp_path)
+        data = await service.estimate_cost(tmp_path, model_name)
         return data
     except Exception as e:
         print(f"Estimation failed: {e}")
@@ -619,6 +619,20 @@ async def delete_anki_notes(req: AnkiDeleteRequest):
         return {"status": "deleted", "count": len(req.note_ids)}
     except Exception as e:
         print(f"Failed to delete Anki notes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AnkiUpdateRequest(BaseModel):
+    fields: Dict[str, str]
+
+@app.put("/anki/notes/{note_id}")
+async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
+    """Update fields on an existing Anki note."""
+    try:
+        from anki_connector import update_note_fields
+        update_note_fields(note_id, req.fields)
+        return {"status": "updated", "note_id": note_id}
+    except Exception as e:
+        print(f"Failed to update Anki note: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

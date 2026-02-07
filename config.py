@@ -200,3 +200,18 @@ LOG_SESSION_CONTENT: bool = os.getenv("LOG_SESSION_CONTENT", "true").lower() not
 LOG_MAX_RESPONSE_CHARS: int = int(os.getenv("LOG_MAX_RESPONSE_CHARS", "20000"))
 
 
+# --- Estimation and Pricing ---
+# Gemini model pricing (per million tokens, as of 2025)
+# Format: {model_pattern: (input_rate_usd, output_rate_usd)}
+GEMINI_PRICING = {
+    "gemini-2.5-pro": (1.25, 10.00),   # $1.25/M in, $10/M out
+    "gemini-2.5-flash": (0.30, 2.50),  # $0.30/M in, $2.50/M out
+    "gemini-3-flash": (0.30, 2.50),    # Assume same as 2.5 Flash for now
+    "default": (0.50, 4.00),           # Conservative fallback
+}
+
+# Heuristics for cost estimation
+ESTIMATION_OUTPUT_RATIO = 0.35      # Output tokens are roughly 35% of input for card generation
+ESTIMATION_PROMPT_OVERHEAD = 3000   # System instruction + overhead for concept map & first batch
+
+
