@@ -74,6 +74,18 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutM
     }
 };
 
+export interface Estimation {
+    tokens: number;
+    cost: number;
+}
+
+export interface HealthStatus {
+    anki_connected: boolean;
+    gemini_configured: boolean;
+    anki_version?: string;
+    gemini_model?: string;
+}
+
 export const api = {
     checkHealth: async () => {
         try {

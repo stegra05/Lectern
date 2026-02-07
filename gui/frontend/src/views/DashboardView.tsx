@@ -1,12 +1,12 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Trash2, Plus, ChevronRight } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 
 import type { Step } from '../hooks/useAppState';
+import type { HistoryEntry } from '../api';
 
 interface DashboardViewProps {
-    history: any[];
+    history: HistoryEntry[];
     clearAllHistory: () => void;
     deleteHistoryEntry: (id: string) => void;
     setDeckName: (name: string) => void;

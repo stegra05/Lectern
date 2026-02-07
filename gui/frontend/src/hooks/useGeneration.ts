@@ -3,11 +3,21 @@ import { api, type ProgressEvent } from '../api';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from './useAppState';
 
+export interface Card {
+  front: string;
+  back: string;
+  tag?: string;
+  tags?: string[];
+  model_name?: string;
+  fields?: Record<string, string>;
+  slide_number?: number;
+}
+
 export function useGeneration(setStep: (step: Step) => void) {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [deckName, setDeckName] = useState('');
   const [logs, setLogs] = useState<ProgressEvent[]>([]);
-  const [cards, setCards] = useState<any[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [estimation, setEstimation] = useState<{ tokens: number, cost: number } | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);

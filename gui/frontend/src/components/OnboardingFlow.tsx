@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Lock, Unlock, ArrowRight, Terminal, Server, BrainCircuit, RefreshCw, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -27,11 +27,15 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
     });
   };
 
-  useEffect(() => {
-    startSequence();
-  }, []);
 
-  const startSequence = async () => {
+  const completeOnboarding = () => {
+    setTimeout(() => {
+      setIsExiting(true);
+      setTimeout(onComplete, 800); // Wait for exit animation
+    }, 1000);
+  };
+
+  const startSequence = useCallback(async () => {
     // Step 1: Anki Check
     setAnkiStatus('active');
 
@@ -52,15 +56,20 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
       } else {
         setAnkiStatus('error');
       }
-    } catch (e) {
+    } catch {
       setAnkiStatus('error');
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const retryAnki = () => {
     setAnkiStatus('pending');
     setTimeout(() => startSequence(), 300);
   };
+
+  useEffect(() => {
+    startSequence();
+  }, [startSequence]);
 
   const submitApiKey = async () => {
     if (!apiKey.trim()) return;
@@ -74,12 +83,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
     }
   };
 
-  const completeOnboarding = () => {
-    setTimeout(() => {
-      setIsExiting(true);
-      setTimeout(onComplete, 800); // Wait for exit animation
-    }, 1000);
-  };
+
 
   return (
     <motion.div
@@ -130,13 +134,13 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                 {/* Connecting Line (Background) */}
                 <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-zinc-800 -z-10" />
 
-                {/* Step 1: Anki Uplink */}
+                {/* Step 1: Anki Connection */}
                 <div className="relative">
                   <StepIndicator status={ankiStatus} icon={Server} />
 
                   <div className="ml-14 pt-1">
                     <h3 className={clsx("font-medium transition-colors", ankiStatus === 'active' ? "text-zinc-200" : "text-zinc-500")}>
-                      Anki Uplink
+                      Anki Connection
                     </h3>
 
                     {ankiStatus === 'active' && (
@@ -161,7 +165,22 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                       >
                         <div className="flex items-start gap-2 text-red-200">
                           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                          <p>Connection failed. Is Anki running with AnkiConnect installed?</p>
+                          <div className="space-y-2">
+                            <p>Connection failed. Is Anki running with AnkiConnect?</p>
+                            <div className="text-xs text-red-300">
+                              <p>1. Open Anki → Tools → Add-ons</p>
+                              <p>2. Get Add-ons → Code: <span className="font-mono bg-red-500/20 px-1 rounded select-all">2055079234</span></p>
+                              <p>3. Restart Anki</p>
+                            </div>
+                            <a
+                              href="https://ankiweb.net/shared/info/2055079234"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block text-xs underline hover:text-white"
+                            >
+                              AnkiConnect Page
+                            </a>
+                          </div>
                         </div>
                         <button
                           onClick={retryAnki}
@@ -174,7 +193,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                   </div>
                 </div>
 
-                {/* Step 2: Neural Link */}
+                {/* Step 2: AI Service */}
                 <div className="relative">
                   <StepIndicator
                     status={geminiStatus === 'pending' && ankiStatus !== 'success' ? 'pending' : geminiStatus}
@@ -183,7 +202,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
 
                   <div className="ml-14 pt-1">
                     <h3 className={clsx("font-medium transition-colors", geminiStatus === 'active' ? "text-zinc-200" : "text-zinc-500")}>
-                      Neural Link
+                      AI Service
                     </h3>
 
                     {geminiStatus === 'active' && (
@@ -192,7 +211,17 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         animate={{ opacity: 1, y: 0 }}
                         className="mt-4"
                       >
-                        <label className="block text-xs text-zinc-500 mb-1.5">GEMINI API KEY</label>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-xs text-zinc-500">GEMINI API KEY</label>
+                          <a
+                            href="https://aistudio.google.com/app/apikey"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-primary hover:underline"
+                          >
+                            Get Free Key
+                          </a>
+                        </div>
                         <div className="relative group/input">
                           <input
                             type="password"
@@ -240,7 +269,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
   );
 }
 
-function StepIndicator({ status, icon: Icon }: { status: StepStatus, icon: any }) {
+function StepIndicator({ status, icon: Icon }: { status: StepStatus, icon: React.ElementType }) {
   return (
     <div className="absolute left-0 top-0 w-10 h-10 flex items-center justify-center">
       {/* Background Circle */}
