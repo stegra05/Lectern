@@ -25,16 +25,22 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 
 ## Features
 
-- **Multimodal Analysis**  
+- **Source Selection (New)**
+  Choose between **Slides** (visual), **Script** (dense text), or **Auto** mode to optimize card generation strategy for your content.
+
+- **Smart Pacing**
+  Dynamically adjusts generation speed and detail based on content density, ensuring no concept is skipped.
+
+- **Configuration Control**
+  Fine-tune Anki styling, Gemini models, and generation prompts directly from the settings UI.
+
+- **Multimodal Analysis**
   Extracts text and images from slides using `pypdf` + `pdf2image`, preserving context for accurate generation.
 
-- **Smart Generation**  
+- **Smart Generation**
   Leverages **Gemini 3.0 Flash** to create atomic, well-structured cards that adhere to learning best practices.
 
-- **Style Matching**  
-  Intelligently samples existing cards to match your deck's aesthetic and formatting.
-
-- **Safe Execution**  
+- **Safe Execution**
   Operates exclusively via the AnkiConnect API, ensuring your collection files remain untouched.
 
 ---
@@ -128,11 +134,13 @@ Lectern writes AI session logs to a fixed location:
 
 ## Configuration
 
-Configure defaults in `.env` or override via flags.
+Most settings can now be configured directly in the **Settings** tab within the application.
+
+For advanced users, defaults can still be set in `.env`:
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | **Required**. (Or set via `main.py --set-key`) | - |
+| `GEMINI_API_KEY` | **Required**. (Or set via GUI) | - |
 | `ANKI_CONNECT_URL` | URL of AnkiConnect API. | `http://localhost:8765` |
 | `BASIC_MODEL_NAME` | Anki Note Type for basic cards. | `prettify-nord-basic` |
 | `CLOZE_MODEL_NAME` | Anki Note Type for cloze cards. | `prettify-nord-cloze` |

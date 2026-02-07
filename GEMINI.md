@@ -20,7 +20,7 @@ Lectern follows a modular pipeline architecture to ensure high-yield card genera
 
 1.  **PDF Parser (`pdf_parser.py`):** Extracts text and images (converted to base64) from PDF slides using `PyMuPDF`.
 2.  **AI Client (`ai_client.py`):** Interfaces with Google's Gemini API. It uses multimodal prompting to "see" slides and builds a **Global Concept Map** to maintain coherence.
-3.  **Service Layer (`lectern_service.py`):** The central orchestrator that manages the state, handles "resume" functionality, and emits events for progress tracking.
+3.  **Service Layer (`lectern_service.py`):** The central orchestrator. Manages state, handles "resume" functionality, applies **Pacing Strategies** based on content type (Slides vs Script), and emits events.
 4.  **Interfaces:**
     *   **GUI (`gui/`):** A modern desktop application built with React (frontend) and FastAPI (backend), wrapped in `pywebview`.
 
@@ -67,8 +67,10 @@ Lectern follows a modular pipeline architecture to ensure high-yield card genera
 
 ## Development Conventions
 
--   **Service Pattern:** Core business logic resides in `lectern_service.py`. Interfaces (CLI/GUI) should only act as consumers of the `ServiceEvent` generator.
+-   **Service Pattern:** Core business logic resides in `lectern_service.py`. The GUI acts as a consumer of the `ServiceEvent` generator.
 -   **State Management:** Use `utils/state.py` to persist progress. The application supports resuming interrupted sessions.
+-   **AI Pacing:** `ai_pacing.py` manages generation speed and detail based on content density.
+-   **Prompt Centralization:** All LLM prompts are centralized in `ai_prompts.py` to ensure consistency and ease of editing.
 -   **Multimodal AI:** Always provide both text and images to the AI for better context.
 -   **Functional Frontend:** React components are functional and styled with Tailwind CSS. Follow the "Glassmorphism" aesthetic established in `gui/frontend/src/components/GlassCard.tsx`.
 -   **Security:** Never store API keys in code or `.env` files. Use `utils/keychain_manager.py` (keyring).
