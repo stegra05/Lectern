@@ -12,7 +12,7 @@ Manual release workflow for publishing new versions.
 
 ### 1. Bump Version
 
-Update version in `config.py` if applicable.
+Update version in `version.py`.
 
 ### 2. Build
 
@@ -29,7 +29,7 @@ Open `dist/Lectern.app` and verify:
 - [ ] Generation starts (test with 1-2 slides)
 - [ ] Cards appear in Anki
 
-### 4. Tag & Push
+### 4. Tag and Push
 
 ```bash
 git tag -a v1.X.X -m "Release v1.X.X"
@@ -38,7 +38,7 @@ git push origin v1.X.X
 
 ### 5. Create GitHub Release
 
-1. Go to **Releases** → **Draft a new release**
+1. Go to **Releases** then **Draft a new release**
 2. Select the tag you just pushed
 3. Title: `Lectern v1.X.X`
 4. Attach: `dist/Lectern.dmg`
@@ -52,7 +52,7 @@ git push origin v1.X.X
 ## Installation
 1. Download `Lectern.dmg`
 2. Open the DMG and drag Lectern to Applications
-3. First launch: Right-click → Open (macOS Gatekeeper)
+3. First launch: Right-click then Open (macOS Gatekeeper)
 
 **Requires:** Anki with [AnkiConnect](https://ankiweb.net/shared/info/2055492159), Poppler (`brew install poppler`)
 ```
@@ -61,7 +61,7 @@ git push origin v1.X.X
 
 ## Gatekeeper Note
 
-Since the app isn't notarized, users will see a warning on first launch. Instruct them to:
+Since the app is not notarized, users will see a warning on first launch. Instruct them to:
 1. Right-click (or Ctrl+click) on Lectern.app
 2. Select "Open"
 3. Click "Open" in the dialog
