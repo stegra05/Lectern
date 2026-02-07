@@ -410,5 +410,11 @@ export const api = {
         return res.json();
     },
 
+    getVersion: async (): Promise<{ current: string; latest: string | null; update_available: boolean; release_url: string }> => {
+        const res = await fetchWithTimeout(`${API_URL}/version`);
+        if (!res.ok) throw new Error('Failed to fetch version info');
+        return res.json();
+    },
+
     getApiUrl: () => API_URL,
 };
