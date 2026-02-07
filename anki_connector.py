@@ -196,38 +196,13 @@ def get_deck_slide_set_patterns(deck_name: str) -> Dict[str, Any]:
     }
     
     try:
-        # Optimization: Try to find tags via notes in the deck first
-        # This avoids fetching all tags (expensive) if the deck is small.
-        tags_to_process: List[str] = []
-        found_via_notes = False
+        # Fetch all tags from Anki
+        # Previously attempted to optimize by fetching notes for small decks,
+        # but notesInfo is heavy (fetches fields) and slower for >100 notes.
+        all_tags = get_all_tags()
 
-        try:
-             # Check deck size
-             deck_query = _escape_query_value(deck_name)
-             note_ids = find_notes(f'deck:"{deck_query}"')
-
-             # If deck has reasonable size, fetch notes info
-             if 0 < len(note_ids) < 2000:
-                 infos = notes_info(note_ids)
-                 found_tags = set()
-                 for info in infos:
-                     if isinstance(info, dict) and 'tags' in info and isinstance(info['tags'], list):
-                         for t in info['tags']:
-                             found_tags.add(str(t))
-                 tags_to_process = list(found_tags)
-                 found_via_notes = True
-        except Exception as e:
-            # Fallback to get_all_tags if findNotes fails
-            print(f"Warning: Failed to fetch notes for tag analysis: {e}")
-            pass
-
-        if not found_via_notes:
-             tags_to_process = get_all_tags()
-
-        if not tags_to_process:
+        if not all_tags:
             return result
-
-        all_tags = tags_to_process
         
         # Normalize deck name for matching
         deck_lower = deck_name.lower().replace(' ', '-').replace('_', '-')
