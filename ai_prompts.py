@@ -5,7 +5,9 @@ and enforce language consistency.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Any
+
+import json
 
 # --- Constants ---
 FORMATTING_RULES = (
@@ -16,23 +18,58 @@ FORMATTING_RULES = (
     "- JSON must escape backslashes (e.g., \\\\frac, \\\\alpha).\n"
 )
 
+def _make_example_str(examples_data: List[Dict[str, Any]], title: str) -> str:
+    lines = [title]
+    for ex in examples_data:
+        # Create the inner fields_json string
+        fields = ex.pop("fields") # We define it as 'fields' in the data helper for readability
+        ex["fields_json"] = json.dumps(fields)
+        
+        # Serialize the whole object
+        json_str = json.dumps(ex)
+        lines.append(f"  {ex.get('model_name', 'Card')}: {json_str}")
+    return "\n".join(lines) + "\n"
+
 # Base card examples (Normal Mode)
-BASIC_EXAMPLES = (
-    "Examples:\n"
-    '  Basic: {"model_name":"Basic","fields":{"Front":"State the quadratic formula.", '
-    '"Back":"Key idea: <b>roots</b>. Formula: \\(x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\\)."},"tags":["algebra"]}\n'
-    '  Cloze: {"model_name":"Cloze","fields":{"Text":"The derivative of \\(x^n\\) is '
-    '{{c1::\\(n x^{n-1}\\)}}."},"tags":["calculus"]}\n'
-)
+_BASIC_DATA = [
+    {
+        "model_name": "Basic", 
+        "fields": {
+            "Front": "State the quadratic formula.", 
+            "Back": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\)."
+        },
+        "tags": ["algebra"]
+    },
+    {
+        "model_name": "Cloze",
+        "fields": {
+            "Text": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}."
+        },
+        "tags": ["calculus"]
+    }
+]
+BASIC_EXAMPLES = _make_example_str(_BASIC_DATA, "Examples:")
 
 # Exam mode examples (Comparison/Scenario focus)
-EXAM_EXAMPLES = (
-    "Examples (Exam Mode):\n"
-    '  Scenario: {"model_name":"Basic","fields":{"Front":"Loss oscillates wildly during training. What is the most likely cause?", '
-    '"Back":"<b>Learning rate is too high</b>. The steps overshoot the minimum."}, "tags":["optimization"]}\n'
-    '  Comparison: {"model_name":"Basic","fields":{"Front":"Compare <b>L1</b> and <b>L2</b> regularization effects.", '
-    '"Back":"<b>L1</b>: Yields sparse weights (feature selection).\\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."}, "tags":["regularization"]}\n'
-)
+_EXAM_DATA = [
+    {
+        "model_name": "Basic",
+        "fields": {
+            "Front": "Loss oscillates wildly during training. What is the most likely cause?", 
+            "Back": "<b>Learning rate is too high</b>. The steps overshoot the minimum."
+        }, 
+        "tags": ["optimization"]
+    },
+    {
+        "model_name": "Basic",
+        "fields": {
+            "Front": "Compare <b>L1</b> and <b>L2</b> regularization effects.", 
+            "Back": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."
+        },
+        "tags": ["regularization"]
+    }
+]
+EXAM_EXAMPLES = _make_example_str(_EXAM_DATA, "Examples (Exam Mode):")
 
 @dataclass
 class PromptConfig:

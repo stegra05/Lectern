@@ -181,7 +181,18 @@ class AnkiCard(BaseModel):
                     fixed_json = _fix_escape_sequences(raw_json)
                     # strict=False allows control characters (like newlines) inside strings
                     data['fields'] = json.loads(fixed_json, strict=False)
-                except Exception as e:
+                except json.JSONDecodeError as e:
+                    # Handle "Extra data" error specifically
+                    if e.msg.startswith("Extra data"):
+                        try:
+                            # The valid JSON ends at e.pos
+                            truncated_json = fixed_json[:e.pos]
+                            data['fields'] = json.loads(truncated_json, strict=False)
+                            # If successful, we just ignore the extra data
+                            return data
+                        except Exception:
+                            pass # Fall through to general error handling
+
                     # Fallback: If parsing fails, try to salvage or provide error field
                     # Don't crash the whole batch for one bad card
                     print(f"WARNING: Failed to parse fields_json for card: {e}. Raw: {raw_json[:50]}...")
@@ -192,6 +203,18 @@ class AnkiCard(BaseModel):
                         data['fields'] = json.loads(aggressive, strict=False)
                     except:
                         # Final fallback
+                        data['fields'] = {
+                            "Front": "Error parsing generated card content",
+                            "Back": f"Raw content: {raw_json}",
+                            "Error": str(e)
+                        }
+                except Exception as e:
+                     # General exception fallback
+                    print(f"WARNING: Failed to parse fields_json for card: {e}. Raw: {raw_json[:50]}...")
+                    try:
+                        aggressive = _aggressive_escape_fix(raw_json)
+                        data['fields'] = json.loads(aggressive, strict=False)
+                    except:
                         data['fields'] = {
                             "Front": "Error parsing generated card content",
                             "Back": f"Raw content: {raw_json}",
