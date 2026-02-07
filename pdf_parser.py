@@ -283,6 +283,14 @@ def _compress_image(
     """
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:
+            # OPTIMIZATION: If already JPEG and small enough, return original bytes
+            if (
+                img.format == "JPEG"
+                and max(img.size) <= max_dimension
+                and img.mode in ("RGB", "L")
+            ):
+                return image_bytes
+
             # Convert to RGB if necessary (e.g. for JPEG saving)
             if img.mode in ("RGBA", "P", "CMYK"):
                 img = img.convert("RGB")
