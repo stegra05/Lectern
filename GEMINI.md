@@ -35,7 +35,7 @@ Lectern follows a modular pipeline architecture to ensure high-yield card genera
 
 ### Prerequisites
 
--   Anki installed with the [AnkiConnect](https://ankiweb.net/shared/info/2055079234) add-on.
+-   Anki installed with the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on.
 -   A Google Gemini API Key.
 
 ### Setup

@@ -169,11 +169,11 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                             <p>Connection failed. Is Anki running with AnkiConnect?</p>
                             <div className="text-xs text-red-300">
                               <p>1. Open Anki → Tools → Add-ons</p>
-                              <p>2. Get Add-ons → Code: <span className="font-mono bg-red-500/20 px-1 rounded select-all">2055079234</span></p>
+                              <p>2. Get Add-ons → Code: <span className="font-mono bg-red-500/20 px-1 rounded select-all">2055492159</span></p>
                               <p>3. Restart Anki</p>
                             </div>
                             <a
-                              href="https://ankiweb.net/shared/info/2055079234"
+                              href="https://ankiweb.net/shared/info/2055492159"
                               target="_blank"
                               rel="noreferrer"
                               className="inline-block text-xs underline hover:text-white"
