@@ -159,6 +159,7 @@ class ConceptMapResponse(BaseModel):
     objectives: List[str]
     concepts: List[Concept]
     relations: List[Relation]
+    language: Optional[str] = None
 
 class AnkiCard(BaseModel):
     model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")

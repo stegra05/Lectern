@@ -15,6 +15,7 @@ from anki_connector import (
 )
 from pdf_parser import extract_content_from_pdf, extract_pdf_title
 from ai_client import LecternAIClient
+from ai_pacing import PacingState
 from utils.tags import infer_slide_set_name, infer_slide_set_name_with_ai
 from utils.note_export import export_card_to_anki
 from utils.state import save_state, clear_state, load_state
@@ -320,27 +321,14 @@ class LecternGenerationService:
                         }
                     )
 
-                    # NOTE(Pacing): Calculate real-time feedback for the AI
-                    pacing_hint = ""
-                    if covered_slides and len(all_cards) > 10:
-                        last_slide = max(covered_slides)
-                        actual_density = len(all_cards) / last_slide
-                        pacing_hint = (
-                            f"Progress: Slide {last_slide} of {len(pages)}.\\n"
-                            f"Status: You have generated {len(all_cards)} cards so far (~{actual_density:.1f} per slide).\\n"
-                        )
-                        if exam_mode:
-                            target = 0.9
-                            if actual_density > target * 1.2:
-                                pacing_hint += f"ADVICE: Density is too high (Target: {target}). Increase your filtering threshold! Focus ONLY on the most complex, exam-critical nuances."
-                            elif actual_density < target * 0.8:
-                                pacing_hint += f"ADVICE: Density is low (Target: {target}). You may capture more application-based nuances if they are high-yield."
-                        else:
-                            # Normal mode feedback using the effective_target calculated earlier
-                            if actual_density > effective_target * 1.25:
-                                pacing_hint += f"ADVICE: Density is too high (Target: ~{effective_target:.1f}). Raise your bar for importance. Focus on more substantial concepts to avoid bloat."
-                            elif actual_density < effective_target * 0.75:
-                                pacing_hint += f"ADVICE: Density is low (Target: ~{effective_target:.1f}). Look closer at the slides for missed details or defined terms."
+                    # NOTE(Pacing): Calculate real-time feedback using PacingState
+                    pacing_hint = PacingState(
+                        current_cards=len(all_cards),
+                        covered_slides=covered_slides,
+                        total_pages=len(pages),
+                        exam_mode=exam_mode,
+                        target_density=effective_target if not exam_mode else 0.9,
+                    ).hint
 
                     out = ai.generate_more_cards(
                         limit=limit,

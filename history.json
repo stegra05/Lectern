@@ -1,5 +1,113 @@
 [
   {
+    "id": "65de7485-9593-41ad-90b2-ddd5fbcfb44e",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:05:21.267658",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "bf3150ef-7e37-44d5-ada0-d938f9a8b7f6",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:05:21.264364",
+    "card_count": 1,
+    "status": "draft"
+  },
+  {
+    "id": "29cd6c9b-ebd4-48a8-9b96-bfbb17762371",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:05:21.260391",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "2b9cc37e-bbcb-49e8-89df-b09933ec0ec1",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:05:21.259402",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "6878ce44-e8c2-4fd2-993f-849140ff1618",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:05:21.257027",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "81fb93d1-c8d0-41e8-a2ce-9ee5c366cef3",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:05:21.254007",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "16e99539-48e2-44ea-b81e-dabfe25d3a26",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:04:57.137461",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "9948d5ee-c1a7-4f7a-8c6a-af3b44206f05",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:04:57.134025",
+    "card_count": 1,
+    "status": "draft"
+  },
+  {
+    "id": "74164f0b-7e47-4bb6-8ab8-2fd3f4c213d5",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:04:57.129396",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "2f5b7ceb-0a88-4e60-8787-bc3e461b9971",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:04:57.128431",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "c8d306f9-b885-41de-bf73-58378717e783",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:04:57.123672",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "795a45e7-d76f-4f6e-a749-084611b9b56a",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T16:04:57.084908",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
     "id": "a66fc8c3-5969-45fa-ad15-6cbe9d4d00ed",
     "filename": "mock.pdf",
     "full_path": "/Users/stef/Dev/Lectern/mock.pdf",
