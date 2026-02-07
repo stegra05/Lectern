@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Trash2, Plus, ChevronRight } from 'lucide-react';
+import { Clock, Trash2, Plus, ChevronRight, Check } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 
 import type { Step } from '../hooks/useAppState';
@@ -24,6 +25,32 @@ export function DashboardView({
     setStep,
     loadSession,
 }: DashboardViewProps) {
+    type FilterType = 'all' | 'completed' | 'draft' | 'error';
+
+    // Initial state from localStorage or default to 'completed'
+    const [historyFilter, setHistoryFilter] = useState<FilterType>(() => {
+        const saved = localStorage.getItem('lectern-history-filter');
+        return (saved as FilterType) || 'completed';
+    });
+
+    // Persist filter choice
+    useEffect(() => {
+        localStorage.setItem('lectern-history-filter', historyFilter);
+    }, [historyFilter]);
+
+    // Calculate counts for each status
+    const counts = {
+        all: history.length,
+        completed: history.filter(h => h.status === 'completed').length,
+        draft: history.filter(h => h.status === 'draft').length,
+        error: history.filter(h => h.status === 'error').length,
+    };
+
+    // Apply filter
+    const filteredHistory = historyFilter === 'all'
+        ? history
+        : history.filter(h => h.status === historyFilter);
+
     const containerVariants = {
         hidden: { opacity: 0 },
         show: {
@@ -70,12 +97,52 @@ export function DashboardView({
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2 scrollbar-thin scrollbar-thumb-border max-h-[60vh]">
-                        {history.length === 0 ? (
-                            <div className="text-text-muted text-sm italic text-center py-10">
-                                No recent sessions found.
+                        {/* Filter row */}
+                        <div className="flex flex-wrap gap-2 mb-4 pb-2 border-b border-border/30">
+                            {[
+                                { id: 'all', label: 'All' },
+                                { id: 'completed', label: 'Completed' },
+                                { id: 'draft', label: 'In Progress' },
+                                { id: 'error', label: 'Errors' }
+                            ].map((filter) => {
+                                const isActive = historyFilter === filter.id;
+                                return (
+                                    <button
+                                        key={filter.id}
+                                        onClick={() => setHistoryFilter(filter.id as FilterType)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${isActive
+                                                ? 'bg-primary/20 border-primary/50 text-primary shadow-sm'
+                                                : 'bg-surface/50 border-border/50 text-text-muted hover:border-primary/30 hover:bg-surface'
+                                            }`}
+                                    >
+                                        {filter.label}
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-primary/30' : 'bg-surface-lighter'
+                                            }`}>
+                                            {counts[filter.id as keyof typeof counts]}
+                                        </span>
+                                        {isActive && <Check className="w-3 h-3" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {filteredHistory.length === 0 ? (
+                            <div className="text-text-muted text-sm italic py-10 flex flex-col items-center gap-2">
+                                <span>
+                                    {history.length === 0
+                                        ? "No sessions found."
+                                        : `No ${historyFilter === 'draft' ? 'in-progress' : historyFilter} sessions.`}
+                                </span>
+                                {history.length > 0 && historyFilter !== 'all' && (
+                                    <button
+                                        onClick={() => setHistoryFilter('all')}
+                                        className="text-primary hover:underline font-normal not-italic"
+                                    >
+                                        View all instead
+                                    </button>
+                                )}
                             </div>
                         ) : (
-                            history.map((entry) => (
+                            filteredHistory.map((entry) => (
                                 <div
                                     key={entry.id}
                                     className="relative group"
