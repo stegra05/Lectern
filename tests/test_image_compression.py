@@ -84,3 +84,17 @@ def test_compress_image_invalid_data():
     invalid_bytes = b"This is not an image"
     result = _compress_image(invalid_bytes)
     assert result == invalid_bytes
+
+def test_compress_image_skip_recompression():
+    """Test that a valid small JPEG is returned as-is without recompression."""
+    # Create a small RGB JPEG
+    img = Image.new('RGB', (500, 500), 'green')
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=80)
+    original_bytes = buf.getvalue()
+
+    # Compress
+    result_bytes = _compress_image(original_bytes, max_dimension=1024)
+
+    # They should be exactly the same bytes object if optimization works
+    assert result_bytes == original_bytes
