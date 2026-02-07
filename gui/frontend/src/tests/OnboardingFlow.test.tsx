@@ -73,7 +73,7 @@ describe('OnboardingFlow', () => {
         // Wait for failure state
         await waitFor(() => {
             expect(screen.getByText(/Is Anki running with AnkiConnect/i)).toBeInTheDocument();
-            expect(screen.getByText(/2055079234/)).toBeInTheDocument();
+            expect(screen.getByText(/2055492159/)).toBeInTheDocument();
         });
     });
 
