@@ -24,7 +24,8 @@ from ai_schemas import (
     AnkiCard,
     preprocess_fields_json_escapes,
 )
-from utils.cli import debug
+import logging
+logger = logging.getLogger(__name__)
 
 # Manual schema definitions for Gemini API to avoid Pydantic/Protobuf mismatches
 # (Gemini SDK does not support 'default', '$defs', 'anyOf', 'additionalProperties', etc.)
@@ -133,7 +134,7 @@ class LecternAIClient:
         # NOTE(Exam-Mode): Combine base formatting with exam context when exam_mode is enabled
         if exam_mode:
             system_instruction = EXAM_PREP_CONTEXT + LATEX_STYLE_GUIDE + EXAM_EXAMPLES
-            debug("[AI] Exam mode ENABLED - prioritizing comparison/application cards")
+            logger.debug("[AI] Exam mode ENABLED - prioritizing comparison/application cards")
         else:
             system_instruction = LATEX_STYLE_GUIDE + BASIC_EXAMPLES
         
@@ -157,7 +158,7 @@ class LecternAIClient:
         )
         
         self._log_path = _start_session_log()
-        debug("[AI] Started session via LecternAIClient (google-genai)")
+        logger.debug("[AI] Started session via LecternAIClient (google-genai)")
 
     @property
     def log_path(self) -> str:
@@ -251,9 +252,9 @@ class LecternAIClient:
 
             new_history = history[:2] + history[-6:]
             self.restore_history(new_history)
-            debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
+            logger.debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
         except Exception as e:
-            debug(f"[AI] History pruning failed: {e}")
+            logger.debug(f"[AI] History pruning failed: {e}")
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         exam_context = ""
@@ -275,7 +276,7 @@ class LecternAIClient:
         # Adjust _compose_multimodal_content to return types.Content parts if needed, 
         # but google-genai handles simple dicts/strings well.
         parts = _compose_multimodal_content(pdf_content, prompt)
-        debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
+        logger.debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
         
         # Update config for this specific call to include response_schema
         call_config = self._generation_config.model_copy(update={
@@ -288,7 +289,7 @@ class LecternAIClient:
         )
         
         text = response.text or ""
-        debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\\n',' ')}...")
+        logger.debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
         
         # Attempt to fix escape sequences (common in LaTeX content)
@@ -296,7 +297,7 @@ class LecternAIClient:
             fixed_text = preprocess_fields_json_escapes(text)
             data_obj = ConceptMapResponse.model_validate_json(fixed_text)
         except Exception as e:
-            debug(f"[Chat/ConceptMap] Standard parsing failed, trying aggressive fix: {e}")
+            logger.debug(f"[Chat/ConceptMap] Standard parsing failed, trying aggressive fix: {e}")
             # Aggressive fallback matching other methods
             aggressive_fix = text.replace('\\', '\\\\')
             for char in ['"', 'n', 't', 'r', '/']:
@@ -378,7 +379,7 @@ class LecternAIClient:
         )
         
         text = response.text or ""
-        debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
+        logger.debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
         
         # Try multiple parsing strategies
@@ -391,7 +392,7 @@ class LecternAIClient:
             data_obj = CardGenerationResponse.model_validate_json(fixed_text)
             parse_strategy = "standard"
         except Exception as e1:
-            debug(f"[Chat/Gen] Standard parsing failed: {e1}")
+            logger.debug(f"[Chat/Gen] Standard parsing failed: {e1}")
             
             # Strategy 2: Aggressive backslash normalization
             try:
@@ -406,9 +407,9 @@ class LecternAIClient:
                 aggressive_fix = aggressive_fix.replace('\\\\\\\\', '\\\\')
                 data_obj = CardGenerationResponse.model_validate_json(aggressive_fix)
                 parse_strategy = "aggressive"
-                debug("[Chat/Gen] Aggressive parsing succeeded")
+                logger.debug("[Chat/Gen] Aggressive parsing succeeded")
             except Exception as e2:
-                debug(f"[Chat/Gen] Aggressive parsing failed: {e2}")
+                logger.debug(f"[Chat/Gen] Aggressive parsing failed: {e2}")
                 
                 # Strategy 3: Try to extract whatever valid cards we can
                 try:
@@ -417,11 +418,11 @@ class LecternAIClient:
                     cards_match = re.search(r'"cards"\s*:\s*\[(.*)\]', text, re.DOTALL)
                     if cards_match:
                         # Return an empty but valid structure so generation can continue
-                        debug("[Chat/Gen] Falling back to empty cards due to parse errors")
+                        logger.debug("[Chat/Gen] Falling back to empty cards due to parse errors")
                         data_obj = CardGenerationResponse(cards=[], done=False)
                         parse_strategy = "fallback_empty"
                 except Exception as e3:
-                    debug(f"[Chat/Gen] All parsing strategies failed: {e3}")
+                    logger.debug(f"[Chat/Gen] All parsing strategies failed: {e3}")
                     raise e1  # Re-raise original error
         
         if data_obj is None:
@@ -476,7 +477,7 @@ class LecternAIClient:
         )
         
         text = response.text or ""
-        debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\\n',' ')}...")
+        logger.debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\\n',' ')}...")
         _append_session_log(self._log_path, "reflection", [{"text": prompt}], text, True)
 
         data_obj = None
@@ -486,7 +487,7 @@ class LecternAIClient:
             data_obj = ReflectionResponse.model_validate_json(fixed_text)
             parse_strategy = "standard"
         except Exception as e1:
-            debug(f"[Chat/Reflect] Standard parsing failed: {e1}")
+            logger.debug(f"[Chat/Reflect] Standard parsing failed: {e1}")
             try:
                 aggressive_fix = text.replace('\\', '\\\\')
                 for char in ['"', 'n', 't', 'r', '/']:
@@ -494,13 +495,13 @@ class LecternAIClient:
                 aggressive_fix = aggressive_fix.replace('\\\\\\\\', '\\\\')
                 data_obj = ReflectionResponse.model_validate_json(aggressive_fix)
                 parse_strategy = "aggressive"
-                debug("[Chat/Reflect] Aggressive parsing succeeded")
+                logger.debug("[Chat/Reflect] Aggressive parsing succeeded")
             except Exception as e2:
-                debug(f"[Chat/Reflect] Aggressive parsing failed: {e2}")
+                logger.debug(f"[Chat/Reflect] Aggressive parsing failed: {e2}")
                 data_obj = ReflectionResponse(reflection="", cards=[], done=True)
                 parse_strategy = "fallback_empty"
 
-        debug(f"[Chat/Reflect] Parse strategy: {parse_strategy}")
+        logger.debug(f"[Chat/Reflect] Parse strategy: {parse_strategy}")
         data = data_obj.model_dump()
 
         if isinstance(data, dict):
@@ -519,7 +520,7 @@ class LecternAIClient:
                 # Use model_dump for Pydantic models in google-genai
                 serialized.append(item.model_dump(exclude_none=True))
         except Exception as e:
-            debug(f"[AI] Failed to serialize history: {e}")
+            logger.debug(f"[AI] Failed to serialize history: {e}")
             return []
         return serialized
 
@@ -534,9 +535,9 @@ class LecternAIClient:
                 config=self._generation_config,
                 history=parsed_history
             )
-            debug(f"[AI] Restored history with {len(history)} turns")
+            logger.debug(f"[AI] Restored history with {len(history)} turns")
         except Exception as e:
-            debug(f"[AI] Failed to restore history: {e}")
+            logger.debug(f"[AI] Failed to restore history: {e}")
 
     def count_tokens(self, content: List[Dict[str, Any]]) -> int:
         """Count tokens for a given content list."""
@@ -551,5 +552,5 @@ class LecternAIClient:
             )
             return response.total_tokens
         except Exception as e:
-            debug(f"[AI] Token counting failed: {e}")
+            logger.debug(f"[AI] Token counting failed: {e}")
             return 0

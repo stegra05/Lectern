@@ -1,5 +1,59 @@
 [
   {
+    "id": "9dc04a30-e099-4e85-b776-f28c86e07d37",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T15:18:19.197418",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "ca5545fc-c986-4ac4-ae12-6783016067d1",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T15:18:19.194671",
+    "card_count": 1,
+    "status": "draft"
+  },
+  {
+    "id": "fe7d2845-c2b3-4779-8be4-f104b5affcac",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T15:18:19.190751",
+    "card_count": 0,
+    "status": "draft"
+  },
+  {
+    "id": "adcf207a-c49a-4c9f-9bca-d1dcf9d058dd",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T15:18:19.189705",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "5eac7216-f222-4f8a-bc33-ffc59d67bae7",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T15:18:15.219101",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
+    "id": "0f11704d-16d7-4663-95bf-1a4d1611d704",
+    "filename": "path.pdf",
+    "full_path": "/fake/path.pdf",
+    "deck": "Test Deck",
+    "date": "2026-02-07T15:18:15.175788",
+    "card_count": 0,
+    "status": "error"
+  },
+  {
     "id": "3ddc41a9-939f-446f-a72d-0d05ad9efe2c",
     "filename": "path.pdf",
     "full_path": "/fake/path.pdf",

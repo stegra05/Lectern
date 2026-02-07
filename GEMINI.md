@@ -22,12 +22,11 @@ Lectern follows a modular pipeline architecture to ensure high-yield card genera
 2.  **AI Client (`ai_client.py`):** Interfaces with Google's Gemini API. It uses multimodal prompting to "see" slides and builds a **Global Concept Map** to maintain coherence.
 3.  **Service Layer (`lectern_service.py`):** The central orchestrator that manages the state, handles "resume" functionality, and emits events for progress tracking.
 4.  **Interfaces:**
-    *   **CLI (`main.py`):** A powerful command-line interface with interactive modes and cost estimation.
     *   **GUI (`gui/`):** A modern desktop application built with React (frontend) and FastAPI (backend), wrapped in `pywebview`.
 
 ## Core Technologies
 
--   **Backend:** Python 3.10+, FastAPI, Uvicorn, PyMuPDF, `google-genai`, `pywebview`, `keyring`, `rich`.
+-   **Backend:** Python 3.10+, FastAPI, Uvicorn, PyMuPDF, `google-genai`, `pywebview`, `keyring`.
 -   **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Lucide React.
 -   **AI:** Google Gemini (Multimodal).
 -   **Integration:** AnkiConnect (External REST API for Anki).
@@ -53,24 +52,18 @@ Lectern follows a modular pipeline architecture to ensure high-yield card genera
     npm install
     ```
 3.  **API Key Setup:**
-    ```bash
-    python main.py --set-key
-    ```
+    Check the App Settings in the GUI.
 
 ### Running
 
 -   **CLI Mode:**
-    ```bash
-    python main.py --pdf-path lecture.pdf --deck-name "Computer Science" --interactive
-    ```
+    (Removed)
 -   **GUI Mode:**
     ```bash
     python gui/launcher.py
     ```
 -   **Cost Estimation:**
-    ```bash
-    python main.py --pdf-path lecture.pdf --estimate
-    ```
+    (Available via GUI/API)
 
 ## Development Conventions
 
@@ -84,6 +77,6 @@ Lectern follows a modular pipeline architecture to ensure high-yield card genera
 ## Directory Structure
 
 -   `/gui`: Contains the FastAPI backend and React frontend.
--   `/utils`: Shared utilities for CLI, state, history, and Anki integration.
+-   `/utils`: Shared utilities for state, history, and Anki integration.
 -   `/docs`: Architectural deep-dives and design goals.
 -   `lectern_service.py`: The heart of the application logic.

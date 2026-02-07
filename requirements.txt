@@ -1,4 +1,4 @@
-# Core dependencies for Lectern CLI
+# Core dependencies for Lectern
 
 # PDF parsing and image extraction (lightweight alternative to PyMuPDF)
 # NOTE: Requires Poppler system dependency (`brew install poppler` on macOS)
@@ -20,9 +20,6 @@ python-multipart>=0.0.9
 # GUI
 pywebview>=5.0
 pyobjc-framework-Cocoa>=10.0; platform_system=="Darwin"
-
-# CLI enhancements
-rich>=13.7.1,<14.0
 
 # Environment file support (optional)
 python-dotenv>=1.0.1

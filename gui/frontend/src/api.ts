@@ -6,9 +6,9 @@ export const getApiUrl = () => {
         const port = window.location.port;
         const hostname = window.location.hostname || 'localhost';
 
-        // Special case for Vite dev server
-        if (port === '5173') {
-            return "http://localhost:8000";
+        // Special case for Vite dev server default
+        if (port === '5173' || port === '5174') {
+             return "http://localhost:4173";
         }
 
         // If we're on a specific port (packaged app), use same origin
@@ -17,7 +17,7 @@ export const getApiUrl = () => {
         }
     }
     // Fallback for dev mode
-    return "http://localhost:8000";
+    return "http://localhost:4173";
 };
 
 const API_URL = getApiUrl();
