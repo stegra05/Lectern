@@ -16,6 +16,7 @@ export function useAppState() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isCheckingHealth, setIsCheckingHealth] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -108,6 +109,8 @@ export function useAppState() {
     isCheckingHealth,
     isSettingsOpen,
     setIsSettingsOpen,
+    isHistoryOpen,
+    setIsHistoryOpen,
     theme,
     toggleTheme,
     isRefreshingStatus,

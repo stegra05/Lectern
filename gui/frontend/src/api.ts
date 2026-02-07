@@ -94,6 +94,7 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutM
 export interface Estimation {
     tokens: number;
     cost: number;
+    pages: number;
 }
 
 export interface HealthStatus {

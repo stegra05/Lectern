@@ -299,9 +299,19 @@ async def clear_history():
 @app.delete("/history/{entry_id}")
 async def delete_history_entry(entry_id: str):
     mgr = HistoryManager()
+    entry = mgr.get_entry(entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    
+    # Clean up persistent session state
+    session_id = entry.get("session_id")
+    if session_id:
+        from utils.state import clear_state
+        clear_state(session_id)
+        
     success = mgr.delete_entry(entry_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Entry not found")
+        raise HTTPException(status_code=500, detail="Failed to delete history entry")
     return {"status": "deleted"}
 
 @app.post("/estimate")
@@ -388,6 +398,7 @@ async def generate_cards(
     entry_id = history_mgr.add_entry(
         filename=pdf_file.filename,
         deck=deck_name,
+        session_id=session.session_id,
         status="draft"
     )
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, type ProgressEvent, type Card } from '../api';
+import { api, type ProgressEvent, type Card, type Estimation } from '../api';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from './useAppState';
 
@@ -11,7 +11,7 @@ export function useGeneration(setStep: (step: Step) => void) {
   const [logs, setLogs] = useState<ProgressEvent[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [estimation, setEstimation] = useState<{ tokens: number, cost: number } | null>(null);
+  const [estimation, setEstimation] = useState<Estimation | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
   const [previewSlide, setPreviewSlide] = useState<number | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -25,6 +25,7 @@ export function useGeneration(setStep: (step: Step) => void) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Card | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [syncLogs, setSyncLogs] = useState<ProgressEvent[]>([]);
   const [confirmModal, setConfirmModal] = useState<{
@@ -118,6 +119,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     setEditingIndex(null);
     setEditForm(null);
     setIsSyncing(false);
+    setSyncSuccess(false);
     setSyncLogs([]);
     setConfirmModal({ isOpen: false, type: 'lectern', index: -1 });
   };
@@ -149,7 +151,7 @@ export function useGeneration(setStep: (step: Step) => void) {
           } else if (event.type === 'progress_update') {
             setProgress(prev => ({ ...prev, current: (event.data as { current: number }).current }));
           } else if (event.type === 'card_generated') {
-            setCards(prev => [(event.data as { card: Card }).card, ...prev]);
+            setCards(prev => [...prev, (event.data as { card: Card }).card]);
           } else if (event.type === 'step_start') {
             if (event.message.includes('concept map')) {
               setCurrentPhase('concept');
@@ -247,6 +249,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     editingIndex, setEditingIndex,
     editForm, setEditForm,
     isSyncing, setIsSyncing,
+    syncSuccess,
     syncProgress, setSyncProgress,
     syncLogs, setSyncLogs,
     confirmModal, setConfirmModal,
@@ -339,6 +342,7 @@ export function useGeneration(setStep: (step: Step) => void) {
 
     handleSync: async (onComplete: () => void) => {
       setIsSyncing(true);
+      setSyncSuccess(false);
       setSyncLogs([]);
       try {
         const syncFn = isHistorical && sessionId
@@ -353,6 +357,8 @@ export function useGeneration(setStep: (step: Step) => void) {
             setSyncProgress(prev => ({ ...prev, current: (event.data as { current: number }).current }));
           } else if (event.type === 'done') {
             onComplete();
+            setSyncSuccess(true);
+            setTimeout(() => setSyncSuccess(false), 3000);
           }
         });
       } catch (e) {

@@ -37,6 +37,7 @@ interface ProgressViewProps {
     editingIndex: number | null;
     editForm: Card | null;
     isSyncing: boolean;
+    syncSuccess: boolean;
     syncProgress: { current: number; total: number };
     syncLogs: ProgressEvent[];
     handleDelete: (index: number) => void;
@@ -64,16 +65,19 @@ export function ProgressView({
     handleReset,
     setPreviewSlide,
     logsEndRef,
+    sessionId,
     sortBy,
     setSortBy,
     searchQuery,
     setSearchQuery,
+    isHistorical,
     isError,
 
     // Review Props
     editingIndex,
     editForm,
     isSyncing,
+    syncSuccess,
     syncProgress,
     syncLogs,
     handleDelete,
@@ -140,7 +144,7 @@ export function ProgressView({
             case 'type':
                 return sorted.sort((a, b) => (a.model_name || '').localeCompare(b.model_name || ''));
             default:
-                return sorted; // creation order
+                return sorted.reverse(); // newest first (creation order)
         }
     }, [filteredCards, sortBy]);
 
@@ -198,6 +202,78 @@ export function ProgressView({
         );
     }
 
+    const successOverlay = (
+        <AnimatePresence>
+            {syncSuccess && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md"
+                >
+                    <motion.div
+                        initial={{ scale: 0.5, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 1.1, opacity: 0, y: -20 }}
+                        transition={{ type: "spring", damping: 15, stiffness: 200 }}
+                        className="flex flex-col items-center"
+                    >
+                        <div className="relative w-32 h-32 mb-8">
+                            {/* Outer Glow Ring */}
+                            <motion.div
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1.2, opacity: 1 }}
+                                transition={{ duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
+                                className="absolute inset-0 bg-primary/20 rounded-full blur-2xl"
+                            />
+
+                            {/* Animated Circle */}
+                            <svg className="w-full h-full" viewBox="0 0 100 100">
+                                <motion.circle
+                                    initial={{ pathLength: 0, opacity: 0 }}
+                                    animate={{ pathLength: 1, opacity: 1 }}
+                                    transition={{ duration: 0.8, ease: "easeInOut" }}
+                                    cx="50"
+                                    cy="50"
+                                    r="45"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="8"
+                                    className="text-primary"
+                                    strokeLinecap="round"
+                                />
+
+                                {/* Animated Checkmark */}
+                                <motion.path
+                                    initial={{ pathLength: 0, opacity: 0 }}
+                                    animate={{ pathLength: 1, opacity: 1 }}
+                                    transition={{ duration: 0.6, delay: 0.5, ease: "easeOut" }}
+                                    d="M30 52L44 66L70 34"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="8"
+                                    className="text-primary"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
+                            </svg>
+                        </div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.8 }}
+                            className="text-center"
+                        >
+                            <h2 className="text-3xl font-bold text-text-main mb-2 tracking-tight">Sync Complete!</h2>
+                            <p className="text-text-muted font-medium">Your collection is now up to date.</p>
+                        </motion.div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+
     const content = (
         <motion.div
             initial={{ opacity: 0 }}
@@ -220,7 +296,11 @@ export function ProgressView({
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="font-semibold text-text-main flex items-center gap-2">
                             <Terminal className="w-4 h-4 text-text-muted" />
-                            Activity Log
+                            Activity Log {isHistorical && sessionId && (
+                                <span className="text-[10px] text-text-muted font-mono opacity-60">
+                                    #{sessionId.slice(0, 8)}
+                                </span>
+                            )}
                         </h3>
                         <div className="flex items-center gap-2">
                             {logs.length > 0 && (
@@ -333,7 +413,14 @@ export function ProgressView({
                     <div className="flex items-center gap-4">
                         <h3 className="text-lg font-semibold text-text-main flex items-center gap-2">
                             <Layers className="w-5 h-5 text-text-muted" />
-                            {step === 'done' ? 'Review Queue' : 'Live Preview'}
+                            {isHistorical ? (
+                                <span className="flex items-center gap-2">
+                                    Archive View
+                                    <span className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded text-[10px] font-mono text-primary">HISTORICAL</span>
+                                </span>
+                            ) : (
+                                step === 'done' ? 'Review Queue' : 'Live Preview'
+                            )}
                         </h3>
                         {/* Sort Pills */}
                         <div className="flex items-center gap-1.5 bg-surface/50 p-1 rounded-lg border border-border/50">
@@ -614,5 +701,10 @@ export function ProgressView({
         );
     }
 
-    return content;
+    return (
+        <div className="relative">
+            {successOverlay}
+            {content}
+        </div>
+    );
 };

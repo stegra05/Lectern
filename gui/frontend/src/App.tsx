@@ -11,11 +11,13 @@ import { useAppState } from './hooks/useAppState';
 import { useGeneration } from './hooks/useGeneration';
 import { useHistory } from './hooks/useHistory';
 
-import { DashboardView } from './views/DashboardView';
-import { ConfigView } from './views/ConfigView';
+import { HomeView } from './views/HomeView';
 import { ProgressView } from './views/ProgressView';
+import { HistoryModal } from './components/HistoryModal';
+import { Clock } from 'lucide-react';
 
 // --- Sub-components ---
+// ... (StatusDot and HealthStatus omitted for brevity, I'll use targetContent for precise matching)
 
 const StatusDot = ({ label, active }: { label: string, active: boolean }) => (
   <div className="flex items-center gap-2">
@@ -99,6 +101,7 @@ function App() {
     showOnboarding,
     isCheckingHealth,
     isSettingsOpen, setIsSettingsOpen,
+    isHistoryOpen, setIsHistoryOpen,
     theme, toggleTheme,
     isRefreshingStatus, refreshHealth
   } = useAppState();
@@ -136,6 +139,7 @@ function App() {
     editingIndex,
     editForm,
     isSyncing,
+    syncSuccess,
     syncProgress,
     syncLogs,
     handleDelete,
@@ -208,6 +212,13 @@ function App() {
             <div className="flex items-center gap-3">
               <HealthStatus health={health} isChecking={isRefreshingStatus} onRefresh={refreshHealth} />
               <button
+                onClick={() => setIsHistoryOpen(true)}
+                className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
+                title="Recent Sessions"
+              >
+                <Clock className="w-5 h-5" />
+              </button>
+              <button
                 onClick={toggleTheme}
                 className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
                 title="Toggle Theme"
@@ -237,22 +248,9 @@ function App() {
                 exit={{ opacity: 0, y: -10 }}
               >
                 <AnimatePresence mode="wait">
-                  {step === 'dashboard' && (
-                    <DashboardView
-                      key="dashboard"
-                      history={history}
-                      clearAllHistory={clearAllHistory}
-                      deleteHistoryEntry={deleteHistoryEntry}
-                      setDeckName={setDeckName}
-                      setPdfFile={setPdfFile}
-                      setStep={setStep}
-                      loadSession={loadSession}
-                    />
-                  )}
-
-                  {step === 'config' && (
-                    <ConfigView
-                      key="config"
+                  {(step === 'dashboard' || step === 'config') && (
+                    <HomeView
+                      key="home"
                       pdfFile={pdfFile}
                       setPdfFile={setPdfFile}
                       deckName={deckName}
@@ -266,7 +264,6 @@ function App() {
                       estimation={estimation}
                       isEstimating={isEstimating}
                       handleGenerate={handleGenerate}
-
                       health={health}
                     />
                   )}
@@ -299,6 +296,7 @@ function App() {
                       editingIndex={editingIndex}
                       editForm={editForm}
                       isSyncing={isSyncing}
+                      syncSuccess={syncSuccess}
                       syncProgress={syncProgress}
                       syncLogs={syncLogs}
                       handleDelete={handleDelete}
@@ -318,6 +316,15 @@ function App() {
           </AnimatePresence>
         </main>
       </div>
+
+      <HistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        history={history}
+        clearAllHistory={clearAllHistory}
+        deleteHistoryEntry={deleteHistoryEntry}
+        loadSession={loadSession}
+      />
 
       <SettingsModal
         isOpen={isSettingsOpen}

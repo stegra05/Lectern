@@ -56,13 +56,17 @@ class HistoryManager:
     def add_entry(self, 
                   filename: str, 
                   deck: str, 
+                  session_id: Optional[str] = None,
                   status: str = "draft") -> str:
         """Create a new history entry and return its ID."""
         history = self._load()
         entry_id = str(uuid.uuid4())
+        # If no session_id provided, default to entry_id (legacy behavior)
+        final_session_id = session_id if session_id else entry_id
+        
         entry = {
             "id": entry_id,
-            "session_id": entry_id,  # Explicit link to state file
+            "session_id": final_session_id,  # Explicit link to state file
             "filename": os.path.basename(filename),
             "full_path": os.path.abspath(filename),
             "deck": deck,

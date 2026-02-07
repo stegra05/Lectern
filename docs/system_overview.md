@@ -17,7 +17,7 @@ graph TD
     
     subgraph Phase2 [Phase 2: AI Orchestration]
         Service -->|1. Init Session| AI[AI Client]
-        AI -->|2. Send PDF Content| Gemini[Gemini 1.5 Flash]
+        AI -->|2. Send PDF Content| Gemini[Gemini 3 Flash]
         Gemini -->|3. Concept Map| AI
         
         loop "Generation Loop"
