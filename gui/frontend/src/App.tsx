@@ -119,7 +119,9 @@ function App() {
     copied,
     sessionId,
     sortBy,
-    setSortBy
+    setSortBy,
+    searchQuery,
+    setSearchQuery
   } = useGeneration(setStep);
 
   const {
@@ -262,6 +264,8 @@ function App() {
                       sessionId={sessionId}
                       sortBy={sortBy}
                       setSortBy={setSortBy}
+                      searchQuery={searchQuery}
+                      setSearchQuery={setSearchQuery}
                     />
                   )}
                 </AnimatePresence>

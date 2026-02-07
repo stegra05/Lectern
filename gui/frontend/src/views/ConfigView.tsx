@@ -12,8 +12,8 @@ interface ConfigViewProps {
     setPdfFile: (file: File | null) => void;
     deckName: string;
     setDeckName: (name: string) => void;
-    examMode: boolean;
-    toggleExamMode: () => void;
+    focusPrompt: string;
+    setFocusPrompt: (prompt: string) => void;
     sourceType: 'auto' | 'slides' | 'script';
     setSourceType: (type: 'auto' | 'slides' | 'script') => void;
     densityTarget: number;
@@ -30,8 +30,8 @@ export function ConfigView({
     setPdfFile,
     deckName,
     setDeckName,
-    examMode,
-    toggleExamMode,
+    focusPrompt,
+    setFocusPrompt,
     sourceType,
     setSourceType,
     densityTarget,
@@ -104,42 +104,18 @@ export function ConfigView({
                     </div>
 
                     <div className="pt-4 border-t border-border/50">
-                        <button
-                            onClick={toggleExamMode}
-                            className={clsx(
-                                "w-full flex items-center justify-between p-4 rounded-xl border transition-all",
-                                examMode
-                                    ? "bg-primary/10 border-primary/30 hover:border-primary/50"
-                                    : "bg-surface/30 border-border/50 hover:border-border"
-                            )}
-                        >
-                            <div className="flex items-center gap-3">
-
-                                <div className="text-left">
-                                    <div className={clsx(
-                                        "font-semibold",
-                                        examMode ? "text-primary" : "text-text-main"
-                                    )}>Exam Mode</div>
-                                    <div className="text-xs text-text-muted">
-                                        {examMode ? "Comparison & application cards" : "Standard card generation"}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className={clsx(
-                                "w-12 h-6 rounded-full p-1 transition-colors",
-                                examMode ? "bg-primary" : "bg-surface"
-                            )}>
-                                <div className={clsx(
-                                    "w-4 h-4 rounded-full bg-white shadow transition-transform",
-                                    examMode ? "translate-x-6" : "translate-x-0"
-                                )} />
-                            </div>
-                        </button>
-                        {examMode && (
-                            <p className="mt-2 text-xs text-primary/70 px-2">
-                                Prioritizes understanding over memorization. 30% comparison, 25% application, 25% intuition, 20% definition cards.
-                            </p>
-                        )}
+                        <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">
+                            Focus Prompt (Optional)
+                        </label>
+                        <textarea
+                            value={focusPrompt}
+                            onChange={(e) => setFocusPrompt(e.target.value)}
+                            placeholder="E.g., 'Focus on definitions and key terms', or 'Prioritize clinical applications and case studies'."
+                            className="w-full bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm min-h-[80px] focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-text-muted resize-y"
+                        />
+                        <p className="mt-2 text-xs text-text-muted px-1">
+                            Guide the AI on what to prioritize. Leave empty for balanced coverage.
+                        </p>
                     </div>
 
                     <div className="pt-4 border-t border-border/50">

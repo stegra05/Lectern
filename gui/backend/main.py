@@ -318,7 +318,7 @@ async def generate_cards(
     model_name: str = Form(config.DEFAULT_GEMINI_MODEL),
     tags: str = Form("[]"),  # JSON string
     context_deck: str = Form(""),
-    exam_mode: bool = Form(False),  # Enable exam-focused card generation
+    focus_prompt: str = Form(""),  # Optional user focus
     source_type: str = Form("auto"),  # "auto", "slides", "script"
     density_target: float = Form(config.CARDS_PER_SLIDE_TARGET),  # Detail level
     max_notes_per_batch: int = Form(config.MAX_NOTES_PER_BATCH),
@@ -328,10 +328,9 @@ async def generate_cards(
     draft_store = DraftStore()
     service = GenerationService(draft_store)
     
-    # NOTE(Exam-Mode): exam_mode is now passed through the service chain,
-    # not set as a global config mutation. This is thread-safe.
-    if exam_mode:
-        print("Info: Exam mode ENABLED - prioritizing comparison/application cards")
+    # NOTE(Exam-Mode): exam_mode is removed in favor of focus_prompt.
+    if focus_prompt:
+        print(f"Info: User focus: '{focus_prompt}'")
     
     if source_type != "auto":
         print(f"Info: Source type override: {source_type}")
@@ -391,7 +390,7 @@ async def generate_cards(
                 tags=tags_list,
                 context_deck=context_deck,
                 entry_id=entry_id,
-                exam_mode=exam_mode,
+                focus_prompt=focus_prompt,
                 source_type=source_type,
                 density_target=density_target,
                 max_notes_per_batch=max_notes_per_batch,

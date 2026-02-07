@@ -110,33 +110,40 @@ _REFLECTION_SCHEMA = {
 
 class LecternAIClient:
     def __init__(
-        self, 
-        model_name: str | None = None, 
-        exam_mode: bool = False,
+        self,
+        model_name: str | None = None,
+        focus_prompt: str | None = None,
         slide_set_context: Dict[str, Any] | None = None,
         language: str = "en",
     ) -> None:
-        if not config.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not set. Export it before running Lectern.")
-        
-        self._client = genai.Client(
-            api_key=config.GEMINI_API_KEY,
-            http_options={'api_version': 'v1alpha'}
-        )
-        
-        self._model_id = model_name or config.DEFAULT_GEMINI_MODEL
-        self._exam_mode = exam_mode
+        """
+        Initialize the Gemini AI client.
+
+        Args:
+            model_name: Overrides the default model if provided.
+            focus_prompt: Optional user instruction to guide generation.
+            slide_set_context: Optional context from a previous generation (concept map etc.)
+            language: Target language for generation (e.g., 'en', 'de')
+        """
+        self._api_key = config.GEMINI_API_KEY
+        if not self._api_key:
+            raise ValueError("GEMINI_API_KEY not found in environment variables or keychain.")
+
+        self._model_name = model_name or config.DEFAULT_GEMINI_MODEL
+        self._client = genai.Client(api_key=self._api_key)
+
         self._slide_set_context = slide_set_context or {}
-        
-        # Initialize PromptBuilder
-        self._prompt_config = PromptConfig(language=language, exam_mode=exam_mode)
-        self._prompts = PromptBuilder(self._prompt_config)
-        
-        system_instruction = self._prompts.system
-        
-        if exam_mode:
-            logger.debug("[AI] Exam mode ENABLED - prioritizing comparison/application cards")
-        
+
+        # Initialize prompt builder
+        self._prompt_config = PromptConfig(language=language, focus_prompt=focus_prompt)
+        self._prompt_builder = PromptBuilder(self._prompt_config)
+
+        # Initialize history
+        self._history: List[Dict[str, Any]] = []
+
+        # System instruction
+        sys_instruction = self._prompt_builder.system
+
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=config.GEMINI_GENERATION_TEMPERATURE,
@@ -276,7 +283,7 @@ class LecternAIClient:
         )
         
         # Temperature adjustment
-        gen_temperature = config.GEMINI_EXAM_MODE_TEMPERATURE if self._exam_mode else config.GEMINI_NORMAL_MODE_TEMPERATURE
+        gen_temperature = config.GEMINI_NORMAL_MODE_TEMPERATURE
         
         call_config = self._generation_config.model_copy(update={
             "response_schema": _CARD_GENERATION_SCHEMA,
