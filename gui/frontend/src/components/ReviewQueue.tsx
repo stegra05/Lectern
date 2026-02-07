@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Edit2, Save, X, UploadCloud, AlertCircle, Layers } from 'lucide-react';
+import { Trash2, Edit2, Save, X, UploadCloud, AlertCircle, Layers, Archive } from 'lucide-react';
 import { api, type ProgressEvent } from '../api';
 import { GlassCard } from './GlassCard';
+import { ConfirmModal } from './ConfirmModal';
 
 interface ReviewQueueProps {
     initialCards: any[];
@@ -19,6 +20,12 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId, isHistori
     const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
     const [syncLogs, setSyncLogs] = useState<ProgressEvent[]>([]);
     const [previewSlide, setPreviewSlide] = useState<number | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        type: 'lectern' | 'anki';
+        index: number;
+        noteId?: number;
+    }>({ isOpen: false, type: 'lectern', index: -1 });
 
     useEffect(() => {
         setCards(initialCards);
@@ -31,6 +38,14 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId, isHistori
 
             if (isHistorical && sessionId) {
                 await api.updateSessionCards(sessionId, newCards);
+                // Also call deleteSessionCard API to ensure history count is updated
+                // The above updateSessionCards does save state, but deleteSessionCard 
+                // is specifically built to return 'remaining' and update history.
+                // However, updateSessionCards overwrites everything so it's safer for consistency.
+                // But we should use deleteSessionCard for single deletions if we want the history count update logic 
+                // which I added to delete_session_card endpoint.
+                // Let's use deleteSessionCard endpoint instead of updateSessionCards for single deletion.
+                await api.deleteSessionCard(sessionId, index);
             } else {
                 await api.deleteDraft(index, sessionId ?? undefined);
             }
@@ -38,6 +53,26 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId, isHistori
             setCards(newCards);
         } catch (e) {
             console.error("Failed to delete card", e);
+        }
+    };
+
+    const handleAnkiDelete = async (noteId: number, index: number) => {
+        try {
+            await api.deleteAnkiNotes([noteId]);
+            // Clear anki_note_id from card but keep card
+            const newCards = [...cards];
+            // Check if card still exists at index (it should)
+            if (newCards[index] && newCards[index].anki_note_id === noteId) {
+                delete newCards[index].anki_note_id;
+                if (isHistorical && sessionId) {
+                    await api.updateSessionCards(sessionId, newCards);
+                } else {
+                    await api.updateDraft(index, newCards[index], sessionId ?? undefined);
+                }
+                setCards(newCards);
+            }
+        } catch (e) {
+            console.error("Failed to delete Anki note", e);
         }
     };
 
@@ -231,13 +266,33 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId, isHistori
                                             >
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
+
                                             <button
-                                                onClick={() => handleDelete(index)}
-                                                className="p-2 hover:bg-red-500/10 rounded-lg text-text-muted hover:text-red-400 transition-colors"
-                                                title="Delete"
+                                                onClick={() => setConfirmModal({
+                                                    isOpen: true,
+                                                    type: 'lectern',
+                                                    index
+                                                })}
+                                                className="p-2 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors"
+                                                title="Remove from Lectern"
                                             >
-                                                <Trash2 className="w-4 h-4" />
+                                                <Archive className="w-4 h-4" />
                                             </button>
+
+                                            {card.anki_note_id && (
+                                                <button
+                                                    onClick={() => setConfirmModal({
+                                                        isOpen: true,
+                                                        type: 'anki',
+                                                        index,
+                                                        noteId: card.anki_note_id
+                                                    })}
+                                                    className="p-2 hover:bg-red-500/10 rounded-lg text-red-300 hover:text-red-400 transition-colors"
+                                                    title="Delete from Anki"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
 
                                         <div className="space-y-4">
@@ -287,6 +342,40 @@ export function ReviewQueue({ initialCards, onSyncComplete, sessionId, isHistori
             </div>
 
             {/* Thumbnail Modal */}
+            <AnimatePresence>
+                {/* ... existing thumbnail modal ... */}
+            </AnimatePresence>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                onConfirm={() => {
+                    if (confirmModal.type === 'lectern') {
+                        handleDelete(confirmModal.index);
+                    } else if (confirmModal.type === 'anki' && confirmModal.noteId) {
+                        handleAnkiDelete(confirmModal.noteId, confirmModal.index);
+                    }
+                }}
+                title={confirmModal.type === 'lectern' ? "Remove from Lectern?" : "Permanently Delete from Anki?"}
+                description={
+                    confirmModal.type === 'lectern' ? (
+                        <>
+                            This will remove the card from your current session view.
+                            <br /><br />
+                            <strong>Note:</strong> If this card is synced to Anki, it will <em>remain in Anki</em>.
+                        </>
+                    ) : (
+                        <>
+                            Are you sure you want to delete this card from Anki?
+                            <br /><br />
+                            <strong className="text-red-400">This action cannot be undone.</strong>
+                        </>
+                    )
+                }
+                confirmText={confirmModal.type === 'lectern' ? "Remove" : "Delete Permanently"}
+                variant={confirmModal.type === 'lectern' ? 'default' : 'destructive'}
+            />
+
             <AnimatePresence>
                 {previewSlide !== null && (
                     <motion.div
