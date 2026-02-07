@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Settings, AlertCircle, Save } from 'lucide-react';
+import { X, Settings, AlertCircle, Save, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 
@@ -24,7 +24,19 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
     const [error, setError] = useState<string | null>(null);
     const [newKey, setNewKey] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
+    const Tooltip = ({ text }: { text: string }) => (
+        <div className="group relative inline-block ml-2">
+            <HelpCircle className="w-4 h-4 text-text-muted hover:text-text-main cursor-help" />
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-zinc-800 text-zinc-200 text-xs rounded-lg whitespace-nowrap pointer-events-none border border-zinc-700 shadow-xl z-50">
+                {text}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-800" />
+            </div>
+        </div>
+    );
 
     const hasChanges = config && editedConfig && (
         config.gemini_model !== editedConfig.gemini_model ||
@@ -168,66 +180,111 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                     </div>
                                 ) : editedConfig && (
                                     <>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-text-muted">Gemini Model</label>
-                                            <input
-                                                type="text"
-                                                value={editedConfig.gemini_model}
-                                                onChange={(e) => updateField('gemini_model', e.target.value)}
-                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-text-muted">Update API Key</label>
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="password"
-                                                    value={newKey}
-                                                    onChange={(e) => setNewKey(e.target.value)}
-                                                    placeholder="Enter new Gemini API Key"
-                                                    className="flex-1 bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-text-muted"
-                                                />
-                                                <button
-                                                    onClick={handleSaveKey}
-                                                    disabled={!newKey.trim() || isSaving}
-                                                    className="px-4 py-2 bg-surface hover:bg-surface/80 disabled:opacity-50 disabled:cursor-not-allowed text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
+                                        <div className="space-y-4">
+                                            {/* Primary Settings */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-text-muted flex items-center">
+                                                    AI Model
+                                                    <Tooltip text="The Gemini model used for generation. Flash is faster, Pro is smarter." />
+                                                </label>
+                                                <select
+                                                    value={editedConfig.gemini_model}
+                                                    onChange={(e) => updateField('gemini_model', e.target.value)}
+                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none appearance-none cursor-pointer"
                                                 >
-                                                    {isSaving ? 'Saving...' : 'Update'}
+                                                    <option value="gemini-3-flash">Gemini 3 Flash (Fast)</option>
+                                                    <option value="gemini-3-pro">Gemini 3 Pro (Smart)</option>
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-text-muted flex items-center">
+                                                    Update API Key
+                                                    <Tooltip text="Your Google Gemini API Key. Stored securely in your system keychain." />
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="password"
+                                                        value={newKey}
+                                                        onChange={(e) => setNewKey(e.target.value)}
+                                                        placeholder="Enter new Gemini API Key"
+                                                        className="flex-1 bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-text-muted"
+                                                    />
+                                                    <button
+                                                        onClick={handleSaveKey}
+                                                        disabled={!newKey.trim() || isSaving}
+                                                        className="px-4 py-2 bg-surface hover:bg-surface/80 disabled:opacity-50 disabled:cursor-not-allowed text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
+                                                    >
+                                                        {isSaving ? 'Saving...' : 'Update'}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Advanced Toggle */}
+                                            <div className="pt-2">
+                                                <button
+                                                    onClick={() => setShowAdvanced(!showAdvanced)}
+                                                    className="flex items-center gap-2 text-xs font-medium text-text-muted hover:text-primary transition-colors uppercase tracking-wider"
+                                                >
+                                                    {showAdvanced ? (
+                                                        <>Hide Advanced <ChevronUp className="w-3 h-3" /></>
+                                                    ) : (
+                                                        <>Show Advanced <ChevronDown className="w-3 h-3" /></>
+                                                    )}
                                                 </button>
                                             </div>
-                                            <p className="text-xs text-text-muted">Securely stored in system keychain</p>
-                                        </div>
 
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-text-muted">Anki Connect URL</label>
-                                            <input
-                                                type="text"
-                                                value={editedConfig.anki_url}
-                                                onChange={(e) => updateField('anki_url', e.target.value)}
-                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
-                                            />
-                                        </div>
+                                            {/* Advanced Settings */}
+                                            <AnimatePresence>
+                                                {showAdvanced && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="space-y-4 overflow-hidden"
+                                                    >
+                                                        <div className="space-y-2 pt-2">
+                                                            <label className="text-sm font-medium text-text-muted flex items-center">
+                                                                Anki Connect URL
+                                                                <Tooltip text="The address where AnkiConnect is listening. Default: http://localhost:8765" />
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={editedConfig.anki_url}
+                                                                onChange={(e) => updateField('anki_url', e.target.value)}
+                                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none font-mono text-sm"
+                                                            />
+                                                        </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-text-muted">Basic Model</label>
-                                                <input
-                                                    type="text"
-                                                    value={editedConfig.basic_model}
-                                                    onChange={(e) => updateField('basic_model', e.target.value)}
-                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-text-muted">Cloze Model</label>
-                                                <input
-                                                    type="text"
-                                                    value={editedConfig.cloze_model}
-                                                    onChange={(e) => updateField('cloze_model', e.target.value)}
-                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
-                                                />
-                                            </div>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-2">
+                                                                <label className="text-sm font-medium text-text-muted flex items-center">
+                                                                    Basic Note Type
+                                                                    <Tooltip text="The Anki note type used for Basic (Front/Back) cards." />
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={editedConfig.basic_model}
+                                                                    onChange={(e) => updateField('basic_model', e.target.value)}
+                                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <label className="text-sm font-medium text-text-muted flex items-center">
+                                                                    Cloze Note Type
+                                                                    <Tooltip text="The Anki note type used for Cloze Deletion cards." />
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={editedConfig.cloze_model}
+                                                                    onChange={(e) => updateField('cloze_model', e.target.value)}
+                                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
                                     </>
                                 )}

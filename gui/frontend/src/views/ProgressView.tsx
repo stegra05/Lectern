@@ -8,18 +8,20 @@ import { ReviewQueue } from '../components/ReviewQueue';
 
 import type { Step } from '../hooks/useAppState';
 import type { Phase } from '../components/PhaseIndicator';
+import type { Card } from '../hooks/useGeneration';
+import type { ProgressEvent } from '../api';
 
 interface ProgressViewProps {
     step: Step;
     setStep: (step: Step) => void;
-    currentPhase: string;
-    logs: any[];
+    currentPhase: Phase;
+    logs: ProgressEvent[];
     handleCopyLogs: () => void;
     copied: boolean;
     isCancelling: boolean;
     handleCancel: () => void;
-    progress: any;
-    cards: any[];
+    progress: { current: number; total: number };
+    cards: Card[];
     handleReset: () => void;
     setPreviewSlide: (slide: number | null) => void;
     logsEndRef: React.RefObject<HTMLDivElement>;
@@ -226,7 +228,7 @@ export function ProgressView({
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setPreviewSlide(card.slide_number);
+                                                        setPreviewSlide(card.slide_number ?? null);
                                                     }}
                                                     className="flex items-center gap-1.5 px-2 py-1 rounded bg-background hover:bg-surface border border-border text-[10px] font-medium text-text-muted hover:text-text-main transition-colors"
                                                 >

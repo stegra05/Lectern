@@ -3,14 +3,21 @@ import { api } from '../api';
 
 export type Step = 'dashboard' | 'config' | 'generating' | 'review' | 'done';
 
+export interface HealthStatus {
+  anki_connected: boolean;
+  gemini_configured: boolean;
+  anki_version?: string;
+  gemini_model?: string;
+}
+
 export function useAppState() {
   const [step, setStep] = useState<Step>('dashboard');
-  const [health, setHealth] = useState<any>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isCheckingHealth, setIsCheckingHealth] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
-  
+
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');

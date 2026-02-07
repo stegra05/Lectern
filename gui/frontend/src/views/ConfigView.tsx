@@ -4,7 +4,8 @@ import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { FilePicker } from '../components/FilePicker';
 
-import type { Step } from '../hooks/useAppState';
+import type { Step, HealthStatus } from '../hooks/useAppState';
+import type { Estimation } from '../api';
 
 interface ConfigViewProps {
     pdfFile: File | null;
@@ -17,11 +18,11 @@ interface ConfigViewProps {
     setSourceType: (type: 'auto' | 'slides' | 'script') => void;
     densityTarget: number;
     setDensityTarget: (target: number) => void;
-    estimation: any;
+    estimation: Estimation | null;
     isEstimating: boolean;
     handleGenerate: () => void;
     setStep: (step: Step) => void;
-    health: any;
+    health: HealthStatus | null;
 }
 
 export function ConfigView({
@@ -113,12 +114,7 @@ export function ConfigView({
                             )}
                         >
                             <div className="flex items-center gap-3">
-                                <div className={clsx(
-                                    "w-10 h-10 rounded-lg flex items-center justify-center text-lg",
-                                    examMode ? "bg-primary/20 text-primary" : "bg-surface text-text-muted"
-                                )}>
-                                    🎯
-                                </div>
+
                                 <div className="text-left">
                                     <div className={clsx(
                                         "font-semibold",
@@ -141,7 +137,7 @@ export function ConfigView({
                         </button>
                         {examMode && (
                             <p className="mt-2 text-xs text-primary/70 px-2">
-                                🎓 Prioritizes understanding over memorization. 30% comparison, 25% application, 25% intuition, 20% definition cards.
+                                Prioritizes understanding over memorization. 30% comparison, 25% application, 25% intuition, 20% definition cards.
                             </p>
                         )}
                     </div>
@@ -162,9 +158,9 @@ export function ConfigView({
                                             : "bg-surface/30 border-border/50 text-text-muted hover:border-border"
                                     )}
                                 >
-                                    {type === 'auto' && '🔮 Auto'}
-                                    {type === 'slides' && '📊 Slides'}
-                                    {type === 'script' && '📝 Script'}
+                                    {type === 'auto' && 'Auto'}
+                                    {type === 'slides' && 'Slides'}
+                                    {type === 'script' && 'Script'}
                                 </button>
                             ))}
                         </div>
@@ -226,7 +222,7 @@ export function ConfigView({
                                                 ${estimation?.cost.toFixed(2)}
                                             </span>
                                             <span className="text-sm text-text-muted font-mono">
-                                                (~{(estimation?.tokens! / 1000).toFixed(1)}k tokens)
+                                                (~{((estimation?.tokens ?? 0) / 1000).toFixed(1)}k tokens)
                                             </span>
                                         </>
                                     )}

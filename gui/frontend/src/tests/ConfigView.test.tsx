@@ -5,11 +5,14 @@ import { ConfigView } from '../views/ConfigView';
 
 vi.mock('framer-motion', () => ({
     motion: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         div: ({ children, ...props }: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { initial, animate, exit, variants, transition, layoutId, ...validProps } = props;
             return React.createElement('div', validProps, children);
         },
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
 }));
 
@@ -26,7 +29,11 @@ describe('ConfigView', () => {
         isEstimating: false,
         handleGenerate: vi.fn(),
         setStep: vi.fn(),
-        health: { anki_connected: true },
+        health: { anki_connected: true, gemini_configured: true },
+        densityTarget: 1.5,
+        setDensityTarget: vi.fn(),
+        sourceType: 'auto' as 'auto' | 'slides' | 'script',
+        setSourceType: vi.fn(),
     };
 
     it('renders necessary inputs', () => {

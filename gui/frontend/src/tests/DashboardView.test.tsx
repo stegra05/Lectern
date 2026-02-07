@@ -5,11 +5,14 @@ import { DashboardView } from '../views/DashboardView';
 
 vi.mock('framer-motion', () => ({
     motion: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         div: ({ children, ...props }: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { initial, animate, exit, variants, transition, layoutId, ...validProps } = props;
             return React.createElement('div', validProps, children);
         },
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
 }));
 
@@ -36,11 +39,12 @@ describe('DashboardView', () => {
         const mockHistory = [
             {
                 id: '123',
-                date: Date.now(), // Component expects 'date'
+                date: new Date().toISOString(), // Component expects 'date' as string
                 deck: 'Test Deck', // Component expects 'deck'
                 filename: 'test.pdf', // Component expects 'filename'
+                full_path: '/tmp/test.pdf',
                 card_count: 10, // Component expects 'card_count'
-                status: 'complete'
+                status: 'completed' as const
             }
         ];
 
