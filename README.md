@@ -34,10 +34,6 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 - **Style Matching**  
   Intelligently samples existing cards to match your deck's aesthetic and formatting.
 
-- **Dual Interface**  
-  - **Native GUI:** A standalone desktop app (via `pywebview`) with a modern React/Tailwind frontend.
-  - **Power CLI:** A robust command-line interface for batch processing and automation.
-
 - **Safe Execution**  
   Operates exclusively via the AnkiConnect API, ensuring your collection files remain untouched.
 
@@ -52,7 +48,7 @@ Lectern is built with a modern, type-safe, and performant stack:
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion
 - **Desktop Wrapper:** PyWebView (Cocoa/WebKit)
 - **PDF Engine:** pypdf + pdf2image (Poppler)
-- **CLI Utilities:** Rich, Keyring
+- **Security:** Keyring
 
 ---
 
@@ -98,10 +94,7 @@ The artifact will be available in `dist/Lectern.app`.
 You can store your API key securely in the system keychain (recommended) or use a `.env` file.
 
 **Option A: System Keychain (Secure)**
-```bash
-python main.py --set-key
-# Follow the prompt to enter your Gemini API Key
-```
+You can set your API key in the app configuration or use the backend to store it securely in the system keychain.
 
 **Option B: Environment File**
 ```bash
@@ -119,27 +112,6 @@ python gui/launcher.py
 
 ![Card Generation](docs/screenshots/generation.png)
 
-### 3. Command Line
-
-For automation, batch processing, and headless environments.
-
-```bash
-# Basic usage
-python main.py --pdf-path /path/to/slides.pdf --deck-name "Target Deck"
-
-# With style matching from another deck
-python main.py \
-  --pdf-path lecture_01.pdf \
-  --deck-name "Biology 101" \
-  --context-deck "Biology 101::Previous" \
-  --verbose
-```
-
-**Common Flags:**
-- `--interactive`: Prompts for missing arguments.
-- `--exam-mode`: Prioritizes application and comparison cards.
-- `--estimate`: Calculates token usage and estimated cost without generating.
-- `--quiet`: Minimal output.
 
 ---
 
