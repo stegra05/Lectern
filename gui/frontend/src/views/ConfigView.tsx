@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion';
-import { RotateCcw, Play, Loader2, AlertCircle } from 'lucide-react';
+import { Play, Loader2, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { FilePicker } from '../components/FilePicker';
+import { DeckSelector } from '../components/DeckSelector';
 
-import type { Step, HealthStatus } from '../hooks/useAppState';
+import type { HealthStatus } from '../hooks/useAppState';
 import type { Estimation } from '../api';
 
 interface ConfigViewProps {
@@ -21,7 +22,7 @@ interface ConfigViewProps {
     estimation: Estimation | null;
     isEstimating: boolean;
     handleGenerate: () => void;
-    setStep: (step: Step) => void;
+
     health: HealthStatus | null;
 }
 
@@ -39,7 +40,7 @@ export function ConfigView({
     estimation,
     isEstimating,
     handleGenerate,
-    setStep,
+
     health,
 }: ConfigViewProps) {
     const containerVariants = {
@@ -65,14 +66,7 @@ export function ConfigView({
             exit={{ opacity: 0, y: -20 }}
             className="grid grid-cols-1 lg:grid-cols-12 gap-8"
         >
-            <motion.div variants={itemVariants} className="lg:col-span-12 mb-4">
-                <button
-                    onClick={() => setStep('dashboard')}
-                    className="flex items-center gap-2 text-text-muted hover:text-text-main transition-colors text-sm font-medium"
-                >
-                    <RotateCcw className="w-4 h-4" /> Back to Dashboard
-                </button>
-            </motion.div>
+
 
             <motion.div variants={itemVariants} className="lg:col-span-7 space-y-8">
                 <GlassCard className="space-y-6">
@@ -94,12 +88,11 @@ export function ConfigView({
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">Deck Name</label>
-                        <input
-                            type="text"
+                        <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">Deck Name</label>
+                        <DeckSelector
                             value={deckName}
-                            onChange={(e) => setDeckName(e.target.value)}
-                            placeholder="University::Subject::Topic"
-                            className="w-full bg-surface/50 border border-border rounded-xl py-4 px-5 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-text-muted"
+                            onChange={setDeckName}
+                            disabled={!health?.anki_connected}
                         />
                     </div>
 
@@ -189,9 +182,17 @@ export function ConfigView({
                                 </div>
                             </div>
                             <p className="text-xs text-text-muted text-center">
-                                {sourceType === 'script'
-                                    ? `Relative Density: ${(densityTarget / 1.5).toFixed(1)}x`
-                                    : `Target: ~${densityTarget.toFixed(1)} cards per page`}
+                                {sourceType === 'script' ? (
+                                    <>
+                                        Relative Density: {(densityTarget / 1.5).toFixed(1)}x
+                                        <br />
+                                        <span className="text-[10px] opacity-75">
+                                            (Scales card generation rate. 1.0x ≈ 1 card per 500 characters.)
+                                        </span>
+                                    </>
+                                ) : (
+                                    `Target: ~${densityTarget.toFixed(1)} cards per page`
+                                )}
                             </p>
                         </div>
                     </div>

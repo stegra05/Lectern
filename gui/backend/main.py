@@ -275,6 +275,21 @@ async def get_decks():
         print(f"Deck list fetch failed: {e}")
         return {"decks": []}
 
+class DeckCreate(BaseModel):
+    name: str
+
+@app.post("/decks")
+async def create_deck_endpoint(req: DeckCreate):
+    from anki_connector import create_deck
+    try:
+        success = await run_in_threadpool(create_deck, req.name)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to create deck in Anki")
+        return {"status": "created", "deck": req.name}
+    except Exception as e:
+        print(f"Deck creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/history")
 async def clear_history():
     mgr = HistoryManager()
@@ -544,7 +559,8 @@ async def update_session_cards(session_id: str, update: SessionCardsUpdate):
         concept_map=state["concept_map"],
         history=state["history"],
         log_path=state.get("log_path", ""),
-        session_id=session_id
+        session_id=session_id,
+        slide_set_name=state.get("slide_set_name"),
     )
     return {"status": "ok", "session_id": session_id}
 
@@ -568,7 +584,8 @@ async def delete_session_card(session_id: str, card_index: int):
         concept_map=state["concept_map"],
         history=state["history"],
         log_path=state.get("log_path", ""),
-        session_id=session_id
+        session_id=session_id,
+        slide_set_name=state.get("slide_set_name"),
     )
 
     # Try to update history card count if this session corresponds to a history entry
@@ -620,10 +637,9 @@ async def sync_session_to_anki(session_id: str):
         
         # We need a slide_set_name for tag building if the card doesn't have it.
         # Let's try to get it from historical tags if possible.
-        slide_set_name = "Session Sync"
-        if state["history"] and len(state["history"]) > 0:
-             # Try to find a slide set name if stored
-             pass
+        # We need a slide_set_name for tag building if the card doesn't have it.
+        # Let's try to get it from historical tags if possible.
+        slide_set_name = state.get("slide_set_name") or "Session Sync"
 
         for idx, card in enumerate(cards, start=1):
             note_id = card.get("anki_note_id")
@@ -683,7 +699,8 @@ async def sync_session_to_anki(session_id: str):
             concept_map=state["concept_map"],
             history=state["history"],
             log_path=state.get("log_path", ""),
-            session_id=session_id
+            session_id=session_id,
+            slide_set_name=state.get("slide_set_name"),
         )
 
         yield json.dumps({"type": "done", "message": "Sync Complete", "data": {"created": created, "updated": updated, "failed": failed}}) + "\n"

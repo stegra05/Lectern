@@ -142,13 +142,13 @@ class LecternAIClient:
         self._history: List[Dict[str, Any]] = []
 
         # System instruction
-        sys_instruction = self._prompt_builder.system
+        system_inst = self._prompt_builder.system
 
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=config.GEMINI_GENERATION_TEMPERATURE,
             max_output_tokens=8192,
-            system_instruction=system_instruction,
+            system_instruction=system_inst,
             thinking_config=types.ThinkingConfig(thinking_level=config.GEMINI_THINKING_LEVEL.lower()),
             safety_settings=[
                 types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
@@ -159,7 +159,7 @@ class LecternAIClient:
         )
         
         self._chat = self._client.chats.create(
-            model=self._model_id,
+            model=self._model_name,
             config=self._generation_config
         )
         
@@ -224,7 +224,7 @@ class LecternAIClient:
             logger.debug(f"[AI] History pruning failed: {e}")
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
-        prompt = self._prompts.concept_map()
+        prompt = self._prompt_builder.concept_map()
         
         parts = _compose_multimodal_content(pdf_content, prompt)
         logger.debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
@@ -274,7 +274,7 @@ class LecternAIClient:
         tag_context = self._build_tag_context()
         
         # Use PromptBuilder
-        prompt = self._prompts.generation(
+        prompt = self._prompt_builder.generation(
             limit=limit,
             pacing_hint=pacing_hint,
             avoid_text=avoid_text,
@@ -309,7 +309,7 @@ class LecternAIClient:
     def reflect(self, limit: int, reflection_prompt: str | None = None) -> Dict[str, Any]:
         self._prune_history()
         
-        prompt = reflection_prompt or self._prompts.reflection(limit=limit)
+        prompt = reflection_prompt or self._prompt_builder.reflection(limit=limit)
         
         call_config = self._generation_config.model_copy(update={
             "response_schema": _REFLECTION_SCHEMA,
@@ -367,7 +367,7 @@ class LecternAIClient:
         try:
             parsed_history = [types.Content(**item) for item in history]
             self._chat = self._client.chats.create(
-                model=self._model_id,
+                model=self._model_name,
                 config=self._generation_config,
                 history=parsed_history
             )
@@ -380,7 +380,7 @@ class LecternAIClient:
         try:
             parsed_content = [types.Content(**c) if isinstance(c, dict) else c for c in content]
             response = self._client.models.count_tokens(
-                model=self._model_id,
+                model=self._model_name,
                 contents=parsed_content,
                 config=self._generation_config
             )

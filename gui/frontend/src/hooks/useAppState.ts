@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 
-export type Step = 'dashboard' | 'config' | 'generating' | 'review' | 'done';
+export type Step = 'dashboard' | 'config' | 'generating' | 'done';
 
 export interface HealthStatus {
   anki_connected: boolean;

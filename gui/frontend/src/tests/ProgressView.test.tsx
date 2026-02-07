@@ -40,6 +40,23 @@ describe('ProgressView', () => {
         setSortBy: vi.fn(),
         searchQuery: '',
         setSearchQuery: vi.fn(),
+        isError: false,
+
+        // Edit & Sync Props
+        editingIndex: null,
+        editForm: null,
+        isSyncing: false,
+        syncProgress: { current: 0, total: 0 },
+        syncLogs: [],
+        handleDelete: vi.fn(),
+        handleAnkiDelete: vi.fn(),
+        startEdit: vi.fn(),
+        cancelEdit: vi.fn(),
+        saveEdit: vi.fn(),
+        handleFieldChange: vi.fn(),
+        handleSync: vi.fn(),
+        confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 },
+        setConfirmModal: vi.fn(),
     };
 
     it('renders progress indicators', () => {
@@ -137,5 +154,15 @@ describe('ProgressView', () => {
         expect(screen.getByText('Cat')).toBeInTheDocument();
         expect(screen.getByText('Bat')).toBeInTheDocument();
         expect(screen.queryByText('Rat')).not.toBeInTheDocument();
+    });
+    it('shows Sync to Anki button when done', () => {
+        const props = {
+            ...defaultProps,
+            step: 'done' as const,
+            currentPhase: 'complete' as Phase,
+            cards: [{ front: 'A', back: 'B', model_name: 'Basic' }], // Needs cards to be enabled
+        };
+        render(<ProgressView {...props} />);
+        expect(screen.getByText(/Sync to Anki/i)).toBeInTheDocument();
     });
 });

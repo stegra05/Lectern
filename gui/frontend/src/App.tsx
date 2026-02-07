@@ -107,6 +107,7 @@ function App() {
     isEstimating,
     previewSlide, setPreviewSlide,
     isCancelling,
+    isError,
     currentPhase,
     focusPrompt, setFocusPrompt,
     sourceType, setSourceType,
@@ -123,7 +124,23 @@ function App() {
     sortBy,
     setSortBy,
     searchQuery,
-    setSearchQuery
+    setSearchQuery,
+
+    // Edit & Sync State
+    editingIndex,
+    editForm,
+    isSyncing,
+    syncProgress,
+    syncLogs,
+    handleDelete,
+    handleAnkiDelete,
+    startEdit,
+    cancelEdit,
+    saveEdit,
+    handleFieldChange,
+    handleSync,
+    confirmModal,
+    setConfirmModal
   } = useGeneration(setStep);
 
   const {
@@ -243,12 +260,12 @@ function App() {
                       estimation={estimation}
                       isEstimating={isEstimating}
                       handleGenerate={handleGenerate}
-                      setStep={setStep}
+
                       health={health}
                     />
                   )}
 
-                  {(step === 'generating' || step === 'done' || step === 'review') && (
+                  {(step === 'generating' || step === 'done') && (
                     <ProgressView
                       key="progress"
                       step={step}
@@ -270,6 +287,23 @@ function App() {
                       searchQuery={searchQuery}
                       setSearchQuery={setSearchQuery}
                       isHistorical={isHistorical}
+                      isError={isError}
+
+                      // Edit & Sync Props
+                      editingIndex={editingIndex}
+                      editForm={editForm}
+                      isSyncing={isSyncing}
+                      syncProgress={syncProgress}
+                      syncLogs={syncLogs}
+                      handleDelete={handleDelete}
+                      handleAnkiDelete={handleAnkiDelete}
+                      startEdit={startEdit}
+                      cancelEdit={cancelEdit}
+                      saveEdit={saveEdit}
+                      handleFieldChange={handleFieldChange}
+                      handleSync={handleSync}
+                      confirmModal={confirmModal}
+                      setConfirmModal={setConfirmModal}
                     />
                   )}
                 </AnimatePresence>

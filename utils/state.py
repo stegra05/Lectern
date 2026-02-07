@@ -25,6 +25,7 @@ def save_state(
     history: List[Dict[str, Any]],
     log_path: str,
     session_id: Optional[str] = None,
+    slide_set_name: Optional[str] = None,
 ) -> None:
     """Save the current session state to a JSON file."""
     state = {
@@ -33,7 +34,8 @@ def save_state(
         "cards": cards,
         "concept_map": concept_map,
         "history": history,
-        "log_path": log_path
+        "log_path": log_path,
+        "slide_set_name": slide_set_name,
     }
     try:
         state_path = _get_state_path(session_id)

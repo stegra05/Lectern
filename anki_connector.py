@@ -155,6 +155,21 @@ def get_deck_names() -> List[str]:
         return []
 
 
+def create_deck(deck_name: str) -> bool:
+    """Create a new deck in Anki via AnkiConnect.
+    
+    Returns:
+        True if successful, False otherwise.
+    """
+    try:
+        result = _invoke("createDeck", {"deck": deck_name})
+        # createDeck returns the ID of the deck (int) on success
+        return isinstance(result, int)
+    except Exception as e:
+        print(f"Failed to create deck '{deck_name}': {e}")
+        return False
+
+
 def get_deck_slide_set_patterns(deck_name: str) -> Dict[str, Any]:
     """Analyze existing tags in a deck to detect slide set naming patterns.
     

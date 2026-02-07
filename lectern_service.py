@@ -353,6 +353,7 @@ class LecternGenerationService:
                         history=ai.get_history(),
                         log_path=ai.log_path,
                         session_id=session_id,
+                        slide_set_name=slide_set_name,
                     )
 
                     should_stop = added_count == 0
@@ -420,6 +421,7 @@ class LecternGenerationService:
                             history=ai.get_history(),
                             log_path=ai.log_path,
                             session_id=session_id,
+                            slide_set_name=slide_set_name,
                         )
 
                         should_stop = len(all_cards) >= total_cards_cap or added_count == 0
@@ -499,7 +501,9 @@ class LecternGenerationService:
             if history_id:
                 history_mgr.update_entry(history_id, status="error")
             yield ServiceEvent("error", f"Critical error: {e}")
-            raise e
+            yield ServiceEvent("error", f"Critical error: {e}")
+            # Do not raise; let the generator exit gracefully so the frontend sees the error event
+            return
 
     async def estimate_cost(self, pdf_path: str) -> Dict[str, Any]:
         """Estimate the token count and cost for processing a PDF.

@@ -12,6 +12,7 @@ export interface Card {
   fields?: Record<string, string>;
   slide_number?: number;
   slide_topic?: string;
+  anki_note_id?: number;
 }
 
 export type SortOption = 'creation' | 'topic' | 'slide' | 'type';
@@ -26,10 +27,24 @@ export function useGeneration(setStep: (step: Step) => void) {
   const [isEstimating, setIsEstimating] = useState(false);
   const [previewSlide, setPreviewSlide] = useState<number | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isError, setIsError] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<Phase>('idle');
   const [copied, setCopied] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isHistorical, setIsHistorical] = useState(false);
+
+  /* Edit & Sync State */
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<any>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+  const [syncLogs, setSyncLogs] = useState<ProgressEvent[]>([]);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'lectern' | 'anki';
+    index: number;
+    noteId?: number;
+  }>({ isOpen: false, type: 'lectern', index: -1 });
 
   /* New Focus Prompt State */
   const [focusPrompt, setFocusPrompt] = useState<string>('');
@@ -108,9 +123,15 @@ export function useGeneration(setStep: (step: Step) => void) {
     setCards([]);
     setProgress({ current: 0, total: 0 });
     setIsCancelling(false);
+    setIsError(false);
     setCurrentPhase('idle');
     setSessionId(null);
     setIsHistorical(false);
+    setEditingIndex(null);
+    setEditForm(null);
+    setIsSyncing(false);
+    setSyncLogs([]);
+    setConfirmModal({ isOpen: false, type: 'lectern', index: -1 });
   };
 
   const handleGenerate = async () => {
@@ -120,6 +141,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     setCards([]);
     setSessionId(null);
     setIsHistorical(false);
+    setIsError(false);
 
     try {
       await api.generate(
@@ -149,16 +171,19 @@ export function useGeneration(setStep: (step: Step) => void) {
               setCurrentPhase('reflecting');
             }
           } else if (event.type === 'done') {
-            setStep('review');
+            setStep('done');
             setCurrentPhase('complete');
           } else if (event.type === 'cancelled') {
             handleReset();
+          } else if (event.type === 'error') {
+            setIsError(true);
           }
         }
       );
     } catch (e) {
       console.error(e);
       setLogs(prev => [...prev, { type: 'error', message: 'Network error', timestamp: Date.now() }]);
+      setIsError(true);
     }
   };
 
@@ -184,7 +209,7 @@ export function useGeneration(setStep: (step: Step) => void) {
       setDeckName(session.deck_name || '');
       setSessionId(sid);
       setIsHistorical(true);
-      setStep('review');
+      setStep('done');
       setCurrentPhase('complete');
     } catch (e) {
       console.error('Failed to load session:', e);
@@ -203,6 +228,7 @@ export function useGeneration(setStep: (step: Step) => void) {
     isEstimating,
     previewSlide, setPreviewSlide,
     isCancelling,
+    isError,
     currentPhase,
     sessionId,
     isHistorical,
@@ -227,6 +253,122 @@ export function useGeneration(setStep: (step: Step) => void) {
       setSortBy(opt);
       localStorage.setItem('cardSortBy', opt);
     },
-    searchQuery, setSearchQuery
+    searchQuery, setSearchQuery,
+
+    /* Edit & Sync Exports */
+    editingIndex, setEditingIndex,
+    editForm, setEditForm,
+    isSyncing, setIsSyncing,
+    syncProgress, setSyncProgress,
+    syncLogs, setSyncLogs,
+    confirmModal, setConfirmModal,
+
+    handleDelete: async (index: number) => {
+      try {
+        const newCards = [...cards];
+        newCards.splice(index, 1);
+
+        if (isHistorical && sessionId) {
+          // For historical sessions, we use deleteSessionCard for single deletions
+          // to ensure history count is updated correctly foundationally
+          await api.deleteSessionCard(sessionId, index);
+
+          // We also update the specific card list state via re-fetch or manual update
+          // Re-fetching is safer but manual update is faster
+          // Let's manually update the local state which we already did above
+        } else {
+          await api.deleteDraft(index, sessionId ?? undefined);
+        }
+
+        setCards(newCards);
+        setConfirmModal({ ...confirmModal, isOpen: false });
+      } catch (e) {
+        console.error("Failed to delete card", e);
+      }
+    },
+
+    handleAnkiDelete: async (noteId: number, index: number) => {
+      try {
+        await api.deleteAnkiNotes([noteId]);
+        // Clear anki_note_id from card but keep card
+        const newCards = [...cards];
+        if (newCards[index] && (newCards[index] as any).anki_note_id === noteId) {
+          delete (newCards[index] as any).anki_note_id;
+          if (isHistorical && sessionId) {
+            await api.updateSessionCards(sessionId, newCards);
+          } else {
+            await api.updateDraft(index, newCards[index], sessionId ?? undefined);
+          }
+          setCards(newCards);
+        }
+        setConfirmModal({ ...confirmModal, isOpen: false });
+      } catch (e) {
+        console.error("Failed to delete Anki note", e);
+      }
+    },
+
+    startEdit: (index: number) => {
+      setEditingIndex(index);
+      setEditForm(JSON.parse(JSON.stringify(cards[index]))); // Deep copy
+    },
+
+    cancelEdit: () => {
+      setEditingIndex(null);
+      setEditForm(null);
+    },
+
+    saveEdit: async (index: number) => {
+      try {
+        const newCards = [...cards];
+        newCards[index] = editForm;
+
+        if (isHistorical && sessionId) {
+          await api.updateSessionCards(sessionId, newCards);
+        } else {
+          await api.updateDraft(index, editForm, sessionId ?? undefined);
+        }
+
+        setCards(newCards);
+        setEditingIndex(null);
+        setEditForm(null);
+      } catch (e) {
+        console.error("Failed to update card", e);
+      }
+    },
+
+    handleFieldChange: (field: string, value: string) => {
+      if (!editForm) return;
+      setEditForm({
+        ...editForm,
+        fields: {
+          ...editForm.fields,
+          [field]: value
+        }
+      });
+    },
+
+    handleSync: async (onComplete: () => void) => {
+      setIsSyncing(true);
+      setSyncLogs([]);
+      try {
+        const syncFn = isHistorical && sessionId
+          ? (cb: any) => api.syncSessionToAnki(sessionId, cb)
+          : (cb: any) => api.syncDrafts(cb, sessionId ?? undefined);
+
+        await syncFn((event: any) => {
+          setSyncLogs(prev => [...prev, event]);
+          if (event.type === 'progress_start') {
+            setSyncProgress({ current: 0, total: event.data.total });
+          } else if (event.type === 'progress_update') {
+            setSyncProgress(prev => ({ ...prev, current: event.data.current }));
+          } else if (event.type === 'done') {
+            onComplete();
+          }
+        });
+      } catch (e) {
+        console.error("Sync failed", e);
+        setIsSyncing(false);
+      }
+    }
   };
 }
