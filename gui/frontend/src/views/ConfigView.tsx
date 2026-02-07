@@ -157,15 +157,37 @@ export function ConfigView({
                                 <span>Balanced</span>
                                 <span>Comprehensive</span>
                             </div>
-                            <input
-                                type="range"
-                                min="0.8"
-                                max="2.5"
-                                step="0.1"
-                                value={densityTarget}
-                                onChange={(e) => setDensityTarget(parseFloat(e.target.value))}
-                                className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
-                            />
+                            <div className="flex items-center gap-4">
+                                <input
+                                    type="range"
+                                    min="0.1"
+                                    max="5.0"
+                                    step="0.1"
+                                    value={densityTarget}
+                                    onChange={(e) => setDensityTarget(parseFloat(e.target.value))}
+                                    className="flex-1 h-2 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
+                                />
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        min="0.1"
+                                        max="5.0"
+                                        step="0.1"
+                                        value={densityTarget}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value);
+                                            if (!isNaN(val)) setDensityTarget(val);
+                                        }}
+                                        onBlur={(e) => {
+                                            let val = parseFloat(e.target.value);
+                                            if (isNaN(val)) val = 1.5;
+                                            val = Math.max(0.1, Math.min(5.0, val));
+                                            setDensityTarget(Number(val.toFixed(1)));
+                                        }}
+                                        className="w-16 bg-surface/50 border border-border rounded-lg py-1 px-2 text-sm text-center focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-text-muted appearance-none"
+                                    />
+                                </div>
+                            </div>
                             <p className="text-xs text-text-muted text-center">
                                 {sourceType === 'script'
                                     ? `Relative Density: ${(densityTarget / 1.5).toFixed(1)}x`
