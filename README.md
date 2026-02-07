@@ -1,4 +1,4 @@
- <div align="center">
+<div align="center">
 
 # LECTERN
 
@@ -13,7 +13,7 @@
 Lectern transforms PDF lecture slides into high-quality Anki flashcards instantly.  
 It parses your slides, composes a multimodal prompt for Google's Gemini, and creates notes in your running Anki instance via AnkiConnect.
 
-[Download](#download) • [Features](#features) • [Tech Stack](#tech-stack) • [Build from Source](#build-from-source)
+[Quick Start](#quick-start) | [Features](#features) | [Configuration](#configuration) | [Advanced](#advanced-usage)
 
 <br>
 
@@ -23,153 +23,140 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 
 ---
 
-## Download
+## Quick Start
 
-**[⬇️ Download Lectern for macOS](https://github.com/stegra05/lectern/releases/latest)**
+### 1. Download
 
-### Quick Install
+**[Download Lectern for macOS](https://github.com/stegra05/lectern/releases/latest)**
 
-1. Download `Lectern.dmg` from the latest release
-2. Open the DMG and drag Lectern to **Applications**
-3. **First launch:** Right-click → Open (bypasses Gatekeeper warning)
+### 2. Install
 
-### Requirements
+1. Open `Lectern.dmg` and drag Lectern to **Applications**
+2. Install Poppler for PDF rendering: `brew install poppler`
+3. Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on in Anki
 
-- **Anki** with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on
-- **Poppler** for PDF rendering: `brew install poppler`
-- **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/apikey) (free tier available)
+### 3. First Launch
+
+1. **Right-click Lectern.app and select "Open"** (bypasses Gatekeeper warning on first run)
+2. Open Settings and enter your [Gemini API Key](https://aistudio.google.com/apikey) (free tier available)
+3. Make sure Anki is running
+4. Drop a PDF and start generating cards
 
 ---
 
 ## Features
 
-- **Source Selection (New)**
-  Choose between **Slides** (visual), **Script** (dense text), or **Auto** mode to optimize card generation strategy for your content.
+### Source Selection
+Choose between **Slides** (visual), **Script** (dense text), or **Auto** mode to optimize card generation strategy for your content.
 
-- **Smart Pacing**
-  Dynamically adjusts generation speed and detail based on content density, ensuring no concept is skipped.
+### Smart Pacing
+Dynamically adjusts generation speed and detail based on content density, ensuring no concept is skipped.
 
-- **Configuration Control**
-  Fine-tune Anki styling, Gemini models, and generation prompts directly from the settings UI.
+### Multimodal Analysis
+Extracts text and images from slides using `pypdf` + `pdf2image`, preserving context for accurate generation.
 
-- **Multimodal Analysis**
-  Extracts text and images from slides using `pypdf` + `pdf2image`, preserving context for accurate generation.
+### Smart Generation
+Leverages **Gemini 3.0 Flash** to create atomic, well-structured cards that adhere to learning best practices.
 
-- **Smart Generation**
-  Leverages **Gemini 3.0 Flash** to create atomic, well-structured cards that adhere to learning best practices.
+### Live Preview
+Review and edit generated cards before syncing to Anki. Filter by card type, search content, and delete unwanted cards.
 
-- **Safe Execution**
-  Operates exclusively via the AnkiConnect API, ensuring your collection files remain untouched.
+### Safe Execution
+Operates exclusively via the AnkiConnect API, ensuring your collection files remain untouched.
 
 ---
 
-## Tech Stack
+## Configuration
 
-Lectern is built with a modern, type-safe, and performant stack:
+Most settings are configured directly in the **Settings** panel within the application:
 
-- **AI Core:** Google Gemini 3.0 Flash  (Multimodal)
+| Setting | Description |
+| :--- | :--- |
+| **Gemini API Key** | Required. Get one free from [Google AI Studio](https://aistudio.google.com/apikey) |
+| **AI Model** | Choose between Gemini models (Flash recommended) |
+| **Anki Note Types** | Configure which note types to use for Basic and Cloze cards |
+
+### Environment Variables (Optional)
+
+For advanced users, defaults can be set via environment variables:
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | Alternative to GUI setting | - |
+| `ANKI_CONNECT_URL` | URL of AnkiConnect API | `http://localhost:8765` |
+| `BASIC_MODEL_NAME` | Anki Note Type for basic cards | `Basic` |
+| `CLOZE_MODEL_NAME` | Anki Note Type for cloze cards | `Cloze` |
+
+---
+
+## Logs
+
+Lectern writes AI session logs for debugging:
+
+- **Path:** `~/Library/Application Support/Lectern/logs/session-*.json`
+- **Contents:** Request/response snapshots for concept map, generation, and reflection
+- **When to check:** If card generation fails or you need to inspect AI prompts/responses
+
+---
+
+## Advanced Usage
+
+### Tech Stack
+
+- **AI Core:** Google Gemini 3.0 Flash (Multimodal)
 - **Backend:** Python, FastAPI, Uvicorn
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion
 - **Desktop Wrapper:** PyWebView (Cocoa/WebKit)
 - **PDF Engine:** pypdf + pdf2image (Poppler)
 - **Security:** Keyring
 
----
+### Build from Source
 
-## Installation
+#### Prerequisites
 
-### Prerequisites
+- Python 3.9+
+- Node.js 18+
+- Poppler: `brew install poppler`
+- Tesseract (optional, for OCR): `brew install tesseract`
 
-- **Python 3.9+**
-- **Anki** with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed.
-- **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/api-keys).
-- **Poppler** (required for PDF rendering): `brew install poppler`
-- **Tesseract** (optional, for OCR): `brew install tesseract`
-
-### Setup
+#### Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/lectern.git
+git clone https://github.com/stegra05/lectern.git
 cd lectern
 
 # Create virtual environment
 python -m venv .venv && source .venv/bin/activate
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
+
+# Install frontend dependencies
+cd gui/frontend && npm install && cd ../..
 ```
 
-### Build from Source
-
-To create a standalone macOS application (`Lectern.app`):
-
-```bash
-./build_app.sh
-```
-The artifact will be available in `dist/Lectern.app`.
-
----
-
-## Usage
-
-### 1. Setup API Key
-
-You can store your API key securely in the system keychain (recommended) or use a `.env` file.
-
-**Option A: System Keychain (Secure)**
-You can set your API key in the app configuration or use the backend to store it securely in the system keychain.
-
-**Option B: Environment File**
-```bash
-cp .env.example .env
-# Edit .env and add GEMINI_API_KEY=...
-```
-
-### 2. Graphical Interface
-
-The recommended way to use Lectern. Launches a native window with a modern UI.
+#### Run in Development Mode
 
 ```bash
 python gui/launcher.py
 ```
 
-![Card Generation](docs/screenshots/generation.png)
+#### Build Application Bundle
 
-
----
-
-## Logs
-
-Lectern writes AI session logs to a fixed location:
-
-- **Path (macOS):** `~/Library/Application Support/Lectern/logs/session-*.json`
-- **When created:** At the start of each AI session.
-- **What they contain:** Request/response snapshots for concept map, generation, and reflection.
-- **When to check:** If card generation fails, reflection errors occur, or you need to inspect prompts/responses.
+```bash
+./build_app.sh      # Creates dist/Lectern.app
+./create_dmg.sh     # Creates dist/Lectern.dmg (optional)
+```
 
 ---
 
-## Configuration
+## Documentation
 
-Most settings can now be configured directly in the **Settings** tab within the application.
-
-For advanced users, defaults can still be set in `.env`:
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `GEMINI_API_KEY` | **Required**. (Or set via GUI) | - |
-| `ANKI_CONNECT_URL` | URL of AnkiConnect API. | `http://localhost:8765` |
-| `BASIC_MODEL_NAME` | Anki Note Type for basic cards. | `Basic` |
-| `CLOZE_MODEL_NAME` | Anki Note Type for cloze cards. | `Cloze` |
-
----
-
-## Documentation & Contribution
-
-- **[System Architecture](docs/ARCHITECTURE.md):** A high-level overview of how Lectern works under the hood.
-- **[Contributing Guide](CONTRIBUTING.md):** Guidelines for developers who want to improve Lectern.
-- **[Frontend Docs](gui/frontend/README.md):** Specific documentation for the React-based GUI.
+- **[System Architecture](docs/ARCHITECTURE.md)** - How Lectern works under the hood
+- **[Contributing Guide](CONTRIBUTING.md)** - Guidelines for developers
+- **[Frontend Docs](gui/frontend/README.md)** - React GUI documentation
+- **[Release Process](RELEASING.md)** - How to publish new versions
 
 <br>
 
