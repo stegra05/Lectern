@@ -5,7 +5,7 @@ import type { Step } from './useAppState';
 
 export type SortOption = 'creation' | 'topic' | 'slide' | 'type';
 
-export function useGeneration(setStep: (step: Step) => void) {
+export function useGeneration(setStep: (step: Step) => void, modelName?: string) {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [deckName, setDeckName] = useState('');
   const [logs, setLogs] = useState<ProgressEvent[]>([]);
@@ -85,7 +85,7 @@ export function useGeneration(setStep: (step: Step) => void) {
       }
       setIsEstimating(true);
       try {
-        const est = await api.estimateCost(pdfFile, controller.signal);
+        const est = await api.estimateCost(pdfFile, modelName, controller.signal);
         if (est) setEstimation(est);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
@@ -101,7 +101,7 @@ export function useGeneration(setStep: (step: Step) => void) {
 
     fetchEstimate();
     return () => controller.abort();
-  }, [pdfFile]);
+  }, [pdfFile, modelName]);
 
   const handleReset = () => {
     setStep('dashboard');
@@ -308,10 +308,20 @@ export function useGeneration(setStep: (step: Step) => void) {
         const newCards = [...cards];
         newCards[index] = editForm;
 
+        // Save to Lectern
         if (isHistorical && sessionId) {
           await api.updateSessionCards(sessionId, newCards);
         } else {
           await api.updateDraft(index, editForm, sessionId ?? undefined);
+        }
+
+        // If synced to Anki, also update Anki
+        if (editForm.anki_note_id && editForm.fields) {
+          const stringFields: Record<string, string> = {};
+          for (const [k, v] of Object.entries(editForm.fields)) {
+            stringFields[k] = String(v);
+          }
+          await api.updateAnkiNote(editForm.anki_note_id, stringFields);
         }
 
         setCards(newCards);
@@ -349,13 +359,25 @@ export function useGeneration(setStep: (step: Step) => void) {
           ? (cb: (event: ProgressEvent) => void) => api.syncSessionToAnki(sessionId, cb)
           : (cb: (event: ProgressEvent) => void) => api.syncDrafts(cb, sessionId ?? undefined);
 
-        await syncFn((event: ProgressEvent) => {
+        await syncFn(async (event: ProgressEvent) => {
           setSyncLogs(prev => [...prev, event]);
           if (event.type === 'progress_start') {
             setSyncProgress({ current: 0, total: (event.data as { total: number }).total });
           } else if (event.type === 'progress_update') {
             setSyncProgress(prev => ({ ...prev, current: (event.data as { current: number }).current }));
           } else if (event.type === 'done') {
+            // Refetch cards from backend to get updated anki_note_id values
+            try {
+              if (isHistorical && sessionId) {
+                const session = await api.getSession(sessionId);
+                setCards(session.cards || []);
+              } else if (sessionId) {
+                const drafts = await api.getDrafts(sessionId);
+                setCards(drafts.cards || []);
+              }
+            } catch (refreshErr) {
+              console.error("Failed to refresh cards after sync:", refreshErr);
+            }
             onComplete();
             setSyncSuccess(true);
             setTimeout(() => setSyncSuccess(false), 3000);

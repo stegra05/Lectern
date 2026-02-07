@@ -253,21 +253,70 @@ export function HomeView({
                         </div>
 
                         {(estimation || isEstimating) && (
-                            <div className="mb-8 p-4 rounded-xl bg-surface/30 border border-border/50 flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Estimated Cost</span>
-                                    <div className="flex items-baseline gap-2 mt-1">
-                                        {isEstimating ? (
-                                            <div className="h-6 w-16 bg-surface animate-pulse rounded" />
-                                        ) : (
-                                            <>
-                                                <span className="text-xl font-bold text-text-main">${estimation?.cost.toFixed(2)}</span>
-                                                <span className="text-[10px] text-text-muted font-mono">~{((estimation?.tokens ?? 0) / 1000).toFixed(1)}k tokens</span>
-                                            </>
+                            <div className="mb-8 space-y-3">
+                                <div className="p-4 rounded-xl bg-surface/30 border border-border/50">
+                                    <div className="flex items-center justify-between mb-3 border-b border-border/30 pb-2">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Estimated Total</span>
+                                            {isEstimating ? (
+                                                <div className="h-7 w-20 bg-surface animate-pulse rounded mt-1" />
+                                            ) : (
+                                                <span className="text-2xl font-bold text-primary">${estimation?.cost.toFixed(3)}</span>
+                                            )}
+                                        </div>
+                                        {!isEstimating && (
+                                            <div className="text-right">
+                                                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">Model</span>
+                                                <span className="text-xs font-mono text-text-main">{estimation?.model.split('/').pop()}</span>
+                                            </div>
                                         )}
                                     </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <span className="text-[9px] font-bold text-text-muted uppercase">Input</span>
+                                            <div className="flex items-baseline gap-1">
+                                                {isEstimating ? (
+                                                    <div className="h-4 w-12 bg-surface animate-pulse rounded" />
+                                                ) : (
+                                                    <>
+                                                        <span className="text-sm font-semibold text-text-main">
+                                                            {((estimation?.input_tokens ?? 0) / 1000).toFixed(1)}k
+                                                        </span>
+                                                        <span className="text-[9px] text-text-muted">tokens</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                            {!isEstimating && (
+                                                <div className="text-[10px] text-text-muted font-mono">${estimation?.input_cost.toFixed(4)}</div>
+                                            )}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[9px] font-bold text-text-muted uppercase">Output (Est.)</span>
+                                            <div className="flex items-baseline gap-1">
+                                                {isEstimating ? (
+                                                    <div className="h-4 w-12 bg-surface animate-pulse rounded" />
+                                                ) : (
+                                                    <>
+                                                        <span className="text-sm font-semibold text-text-main">
+                                                            {((estimation?.output_tokens ?? 0) / 1000).toFixed(1)}k
+                                                        </span>
+                                                        <span className="text-[9px] text-text-muted">tokens</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                            {!isEstimating && (
+                                                <div className="text-[10px] text-text-muted font-mono">${estimation?.output_cost.toFixed(4)}</div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                {isEstimating && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
+                                {isEstimating && (
+                                    <div className="flex items-center justify-center gap-2 py-2 text-xs text-primary animate-pulse">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        <span>Analyzing content density...</span>
+                                    </div>
+                                )}
                             </div>
                         )}
 

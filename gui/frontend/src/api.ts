@@ -93,11 +93,17 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutM
 
 export interface Estimation {
     tokens: number;
+    input_tokens: number;
+    output_tokens: number;
+    input_cost: number;
+    output_cost: number;
     cost: number;
     pages: number;
+    model: string;
 }
 
 export interface HealthStatus {
+    // ... existing interface ...
     anki_connected: boolean;
     gemini_configured: boolean;
     anki_version?: string;
@@ -195,12 +201,16 @@ export const api = {
         return res.json();
     },
 
-    estimateCost: async (file: File, signal?: AbortSignal) => {
+    estimateCost: async (file: File, modelName?: string, signal?: AbortSignal) => {
         const formData = new FormData();
         formData.append("pdf_file", file);
 
         try {
-            const res = await fetch(`${API_URL}/estimate`, {
+            const url = modelName
+                ? `${API_URL}/estimate?model_name=${encodeURIComponent(modelName)}`
+                : `${API_URL}/estimate`;
+
+            const res = await fetch(url, {
                 method: "POST",
                 body: formData,
                 signal: signal
@@ -387,6 +397,16 @@ export const api = {
             body: JSON.stringify({ note_ids: noteIds }),
         });
         if (!res.ok) throw new Error('Failed to delete notes from Anki');
+        return res.json();
+    },
+
+    updateAnkiNote: async (noteId: number, fields: Record<string, string>) => {
+        const res = await fetchWithTimeout(`${API_URL}/anki/notes/${noteId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields }),
+        });
+        if (!res.ok) throw new Error('Failed to update Anki note');
         return res.json();
     },
 

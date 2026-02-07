@@ -151,7 +151,7 @@ function App() {
     handleSync,
     confirmModal,
     setConfirmModal
-  } = useGeneration(setStep);
+  } = useGeneration(setStep, health?.gemini_model);
 
   const {
     history,
