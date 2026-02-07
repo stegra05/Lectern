@@ -95,6 +95,7 @@ export function useAppState() {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [health?.anki_connected, health?.gemini_configured]);
 
   return {

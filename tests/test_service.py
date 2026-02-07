@@ -281,7 +281,7 @@ class TestServiceIntegration:
     @patch('lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
-    def test_exam_mode_passed_to_ai_client(
+    def test_focus_prompt_passed_to_ai_client(
         self,
         mock_getsize,
         mock_exists,
@@ -295,7 +295,7 @@ class TestServiceIntegration:
         service,
         mock_pdf_pages
     ):
-        """Test that exam_mode=True is correctly passed to LecternAIClient."""
+        """Test that focus_prompt is correctly passed to LecternAIClient."""
         # Setup mocks
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
@@ -317,17 +317,17 @@ class TestServiceIntegration:
         mock_ai.get_history.return_value = []
         mock_ai_client_class.return_value = mock_ai
 
-        # Run with exam_mode=True
+        # Run with focus_prompt
         list(service.run(
             pdf_path="/fake/path.pdf",
             deck_name="Test Deck",
             model_name="gemini-3-flash-preview",
             tags=[],
             skip_export=True,
-            exam_mode=True
+            focus_prompt="Focus on key terms"
         ))
 
-        # Verify LecternAIClient was initialized with exam_mode=True
+        # Verify LecternAIClient was initialized with focus_prompt
         mock_ai_client_class.assert_called()
         _, kwargs = mock_ai_client_class.call_args
-        assert kwargs.get("exam_mode") is True
+        assert kwargs.get("focus_prompt") == "Focus on key terms"

@@ -26,10 +26,10 @@ def test_language_detection_integration(mock_client_cls):
     assert client._prompt_config.language == "de"
     
     # Verify prompt builder updated
-    assert "Output language: de" in client._prompts.system
+    assert "Output language: de" in client._prompt_builder.system
 
 @patch("ai_client.genai.Client")
 def test_client_init_with_language(mock_client_cls):
     client = LecternAIClient(language="fr")
     assert client._prompt_config.language == "fr"
-    assert "Output language: fr" in client._prompts.system
+    assert "Output language: fr" in client._prompt_builder.system

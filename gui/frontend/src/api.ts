@@ -42,10 +42,23 @@ export interface GenerateRequest {
 // ... (omitting ProgressEvent and others for brevity)
 
 
+export interface Card {
+    front: string;
+    back: string;
+    tags?: string[];
+    anki_note_id?: number;
+    fields?: Record<string, string>;
+    model_name?: string;
+    slide_number?: number;
+    slide_topic?: string;
+    tag?: string;
+    [key: string]: unknown;
+}
+
 export interface ProgressEvent {
     type: "session_start" | "status" | "info" | "warning" | "error" | "progress_start" | "progress_update" | "card_generated" | "note_created" | "done" | "cancelled" | "step_start";
     message: string;
-    data?: any;
+    data?: unknown;
     timestamp: number;
 }
 
@@ -260,7 +273,7 @@ export const api = {
         return res.json();
     },
 
-    updateDraft: async (index: number, card: any, sessionId?: string) => {
+    updateDraft: async (index: number, card: Card, sessionId?: string) => {
         const res = await fetch(withSessionId(`${API_URL}/drafts/${index}`, sessionId), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -316,7 +329,7 @@ export const api = {
         return res.json();
     },
 
-    updateSessionCards: async (sessionId: string, cards: any[]) => {
+    updateSessionCards: async (sessionId: string, cards: Card[]) => {
         const res = await fetch(`${API_URL}/session/${sessionId}/cards`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },

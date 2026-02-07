@@ -1,19 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, type ProgressEvent } from '../api';
+import { api, type ProgressEvent, type Card } from '../api';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from './useAppState';
-
-export interface Card {
-  front: string;
-  back: string;
-  tag?: string;
-  tags?: string[];
-  model_name?: string;
-  fields?: Record<string, string>;
-  slide_number?: number;
-  slide_topic?: string;
-  anki_note_id?: number;
-}
 
 export type SortOption = 'creation' | 'topic' | 'slide' | 'type';
 
@@ -35,7 +23,7 @@ export function useGeneration(setStep: (step: Step) => void) {
 
   /* Edit & Sync State */
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<any>(null);
+  const [editForm, setEditForm] = useState<Card | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [syncLogs, setSyncLogs] = useState<ProgressEvent[]>([]);
@@ -52,7 +40,7 @@ export function useGeneration(setStep: (step: Step) => void) {
   const [sourceType, setSourceType] = useState<'auto' | 'slides' | 'script'>(() => {
     // Persist source type preference
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('sourceType') as any) || 'auto';
+      return (localStorage.getItem('sourceType') as 'auto' | 'slides' | 'script') || 'auto';
     }
     return 'auto';
   });
@@ -155,13 +143,13 @@ export function useGeneration(setStep: (step: Step) => void) {
         (event) => {
           setLogs(prev => [...prev, event]);
           if (event.type === 'session_start') {
-            setSessionId(event.data?.session_id ?? null);
+            setSessionId(event.data && typeof event.data === 'object' && 'session_id' in event.data ? (event.data as { session_id: string }).session_id : null);
           } else if (event.type === 'progress_start') {
-            setProgress({ current: 0, total: event.data.total });
+            setProgress({ current: 0, total: (event.data as { total: number }).total });
           } else if (event.type === 'progress_update') {
-            setProgress(prev => ({ ...prev, current: event.data.current }));
+            setProgress(prev => ({ ...prev, current: (event.data as { current: number }).current }));
           } else if (event.type === 'card_generated') {
-            setCards(prev => [event.data.card, ...prev]);
+            setCards(prev => [(event.data as { card: Card }).card, ...prev]);
           } else if (event.type === 'step_start') {
             if (event.message.includes('concept map')) {
               setCurrentPhase('concept');
@@ -269,13 +257,7 @@ export function useGeneration(setStep: (step: Step) => void) {
         newCards.splice(index, 1);
 
         if (isHistorical && sessionId) {
-          // For historical sessions, we use deleteSessionCard for single deletions
-          // to ensure history count is updated correctly foundationally
           await api.deleteSessionCard(sessionId, index);
-
-          // We also update the specific card list state via re-fetch or manual update
-          // Re-fetching is safer but manual update is faster
-          // Let's manually update the local state which we already did above
         } else {
           await api.deleteDraft(index, sessionId ?? undefined);
         }
@@ -292,8 +274,8 @@ export function useGeneration(setStep: (step: Step) => void) {
         await api.deleteAnkiNotes([noteId]);
         // Clear anki_note_id from card but keep card
         const newCards = [...cards];
-        if (newCards[index] && (newCards[index] as any).anki_note_id === noteId) {
-          delete (newCards[index] as any).anki_note_id;
+        if (newCards[index] && newCards[index].anki_note_id === noteId) {
+          delete newCards[index].anki_note_id;
           if (isHistorical && sessionId) {
             await api.updateSessionCards(sessionId, newCards);
           } else {
@@ -319,6 +301,7 @@ export function useGeneration(setStep: (step: Step) => void) {
 
     saveEdit: async (index: number) => {
       try {
+        if (!editForm) return;
         const newCards = [...cards];
         newCards[index] = editForm;
 
@@ -338,13 +321,20 @@ export function useGeneration(setStep: (step: Step) => void) {
 
     handleFieldChange: (field: string, value: string) => {
       if (!editForm) return;
-      setEditForm({
-        ...editForm,
-        fields: {
-          ...editForm.fields,
-          [field]: value
-        }
-      });
+      if (editForm.fields && typeof editForm.fields === 'object') {
+        setEditForm({
+          ...editForm,
+          fields: {
+            ...editForm.fields,
+            [field]: value
+          }
+        });
+      } else {
+        setEditForm({
+          ...editForm,
+          fields: { [field]: value }
+        });
+      }
     },
 
     handleSync: async (onComplete: () => void) => {
@@ -352,21 +342,22 @@ export function useGeneration(setStep: (step: Step) => void) {
       setSyncLogs([]);
       try {
         const syncFn = isHistorical && sessionId
-          ? (cb: any) => api.syncSessionToAnki(sessionId, cb)
-          : (cb: any) => api.syncDrafts(cb, sessionId ?? undefined);
+          ? (cb: (event: ProgressEvent) => void) => api.syncSessionToAnki(sessionId, cb)
+          : (cb: (event: ProgressEvent) => void) => api.syncDrafts(cb, sessionId ?? undefined);
 
-        await syncFn((event: any) => {
+        await syncFn((event: ProgressEvent) => {
           setSyncLogs(prev => [...prev, event]);
           if (event.type === 'progress_start') {
-            setSyncProgress({ current: 0, total: event.data.total });
+            setSyncProgress({ current: 0, total: (event.data as { total: number }).total });
           } else if (event.type === 'progress_update') {
-            setSyncProgress(prev => ({ ...prev, current: event.data.current }));
+            setSyncProgress(prev => ({ ...prev, current: (event.data as { current: number }).current }));
           } else if (event.type === 'done') {
             onComplete();
           }
         });
       } catch (e) {
         console.error("Sync failed", e);
+      } finally {
         setIsSyncing(false);
       }
     }

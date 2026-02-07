@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { DeckSelector } from '../components/DeckSelector';
 import { api } from '../api';
 
@@ -28,7 +28,7 @@ describe('DeckSelector', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         // Default API response
-        (api.getDecks as any).mockResolvedValue({ decks: ['Uni', 'Uni::Math', 'Uni::CS'] });
+        (api.getDecks as Mock).mockResolvedValue({ decks: ['Uni', 'Uni::Math', 'Uni::CS'] });
     });
 
     it('renders with initial value', () => {
@@ -73,7 +73,7 @@ describe('DeckSelector', () => {
 
         // The text is split across nodes: Create new deck "<strong>NewDeck</strong>"
         // textContent matches both the span and its parent div, so we use findAllByText
-        const createOptions = await screen.findAllByText((content, element) => {
+        const createOptions = await screen.findAllByText((_, element) => {
             return element?.textContent === 'Create new deck "NewDeck"';
         });
 
@@ -82,7 +82,7 @@ describe('DeckSelector', () => {
     });
 
     it('creates deck on enter', async () => {
-        (api.createDeck as any).mockResolvedValue({ status: 'created' });
+        (api.createDeck as Mock).mockResolvedValue({ status: 'created' });
 
         render(<DeckSelector value="" onChange={mockOnChange} />);
         const input = screen.getByRole('textbox');
