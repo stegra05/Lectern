@@ -79,6 +79,16 @@ def add_note(deck_name: str, model_name: str, fields: Dict[str, str], tags: List
     return result
 
 
+def update_note_fields(note_id: int, fields: Dict[str, str]) -> None:
+    """Update fields of an existing Anki note via AnkiConnect."""
+    _invoke("updateNoteFields", {"note": {"id": note_id, "fields": fields}})
+
+
+def delete_notes(note_ids: List[int]) -> None:
+    """Delete notes from Anki by their IDs via AnkiConnect."""
+    _invoke("deleteNotes", {"notes": note_ids})
+
+
 def store_media_file(filename: str, data: bytes) -> str:
     """Upload an image or other binary to Anki's media collection.
 

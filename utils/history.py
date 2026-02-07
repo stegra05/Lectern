@@ -62,6 +62,7 @@ class HistoryManager:
         entry_id = str(uuid.uuid4())
         entry = {
             "id": entry_id,
+            "session_id": entry_id,  # Explicit link to state file
             "filename": os.path.basename(filename),
             "full_path": os.path.abspath(filename),
             "deck": deck,

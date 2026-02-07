@@ -108,16 +108,18 @@ function App() {
     previewSlide, setPreviewSlide,
     isCancelling,
     currentPhase,
-    examMode, toggleExamMode,
+    focusPrompt, setFocusPrompt,
     sourceType, setSourceType,
     densityTarget, setDensityTarget,
     handleGenerate,
     handleReset,
     handleCancel,
+    loadSession,
     logsEndRef,
     handleCopyLogs,
     copied,
     sessionId,
+    isHistorical,
     sortBy,
     setSortBy,
     searchQuery,
@@ -221,6 +223,7 @@ function App() {
                       setDeckName={setDeckName}
                       setPdfFile={setPdfFile}
                       setStep={setStep}
+                      loadSession={loadSession}
                     />
                   )}
 
@@ -231,12 +234,12 @@ function App() {
                       setPdfFile={setPdfFile}
                       deckName={deckName}
                       setDeckName={setDeckName}
-                      examMode={examMode}
-                      toggleExamMode={toggleExamMode}
                       sourceType={sourceType}
                       setSourceType={setSourceType}
                       densityTarget={densityTarget}
                       setDensityTarget={setDensityTarget}
+                      focusPrompt={focusPrompt}
+                      setFocusPrompt={setFocusPrompt}
                       estimation={estimation}
                       isEstimating={isEstimating}
                       handleGenerate={handleGenerate}
@@ -266,6 +269,7 @@ function App() {
                       setSortBy={setSortBy}
                       searchQuery={searchQuery}
                       setSearchQuery={setSearchQuery}
+                      isHistorical={isHistorical}
                     />
                   )}
                 </AnimatePresence>

@@ -30,6 +30,7 @@ interface ProgressViewProps {
     setSortBy: (opt: SortOption) => void;
     searchQuery: string;
     setSearchQuery: (query: string) => void;
+    isHistorical?: boolean;
 }
 
 export function ProgressView({
@@ -50,7 +51,8 @@ export function ProgressView({
     sortBy,
     setSortBy,
     searchQuery,
-    setSearchQuery
+    setSearchQuery,
+    isHistorical
 }: ProgressViewProps) {
     const filteredCards = useMemo(() => {
         if (!searchQuery.trim()) return cards;
@@ -236,6 +238,7 @@ export function ProgressView({
                         initialCards={sortedCards}
                         onSyncComplete={() => setStep('done')}
                         sessionId={sessionId}
+                        isHistorical={isHistorical}
                     />
                 ) : (
                     <>
