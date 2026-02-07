@@ -76,6 +76,10 @@ echo -e "\n${BLUE}📦 Building...${NC}"
 echo -e "\n${BLUE}💿 Creating DMG...${NC}"
 ./create_dmg.sh
 
+# Update version.py
+echo "__version__ = \"${NEW_VERSION#v}\"" > version.py
+git add version.py
+
 # Tag
 echo -e "\n${BLUE}🏷  Tagging $NEW_VERSION...${NC}"
 git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"

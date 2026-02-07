@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Settings, AlertCircle, Save, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Settings, AlertCircle, Save, HelpCircle, ChevronDown, ChevronUp, ExternalLink, Download, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 
@@ -27,6 +27,8 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
 
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [versionInfo, setVersionInfo] = useState<{ current: string; latest: string | null; update_available: boolean; release_url: string } | null>(null);
+    const [checkLoading, setCheckLoading] = useState(false);
 
     const Tooltip = ({ text }: { text: string }) => (
         <div className="group relative inline-block ml-2">
@@ -104,9 +106,22 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
         setEditedConfig({ ...editedConfig, [field]: value });
     };
 
+    const checkUpdates = async () => {
+        setCheckLoading(true);
+        try {
+            const info = await api.getVersion();
+            setVersionInfo(info);
+        } catch (err) {
+            console.error('Failed to check updates:', err);
+        } finally {
+            setCheckLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (isOpen) {
             loadConfig();
+            checkUpdates();
         }
     }, [isOpen]);
 
@@ -285,6 +300,71 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
+                                        </div>
+
+                                        <div className="w-full h-px bg-border my-4" />
+
+                                        {/* About Section */}
+                                        <div className="space-y-4">
+                                            <label className="text-sm font-medium text-text-muted flex items-center gap-2">
+                                                About
+                                            </label>
+
+                                            <div className="p-4 rounded-xl border border-border bg-background space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="space-y-0.5">
+                                                        <p className="text-sm font-semibold text-text-main">Lectern</p>
+                                                        <p className="text-xs text-text-muted">Version {versionInfo?.current || '...'}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            checkUpdates();
+                                                        }}
+                                                        disabled={checkLoading}
+                                                        className="p-2 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors disabled:opacity-50"
+                                                        title="Check for updates"
+                                                    >
+                                                        <RefreshCw className={`w-4 h-4 ${checkLoading ? 'animate-spin' : ''}`} />
+                                                    </button>
+                                                </div>
+
+                                                {versionInfo?.update_available ? (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between gap-4"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                                                                <Download className="w-4 h-4 text-primary" />
+                                                            </div>
+                                                            <div className="space-y-0.5">
+                                                                <p className="text-sm font-medium text-text-main">Update available!</p>
+                                                                <p className="text-xs text-text-muted">New version v{versionInfo.latest}</p>
+                                                            </div>
+                                                        </div>
+                                                        <a
+                                                            href={versionInfo.release_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-background rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+                                                        >
+                                                            Download <ExternalLink className="w-3 h-3" />
+                                                        </a>
+                                                    </motion.div>
+                                                ) : versionInfo?.latest && (
+                                                    <p className="text-[10px] text-text-muted text-center italic">
+                                                        You are running the latest version
+                                                    </p>
+                                                )}
+
+                                                <div className="pt-2 flex items-center justify-center gap-4 text-[10px] text-text-muted">
+                                                    <a href="https://github.com/stegra05/Lectern" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">GitHub Repository</a>
+                                                    <span>•</span>
+                                                    <a href="https://github.com/stegra05/Lectern/issues" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Report Issue</a>
+                                                </div>
+                                            </div>
                                         </div>
                                     </>
                                 )}

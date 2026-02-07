@@ -12,7 +12,9 @@ import tempfile
 import json
 import time
 import threading
+import requests
 from uuid import uuid4
+from version import __version__
 
 # Add parent directory to path to import ankiparse modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -164,6 +166,67 @@ class ConfigUpdate(BaseModel):
     basic_model: Optional[str] = None
     cloze_model: Optional[str] = None
     gemini_model: Optional[str] = None
+
+# Update Cache
+_update_cache = {
+    "data": None,
+    "expires_at": 0
+}
+_update_lock = threading.Lock()
+
+@app.get("/version")
+async def get_version():
+    """Returns local version and checks GitHub for updates."""
+    global _update_cache
+    
+    now = time.time()
+    
+    with _update_lock:
+        if _update_cache["data"] and now < _update_cache["expires_at"]:
+            return _update_cache["data"]
+
+    # Check GitHub
+    try:
+        # We use a timeout to avoid hanging the UI
+        response = requests.get(
+            "https://api.github.com/repos/stegra05/Lectern/releases/latest",
+            headers={"Accept": "application/vnd.github.v3+json"},
+            timeout=5
+        )
+        if response.status_code == 200:
+            data = response.json()
+            latest_version = data.get("tag_name", "v0.0.0").lstrip("v")
+            release_url = data.get("html_url", "https://github.com/stegra05/Lectern/releases")
+            
+            # Simple semver compare (split by dots)
+            curr_parts = [int(p) for p in __version__.split(".")]
+            late_parts = [int(p) for p in latest_version.split(".")]
+            
+            update_available = late_parts > curr_parts
+            
+            result = {
+                "current": __version__,
+                "latest": latest_version,
+                "update_available": update_available,
+                "release_url": release_url
+            }
+            
+            with _update_lock:
+                _update_cache = {
+                    "data": result,
+                    "expires_at": now + 3600  # 1 hour cache
+                }
+            return result
+    except Exception as e:
+        print(f"Update check failed: {e}")
+    
+    # Fallback to current only if check fails
+    return {
+        "current": __version__,
+        "latest": None,
+        "update_available": False,
+        "release_url": "https://github.com/stegra05/Lectern/releases"
+    }
 
 @app.get("/health")
 async def health_check():
