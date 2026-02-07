@@ -8,7 +8,7 @@ export const getApiUrl = () => {
 
         // Special case for Vite dev server default
         if (port === '5173' || port === '5174') {
-             return "http://localhost:4173";
+            return "http://localhost:4173";
         }
 
         // If we're on a specific port (packaged app), use same origin
@@ -34,7 +34,8 @@ export interface GenerateRequest {
     model_name?: string;
     tags?: string[];
     context_deck?: string;
-    exam_mode?: boolean;  // NEW: Enable exam-focused card generation
+    exam_mode?: boolean;
+    source_type?: string;  // NEW: "auto", "slides", "script"
 }
 
 export interface ProgressEvent {
@@ -176,7 +177,8 @@ export const api = {
         if (req.model_name) formData.append("model_name", req.model_name);
         if (req.tags) formData.append("tags", JSON.stringify(req.tags));
         if (req.context_deck) formData.append("context_deck", req.context_deck);
-        formData.append("exam_mode", String(req.exam_mode ?? false));  // NEW: Include exam_mode
+        formData.append("exam_mode", String(req.exam_mode ?? false));
+        formData.append("source_type", req.source_type ?? "auto");  // NEW: Include source_type
 
         const res = await fetch(`${API_URL}/generate`, {
             method: "POST",

@@ -48,6 +48,7 @@ class LecternGenerationService:
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
         exam_mode: bool = False,
+        source_type: str = "auto",  # NEW: "auto", "slides", "script"
         session_id: Optional[str] = None,
     ) -> Generator[ServiceEvent, None, None]:
         
@@ -235,23 +236,56 @@ class LecternGenerationService:
                     effective_target = 1.8
                     target_reason = "large_deck_boost_50"
             
-            total_cards_cap = int(len(pages) * effective_target)
-            hard_cap = int(getattr(config, "MAX_TOTAL_NOTES", 0))
-            if hard_cap > 0:
-                total_cards_cap = min(total_cards_cap, hard_cap)
-            
-            min_cards_required = int(len(pages) * getattr(config, "MIN_CARDS_PER_SLIDE", 0.8))
-            
+            # === Density Detection ===
+            chars_per_page = total_text_chars / len(pages) if len(pages) > 0 else 0
+            detected_mode = "slides"
+
+            if source_type == "auto":
+                if chars_per_page > config.DENSE_THRESHOLD_CHARS_PER_PAGE:
+                    detected_mode = "script"
+                elif chars_per_page > config.NORMAL_THRESHOLD_CHARS_PER_PAGE:
+                    detected_mode = "normal"
+                else:
+                    detected_mode = "slides"
+            else:
+                detected_mode = source_type # User override
+
+            yield ServiceEvent("info", f"Density mode: {detected_mode} ({chars_per_page:.0f} chars/page)")
+
+            # === Calculate total_cards_cap based on mode ===
+            if detected_mode == "script":
+                # Dense: Ignore page count, use pure text metric
+                total_cards_cap = max(3, int(total_text_chars / config.SCRIPT_CHARS_PER_CARD))
+                target_reason = "script_text_density"
+            elif detected_mode == "normal":
+                # Balanced: Use higher of page-based or text-based
+                page_cap = int(len(pages) * effective_target)
+                text_cap = int(total_text_chars / 800)
+                total_cards_cap = max(page_cap, text_cap)
+                target_reason = "normal_balanced"
+            else: # "slides"
+                # Sparse: Classic page-based logic
+                total_cards_cap = int(len(pages) * effective_target)
+                target_reason = "slides_page_based"
+                
+                # Text-density-based cap (reduction for thin slides)
+                chars_per_card_target = max(50, int(getattr(config, "CHARS_PER_CARD_TARGET", 200)))
+                text_cap = int(total_text_chars / chars_per_card_target) if total_text_chars else 0
+                if text_cap > 0 and text_cap < total_cards_cap:
+                    total_cards_cap = text_cap
+                    target_reason += "+text_density_cap"
+
+            # Safety clamps
+            if exam_mode:
+                # In exam mode, we still cap by page count to prevent infinite extraction
+                exam_cap = int(len(pages) * config.EXAM_MODE_SAFETY_CAP)
+                if total_cards_cap > exam_cap:
+                    total_cards_cap = exam_cap
+                    target_reason += "+exam_mode_cap"
+
             # Dynamic batching logic
             dynamic_batch_size = min(50, max(20, len(pages) // 2))
             actual_batch_size = int(max_notes_per_batch or dynamic_batch_size)
-
-            # Text-density-based cap
-            chars_per_card_target = max(50, int(getattr(config, "CHARS_PER_CARD_TARGET", 200)))
-            text_cap = int(total_text_chars / chars_per_card_target) if total_text_chars else 0
-            if text_cap > 0 and text_cap < total_cards_cap:
-                total_cards_cap = text_cap
-                target_reason = f"{target_reason}+text_density_cap"
 
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})
 

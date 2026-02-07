@@ -14,6 +14,8 @@ interface ConfigViewProps {
     setDeckName: (name: string) => void;
     examMode: boolean;
     toggleExamMode: () => void;
+    sourceType: 'auto' | 'slides' | 'script';
+    setSourceType: (type: 'auto' | 'slides' | 'script') => void;
     estimation: any;
     isEstimating: boolean;
     handleGenerate: () => void;
@@ -28,6 +30,8 @@ export function ConfigView({
     setDeckName,
     examMode,
     toggleExamMode,
+    sourceType,
+    setSourceType,
     estimation,
     isEstimating,
     handleGenerate,
@@ -137,6 +141,35 @@ export function ConfigView({
                                 🎓 Prioritizes understanding over memorization. 30% comparison, 25% application, 25% intuition, 20% definition cards.
                             </p>
                         )}
+                    </div>
+
+                    <div className="pt-4 border-t border-border/50">
+                        <label className="block text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">
+                            Document Type
+                        </label>
+                        <div className="flex gap-2">
+                            {(['auto', 'slides', 'script'] as const).map((type) => (
+                                <button
+                                    key={type}
+                                    onClick={() => setSourceType(type)}
+                                    className={clsx(
+                                        "flex-1 py-3 px-4 rounded-xl border text-sm font-medium transition-all outline-none",
+                                        sourceType === type
+                                            ? "bg-primary/10 border-primary/30 text-primary shadow-sm"
+                                            : "bg-surface/30 border-border/50 text-text-muted hover:border-border"
+                                    )}
+                                >
+                                    {type === 'auto' && '🔮 Auto'}
+                                    {type === 'slides' && '📊 Slides'}
+                                    {type === 'script' && '📝 Script'}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="mt-2 text-xs text-text-muted px-2">
+                            {sourceType === 'auto' && 'Automatically detects density from text content.'}
+                            {sourceType === 'slides' && 'Optimized for sparse lecture slides (1-2 cards/page).'}
+                            {sourceType === 'script' && 'Optimized for dense summaries (many cards/page).'}
+                        </p>
                     </div>
                 </GlassCard>
             </motion.div>

@@ -109,6 +109,7 @@ function App() {
     isCancelling,
     currentPhase,
     examMode, toggleExamMode,
+    sourceType, setSourceType,
     handleGenerate,
     handleReset,
     handleCancel,
@@ -227,6 +228,8 @@ function App() {
                       setDeckName={setDeckName}
                       examMode={examMode}
                       toggleExamMode={toggleExamMode}
+                      sourceType={sourceType}
+                      setSourceType={setSourceType}
                       estimation={estimation}
                       isEstimating={isEstimating}
                       handleGenerate={handleGenerate}
