@@ -49,7 +49,8 @@ class LecternGenerationService:
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
         exam_mode: bool = False,
-        source_type: str = "auto",  # NEW: "auto", "slides", "script"
+        source_type: str = "auto",  # "auto", "slides", "script"
+        density_target: Optional[float] = None,  # Override for CARDS_PER_SLIDE_TARGET
         session_id: Optional[str] = None,
     ) -> Generator[ServiceEvent, None, None]:
         
@@ -219,9 +220,10 @@ class LecternGenerationService:
                 yield ServiceEvent("info", f"Restored {len(all_cards)} cards from state")
 
             # Targets
-            base_target = float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+            # NOTE(Density): User-provided density_target overrides config default
+            base_target = density_target if density_target is not None else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
             effective_target = base_target
-            target_reason = "config_default"
+            target_reason = "user_override" if density_target is not None else "config_default"
             
             # NOTE(Exam-Mode): In exam mode, we strictly cap density to prioritize high-yield concepts.
             # We disable the "Large Deck Boost" which would otherwise flood the user with details.
@@ -254,10 +256,15 @@ class LecternGenerationService:
             yield ServiceEvent("info", f"Density mode: {detected_mode} ({chars_per_page:.0f} chars/page)")
 
             # === Calculate total_cards_cap based on mode ===
+            # Standardize density ratio (1.5 is default base)
+            density_ratio = effective_target / 1.5
+
             if detected_mode == "script":
                 # Dense: Ignore page count, use pure text metric
-                total_cards_cap = max(3, int(total_text_chars / config.SCRIPT_CHARS_PER_CARD))
-                target_reason = "script_text_density"
+                # Scale chars per card inversely to density (Higher density = fewer chars per card)
+                adjusted_chars_per_card = int(config.SCRIPT_CHARS_PER_CARD / density_ratio)
+                total_cards_cap = max(3, int(total_text_chars / adjusted_chars_per_card))
+                target_reason = f"script_text_density (scaled {density_ratio:.2f}x)"
             elif detected_mode == "normal":
                 # Balanced: Use higher of page-based or text-based
                 page_cap = int(len(pages) * effective_target)

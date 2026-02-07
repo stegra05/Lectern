@@ -33,6 +33,15 @@ export function useGeneration(setStep: (step: Step) => void) {
     return 'auto';
   });
 
+  const [densityTarget, setDensityTarget] = useState<number>(() => {
+    // Persist density preference
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('densityTarget');
+      return stored ? parseFloat(stored) : 1.5;
+    }
+    return 1.5;
+  });
+
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs
@@ -103,7 +112,8 @@ export function useGeneration(setStep: (step: Step) => void) {
           pdf_file: pdfFile,
           deck_name: deckName,
           exam_mode: examMode,
-          source_type: sourceType
+          source_type: sourceType,
+          density_target: densityTarget
         },
         (event) => {
           setLogs(prev => [...prev, event]);
@@ -167,6 +177,10 @@ export function useGeneration(setStep: (step: Step) => void) {
     sourceType, setSourceType: (type: 'auto' | 'slides' | 'script') => {
       setSourceType(type);
       localStorage.setItem('sourceType', type);
+    },
+    densityTarget, setDensityTarget: (target: number) => {
+      setDensityTarget(target);
+      localStorage.setItem('densityTarget', String(target));
     },
     handleGenerate,
     handleReset,

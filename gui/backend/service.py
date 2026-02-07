@@ -92,7 +92,8 @@ class GenerationService:
         context_deck: str = "",
         entry_id: str = None,
         exam_mode: bool = False,
-        source_type: str = "auto",  # NEW: "auto", "slides", "script"
+        source_type: str = "auto",  # "auto", "slides", "script"
+        density_target: float = config.CARDS_PER_SLIDE_TARGET,  # Detail level
         max_notes_per_batch: int = config.MAX_NOTES_PER_BATCH,
         reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
         enable_reflection: bool = config.ENABLE_REFLECTION,
@@ -113,6 +114,7 @@ class GenerationService:
             stop_check=lambda: self.stop_requested,
             exam_mode=exam_mode,
             source_type=source_type,
+            density_target=density_target,
             max_notes_per_batch=max_notes_per_batch,
             reflection_rounds=reflection_rounds,
             enable_reflection=enable_reflection,
