@@ -25,7 +25,7 @@ from pypdf import PdfReader
 import io
 from starlette.concurrency import run_in_threadpool
 
-from anki_connector import check_connection, get_deck_names, notes_info, update_note_fields
+from anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes
 import config
 from service import GenerationService, DraftStore
 from lectern_service import LecternGenerationService
@@ -547,6 +547,52 @@ async def update_session_cards(session_id: str, update: SessionCardsUpdate):
         session_id=session_id
     )
     return {"status": "ok", "session_id": session_id}
+
+@app.delete("/session/{session_id}/cards/{card_index}")
+async def delete_session_card(session_id: str, card_index: int):
+    state = load_state(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    cards = state["cards"]
+    if card_index < 0 or card_index >= len(cards):
+        raise HTTPException(status_code=404, detail="Card not found")
+    
+    cards.pop(card_index)
+    
+    # Save the updated cards back to the session state
+    save_state(
+        pdf_path=state["pdf_path"],
+        deck_name=state["deck_name"],
+        cards=cards,
+        concept_map=state["concept_map"],
+        history=state["history"],
+        log_path=state.get("log_path", ""),
+        session_id=session_id
+    )
+
+    # Try to update history card count if this session corresponds to a history entry
+    try:
+        mgr = HistoryManager()
+        # Assume session_id is the entry_id for persistent sessions
+        mgr.update_entry(session_id, card_count=len(cards))
+    except Exception as e:
+        print(f"Warning: Failed to update history card count: {e}")
+
+    return {"status": "ok", "remaining": len(cards)}
+
+class AnkiDeleteRequest(BaseModel):
+    note_ids: List[int]
+
+@app.delete("/anki/notes")
+async def delete_anki_notes(req: AnkiDeleteRequest):
+    try:
+        delete_notes(req.note_ids)
+        return {"status": "deleted", "count": len(req.note_ids)}
+    except Exception as e:
+        print(f"Failed to delete Anki notes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/session/{session_id}/sync")
 async def sync_session_to_anki(session_id: str):

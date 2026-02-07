@@ -348,5 +348,23 @@ export const api = {
         }
     },
 
+    deleteSessionCard: async (sessionId: string, cardIndex: number) => {
+        const res = await fetchWithTimeout(`${API_URL}/session/${sessionId}/cards/${cardIndex}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete card from session');
+        return res.json();
+    },
+
+    deleteAnkiNotes: async (noteIds: number[]) => {
+        const res = await fetchWithTimeout(`${API_URL}/anki/notes`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note_ids: noteIds }),
+        });
+        if (!res.ok) throw new Error('Failed to delete notes from Anki');
+        return res.json();
+    },
+
     getApiUrl: () => API_URL,
 };
