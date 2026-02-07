@@ -88,7 +88,7 @@ export function ConfigView({
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">Deck Name</label>
-                        <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">Deck Name</label>
+
                         <DeckSelector
                             value={deckName}
                             onChange={setDeckName}
