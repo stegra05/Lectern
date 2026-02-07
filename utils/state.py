@@ -40,7 +40,7 @@ def save_state(
     try:
         state_path = _get_state_path(session_id)
         with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", dir=os.path.dirname(state_path)) as tmp:
-            json.dump(state, tmp, ensure_ascii=False, indent=2)
+            json.dump(state, tmp, ensure_ascii=False)
             temp_path = tmp.name
         os.replace(temp_path, state_path)
     except Exception as e:
