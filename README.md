@@ -13,13 +13,31 @@
 Lectern transforms PDF lecture slides into high-quality Anki flashcards instantly.  
 It parses your slides, composes a multimodal prompt for Google's Gemini, and creates notes in your running Anki instance via AnkiConnect.
 
-[Get Started](#installation) • [Usage](#usage) • [Tech Stack](#tech-stack) • [Configuration](#configuration)
+[Download](#download) • [Features](#features) • [Tech Stack](#tech-stack) • [Build from Source](#build-from-source)
 
 <br>
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
 </div>
+
+---
+
+## Download
+
+**[⬇️ Download Lectern for macOS](https://github.com/stegra05/lectern/releases/latest)**
+
+### Quick Install
+
+1. Download `Lectern.dmg` from the latest release
+2. Open the DMG and drag Lectern to **Applications**
+3. **First launch:** Right-click → Open (bypasses Gatekeeper warning)
+
+### Requirements
+
+- **Anki** with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on
+- **Poppler** for PDF rendering: `brew install poppler`
+- **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/apikey) (free tier available)
 
 ---
 
