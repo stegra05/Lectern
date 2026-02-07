@@ -34,13 +34,15 @@ describe('ConfigView', () => {
         setDensityTarget: vi.fn(),
         sourceType: 'auto' as 'auto' | 'slides' | 'script',
         setSourceType: vi.fn(),
+        focusPrompt: '',
+        setFocusPrompt: vi.fn(),
     };
 
     it('renders necessary inputs', () => {
         render(<ConfigView {...defaultProps} />);
         expect(screen.getByText(/Source Material/i)).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/University::Subject::Topic/i)).toBeInTheDocument();
-        expect(screen.getByText(/Exam Mode/i)).toBeInTheDocument();
+        expect(screen.getByText(/Focus Prompt/i)).toBeInTheDocument();
     });
 
     it('disables generate button when inputs are missing', () => {
