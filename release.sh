@@ -69,16 +69,16 @@ if [ -n "$(git status --porcelain)" ]; then
     fi
 fi
 
+# Update version.py
+echo "__version__ = \"${NEW_VERSION#v}\"" > version.py
+git add version.py
+
 # Build
 echo -e "\n${BLUE}📦 Building...${NC}"
 ./build_app.sh
 
 echo -e "\n${BLUE}💿 Creating DMG...${NC}"
 ./create_dmg.sh
-
-# Update version.py
-echo "__version__ = \"${NEW_VERSION#v}\"" > version.py
-git add version.py
 
 # Tag
 echo -e "\n${BLUE}🏷  Tagging $NEW_VERSION...${NC}"
