@@ -42,7 +42,7 @@ class HistoryManager:
     def _save(self, history: List[Dict[str, Any]]) -> None:
         try:
             with open(self.history_file, "w", encoding="utf-8") as f:
-                json.dump(history, f, ensure_ascii=False, indent=2)
+                json.dump(history, f, ensure_ascii=False)
         except Exception as e:
             print(f"Warning: Failed to save history: {e}")
 
