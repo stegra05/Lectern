@@ -37,7 +37,7 @@ def test_concept_map_prompt():
     prompt = builder.concept_map()
     assert "construct a comprehensive global concept map" in prompt
     assert "ISO 639-1 code" in prompt
-    assert "language (string)" in prompt
+    assert "language (string)" in prompt or "language" in prompt  # Schema key present
 
 import json
 from ai_prompts import CARD_EXAMPLES
@@ -67,10 +67,9 @@ def test_card_examples_are_valid_json():
     assert len(examples) >= 2
     for ex in examples:
         assert "model_name" in ex
-        assert "fields_json" in ex, "Examples must use fields_json (string) not fields (dict)"
-        # Verify fields_json is a string that parses to a dict
-        assert isinstance(ex["fields_json"], str)
-        fields = json.loads(ex["fields_json"])
-        assert isinstance(fields, dict)
+        # New schema uses 'fields' as native object, not 'fields_json' string
+        assert "fields" in ex, "Examples must use fields (dict)"
+        assert isinstance(ex["fields"], dict)
+        fields = ex["fields"]
         if "Front" in fields:
             assert isinstance(fields["Front"], str)

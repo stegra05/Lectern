@@ -8,15 +8,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Generator, List, Optional, Callable
 
 import config
-from anki_connector import (
-    check_connection, 
-    sample_examples_from_deck,
-    get_deck_slide_set_patterns,
-)
+from anki_connector import check_connection, sample_examples_from_deck
 from pdf_parser import extract_content_from_pdf, extract_pdf_title
 from ai_client import LecternAIClient
 from ai_pacing import PacingState
-from utils.tags import infer_slide_set_name, infer_slide_set_name_with_ai
+from utils.tags import infer_slide_set_name
 from utils.note_export import export_card_to_anki
 from utils.state import save_state, clear_state, load_state
 from utils.history import HistoryManager
@@ -126,25 +122,21 @@ class LecternGenerationService:
                 history_mgr.update_entry(history_id, status="error")
                 return
 
-            # 3. Sample Examples & Analyze Deck Patterns
+            # 3. Sample Examples
             if stop_check and stop_check():
                 return
 
             examples = ""
-            pattern_info: Dict[str, Any] = {}
-            yield ServiceEvent("step_start", "Sample examples & analyze deck patterns")
+            yield ServiceEvent("step_start", "Sample examples from deck")
             try:
                 deck_for_examples = (context_deck or deck_name)
                 examples = sample_examples_from_deck(deck_name=deck_for_examples, sample_size=5)
-                pattern_info = get_deck_slide_set_patterns(deck_name)
                 if examples.strip():
                     yield ServiceEvent("info", "Loaded style examples from Anki")
-                if pattern_info.get('slide_sets'):
-                    yield ServiceEvent("info", f"Found {len(pattern_info['slide_sets'])} existing slide sets in deck")
-                yield ServiceEvent("step_end", "Examples & Patterns Analyzed", {"success": True})
+                yield ServiceEvent("step_end", "Examples Loaded", {"success": True})
             except Exception as e:
                  yield ServiceEvent("warning", f"Failed to sample examples: {e}")
-                 yield ServiceEvent("step_end", "Analysis Failed", {"success": False})
+                 yield ServiceEvent("step_end", "Examples Failed", {"success": False})
 
             # 3b. Extract PDF Title for Slide Set Naming
             pdf_title = ""
@@ -156,38 +148,16 @@ class LecternGenerationService:
             except Exception as e:
                 yield ServiceEvent("warning", f"PDF title extraction failed: {e}")
 
-            # 3c. Infer Slide Set Name using AI
-            # NOTE(Naming): Use AI to infer a semantic name from context (filename, title, first slides)
-            # This prevents generic names like "Week 1" when the content is about a specific topic.
-            yield ServiceEvent("step_start", "Infer slide set name")
-            first_slides_text = [p.text for p in pages[:3]] if pages else []
-            slide_set_name = infer_slide_set_name_with_ai(
-                pdf_filename=pdf_filename,
-                pdf_title=pdf_title,
-                first_slides_text=first_slides_text,
-                pattern_info=pattern_info,
-            )
-            if slide_set_name:
-                yield ServiceEvent("step_end", f"Slide Set Name: '{slide_set_name}'", {"success": True})
-            else:
-                # Fallback to filename if all inference failed
-                slide_set_name = pdf_filename.replace('_', ' ').replace('-', ' ').title()
-                yield ServiceEvent("step_end", f"Using filename as Slide Set Name: '{slide_set_name}'", {"success": False})
-
-            # Build slide set context for AI
-            slide_set_context = {
-                'deck_name': deck_name,
-                'slide_set_name': slide_set_name,
-                'pattern_info': pattern_info,
-                'pdf_title': pdf_title,
-            }
+            # 3c. Slide Set Name - DEFERRED until after concept map
+            # The concept map now returns slide_set_name, we'll extract it after step 5
 
             # 4. AI Session Init
             if stop_check and stop_check():
                 return
 
             yield ServiceEvent("step_start", "Start AI session")
-            ai = LecternAIClient(model_name=model_name, focus_prompt=focus_prompt, slide_set_context=slide_set_context)
+            # NOTE: slide_set_context is set after concept map for the slide_set_name
+            ai = LecternAIClient(model_name=model_name, focus_prompt=focus_prompt, slide_set_context=None)
             if saved_state:
                 history = saved_state.get("history", [])
                 if history:
@@ -212,6 +182,21 @@ class LecternGenerationService:
                     yield ServiceEvent("warning", f"Concept map failed: {e}")
                     yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})
 
+            # 5b. Extract Slide Set Name from Concept Map (or fallback to heuristic)
+            slide_set_name = concept_map.get('slide_set_name', '') if concept_map else ''
+            if not slide_set_name:
+                slide_set_name = infer_slide_set_name(pdf_title, pdf_filename)
+            if not slide_set_name:
+                slide_set_name = pdf_filename.replace('_', ' ').replace('-', ' ').title()
+            yield ServiceEvent("info", f"Slide Set Name: '{slide_set_name}'")
+
+            # Build slide set context for AI
+            slide_set_context = {
+                'deck_name': deck_name,
+                'slide_set_name': slide_set_name,
+            }
+            ai._slide_set_context = slide_set_context  # Update context for future calls
+
             # 6. Generation Loop
             all_cards = []
             seen_keys = set()
@@ -225,66 +210,25 @@ class LecternGenerationService:
                 yield ServiceEvent("info", f"Restored {len(all_cards)} cards from state")
 
             # Targets
-            # NOTE(Density): User-provided density_target overrides config default
-            base_target = density_target if density_target is not None else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
-            effective_target = base_target
-            target_reason = "user_override" if density_target is not None else "config_default"
+            # NOTE(Density): Simple linear formula - user controls via density_target slider
+            effective_target = density_target if density_target is not None else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
             
-            # Boost for large decks (unless density explicitly low)
-            if len(pages) >= 100 and effective_target < 2.0:
-                effective_target = 2.0
-                target_reason = "large_deck_boost_100"
-            elif len(pages) >= 50 and effective_target < 1.8:
-                effective_target = 1.8
-                target_reason = "large_deck_boost_50"
-            
-            # === Density Detection ===
+            # Calculate chars per page for mode detection
             chars_per_page = total_text_chars / len(pages) if len(pages) > 0 else 0
-            detected_mode = "slides"
-
-            if source_type == "auto":
-                if chars_per_page > config.DENSE_THRESHOLD_CHARS_PER_PAGE:
-                    detected_mode = "script"
-                elif chars_per_page > config.NORMAL_THRESHOLD_CHARS_PER_PAGE:
-                    detected_mode = "normal"
-                else:
-                    detected_mode = "slides"
+            is_script_mode = source_type == "script" or (source_type == "auto" and chars_per_page > 2000)
+            
+            # Simple card cap calculation
+            if is_script_mode:
+                # Script/dense mode: text-based calculation
+                total_cards_cap = max(5, int(total_text_chars / 1000 * effective_target))
+                yield ServiceEvent("info", f"Script mode: ~{total_cards_cap} cards target ({chars_per_page:.0f} chars/page)")
             else:
-                detected_mode = source_type # User override
+                # Slides mode: page-based calculation
+                total_cards_cap = max(3, int(len(pages) * effective_target))
+                yield ServiceEvent("info", f"Slides mode: ~{total_cards_cap} cards target ({len(pages)} pages × {effective_target:.1f})")
 
-            yield ServiceEvent("info", f"Density mode: {detected_mode} ({chars_per_page:.0f} chars/page)")
-
-            # === Calculate total_cards_cap based on mode ===
-            # Standardize density ratio (1.5 is default base)
-            density_ratio = effective_target / 1.5
-
-            if detected_mode == "script":
-                # Dense: Ignore page count, use pure text metric
-                # Scale chars per card inversely to density (Higher density = fewer chars per card)
-                adjusted_chars_per_card = int(config.SCRIPT_CHARS_PER_CARD / density_ratio)
-                total_cards_cap = max(3, int(total_text_chars / adjusted_chars_per_card))
-                target_reason = f"script_text_density (scaled {density_ratio:.2f}x)"
-            elif detected_mode == "normal":
-                # Balanced: Use higher of page-based or text-based
-                page_cap = int(len(pages) * effective_target)
-                text_cap = int(total_text_chars / 800)
-                total_cards_cap = max(page_cap, text_cap)
-                target_reason = "normal_balanced"
-            else: # "slides"
-                # Sparse: Classic page-based logic
-                total_cards_cap = int(len(pages) * effective_target)
-                target_reason = "slides_page_based"
-                
-                # Text-density-based cap (reduction for thin slides)
-                chars_per_card_target = max(50, int(getattr(config, "CHARS_PER_CARD_TARGET", 200)))
-                text_cap = int(total_text_chars / chars_per_card_target) if total_text_chars else 0
-                if text_cap > 0 and text_cap < total_cards_cap:
-                    total_cards_cap = text_cap
-                    target_reason += "+text_density_cap"
-
-            # Dynamic batching logic
-            dynamic_batch_size = min(50, max(20, len(pages) // 2))
-            actual_batch_size = int(max_notes_per_batch or dynamic_batch_size)
+            # Batch sizing
+            actual_batch_size = int(max_notes_per_batch or min(50, max(20, len(pages) // 2)))
 
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})
 
