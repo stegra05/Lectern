@@ -66,6 +66,14 @@ fi
 echo "__version__ = \"${NEW_VERSION#v}\"" > version.py
 git add version.py
 
+# Update gui/backend/main.py
+sed -i '' "s/version='[0-9.]*'/version='${NEW_VERSION#v}'/" gui/backend/main.py
+git add gui/backend/main.py
+
+# Update gui/frontend/package.json
+sed -i '' "s/\"version\": \"[0-9.]*\"/\"version\": \"${NEW_VERSION#v}\"/" gui/frontend/package.json
+git add gui/frontend/package.json
+
 # Commit and Tag
 git commit -m "chore(release): bump version to ${NEW_VERSION#v}"
 git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"

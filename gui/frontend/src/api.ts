@@ -210,11 +210,24 @@ export const api = {
                 ? `${API_URL}/estimate?model_name=${encodeURIComponent(modelName)}`
                 : `${API_URL}/estimate`;
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+            // If an external signal is provided, chain it
+            if (signal) {
+                signal.addEventListener('abort', () => {
+                    clearTimeout(timeoutId);
+                    controller.abort();
+                });
+            }
+
             const res = await fetch(url, {
                 method: "POST",
                 body: formData,
-                signal: signal
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
+
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return await res.json();
         } catch (error) {

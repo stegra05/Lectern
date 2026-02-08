@@ -27,7 +27,7 @@ class ConceptMapResponse(BaseModel):
 class AnkiCard(BaseModel):
     """Anki card model. Now receives 'fields' directly as a dict from AI."""
     model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")
-    fields: Dict[str, str] = {}
+    fields: List[Dict[str, str]] = []  # List of {name: "Front", value: "..."}
     tags: List[str] = []
     slide_topic: Optional[str] = None
     rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")

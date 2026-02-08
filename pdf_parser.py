@@ -27,14 +27,14 @@ class PageContent:
     Attributes:
         page_number: 1-based page index for user-friendly reporting.
         text: Extracted text content of the page.
-        images: Raw image bytes extracted from the page in their original
-            encodings (e.g., PNG/JPEG). Each entry is a binary blob suitable
-            for direct upload to Anki media.
+        images: Raw image bytes extracted from the page.
+        image_count: Number of images detected on the page (for token estimation).
     """
 
     page_number: int
     text: str
     images: List[bytes]
+    image_count: int = 0
 
 
 def extract_content_from_pdf(
@@ -49,7 +49,7 @@ def extract_content_from_pdf(
         pdf_path: Absolute or relative path to the PDF file.
         stop_check: Optional callback that returns True if processing should stop.
         skip_ocr: If True, skips Tesseract OCR on minimal-text pages.
-        skip_images: If True, skips image extraction and compression.
+        skip_images: If True, skips image extraction/compression but still counts embedded images.
 
     Returns:
        A list of PageContent objects, one per page.
@@ -115,21 +115,37 @@ def extract_content_from_pdf(
 
         # Extract images
         images: List[bytes] = []
-        if not skip_images:
-            # Method 1: Extract embedded images from PDF structure
-            if hasattr(page, "images"):
-                for img in page.images:
-                    try:
-                        raw_bytes = img.data
-                        if isinstance(raw_bytes, (bytes, bytearray)):
-                            compressed_bytes = _compress_image(bytes(raw_bytes))
-                            images.append(compressed_bytes)
-                    except Exception:
-                        continue
+        embedded_count = 0
+        
+        # Method 1: Check embedded images
+        if hasattr(page, "images"):
+            try:
+                # Just get the count first
+                embedded_imgs = page.images
+                embedded_count = len(embedded_imgs)
+                
+                if not skip_images:
+                    for img in embedded_imgs:
+                        try:
+                            raw_bytes = img.data
+                            if isinstance(raw_bytes, (bytes, bytearray)):
+                                compressed_bytes = _compress_image(bytes(raw_bytes))
+                                images.append(compressed_bytes)
+                        except Exception:
+                            continue
+            except Exception:
+                pass
 
-            # Method 2: If no embedded images found, use rendered page image
-            # This catches diagrams, charts, etc. that are drawn, not embedded
-            if not images:
+        # Method 2: If no embedded images found, use rendered page image
+        # This catches diagrams, charts, etc. that are drawn, not embedded
+        if not images and embedded_count == 0:
+            # If skipping images, we can't easily detect if a page *needs* a screenshot 
+            # without rendering it, which is slow.
+            # Strategy: If text is minimal (<200 chars), assume it's a visual slide.
+            if skip_images:
+                if len(text_content) < 200:
+                    embedded_count = 1 # Assume 1 visual element
+            else:
                 try:
                     if page_img is None:
                         page_img = render_page_image(page_index + 1, dpi=120)
@@ -139,11 +155,17 @@ def extract_content_from_pdf(
                     page_img.save(img_buffer, format="JPEG", quality=85)
                     compressed = _compress_image(img_buffer.getvalue())
                     images.append(compressed)
+                    embedded_count = max(embedded_count, 1)
                 except Exception:
                     pass
 
         extracted_pages.append(
-            PageContent(page_number=page_index + 1, text=text_content, images=images)
+            PageContent(
+                page_number=page_index + 1, 
+                text=text_content, 
+                images=images,
+                image_count=max(len(images), embedded_count)
+            )
         )
 
     print(f"Info: PDF parsing complete. Total pages extracted: {len(extracted_pages)}")
