@@ -1,11 +1,13 @@
-# -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+datas, binaries, hiddenimports = collect_all('pypdfium2')
 
 a = Analysis(
     ['gui/launcher.py'],
     pathex=[],
-    binaries=[],
-    datas=[('gui/frontend/dist', 'frontend/dist'), ('gui/backend', 'backend')],
-    hiddenimports=['webview', 'uvicorn', 'PIL', 'PIL.Image', 'pypdfium2', 'pypdf'],
+    binaries=binaries,
+    datas=[('gui/frontend/dist', 'frontend/dist'), ('gui/backend', 'backend')] + datas,
+    hiddenimports=['webview', 'uvicorn', 'PIL', 'PIL.Image', 'pypdf'] + hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
