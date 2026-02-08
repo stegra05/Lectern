@@ -4,12 +4,13 @@ This document covers how Lectern integrates with Gemini and where to find sessio
 
 ## Session Logging
 
-Lectern records each Gemini session (concept map, generation, reflection) to a JSON log file.
+Lectern records each Gemini session (concept map, generation, reflection) to JSON log files.
 
-- **Path (macOS):** `~/Library/Application Support/Lectern/logs/session-*.json`
-- **When created:** At the start of each AI session.
-- **What they contain:** Request/response snapshots for debugging prompt quality and schema errors.
-- **When to check:** If generation or reflection fails, or to audit the model output.
+- **macOS:** `~/Library/Application Support/Lectern/logs/`
+- **Windows:** `%APPDATA%\Lectern\logs\`
+- **Linux:** `~/.config/lectern/logs/`
+
+These contain request/response snapshots for debugging prompt quality and schema errors. Check these if generation or reflection fails, or to audit the model output.
 # Lectern - AI Lecture to Anki Converter
 
 Lectern is a high-velocity tool designed to transform unstructured lecture slides (PDFs) into structured, high-quality Anki flashcards using Google's Gemini Multimodal AI.

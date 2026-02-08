@@ -23,7 +23,6 @@ interface ProgressViewProps {
     progress: { current: number; total: number };
     cards: Card[];
     handleReset: () => void;
-    setPreviewSlide: (slide: number | null) => void;
     logsEndRef: React.RefObject<HTMLDivElement>;
     sessionId?: string | null;
     sortBy: SortOption;
@@ -63,7 +62,6 @@ export function ProgressView({
     progress,
     cards,
     handleReset,
-    setPreviewSlide,
     logsEndRef,
     sessionId,
     sortBy,
@@ -584,16 +582,10 @@ export function ProgressView({
 
                                             {card.slide_number && (
                                                 <div className="absolute bottom-4 right-4">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setPreviewSlide(card.slide_number ?? null);
-                                                        }}
-                                                        className="flex items-center gap-1.5 px-2 py-1 rounded bg-background hover:bg-surface border border-border text-[10px] font-medium text-text-muted hover:text-text-main transition-colors"
-                                                    >
+                                                    <span className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border border-border text-[10px] font-medium text-text-muted">
                                                         <Layers className="w-3 h-3" />
                                                         SLIDE {card.slide_number}
-                                                    </button>
+                                                    </span>
                                                 </div>
                                             )}
                                         </>

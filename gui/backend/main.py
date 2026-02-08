@@ -21,8 +21,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 # Add current directory to path to import local modules (service.py)
 sys.path.append(os.path.dirname(__file__))
 
-from pdf2image import convert_from_path
-from pdf2image.exceptions import PDFInfoNotInstalledError, PDFPageCountError
+
 from pypdf import PdfReader
 import io
 from starlette.concurrency import run_in_threadpool
@@ -795,69 +794,7 @@ async def sync_session_to_anki(session_id: str):
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 
-@app.get("/thumbnail/{page_num}")
-async def get_thumbnail(page_num: int, session_id: Optional[str] = None):
-    """Serve a PNG thumbnail of the specified PDF page (1-based index)."""
-    session = _get_session_or_404(session_id)
-    pdf_path = session.pdf_path
-    cache = session.thumbnail_cache
 
-    if not pdf_path or not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="No active PDF session")
-
-    if page_num < 1:
-        raise HTTPException(status_code=400, detail="Page number must be >= 1")
-
-    try:
-        reader = PdfReader(pdf_path)
-        total_pages = len(reader.pages)
-    except Exception as e:
-        print(f"Thumbnail page count failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to read PDF page count")
-
-    if page_num > total_pages:
-        raise HTTPException(status_code=404, detail="Page out of range")
-
-    # Check cache first
-    if page_num in cache:
-        return StreamingResponse(io.BytesIO(cache[page_num]), media_type="image/png")
-
-    try:
-        def render_page():
-            # Convert just the specific page. pdf2image uses 1-based indexing for first_page/last_page
-            # 300 DPI is standard, but for thumbnails we can go lower (e.g. 100)
-            images = convert_from_path(
-                pdf_path,
-                first_page=page_num, 
-                last_page=page_num,
-                dpi=100, 
-                size=(400, None) # Limit width to 400px for thumbnails
-            )
-            if not images:
-                return None
-            
-            img_byte_arr = io.BytesIO()
-            images[0].save(img_byte_arr, format='PNG')
-            return img_byte_arr.getvalue()
-
-        img_data = await run_in_threadpool(render_page)
-        
-        if img_data:
-            cache[page_num] = img_data
-            return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
-        else:
-            raise HTTPException(status_code=404, detail="Page not found")
-    except PDFInfoNotInstalledError:
-        raise HTTPException(
-            status_code=503,
-            detail="Poppler is not installed. Install it to enable thumbnails.",
-        )
-    except PDFPageCountError as e:
-        print(f"Thumbnail page count error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to read PDF pages")
-    except Exception as e:
-        print(f"Thumbnail generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # Mount static files (Frontend Build)
 # Mount static files (Frontend Build)

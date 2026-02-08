@@ -7,15 +7,16 @@ from typing import Dict, Any, List, Optional
 STATE_FILENAME = "lectern_state.json"
 LEGACY_STATE_FILE = ".lectern_state.json"
 
+from utils.path_utils import get_app_data_dir
+
 def _get_state_path(session_id: Optional[str] = None) -> str:
-    home_dir = os.path.expanduser("~")
-    state_dir = os.path.join(home_dir, "Library", "Application Support", "Lectern", "state")
-    os.makedirs(state_dir, exist_ok=True)
+    state_dir = get_app_data_dir() / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
     if session_id:
         filename = f"session-{session_id}.json"
     else:
         filename = STATE_FILENAME
-    return os.path.join(state_dir, filename)
+    return str(state_dir / filename)
 
 def save_state(
     pdf_path: str,

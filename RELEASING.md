@@ -10,54 +10,26 @@ Manual release workflow for publishing new versions.
 
 ## Release Steps
 
-### 1. Bump Version
+### 1. Run Release Script
 
-Update version in `version.py`.
-
-### 2. Build
+Everything is automated—building, tagging, and publishing. Run the orchestrator from your macOS terminal:
 
 ```bash
-./build_app.sh      # Creates dist/Lectern.app
-./create_dmg.sh     # Creates dist/Lectern.dmg
+# Bumps version, tags, and triggers Cloud CI/CD
+./release.sh [major|minor|patch]
 ```
 
-### 3. Smoke Test
+### 2. Monitor Builds
 
-Open `dist/Lectern.app` and verify:
-- [ ] App launches without crashes
-- [ ] Can load a PDF
-- [ ] Generation starts (test with 1-2 slides)
-- [ ] Cards appear in Anki
+Monitor the progress on [GitHub Actions](https://github.com/stegra05/Lectern/actions). The script will provide a direct link at the end.
 
-### 4. Tag and Push
+### 3. Verify Release
 
-```bash
-git tag -a v1.X.X -m "Release v1.X.X"
-git push origin v1.X.X
-```
+Once Actions completes (approx. 5-8 minutes), verify the [Releases page](https://github.com/stegra05/Lectern/releases):
+- [ ] Tag matches `version.py`
+- [ ] Release contains 3 artifacts: `.dmg` (macOS), `.zip` (Windows), `.tar.gz` (Linux)
+- [ ] Release notes are automatically generated from commit history
 
-### 5. Create GitHub Release
-
-1. Go to **Releases** then **Draft a new release**
-2. Select the tag you just pushed
-3. Title: `Lectern v1.X.X`
-4. Attach: `dist/Lectern.dmg`
-5. Release notes template:
-
-```markdown
-## What's New
-- Feature 1
-- Fix 2
-
-## Installation
-1. Download `Lectern.dmg`
-2. Open the DMG and drag Lectern to Applications
-3. First launch: Right-click then Open (macOS Gatekeeper)
-
-**Requires:** Anki with [AnkiConnect](https://ankiweb.net/shared/info/2055492159), Poppler (`brew install poppler`)
-```
-
-6. Publish!
 
 ## Gatekeeper Note
 

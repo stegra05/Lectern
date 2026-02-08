@@ -27,13 +27,12 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 
 ### 1. Download
 
-**[Download Lectern for macOS](https://github.com/stegra05/lectern/releases/latest)**
+**[Download Lectern (macOS / Windows / Linux)](https://github.com/stegra05/lectern/releases/latest)**
 
 ### 2. Install
 
 1. Open `Lectern.dmg` and drag Lectern to **Applications**
-2. Install Poppler for PDF rendering: `brew install poppler`
-3. Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on in Anki
+2. Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on in Anki
 
 ### 3. First Launch
 
@@ -53,7 +52,7 @@ Choose between **Slides** (visual), **Script** (dense text), or **Auto** mode to
 Dynamically adjusts generation speed and detail based on content density, ensuring no concept is skipped.
 
 ### Multimodal Analysis
-Extracts text and images from slides using `pypdf` + `pdf2image`, preserving context for accurate generation.
+Extracts text and images from slides using `pypdf` + `pypdfium2`, preserving context for accurate generation.
 
 ### Smart Generation
 Leverages **Gemini 3.0 Flash** to create atomic, well-structured cards that adhere to learning best practices.
@@ -93,9 +92,11 @@ For advanced users, defaults can be set via environment variables:
 
 Lectern writes AI session logs for debugging:
 
-- **Path:** `~/Library/Application Support/Lectern/logs/session-*.json`
-- **Contents:** Request/response snapshots for concept map, generation, and reflection
-- **When to check:** If card generation fails or you need to inspect AI prompts/responses
+- **macOS:** `~/Library/Application Support/Lectern/logs/`
+- **Windows:** `%APPDATA%\Lectern\logs\`
+- **Linux:** `~/.config/lectern/logs/`
+
+Contents: Request/response snapshots for concept map, generation, and reflection. Check these if card generation fails or you need to inspect AI prompts.
 
 ---
 
@@ -107,7 +108,7 @@ Lectern writes AI session logs for debugging:
 - **Backend:** Python, FastAPI, Uvicorn
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion
 - **Desktop Wrapper:** PyWebView (Cocoa/WebKit)
-- **PDF Engine:** pypdf + pdf2image (Poppler)
+- **PDF Engine:** pypdf + pypdfium2
 - **Security:** Keyring
 
 ### Build from Source
@@ -116,8 +117,10 @@ Lectern writes AI session logs for debugging:
 
 - Python 3.9+
 - Node.js 18+
-- Poppler: `brew install poppler`
-- Tesseract (optional, for OCR): `brew install tesseract`
+- Tesseract (optional, for OCR):
+  - **macOS:** `brew install tesseract`
+  - **Windows:** Download installer from [UB-Mannheim](https://github.com/UB-Mannheim/tesseract/wiki)
+  - **Linux:** `sudo apt install tesseract-ocr`
 
 #### Setup
 
@@ -127,7 +130,13 @@ git clone https://github.com/stegra05/lectern.git
 cd lectern
 
 # Create virtual environment
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+
+# Activate venv
+# macOS/Linux:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\activate
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -145,8 +154,15 @@ python gui/launcher.py
 #### Build Application Bundle
 
 ```bash
+# macOS
 ./build_app.sh      # Creates dist/Lectern.app
-./create_dmg.sh     # Creates dist/Lectern.dmg (optional)
+./create_dmg.sh     # Creates dist/Lectern.dmg
+
+# Windows (run in PowerShell)
+.\build_windows.ps1 # Creates dist/Lectern/Lectern.exe
+
+# Linux
+./build_linux.sh    # Creates dist/Lectern (directory)
 ```
 
 ---

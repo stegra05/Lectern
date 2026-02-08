@@ -112,8 +112,8 @@ def test_extract_pdf_title_no_candidates(mock_reader_cls):
 
 def test_extract_content_from_pdf_real(real_pdf_path):
     """Integration test with the real PDF file."""
-    # This runs the actual pypdf + pdf2image code.
-    # Note: Requires poppler installed for images, but should gracefully handle absence.
+    # This runs the actual pypdf + pypdfium2 code.
+    # Note: pypdfium2 is bundled, no external dependencies.
     pages = extract_content_from_pdf(real_pdf_path)
     assert isinstance(pages, list)
     if len(pages) > 0:
@@ -123,9 +123,9 @@ def test_extract_content_from_pdf_real(real_pdf_path):
         assert hasattr(pages[0], 'page_number')
 
 @patch('os.path.getsize')
-@patch('pdf_parser.convert_from_path')
+@patch('pdf_parser.pdfium.PdfDocument')
 @patch('pdf_parser.PdfReader')
-def test_extract_content_from_pdf_skip_options(mock_reader_cls, mock_convert, mock_getsize):
+def test_extract_content_from_pdf_skip_options(mock_reader_cls, mock_pdfium_doc, mock_getsize):
     """Test that skip_images flag prevents image collection."""
     mock_getsize.return_value = 1024
     
@@ -146,13 +146,13 @@ def test_extract_content_from_pdf_skip_options(mock_reader_cls, mock_convert, mo
     
     assert len(pages) == 1
     assert len(pages[0].images) == 0
-    # Verify convert_from_path was NOT called (optimization)
-    mock_convert.assert_not_called()
+    # Verify pdfium was NOT called (optimization)
+    mock_pdfium_doc.assert_not_called()
 
 @patch('os.path.getsize')
-@patch('pdf_parser.convert_from_path')
+@patch('pdf_parser.pdfium.PdfDocument')
 @patch('pdf_parser.PdfReader')
-def test_extract_content_stop_check(mock_reader_cls, mock_convert, mock_getsize):
+def test_extract_content_stop_check(mock_reader_cls, mock_pdfium_doc, mock_getsize):
     """Test that the stop_check callback aborts parsing."""
     mock_getsize.return_value = 1024
     
@@ -172,9 +172,9 @@ def test_extract_content_stop_check(mock_reader_cls, mock_convert, mock_getsize)
 
 @patch('os.path.getsize')
 @patch('pdf_parser.pytesseract.image_to_string')
-@patch('pdf_parser.convert_from_path')
+@patch('pdf_parser.pdfium.PdfDocument')
 @patch('pdf_parser.PdfReader')
-def test_ocr_fallback(mock_reader_cls, mock_convert, mock_ocr, mock_getsize):
+def test_ocr_fallback(mock_reader_cls, mock_pdfium_doc, mock_ocr, mock_getsize):
     """Test that OCR is triggered when text is minimal."""
     mock_getsize.return_value = 1024
     
@@ -189,10 +189,15 @@ def test_ocr_fallback(mock_reader_cls, mock_convert, mock_ocr, mock_getsize):
     
     mock_reader.pages = [mock_page]
     
-    # convert_from_path must return a list of images (one per page)
-    # We use a mock PIL image
+    # Mock pypdfium2: PdfDocument returns a mock that can be indexed
+    mock_doc = MagicMock()
+    mock_page_pdfium = MagicMock()
+    mock_bitmap = MagicMock()
     mock_pil_img = MagicMock()
-    mock_convert.return_value = [mock_pil_img]
+    mock_bitmap.to_pil.return_value = mock_pil_img
+    mock_page_pdfium.render.return_value = mock_bitmap
+    mock_doc.__getitem__ = MagicMock(return_value=mock_page_pdfium)
+    mock_pdfium_doc.return_value = mock_doc
     
     # Mock OCR result
     mock_ocr.return_value = "Extracted Text via OCR"
@@ -203,14 +208,14 @@ def test_ocr_fallback(mock_reader_cls, mock_convert, mock_ocr, mock_getsize):
     assert "[OCR Extracted Content]" in pages[0].text
     assert "Extracted Text via OCR" in pages[0].text
     
-    mock_convert.assert_called_once()
+    mock_pdfium_doc.assert_called_once()
     mock_ocr.assert_called_once()
 
 @patch('os.path.getsize')
 @patch('pdf_parser.pytesseract.image_to_string')
-@patch('pdf_parser.convert_from_path')
+@patch('pdf_parser.pdfium.PdfDocument')
 @patch('pdf_parser.PdfReader')
-def test_ocr_tesseract_not_found_handled(mock_reader_cls, mock_convert, mock_ocr, mock_getsize):
+def test_ocr_tesseract_not_found_handled(mock_reader_cls, mock_pdfium_doc, mock_ocr, mock_getsize):
     """Test that TesseractNotFoundError is handled gracefully."""
     mock_getsize.return_value = 1024
     
@@ -221,7 +226,14 @@ def test_ocr_tesseract_not_found_handled(mock_reader_cls, mock_convert, mock_ocr
     mock_page.images = []
     mock_reader.pages = [mock_page]
     
-    mock_convert.return_value = [MagicMock()]
+    # Mock pypdfium2
+    mock_doc = MagicMock()
+    mock_page_pdfium = MagicMock()
+    mock_bitmap = MagicMock()
+    mock_bitmap.to_pil.return_value = MagicMock()
+    mock_page_pdfium.render.return_value = mock_bitmap
+    mock_doc.__getitem__ = MagicMock(return_value=mock_page_pdfium)
+    mock_pdfium_doc.return_value = mock_doc
     
     # Simulate Tesseract missing
     mock_ocr.side_effect = pytesseract.TesseractNotFoundError()
@@ -234,9 +246,9 @@ def test_ocr_tesseract_not_found_handled(mock_reader_cls, mock_convert, mock_ocr
 
 @patch('os.path.getsize')
 @patch('pdf_parser._compress_image')
-@patch('pdf_parser.convert_from_path')
+@patch('pdf_parser.pdfium.PdfDocument')
 @patch('pdf_parser.PdfReader')
-def test_image_extraction_pypdf(mock_reader_cls, mock_convert, mock_compress, mock_getsize, sample_image_bytes):
+def test_image_extraction_pypdf(mock_reader_cls, mock_pdfium_doc, mock_compress, mock_getsize, sample_image_bytes):
     """Test verification of image extraction from PDF structure (pypdf)."""
     mock_getsize.return_value = 1024
     
@@ -264,9 +276,9 @@ def test_image_extraction_pypdf(mock_reader_cls, mock_convert, mock_compress, mo
 
 @patch('os.path.getsize')
 @patch('pdf_parser._compress_image')
-@patch('pdf_parser.convert_from_path')
+@patch('pdf_parser.pdfium.PdfDocument')
 @patch('pdf_parser.PdfReader')
-def test_image_extraction_fallback_render(mock_reader_cls, mock_convert, mock_compress, mock_getsize):
+def test_image_extraction_fallback_render(mock_reader_cls, mock_pdfium_doc, mock_compress, mock_getsize):
     """Test that if no embedded images, we fallback to rendered page image."""
     mock_getsize.return_value = 1024
     
@@ -277,14 +289,18 @@ def test_image_extraction_fallback_render(mock_reader_cls, mock_convert, mock_co
     mock_page.images = [] # No embedded images
     mock_reader.pages = [mock_page]
     
-    # Mock convert_from_path returning a valid PIL image
+    # Mock pypdfium2: PdfDocument returns a mock PIL image via render().to_pil()
+    mock_doc = MagicMock()
+    mock_page_pdfium = MagicMock()
+    mock_bitmap = MagicMock()
     mock_pil_img = MagicMock()
-    # When save is called on the PIL image, it writes to the buffer
     def save_side_effect(fp, format, **kwargs):
         fp.write(b"rendered_image_data")
     mock_pil_img.save.side_effect = save_side_effect
-    
-    mock_convert.return_value = [mock_pil_img]
+    mock_bitmap.to_pil.return_value = mock_pil_img
+    mock_page_pdfium.render.return_value = mock_bitmap
+    mock_doc.__getitem__ = MagicMock(return_value=mock_page_pdfium)
+    mock_pdfium_doc.return_value = mock_doc
     mock_compress.return_value = b"compressed_rendered_data"
     
     pages = extract_content_from_pdf("dummy.pdf", skip_images=False)

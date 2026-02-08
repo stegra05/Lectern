@@ -7,15 +7,17 @@ from typing import List, Dict, Any, Optional
 import sys
 from pathlib import Path
 
+from utils.path_utils import get_app_data_dir
+
 def get_history_file_path() -> str:
     """
     Determine the appropriate path for history.json.
-    - If Frozen (App Bundle): ~/Library/Application Support/Lectern/history.json
+    - If Frozen (App Bundle): Platform-specific app data dir/history.json
     - If Dev: Project Root/history.json
     """
     if getattr(sys, 'frozen', False):
         # We are running in a bundle
-        app_support = Path.home() / "Library" / "Application Support" / "Lectern"
+        app_support = get_app_data_dir()
         app_support.mkdir(parents=True, exist_ok=True)
         return str(app_support / "history.json")
     else:

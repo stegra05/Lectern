@@ -55,7 +55,7 @@ export function useGenerationFlow(state: FlowState, setters: FlowSetters) {
         };
         fetchEstimate();
         return () => controller.abort();
-    }, [state.pdfFile, state.modelName]);
+    }, [state.pdfFile, state.modelName, setters]);
 
     const handleGenerate = async () => {
         if (!state.pdfFile || !state.deckName) return;

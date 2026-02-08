@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-# Lectern Release Script
+# Lectern Release Orchestrator
+# Bumps version, tags, and pushes to trigger Cloud CI/CD builds.
 # Usage: ./release.sh [major|minor|patch]
-# Default: patch
 
 BOLD='\033[1m'
 GREEN='\033[0;32m'
@@ -14,7 +14,7 @@ NC='\033[0m'
 # Get bump type (default: patch)
 BUMP_TYPE="${1:-patch}"
 
-# Get latest tag, default to v0.0.0 if none
+# Get latest tag from git, default to v0.0.0 if none
 LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
 if [ -z "$LATEST_TAG" ]; then
     LATEST_TAG="v0.0.0"
@@ -46,26 +46,19 @@ esac
 
 NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
 
-echo -e "${BOLD}🚀 Lectern Release${NC}"
-echo -e "   ${BLUE}Previous:${NC} $LATEST_TAG"
-echo -e "   ${GREEN}New:${NC}      $NEW_VERSION"
+echo -e "${BOLD}🚀 Lectern Cloud Release Orchestrator${NC}"
+echo -e "   ${BLUE}From:${NC} $LATEST_TAG"
+echo -e "   ${GREEN}To:  ${NC} $NEW_VERSION"
 echo ""
-
-# Confirm
-read -p "Proceed? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 0
-fi
 
 # Check for uncommitted changes
 if [ -n "$(git status --porcelain)" ]; then
-    echo -e "${YELLOW}Warning: You have uncommitted changes.${NC}"
-    read -p "Continue anyway? (y/N) " -n 1 -r
+    echo -e "${YELLOW}⚠️ You have uncommitted changes.${NC}"
+    read -p "Commit version bump and continue? (y/N) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 0
+        echo "Aborted."
+        exit 1
     fi
 fi
 
@@ -73,41 +66,15 @@ fi
 echo "__version__ = \"${NEW_VERSION#v}\"" > version.py
 git add version.py
 
-# Build
-echo -e "\n${BLUE}📦 Building...${NC}"
-./build_app.sh
-
-echo -e "\n${BLUE}💿 Creating DMG...${NC}"
-./create_dmg.sh
-
-# Tag
-echo -e "\n${BLUE}🏷  Tagging $NEW_VERSION...${NC}"
+# Commit and Tag
+git commit -m "chore(release): bump version to ${NEW_VERSION#v}"
 git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
+
+echo -e "\n${BLUE}📤 Pushing to GitHub...${NC}"
+git push origin main
 git push origin "$NEW_VERSION"
 
-# Create GitHub Release
-echo -e "\n${BLUE}📤 Creating GitHub Release...${NC}"
-
-RELEASE_NOTES="## What's New
-
-- See commit history for changes since $LATEST_TAG
-
-## Installation
-
-1. Download \`Lectern.dmg\` below
-2. Open the DMG and drag Lectern to **Applications**
-3. **First launch:** Right-click → Open (bypasses Gatekeeper)
-
-## Requirements
-
-- [Anki](https://apps.ankiweb.net/) with [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
-- Poppler: \`brew install poppler\`
-- [Gemini API Key](https://aistudio.google.com/apikey) (free tier available)"
-
-gh release create "$NEW_VERSION" \
-    --title "Lectern $NEW_VERSION" \
-    --notes "$RELEASE_NOTES" \
-    dist/Lectern.dmg
-
-echo -e "\n${GREEN}✨ Released $NEW_VERSION!${NC}"
-echo -e "   https://github.com/stegra05/Lectern/releases/tag/$NEW_VERSION"
+echo -e "\n${GREEN}✨ Release Triggered! ✨${NC}"
+echo -e "GitHub Actions is now building all 3 platforms (macOS, Windows, Linux)."
+echo -e "Track progress here: ${BOLD}https://github.com/stegra05/Lectern/actions${NC}"
+echo -e "The release will appear at: ${BOLD}https://github.com/stegra05/Lectern/releases/tag/$NEW_VERSION${NC}"

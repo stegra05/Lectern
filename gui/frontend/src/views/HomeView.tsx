@@ -127,7 +127,7 @@ export function HomeView({
                             ].map((type) => (
                                 <button
                                     key={type.id}
-                                    onClick={() => setSourceType(type.id as any)}
+                                    onClick={() => setSourceType(type.id as 'auto' | 'slides' | 'script')}
                                     className={clsx(
                                         "relative flex flex-col items-start p-4 rounded-xl border transition-all duration-200 text-left",
                                         sourceType === type.id

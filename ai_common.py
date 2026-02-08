@@ -160,11 +160,11 @@ def _start_session_log() -> str:
     if not getattr(config, "LOG_SESSION_CONTENT", True):
         return ""
     try:
-        home_dir = os.path.expanduser("~")
-        logs_dir = os.path.join(home_dir, "Library", "Application Support", "Lectern", "logs")
-        os.makedirs(logs_dir, exist_ok=True)
+        from utils.path_utils import get_app_data_dir
+        logs_dir = get_app_data_dir() / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
-        log_path = os.path.join(logs_dir, f"session-{ts}.json")
+        log_path = str(logs_dir / f"session-{ts}.json")
         header = {
             "timestamp_utc": ts,
             "exchanges": [],

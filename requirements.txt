@@ -1,9 +1,8 @@
 # Core dependencies for Lectern
 
-# PDF parsing and image extraction (lightweight alternative to PyMuPDF)
-# NOTE: Requires Poppler system dependency (`brew install poppler` on macOS)
+# PDF parsing and image extraction
 pypdf>=4.0.0
-pdf2image>=1.16.0
+pypdfium2>=4.0.0
 pytesseract>=0.3.10
 
 # Google Gemini API client

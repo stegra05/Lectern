@@ -150,7 +150,7 @@ fi
 # Packaging
 header "Packaging"
 
-PYINSTALLER_CMD="python -m PyInstaller Lectern.spec --noconfirm"
+PYINSTALLER_CMD="python -m PyInstaller Lectern.macos.spec --noconfirm"
 
 run_step "Compiling Binary - this may take a while" "$PYINSTALLER_CMD"
 

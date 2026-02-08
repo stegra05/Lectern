@@ -1,4 +1,4 @@
-import React from 'react';
+// React import removed because it is unused in this file.
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, BookOpen, Settings, Sun, Moon } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -52,47 +52,9 @@ const HealthStatus = ({ health, isChecking, onRefresh }: HealthStatusProps) => (
   </div>
 );
 
-const PDFViewer = ({ pageNumber, sessionId, onClose }: { pageNumber: number, sessionId?: string | null, onClose: () => void }) => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    onClick={onClose}
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8"
-  >
-    <motion.div
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.95, opacity: 0 }}
-      onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      className="relative max-w-4xl max-h-full bg-surface rounded-xl overflow-hidden shadow-2xl border border-border"
-    >
-      <div className="absolute top-4 right-4 z-10">
-        <button
-          onClick={onClose}
-          className="p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-md transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <div className="p-1 bg-background">
-        <img
-          src={`${api.getApiUrl()}/thumbnail/${pageNumber}${sessionId ? `?session_id=${sessionId}` : ""}`}
-          alt={`Slide ${pageNumber}`}
-          className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
-        />
-      </div>
-      <div className="p-4 bg-surface border-t border-border flex justify-between items-center">
-        <span className="font-mono text-text-muted">SLIDE {pageNumber}</span>
-        <span className="text-xs text-text-muted">Source Context</span>
-      </div>
-    </motion.div>
-  </motion.div>
-);
 
 // --- Main App ---
+
 
 function App() {
   const {
@@ -114,7 +76,6 @@ function App() {
     progress,
     estimation,
     isEstimating,
-    previewSlide, setPreviewSlide,
     isCancelling,
     isError,
     currentPhase,
@@ -282,7 +243,6 @@ function App() {
                       progress={progress}
                       cards={cards}
                       handleReset={handleReset}
-                      setPreviewSlide={setPreviewSlide}
                       logsEndRef={logsEndRef}
                       sessionId={sessionId}
                       sortBy={sortBy}
@@ -337,16 +297,7 @@ function App() {
         <div />
       </ToastContainer>
 
-      <AnimatePresence>
-        {previewSlide !== null && (
-          <PDFViewer
-            key="pdf-viewer"
-            pageNumber={previewSlide}
-            sessionId={sessionId}
-            onClose={() => setPreviewSlide(null)}
-          />
-        )}
-      </AnimatePresence>
+
     </div>
   );
 }
