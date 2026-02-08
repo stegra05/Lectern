@@ -4,7 +4,7 @@ datas, binaries, hiddenimports = collect_all('pypdfium2')
 
 a = Analysis(
     ['gui/launcher.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=binaries,
     datas=[('gui/frontend/dist', 'frontend/dist'), ('gui/backend', 'backend')] + datas,
     hiddenimports=['webview', 'uvicorn', 'objc', 'Cocoa', 'WebKit', 'PIL', 'PIL.Image', 'pypdf'] + hiddenimports,
