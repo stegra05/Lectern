@@ -1,6 +1,8 @@
 from PyInstaller.utils.hooks import collect_all
 
 datas, binaries, hiddenimports = collect_all('pypdfium2')
+import pypdfium2
+pypdfium2_path = os.path.dirname(pypdfium2.__file__)
 
 import os
 PROJECT_ROOT = os.path.abspath(os.getcwd())
@@ -23,6 +25,7 @@ a = Analysis(
         ('lectern_service.py', '.'),
         ('pdf_parser.py', '.'),
         ('version.py', '.'),
+        (pypdfium2_path, 'pypdfium2'), 
     ] + datas,
     hiddenimports=['webview', 'uvicorn', 'objc', 'Cocoa', 'WebKit', 'PIL', 'PIL.Image', 'pypdf',
                    'lectern_service', 'ai_client', 'ai_common', 'ai_pacing', 'ai_prompts', 'ai_schemas',
@@ -41,7 +44,7 @@ a = Analysis(
     optimize=0,
 )
 pyz = PYZ(a.pure)
-
+ 
 exe = EXE(
     pyz,
     a.scripts,
