@@ -76,4 +76,12 @@ Bugs are tracked as GitHub issues.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under its MIT License.
+
+## Future Ideas (Backlog)
+
+### Multi-Document Input
+**Status:** Deferred  
+**Requested by:** User feedback (Feb 2026)  
+**Description:** Allow feeding multiple documents with role annotations (primary source vs. reference material like past exams).  
+**Considerations:** Token budget constraints, UX complexity, quality risk.
+

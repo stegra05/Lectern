@@ -207,9 +207,9 @@ export function HomeView({
 
                             <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-start gap-3">
                                 <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                                <p className="text-xs text-text-muted leading-relaxed">
+                                <div className="text-xs text-text-muted leading-relaxed">
                                     {getDensityDescription()}
-                                </p>
+                                </div>
                             </div>
                         </div>
 

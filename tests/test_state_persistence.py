@@ -99,5 +99,44 @@ class TestStatePersistence(unittest.TestCase):
             if os.path.exists(history_path):
                 os.remove(history_path)
 
+    def test_load_state_legacy_migration(self):
+        """Test migration from .lectern_state.json (legacy)."""
+        from utils.state import LEGACY_STATE_FILE
+        legacy_data = {"pdf_path": "legacy.pdf", "deck_name": "Legacy Deck"}
+        
+        # Ensure new state doesn't exist
+        clear_state(None)
+        
+        # Create legacy file
+        with open(LEGACY_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(legacy_data, f)
+            
+        try:
+            loaded = load_state(None)
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded["pdf_path"], "legacy.pdf")
+        finally:
+            if os.path.exists(LEGACY_STATE_FILE):
+                os.remove(LEGACY_STATE_FILE)
+
+    def test_load_state_invalid_json(self):
+        """Test loading corrupted state file."""
+        state_path = _get_state_path(self.test_session_id)
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
+        with open(state_path, "w", encoding="utf-8") as f:
+            f.write("{ invalid json")
+            
+        loaded = load_state(self.test_session_id)
+        self.assertIsNone(loaded)
+
+    def test_clear_state(self):
+        """Test clearing state files."""
+        save_state("p", "d", [], {}, [], "l", session_id=self.test_session_id)
+        state_path = _get_state_path(self.test_session_id)
+        self.assertTrue(os.path.exists(state_path))
+        
+        clear_state(self.test_session_id)
+        self.assertFalse(os.path.exists(state_path))
+
 if __name__ == "__main__":
     unittest.main()

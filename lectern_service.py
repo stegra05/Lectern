@@ -61,6 +61,10 @@ class LecternGenerationService:
             return
             
         file_size = os.path.getsize(pdf_path)
+        if file_size == 0:
+            yield ServiceEvent("error", f"PDF file is empty (0 bytes): {os.path.basename(pdf_path)}")
+            return
+            
         yield ServiceEvent("info", f"Processing file: {os.path.basename(pdf_path)} ({file_size} bytes)")
 
         # Initialize History Entry
@@ -114,6 +118,11 @@ class LecternGenerationService:
                     if page.images:
                         image_pages += 1
                 total_text_chars = total_chars
+                if not pages:
+                    yield ServiceEvent("error", "No content could be extracted from the PDF.")
+                    history_mgr.update_entry(history_id, status="error")
+                    return
+                
                 yield ServiceEvent("info", f"Parsed {len(pages)} pages")
                 yield ServiceEvent("step_end", "PDF Parsed", {"success": True, "pages": len(pages)})
             except Exception as e:

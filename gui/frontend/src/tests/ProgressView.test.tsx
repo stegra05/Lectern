@@ -7,18 +7,24 @@ import type { Phase } from '../components/PhaseIndicator';
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-vi.mock('framer-motion', () => ({
-    motion: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        div: ({ children, ...props }: any) => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { initial, animate, exit, variants, transition, layoutId, layout, ...validProps } = props;
-            return React.createElement('div', validProps, children);
-        },
-    },
+vi.mock('framer-motion', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
-}));
+    const MockComponent = ({ children, ...props }: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { initial, animate, exit, variants, transition, layoutId, layout, ...validProps } = props;
+        return React.createElement('div', validProps, children);
+    };
+
+    return {
+        motion: {
+            div: MockComponent,
+            circle: MockComponent,
+            path: MockComponent,
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
+    };
+});
 
 describe('ProgressView', () => {
     afterEach(cleanup);
@@ -155,14 +161,109 @@ describe('ProgressView', () => {
         expect(screen.getByText('Bat')).toBeInTheDocument();
         expect(screen.queryByText('Rat')).not.toBeInTheDocument();
     });
-    it('shows Sync to Anki button when done', () => {
+    it('shows sync overlay when isSyncing is true', () => {
         const props = {
             ...defaultProps,
-            step: 'done' as const,
-            currentPhase: 'complete' as Phase,
-            cards: [{ front: 'A', back: 'B', model_name: 'Basic' }], // Needs cards to be enabled
+            isSyncing: true,
+            syncProgress: { current: 1, total: 2 },
+            syncLogs: [{ type: 'status' as const, message: 'Uploading...', timestamp: Date.now() / 1000 }],
         };
         render(<ProgressView {...props} />);
-        expect(screen.getByText(/Sync to Anki/i)).toBeInTheDocument();
+        expect(screen.getByText(/Syncing to Anki/i)).toBeInTheDocument();
+        expect(screen.getByText('50%')).toBeInTheDocument();
+        expect(screen.getByText('Uploading...')).toBeInTheDocument();
+    });
+
+    it('shows success overlay when syncSuccess is true', () => {
+        const props = {
+            ...defaultProps,
+            syncSuccess: true,
+        };
+        render(<ProgressView {...props} />);
+        expect(screen.getByText(/Sync Complete/i)).toBeInTheDocument();
+    });
+
+    it('shows error overlay when isError is true', () => {
+        const props = {
+            ...defaultProps,
+            isError: true,
+            logs: [{ type: 'error' as const, message: 'Fatal error', timestamp: Date.now() / 1000 }],
+        };
+        render(<ProgressView {...props} />);
+        expect(screen.getByText(/Process Interrupted/i)).toBeInTheDocument();
+        expect(screen.getAllByText('Fatal error').length).toBeGreaterThan(0);
+    });
+
+    it('renders tags and slide numbers', () => {
+        const cards = [{
+            front: 'A', back: 'B', tag: 't1', tags: ['t1', 't2'],
+            slide_number: 42, model_name: 'Basic'
+        }];
+        render(<ProgressView {...defaultProps} cards={cards} />);
+        expect(screen.getByText('#t1')).toBeInTheDocument();
+        expect(screen.getByText('#t2')).toBeInTheDocument();
+        expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
+    });
+
+    it('handles card actions: edit, archive, delete', () => {
+        const cards = [{
+            front: 'A', back: 'B', model_name: 'Basic', anki_note_id: 101
+        }];
+        const props = { ...defaultProps, cards, step: 'done' as const };
+        render(<ProgressView {...props} />);
+
+        // Edit
+        const editBtn = screen.getByTitle('Edit');
+        editBtn.click();
+        expect(defaultProps.startEdit).toHaveBeenCalledWith(0);
+
+        // Archive (Lectern remove)
+        const archiveBtn = screen.getByTitle('Remove');
+        archiveBtn.click();
+        expect(defaultProps.setConfirmModal).toHaveBeenCalledWith(expect.objectContaining({ type: 'lectern', index: 0 }));
+
+        // Delete (Anki)
+        const deleteBtn = screen.getByTitle('Delete from Anki');
+        deleteBtn.click();
+        expect(defaultProps.setConfirmModal).toHaveBeenCalledWith(expect.objectContaining({ type: 'anki', noteId: 101 }));
+    });
+
+    it('renders Edit mode correctly', () => {
+        const cards = [{ front: 'A', back: 'B', model_name: 'Basic', fields: { Front: 'A', Back: 'B' } }];
+        const props = {
+            ...defaultProps,
+            cards,
+            editingIndex: 0,
+            editForm: cards[0],
+        };
+        render(<ProgressView {...props} />);
+        expect(screen.getByText(/Editing Card/i)).toBeInTheDocument();
+        expect(screen.getByDisplayValue('A')).toBeInTheDocument();
+
+        // Save
+        const saveBtn = screen.getAllByRole('button').find(btn => btn.querySelector('svg.lucide-save'));
+        if (saveBtn) {
+            (saveBtn as HTMLElement).click();
+            expect(defaultProps.saveEdit).toHaveBeenCalledWith(0);
+        }
+    });
+
+    it('handles confirm modal callbacks', () => {
+        const props = {
+            ...defaultProps,
+            confirmModal: { isOpen: true, type: 'anki' as const, index: 0, noteId: 101 },
+        };
+        render(<ProgressView {...props} />);
+
+        // We need to find the Confirm button in the modal.
+        // ConfirmModal is a separate component, let's see if we need to mock it or if it's rendered.
+        // It's rendered.
+        const confirmBtn = screen.getByText('Permanently Delete');
+        confirmBtn.click();
+        expect(defaultProps.handleAnkiDelete).toHaveBeenCalledWith(101, 0);
+
+        const closeBtn = screen.getByText('Cancel');
+        closeBtn.click();
+        expect(defaultProps.setConfirmModal).toHaveBeenCalled();
     });
 });

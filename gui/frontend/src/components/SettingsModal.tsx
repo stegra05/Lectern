@@ -200,7 +200,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                             <div className="space-y-2">
                                                 <label className="text-sm font-medium text-text-muted flex items-center">
                                                     AI Model
-                                                    <Tooltip text="The Gemini model used for generation. Flash is faster, Pro is smarter." />
+                                                    <Tooltip text="Flash: Fast, 30 RPM limit. Pro: Smarter, 60 RPM limit. Use Pro for large documents (50+ pages) to avoid rate limits." />
                                                 </label>
                                                 <select
                                                     value={editedConfig.gemini_model}
