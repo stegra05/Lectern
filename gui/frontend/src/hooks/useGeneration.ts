@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { type ProgressEvent, type Card, type Estimation } from '../api';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from './useAppState';
@@ -42,12 +42,15 @@ export function useGeneration(setStep: (step: Step) => void, modelName?: string)
   });
 
   // Flow Sub-hook
+  // MEMOIZED setters to prevent infinite loop in useGenerationFlow's useEffect
+  const setters = useMemo(() => ({
+    setStep, setLogs, setProgress, setSessionId, setCards, setCurrentPhase,
+    setIsError, setIsCancelling, setEstimation, setIsEstimating
+  }), [setStep]);
+
   const flow = useGenerationFlow(
     { pdfFile, deckName, focusPrompt, sourceType, densityTarget, sessionId, modelName },
-    {
-      setStep, setLogs, setProgress, setSessionId, setCards, setCurrentPhase,
-      setIsError, setIsCancelling, setEstimation, setIsEstimating
-    }
+    setters
   );
 
   // Manager Sub-hook

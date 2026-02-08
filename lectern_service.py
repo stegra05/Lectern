@@ -457,22 +457,27 @@ class LecternGenerationService:
     async def estimate_cost(self, pdf_path: str, model_name: str | None = None) -> Dict[str, Any]:
         """Estimate the token count and cost for processing a PDF.
         
-        Skips OCR for speed during estimation.
+        Skips OCR and image extraction for speed during estimation.
         """
         from ai_common import _compose_multimodal_content
         from pdf_parser import extract_content_from_pdf
         import asyncio
         
-        # Parse PDF without OCR for speed
-        pages = await asyncio.to_thread(extract_content_from_pdf, pdf_path, skip_ocr=True)
-        pdf_content = [{"text": p.text, "images": p.images} for p in pages]
+        # Parse PDF without OCR and without extracting images (just counting them)
+        pages = await asyncio.to_thread(extract_content_from_pdf, pdf_path, skip_ocr=True, skip_images=True)
+        pdf_content = [{"text": p.text, "images": []} for p in pages]
         
-        # Compose content as it would be sent to the AI
+        # Compose content as it would be sent to the AI (text only)
         content = _compose_multimodal_content(pdf_content, "Analyze this PDF.")
         
-        # Count tokens
+        # Count tokens (Text only)
         ai = LecternAIClient()
         token_count = ai.count_tokens(content)
+        
+        # Add image tokens manually (Gemini: 258 tokens per image)
+        total_images = sum(p.image_count for p in pages)
+        image_tokens = total_images * config.GEMINI_IMAGE_TOKEN_COST
+        token_count += image_tokens
         
         # Account for overhead (system prompt, concept map prompt, history)
         input_tokens = token_count + config.ESTIMATION_PROMPT_OVERHEAD

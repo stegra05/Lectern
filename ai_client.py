@@ -69,9 +69,16 @@ _ANKI_CARD_SCHEMA = {
     "properties": {
         "model_name": {"type": "string"},
         "fields": {
-            "type": "object",
-            "additionalProperties": {"type": "string"},
-            "description": "Field name to value mapping (e.g. {'Front': '...', 'Back': '...'})"
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "value": {"type": "string"}
+                },
+                "required": ["name", "value"]  
+            },
+            "description": "List of field name/value pairs (e.g. [{'name': 'Front', 'value': '...'}, {'name': 'Back', 'value': '...'}])"
         },
         "tags": {"type": "array", "items": {"type": "string"}},
         "slide_topic": {"type": "string", "nullable": True},
@@ -342,7 +349,20 @@ class LecternAIClient:
         """Parse JSON response from AI."""
         try:
             data_obj = model_class.model_validate_json(text)
-            return data_obj.model_dump()
+            data_dict = data_obj.model_dump()
+            
+            # Post-processing: Convert list of fields back to dict for compatibility
+            # This handles AnkiCard inside CardGenerationResponse or ReflectionResponse
+            if "cards" in data_dict:
+                for card in data_dict["cards"]:
+                    if isinstance(card.get("fields"), list):
+                        new_fields = {}
+                        for field_item in card["fields"]:
+                            if isinstance(field_item, dict) and "name" in field_item and "value" in field_item:
+                                new_fields[field_item["name"]] = field_item["value"]
+                        card["fields"] = new_fields
+                        
+            return data_dict
         except Exception as e:
             logger.debug(f"[AI] JSON parsing failed: {e}")
             return None
@@ -378,7 +398,7 @@ class LecternAIClient:
             response = self._client.models.count_tokens(
                 model=self._model_name,
                 contents=parsed_content,
-                config=self._generation_config
+                # config=self._generation_config  # NOTE: generating config (with system_instruction) breaks count_tokens
             )
             return response.total_tokens
         except Exception as e:

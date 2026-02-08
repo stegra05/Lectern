@@ -31,33 +31,33 @@ def _make_example_str(examples_data: List[Dict[str, Any]], title: str) -> str:
 _CARD_DATA = [
     {
         "model_name": "Basic", 
-        "fields": {
-            "Front": "State the quadratic formula.", 
-            "Back": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\)."
-        },
+        "fields": [
+            {"name": "Front", "value": "State the quadratic formula."}, 
+            {"name": "Back", "value": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\)."}
+        ],
         "tags": ["algebra"]
     },
     {
         "model_name": "Cloze",
-        "fields": {
-            "Text": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}."
-        },
+        "fields": [
+            {"name": "Text", "value": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}."}
+        ],
         "tags": ["calculus"]
     },
     {
         "model_name": "Basic",
-        "fields": {
-            "Front": "Loss oscillates wildly during training. What is the most likely cause?", 
-            "Back": "<b>Learning rate is too high</b>. The steps overshoot the minimum."
-        }, 
+        "fields": [
+            {"name": "Front", "value": "Loss oscillates wildly during training. What is the most likely cause?"}, 
+            {"name": "Back", "value": "<b>Learning rate is too high</b>. The steps overshoot the minimum."}
+        ], 
         "tags": ["optimization"]
     },
     {
         "model_name": "Basic",
-        "fields": {
-            "Front": "Compare <b>L1</b> and <b>L2</b> regularization effects.", 
-            "Back": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."
-        },
+        "fields": [
+            {"name": "Front", "value": "Compare <b>L1</b> and <b>L2</b> regularization effects."}, 
+            {"name": "Back", "value": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."}
+        ],
         "tags": ["regularization"]
     }
 ]

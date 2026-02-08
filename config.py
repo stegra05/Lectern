@@ -213,5 +213,6 @@ GEMINI_PRICING = {
 # Heuristics for cost estimation
 ESTIMATION_OUTPUT_RATIO = 0.35      # Output tokens are roughly 35% of input for card generation
 ESTIMATION_PROMPT_OVERHEAD = 3000   # System instruction + overhead for concept map & first batch
+GEMINI_IMAGE_TOKEN_COST = 258       # Fixed cost per image in Gemini models
 
 

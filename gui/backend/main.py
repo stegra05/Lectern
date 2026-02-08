@@ -1,3 +1,13 @@
+import sys
+import os
+
+# Add parent directory to path to import ankiparse modules and version
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+# Add current directory to path to import local modules (service.py)
+sys.path.append(os.path.dirname(__file__))
+
+from version import __version__
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -5,8 +15,6 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
-import os
-import sys
 import shutil
 import tempfile
 import json
@@ -14,12 +22,7 @@ import time
 import threading
 import requests
 from uuid import uuid4
-from version import __version__
 
-# Add parent directory to path to import ankiparse modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-# Add current directory to path to import local modules (service.py)
-sys.path.append(os.path.dirname(__file__))
 
 
 from pypdf import PdfReader
