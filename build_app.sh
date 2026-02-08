@@ -80,7 +80,6 @@ run_step() {
 }
 
 # Start
-clear
 echo -e "${BOLD}🚀 Lectern Build System${NC}"
 echo -e "${DIM}Starting build process...${NC}\n"
 
