@@ -205,7 +205,6 @@ class TestServiceIntegration:
     @patch('lectern_service.get_deck_slide_set_patterns')
     @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.extract_pdf_title')
-    @patch('lectern_service.infer_slide_set_name_with_ai')
     @patch('lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
@@ -214,7 +213,6 @@ class TestServiceIntegration:
         mock_getsize,
         mock_exists,
         mock_ai_client_class,
-        mock_infer_name,
         mock_extract_title,
         mock_extract_pdf,
         mock_patterns,
@@ -232,7 +230,6 @@ class TestServiceIntegration:
         mock_patterns.return_value = {"slide_sets": []}
         mock_extract_pdf.return_value = mock_pdf_pages
         mock_extract_title.return_value = "Test Lecture"
-        mock_infer_name.return_value = "Lecture 1 Introduction"
         
         # Mock AI client
         mock_ai = MagicMock()
@@ -277,7 +274,6 @@ class TestServiceIntegration:
     @patch('lectern_service.get_deck_slide_set_patterns')
     @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.extract_pdf_title')
-    @patch('lectern_service.infer_slide_set_name_with_ai')
     @patch('lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
@@ -286,7 +282,6 @@ class TestServiceIntegration:
         mock_getsize,
         mock_exists,
         mock_ai_client_class,
-        mock_infer_name,
         mock_extract_title,
         mock_extract_pdf,
         mock_patterns,
@@ -304,7 +299,6 @@ class TestServiceIntegration:
         mock_patterns.return_value = {"slide_sets": []}
         mock_extract_pdf.return_value = mock_pdf_pages
         mock_extract_title.return_value = "Test Lecture"
-        mock_infer_name.return_value = "Lecture 1 Introduction"
 
         # Mock AI client
         mock_ai = MagicMock()

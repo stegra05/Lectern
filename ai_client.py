@@ -18,7 +18,6 @@ from ai_schemas import (
     ConceptMapResponse,
     ReflectionResponse,
     AnkiCard,
-    preprocess_fields_json_escapes,
 )
 import logging
 logger = logging.getLogger(__name__)
@@ -56,18 +55,23 @@ _CONCEPT_MAP_SCHEMA = {
         "language": {
             "type": "string",
             "description": "ISO 639-1 code of primary document language (e.g., 'en', 'de', 'fr')"
+        },
+        "slide_set_name": {
+            "type": "string",
+            "description": "Semantic name for this slide set in Title Case, max 8 words (e.g., 'Lecture 2 Supervised Learning')"
         }
     },
-    "required": ["objectives", "concepts", "relations", "language"]
+    "required": ["objectives", "concepts", "relations", "language", "slide_set_name"]
 }
 
 _ANKI_CARD_SCHEMA = {
     "type": "object",
     "properties": {
         "model_name": {"type": "string"},
-        "fields_json": {
-            "type": "string", 
-            "description": "JSON object string mapping field names to values (e.g. '{\"Front\": \"...\", \"Back\": \"...\"}')"
+        "fields": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+            "description": "Field name to value mapping (e.g. {'Front': '...', 'Back': '...'})"
         },
         "tags": {"type": "array", "items": {"type": "string"}},
         "slide_topic": {"type": "string", "nullable": True},
@@ -86,7 +90,7 @@ _ANKI_CARD_SCHEMA = {
             "nullable": True
         }
     },
-    "required": ["model_name", "fields_json"]
+    "required": ["model_name", "fields"]
 }
 
 _CARD_GENERATION_SCHEMA = {
@@ -332,24 +336,13 @@ class LecternAIClient:
         return {"reflection": "", "cards": [], "done": True}
 
     def _safe_parse_json(self, text: str, model_class: Any) -> Dict[str, Any] | None:
-        """Helper to parse JSON with multiple fallback strategies."""
+        """Parse JSON response from AI."""
         try:
-            fixed_text = preprocess_fields_json_escapes(text)
-            data_obj = model_class.model_validate_json(fixed_text)
+            data_obj = model_class.model_validate_json(text)
             return data_obj.model_dump()
-        except Exception as e1:
-            logger.debug(f"[AI] Standard parsing failed: {e1}")
-            try:
-                # Aggressive backslash fixing
-                aggressive = text.replace('\\', '\\\\')
-                for char in ['"', 'n', 't', 'r', '/']:
-                    aggressive = aggressive.replace('\\\\' + char, '\\' + char)
-                aggressive = aggressive.replace('\\\\\\\\', '\\\\')
-                data_obj = model_class.model_validate_json(aggressive)
-                return data_obj.model_dump()
-            except Exception as e2:
-                logger.debug(f"[AI] Aggressive parsing failed: {e2}")
-                return None
+        except Exception as e:
+            logger.debug(f"[AI] JSON parsing failed: {e}")
+            return None
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""

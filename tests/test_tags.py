@@ -1,15 +1,26 @@
 
 import pytest
-from utils.tags import build_hierarchical_tags, infer_slide_set_name, _normalize_segment
+from utils.tags import build_hierarchical_tags, infer_slide_set_name, _clean_tag_part
 
 class TestTags:
-    def test_normalize_segment(self):
-        assert _normalize_segment("  Test   String  ") == "Test String"
-        assert _normalize_segment("Test_String") == "Test_String"
-        assert _normalize_segment("Test-String") == "Test-String"
-        assert _normalize_segment("Test@#$String") == "Test-String"
-        assert _normalize_segment("multiple   spaces") == "multiple spaces"
-        assert _normalize_segment("multiple---dashes") == "multiple-dashes"
+    def test_clean_tag_part_basic(self):
+        """Test the unified _clean_tag_part function."""
+        assert _clean_tag_part("  Test   String  ") == "Test-String"
+        assert _clean_tag_part("Test_String") == "Test_String"
+        assert _clean_tag_part("Test-String") == "Test-String"
+        assert _clean_tag_part("Test@#$String") == "Test-String"
+        assert _clean_tag_part("multiple   spaces") == "multiple-spaces"
+
+    def test_clean_tag_part_title_case(self):
+        """Test title case normalization."""
+        assert _clean_tag_part("hello world", title_case=True) == "Hello-World"
+        assert _clean_tag_part("ML basics", title_case=True) == "ML-Basics"  # Preserve acronyms
+        assert _clean_tag_part("lecture 1", title_case=True) == "Lecture-1"
+
+    def test_clean_tag_part_slug(self):
+        """Test slug (lowercase) normalization."""
+        assert _clean_tag_part("HELLO World", slug=True) == "hello-world"
+        assert _clean_tag_part("ML Basics", slug=True) == "ml-basics"
 
     def test_build_hierarchical_tags_basic(self):
         tags = build_hierarchical_tags(
@@ -47,70 +58,22 @@ class TestTags:
             topic="I/O Streams",
             tags=["std::cout"]
         )
-        # Special chars should be normalized
-        # "C++ Programming" -> "C-Programming" (since + is not allowed in _NON_ALLOWED unless added, let's check implementation)
-        # Wait, _NON_ALLOWED = re.compile(r"[^a-zA-Z0-9_\-\s]+") 
-        # So "C++" becomes "C-".
-        # "Lecture #1" -> "Lecture-1"
-        # "I/O Streams" -> "I-O-Streams"
-        # "std::cout" -> "std-cout" (slug_segment)
-        
-        # Actually checking the implementation:
-        # deck_name: _tag_segment -> _normalize_segment -> s.replace(" ", "-")
-        # slide_set_name: _tag_segment(title_case=True)
-        # topic: _tag_segment(title_case=True)
-        # tag: _slug_segment -> _normalize_segment(preserve_case=False) -> replace " " with "-"
-        
-        # C++ -> C- (multiple dashes collapsed to one)
-        
+        # Special chars normalized: ++ -> -, # -> -, / -> -, :: -> -
         assert tags[0] == "C-Programming::Lecture-1::I-O-Streams::std-cout"
 
-    def test_infer_slide_set_name_pattern(self):
-        pattern_info = {'pattern': 'lecture', 'next_number': 5}
-        
-        # Test 1: Title matches pattern
-        name = infer_slide_set_name(
-            pdf_title="Lecture 5: Neural Networks",
-            pattern_info=pattern_info
-        )
-        assert name == "Lecture 5 Neural Networks"
-        
-        # Test 2: Filename matches pattern
-        name = infer_slide_set_name(
-            pdf_title="",
-            pattern_info=pattern_info,
-            pdf_filename="Lecture_05_Slides"
-        )
-        assert name == "Lecture 05"
-
-    def test_infer_slide_set_name_structured_title(self):
-        name = infer_slide_set_name(
-            pdf_title="Week 3 - Deep Learning",
-            pattern_info={}
-        )
-        assert name == "Week 3 Deep Learning"
-
     def test_infer_slide_set_name_simple_title(self):
-        name = infer_slide_set_name(
-            pdf_title="Introduction to Python",
-            pattern_info={}
-        )
-        assert name == "Introduction To Python"
+        """The new simplified version just uses title as-is."""
+        name = infer_slide_set_name(pdf_title="Introduction to Python")
+        assert name == "Introduction-To-Python"
 
     def test_infer_slide_set_name_filename_fallback(self):
         name = infer_slide_set_name(
             pdf_title="",
-            pattern_info={},
-            pdf_filename="2023-10-15_Advanced_Algorithms_v2"
+            pdf_filename="Advanced_Algorithms"
         )
-        # "2023-10-15_Advanced_Algorithms_v2" -> clean date -> "Advanced_Algorithms_v2" -> clean version -> "Advanced_Algorithms"
-        # -> replace _ with space -> "Advanced Algorithms"
-        assert name == "Advanced Algorithms"
+        # Underscores replaced with spaces, then title cased
+        assert name == "Advanced-Algorithms"
 
     def test_infer_slide_set_name_empty(self):
-        name = infer_slide_set_name(
-            pdf_title="",
-            pattern_info={},
-            pdf_filename=""
-        )
+        name = infer_slide_set_name(pdf_title="", pdf_filename="")
         assert name == ""

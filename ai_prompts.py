@@ -19,18 +19,15 @@ FORMATTING_RULES = (
 )
 
 def _make_example_str(examples_data: List[Dict[str, Any]], title: str) -> str:
+    """Build example string for prompts. Uses 'fields' as native object."""
     lines = [title]
     for ex in examples_data:
-        # Create the inner fields_json string
-        fields = ex.pop("fields") # We define it as 'fields' in the data helper for readability
-        ex["fields_json"] = json.dumps(fields)
-        
-        # Serialize the whole object
         json_str = json.dumps(ex)
         lines.append(f"  {ex.get('model_name', 'Card')}: {json_str}")
     return "\n".join(lines) + "\n"
 
 # Unified Card Examples (Definitions, Comparisons, Applications)
+# NOTE: Using 'fields' as native object, matching the updated schema
 _CARD_DATA = [
     {
         "model_name": "Basic", 
@@ -118,8 +115,10 @@ class PromptBuilder:
             "- Concepts: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts. Assign stable, short, unique IDs.\n"
             "- Relations: Map the *semantic structure* (e.g., `is_a`, `part_of`, `causes`, `contrasts_with`). Note page references.\n"
             "- Language: Detect the primary language of the slides (e.g. 'en', 'de', 'fr'). Return the ISO 639-1 code.\n"
+            "- Slide Set Name: Generate a semantic name for this slide set (e.g., 'Lecture 2 Introduction To Machine Learning'). "
+            "Use Title Case, max 8 words. Include lecture/week number if present.\n"
             "- Formatting: STRICTLY AVOID Markdown in text fields. Use HTML.\n"
-            "Return ONLY a JSON object with keys: objectives (array), concepts (array), relations (array), language (string). No prose.\n"
+            "Return ONLY a JSON object with keys: objectives, concepts, relations, language, slide_set_name. No prose.\n"
         )
 
     def generation(
