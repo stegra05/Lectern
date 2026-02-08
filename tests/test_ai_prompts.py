@@ -68,8 +68,13 @@ def test_card_examples_are_valid_json():
     for ex in examples:
         assert "model_name" in ex
         # New schema uses 'fields' as native object, not 'fields_json' string
-        assert "fields" in ex, "Examples must use fields (dict)"
-        assert isinstance(ex["fields"], dict)
+        assert "fields" in ex, "Examples must use fields (list of dicts)"
+        assert isinstance(ex["fields"], list)
         fields = ex["fields"]
-        if "Front" in fields:
-            assert isinstance(fields["Front"], str)
+        
+        # Check that we can find expected values if present
+        for field in fields:
+            assert "name" in field
+            assert "value" in field
+            if field["name"] == "Front":
+                assert isinstance(field["value"], str)

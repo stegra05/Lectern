@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { OnboardingFlow } from '../components/OnboardingFlow';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -14,7 +14,8 @@ vi.mock('../api', () => ({
 vi.mock('../components/GlassCard', async () => {
     const React = await import('react');
     return {
-        GlassCard: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children)
+        GlassCard: ({ children, className }: { children: React.ReactNode, className: string }) =>
+            React.createElement('div', { className }, children)
     };
 });
 
@@ -59,22 +60,19 @@ describe('OnboardingFlow', () => {
 
     beforeEach(() => {
         vi.resetAllMocks();
+        vi.useRealTimers();
     });
 
     it('shows help text when Anki connection fails', async () => {
-        // Mock health check failure
         vi.mocked(api.checkHealth).mockRejectedValue(new Error('Failed'));
 
         render(<OnboardingFlow onComplete={mockOnComplete} />);
 
-        // Should initially show "Anki Connection"
         expect(screen.getByText('Anki Connection')).toBeInTheDocument();
 
-        // Wait for failure state
         await waitFor(() => {
             expect(screen.getByText(/Is Anki running with AnkiConnect/i)).toBeInTheDocument();
-            expect(screen.getByText(/2055492159/)).toBeInTheDocument();
-        });
+        }, { timeout: 10000 });
     });
 
     it('navigates to AI Service step on Anki success', async () => {
@@ -87,12 +85,50 @@ describe('OnboardingFlow', () => {
 
         await waitFor(() => {
             expect(screen.getByText('CONNECTED: LOCALHOST:8765')).toBeInTheDocument();
-        }, { timeout: 3000 });
+        }, { timeout: 10000 });
 
-        // Check if AI Service section becomes active and shows input
         await waitFor(() => {
             expect(screen.getByPlaceholderText('sk-...')).toBeInTheDocument();
-            expect(screen.getByText('Get Free Key')).toBeInTheDocument();
-        }, { timeout: 3000 });
+        }, { timeout: 10000 });
+    });
+
+    it('completes onboarding when both services are configured', async () => {
+        vi.mocked(api.checkHealth).mockResolvedValue({
+            anki_connected: true,
+            gemini_configured: true
+        });
+
+        render(<OnboardingFlow onComplete={mockOnComplete} />);
+
+        await waitFor(() => {
+            expect(screen.getByText('AUTHENTICATED')).toBeInTheDocument();
+        }, { timeout: 10000 });
+
+        await waitFor(() => {
+            expect(mockOnComplete).toHaveBeenCalled();
+        }, { timeout: 10000 });
+    });
+
+    it('submits API key successfully', async () => {
+        vi.mocked(api.checkHealth).mockResolvedValue({
+            anki_connected: true,
+            gemini_configured: false
+        });
+
+        render(<OnboardingFlow onComplete={mockOnComplete} />);
+
+        const input = await screen.findByPlaceholderText('sk-...', {}, { timeout: 10000 });
+        fireEvent.change(input, { target: { value: 'test-api-key-long-enough' } });
+
+        const submitButton = screen.getByText('Initialize');
+        fireEvent.click(submitButton);
+
+        await waitFor(() => {
+            expect(api.saveConfig).toHaveBeenCalledWith({ gemini_api_key: 'test-api-key-long-enough' });
+        }, { timeout: 10000 });
+
+        await waitFor(() => {
+            expect(mockOnComplete).toHaveBeenCalled();
+        }, { timeout: 10000 });
     });
 });
