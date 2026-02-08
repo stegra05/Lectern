@@ -1,10 +1,8 @@
 """
 PDF parsing utilities for Lectern.
 
-Uses pypdf + pdf2image instead of PyMuPDF to reduce bundle size by ~30MB.
+Uses pypdf + pypdfium2 for pure-Python PDF processing.
 This module is read-only and never mutates user files.
-
-System requirement: Poppler must be installed (`brew install poppler` on macOS).
 """
 
 from __future__ import annotations
@@ -16,10 +14,10 @@ import os
 
 from PIL import Image
 import pytesseract  # type: ignore
+import pypdfium2 as pdfium
 
-# Lightweight PDF libraries (combined ~2MB vs PyMuPDF's 35MB)
+# Lightweight PDF libraries (no external dependencies)
 from pypdf import PdfReader
-from pdf2image import convert_from_path
 
 
 @dataclass
@@ -73,17 +71,13 @@ def extract_content_from_pdf(
 
     def render_page_image(page_number: int, dpi: int = 150) -> Optional[Image.Image]:
         try:
-            images = convert_from_path(
-                pdf_path,
-                first_page=page_number,
-                last_page=page_number,
-                dpi=dpi,
-            )
-            if images:
-                return images[0]
+            pdf_doc = pdfium.PdfDocument(pdf_path)
+            page = pdf_doc[page_number - 1]  # pypdfium2 uses 0-indexed pages
+            scale = dpi / 72  # PDFium uses 72 DPI as base
+            bitmap = page.render(scale=scale)
+            return bitmap.to_pil()
         except Exception as e:
             print(f"Warning: Could not render page {page_number} as image: {e}")
-            print("Hint: Ensure Poppler is installed (`brew install poppler` on macOS)")
         return None
 
     for page_index, page in enumerate(reader.pages):

@@ -224,6 +224,8 @@ Lectern adapts its behavior based on content density:
 
 AI session logs for debugging and traceability:
 
-- **Path:** `~/Library/Application Support/Lectern/logs/session-*.json`
+- **macOS:** `~/Library/Application Support/Lectern/logs/`
+- **Windows:** `%APPDATA%\Lectern\logs\`
+- **Linux:** `~/.config/lectern/logs/`
 - **Lifecycle:** Created at session start; appended after each phase
 - **Use cases:** Debug generation quality issues, inspect prompts/responses
