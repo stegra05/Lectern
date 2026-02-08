@@ -202,7 +202,6 @@ class TestCardDeduplication:
 class TestServiceIntegration:
     @patch('lectern_service.check_connection')
     @patch('lectern_service.sample_examples_from_deck')
-    @patch('lectern_service.get_deck_slide_set_patterns')
     @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.extract_pdf_title')
     @patch('lectern_service.LecternAIClient')
@@ -215,7 +214,6 @@ class TestServiceIntegration:
         mock_ai_client_class,
         mock_extract_title,
         mock_extract_pdf,
-        mock_patterns,
         mock_examples,
         mock_check,
         service,
@@ -227,7 +225,6 @@ class TestServiceIntegration:
         mock_getsize.return_value = 1024
         mock_check.return_value = True
         mock_examples.return_value = ""
-        mock_patterns.return_value = {"slide_sets": []}
         mock_extract_pdf.return_value = mock_pdf_pages
         mock_extract_title.return_value = "Test Lecture"
         
@@ -271,7 +268,6 @@ class TestServiceIntegration:
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.sample_examples_from_deck')
-    @patch('lectern_service.get_deck_slide_set_patterns')
     @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.extract_pdf_title')
     @patch('lectern_service.LecternAIClient')
@@ -284,7 +280,6 @@ class TestServiceIntegration:
         mock_ai_client_class,
         mock_extract_title,
         mock_extract_pdf,
-        mock_patterns,
         mock_examples,
         mock_check,
         service,
@@ -296,7 +291,6 @@ class TestServiceIntegration:
         mock_getsize.return_value = 1024
         mock_check.return_value = True
         mock_examples.return_value = ""
-        mock_patterns.return_value = {"slide_sets": []}
         mock_extract_pdf.return_value = mock_pdf_pages
         mock_extract_title.return_value = "Test Lecture"
 
