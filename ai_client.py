@@ -243,7 +243,8 @@ class LecternAIClient:
         )
         
         text = response.text or ""
-        logger.debug(f"[Chat/ConceptMap] Response snippet: {text[:200].replace('\\n',' ')}...")
+        text_snippet = text[:200].replace('\n', ' ')
+        logger.debug(f"[Chat/ConceptMap] Response snippet: {text_snippet}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
         
         data = self._safe_parse_json(text, ConceptMapResponse)
@@ -300,7 +301,8 @@ class LecternAIClient:
         )
         
         text = response.text or ""
-        logger.debug(f"[Chat/Gen] Response snippet: {text[:200].replace('\\n',' ')}...")
+        text_snippet = text[:200].replace('\n', ' ')
+        logger.debug(f"[Chat/Gen] Response snippet: {text_snippet}...")
         _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
         
         data = self._safe_parse_json(text, CardGenerationResponse)
@@ -325,7 +327,8 @@ class LecternAIClient:
         )
         
         text = response.text or ""
-        logger.debug(f"[Chat/Reflect] Response snippet: {text[:200].replace('\\n',' ')}...")
+        text_snippet = text[:200].replace('\n', ' ')
+        logger.debug(f"[Chat/Reflect] Response snippet: {text_snippet}...")
         _append_session_log(self._log_path, "reflection", [{"text": prompt}], text, True)
 
         data = self._safe_parse_json(text, ReflectionResponse)
