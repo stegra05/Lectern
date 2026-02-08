@@ -2,12 +2,17 @@ from PyInstaller.utils.hooks import collect_all
 
 datas, binaries, hiddenimports = collect_all('pypdfium2')
 
+import os
+PROJECT_ROOT = os.path.abspath(os.getcwd())
+
 a = Analysis(
     ['gui/launcher.py'],
-    pathex=['.'],
+    pathex=[PROJECT_ROOT, os.path.join(PROJECT_ROOT, 'gui', 'backend')],
     binaries=binaries,
     datas=[('gui/frontend/dist', 'frontend/dist'), ('gui/backend', 'backend')] + datas,
-    hiddenimports=['webview', 'uvicorn', 'objc', 'Cocoa', 'WebKit', 'PIL', 'PIL.Image', 'pypdf'] + hiddenimports,
+    hiddenimports=['webview', 'uvicorn', 'objc', 'Cocoa', 'WebKit', 'PIL', 'PIL.Image', 'pypdf',
+                   'lectern_service', 'ai_client', 'ai_common', 'ai_pacing', 'ai_prompts', 'ai_schemas',
+                   'anki_connector', 'config', 'pdf_parser', 'utils'] + hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

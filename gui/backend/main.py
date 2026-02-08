@@ -34,7 +34,7 @@ from utils.note_export import export_card_to_anki
 from utils.history import HistoryManager
 from utils.state import load_state, save_state
 
-app = FastAPI(title='Lectern API', version='1.1.6')
+app = FastAPI(title='Lectern API', version='1.1.7')
 
 app.add_middleware(
     CORSMiddleware,
