@@ -19,7 +19,7 @@ describe('SettingsModal', () => {
     const mockOnClose = vi.fn();
     const mockToggleTheme = vi.fn();
     const defaultConfig = {
-        gemini_model: 'gemini-2.0-flash',
+        gemini_model: 'gemini-3-flash',
         anki_url: 'http://localhost:8765',
         basic_model: 'Basic',
         cloze_model: 'Cloze',
@@ -37,7 +37,6 @@ describe('SettingsModal', () => {
         vi.mocked(api.getDecks).mockResolvedValue({ decks: ['Default'] });
     });
 
-    /*
     it('renders and loads configuration', async () => {
         await act(async () => {
             render(
@@ -53,13 +52,13 @@ describe('SettingsModal', () => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
         await waitFor(() => {
             expect(api.getConfig).toHaveBeenCalled();
-            expect(screen.getByDisplayValue('gemini-2.0-flash (Fast)')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Gemini 3 Flash (Fast)')).toBeInTheDocument();
         });
     });
 
     it('handles configuration load failure', async () => {
         const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
-        vi.mocked(api.getConfig).mockRejectedValue(new Error('Failed'));
+        vi.mocked(api.getConfig).mockRejectedValueOnce(new Error('Failed'));
 
         await act(async () => {
             render(
@@ -73,21 +72,21 @@ describe('SettingsModal', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText('Failed to connect to backend')).toBeInTheDocument();
+            expect(screen.getByText(/Failed to connect/i)).toBeInTheDocument();
         });
 
         const retryButton = screen.getByText('Retry');
         vi.mocked(api.getConfig).mockResolvedValue(defaultConfig);
+
         await act(async () => {
             fireEvent.click(retryButton);
         });
 
         await waitFor(() => {
-            expect(screen.getByDisplayValue('gemini-2.0-flash (Fast)')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Gemini 3 Flash (Fast)')).toBeInTheDocument();
         });
         consoleSpy.mockRestore();
     });
-    */
 
     it('updates Gemini API key', async () => {
         await act(async () => {
@@ -114,7 +113,6 @@ describe('SettingsModal', () => {
         });
     });
 
-    /*
     it('saves changed settings', async () => {
         await act(async () => {
             render(
@@ -127,10 +125,10 @@ describe('SettingsModal', () => {
             );
         });
 
-        await waitFor(() => screen.getByDisplayValue('gemini-2.0-flash (Fast)'));
-        const select = screen.getByDisplayValue('gemini-2.0-flash (Fast)');
+        await waitFor(() => screen.getByDisplayValue('Gemini 3 Flash (Fast)'));
+        const select = screen.getByDisplayValue('Gemini 3 Flash (Fast)');
 
-        fireEvent.change(select, { target: { value: 'gemini-2.0-pro-exp-02-05' } });
+        fireEvent.change(select, { target: { value: 'gemini-3-pro' } });
 
         const saveButton = screen.getByText('Save Changes');
         await act(async () => {
@@ -139,12 +137,11 @@ describe('SettingsModal', () => {
 
         await waitFor(() => {
             expect(api.saveConfig).toHaveBeenCalledWith(expect.objectContaining({
-                gemini_model: 'gemini-2.0-pro-exp-02-05'
+                gemini_model: 'gemini-3-pro'
             }));
-            expect(screen.getByText(/Settings saved successfully/i)).toBeInTheDocument();
+            expect(screen.getByText(/Settings saved/i)).toBeInTheDocument();
         });
     });
-    */
 
     it('toggles advanced settings', async () => {
         await act(async () => {
