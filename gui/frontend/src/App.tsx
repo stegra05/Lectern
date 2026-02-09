@@ -87,6 +87,8 @@ function App() {
     handleGenerate,
     handleReset,
     loadSession,
+    recoverSessionOnRefresh,
+    refreshRecoveredSession,
   } = useLecternStore();
 
   const {
@@ -121,6 +123,18 @@ function App() {
     fetchEstimate();
     return () => controller.abort();
   }, [pdfFile, health?.gemini_model, setEstimation, setIsEstimating]);
+
+  useEffect(() => {
+    recoverSessionOnRefresh();
+  }, [recoverSessionOnRefresh]);
+
+  useEffect(() => {
+    if (step !== 'generating' || !sessionId) return undefined;
+    const interval = window.setInterval(() => {
+      refreshRecoveredSession();
+    }, 2500);
+    return () => window.clearInterval(interval);
+  }, [refreshRecoveredSession, sessionId, step]);
 
   if (isCheckingHealth) {
     return (

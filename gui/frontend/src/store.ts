@@ -68,6 +68,8 @@ type GenerationActions = {
   handleReset: () => void;
   handleCopyLogs: () => void;
   loadSession: (sessionId: string) => Promise<void>;
+  recoverSessionOnRefresh: () => Promise<void>;
+  refreshRecoveredSession: () => Promise<void>;
   reset: () => void;
 };
 
@@ -94,6 +96,8 @@ type UiActions = {
 
 type StoreActions = GenerationActions & ReviewActions & UiActions;
 type LecternStore = StoreState & StoreActions;
+
+const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
 
 const getStored = <T>(key: string, fallback: T): T => {
   if (typeof window === 'undefined') return fallback;
@@ -147,6 +151,10 @@ const processGenerationEvent = (
       event.data && typeof event.data === 'object' && 'session_id' in event.data
         ? (event.data as { session_id: string }).session_id
         : null;
+    if (typeof window !== 'undefined') {
+      if (sid) localStorage.setItem(ACTIVE_SESSION_KEY, sid);
+      else localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
     set(() => ({ sessionId: sid }));
     return;
   }
@@ -182,11 +190,17 @@ const processGenerationEvent = (
   }
 
   if (event.type === 'done') {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
     set(() => ({ step: 'done', currentPhase: 'complete', isCancelling: false }));
     return;
   }
 
   if (event.type === 'cancelled') {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
     set(() => ({ isCancelling: false }));
     return;
   }
@@ -260,7 +274,13 @@ const createGenerationActions = (
   setIsEstimating: (value) => set({ isEstimating: value }),
   setIsError: (value) => set({ isError: value }),
   setIsCancelling: (value) => set({ isCancelling: value }),
-  setSessionId: (id) => set({ sessionId: id }),
+  setSessionId: (id) => {
+    if (typeof window !== 'undefined') {
+      if (id) localStorage.setItem(ACTIVE_SESSION_KEY, id);
+      else localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
+    set({ sessionId: id });
+  },
   setPhaseFromEvent: (event) =>
     set((state) => {
       if (event.type !== 'step_start') return state;
@@ -286,7 +306,12 @@ const createGenerationActions = (
     set((state) => ({
       cards: [...state.cards, card],
     })),
-  reset: () => set(getInitialState()),
+  reset: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
+    set(getInitialState());
+  },
   handleGenerate: async () => {
     const state = get();
     if (!state.pdfFile || !state.deckName) return;
@@ -302,6 +327,9 @@ const createGenerationActions = (
       isHistorical: false,
       currentPhase: 'idle',
     });
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
 
     try {
       await api.generate(
@@ -331,6 +359,9 @@ const createGenerationActions = (
     api.stopGeneration(sessionId ?? undefined);
   },
   handleReset: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
     set(getInitialState());
   },
   handleCopyLogs: () => {
@@ -360,6 +391,61 @@ const createGenerationActions = (
     } catch (e) {
       console.error('Failed to load session:', e);
       set({ step: 'dashboard' });
+    }
+  },
+  recoverSessionOnRefresh: async () => {
+    if (typeof window === 'undefined') return;
+    const sessionId = localStorage.getItem(ACTIVE_SESSION_KEY);
+    if (!sessionId) return;
+
+    try {
+      const status = await api.getSessionStatus(sessionId);
+      const snapshot = await api.getSession(sessionId);
+      if (status.active) {
+        set({
+          sessionId,
+          cards: snapshot.cards || [],
+          deckName: snapshot.deck_name || '',
+          step: 'generating',
+          currentPhase: 'generating',
+          isHistorical: false,
+        });
+      } else {
+        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        set({
+          sessionId,
+          cards: snapshot.cards || [],
+          deckName: snapshot.deck_name || '',
+          step: 'done',
+          currentPhase: 'complete',
+          isHistorical: true,
+        });
+      }
+    } catch (error) {
+      console.warn('Session recovery failed:', error);
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+      set({ sessionId: null });
+    }
+  },
+  refreshRecoveredSession: async () => {
+    const { sessionId, step } = get();
+    if (!sessionId || step !== 'generating') return;
+    try {
+      const status = await api.getSessionStatus(sessionId);
+      if (!status.active) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(ACTIVE_SESSION_KEY);
+        }
+        set({ step: 'done', currentPhase: 'complete', isHistorical: true });
+        return;
+      }
+      const snapshot = await api.getSession(sessionId);
+      set({
+        cards: snapshot.cards || [],
+        deckName: snapshot.deck_name || '',
+      });
+    } catch (error) {
+      console.warn('Failed to refresh recovered session:', error);
     }
   },
 });

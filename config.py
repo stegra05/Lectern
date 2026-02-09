@@ -197,18 +197,27 @@ LOG_MAX_RESPONSE_CHARS: int = int(os.getenv("LOG_MAX_RESPONSE_CHARS", "20000"))
 
 
 # --- Estimation and Pricing ---
-# Gemini model pricing (per million tokens, as of 2025)
+# Gemini model pricing (per million tokens, checked against ai.google.dev/pricing on 2026-02-09)
 # Format: {model_pattern: (input_rate_usd, output_rate_usd)}
 GEMINI_PRICING = {
     "gemini-2.5-pro": (1.25, 10.00),   # $1.25/M in, $10/M out
     "gemini-2.5-flash": (0.30, 2.50),  # $0.30/M in, $2.50/M out
-    "gemini-3-flash": (0.30, 2.50),    # Assume same as 2.5 Flash for now
+    "gemini-3-flash": (0.50, 3.00),    # Gemini 3 Flash Preview (Standard): $0.50/M in, $3.00/M out
     "default": (0.50, 4.00),           # Conservative fallback
 }
 
 # Heuristics for cost estimation
 ESTIMATION_OUTPUT_RATIO = 0.35      # Output tokens are roughly 35% of input for card generation
 ESTIMATION_PROMPT_OVERHEAD = 3000   # System instruction + overhead for concept map & first batch
-GEMINI_IMAGE_TOKEN_COST = 258       # Fixed cost per image in Gemini models
+# For Gemini multimodal tokenization docs (2025-12-18):
+# - <=384px image: 258 tokens
+# - larger images: tiled to 768x768 and charged 258 tokens per tile
+# We use 258 as a baseline per-image estimate and can optionally verify with count_tokens.
+GEMINI_IMAGE_TOKEN_COST = 258
+ESTIMATION_VERIFY_IMAGE_TOKEN_COST = os.getenv("ESTIMATION_VERIFY_IMAGE_TOKEN_COST", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 

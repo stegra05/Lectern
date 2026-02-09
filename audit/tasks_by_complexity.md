@@ -48,13 +48,13 @@
 | T16 | Replace `_slide_set_context` mutation with setter | 3 | P2 | [x] |
 | T17 | Fix `slide_number` visibility in `ProgressView` | 3 | P2 | [x] |
 | T18 | Add per-call thinking level profiles | 4 | P1 | [x] |
-| T19 | Redesign history pruning with rolling card summary | 4 | P1 | [ ] |
-| T20 | Verify and fix resume/checkpoint system | 4 | P2 | [ ] |
-| T21 | Verify Gemini image token cost (258) | 4 | P2 | [ ] |
-| T22 | Verify and annotate Gemini 3 Flash pricing | 4 | P3 | [ ] |
-| T23 | Session recovery on page refresh | 4 | P2 | [ ] |
-| T24 | Add `importance` + `difficulty` to concept schema | 4 | P2 | [ ] |
-| T25 | Remove TTL-based session pruning; explicit temp-file cleanup | 4 | P3 | [ ] |
+| T19 | Redesign history pruning with rolling card summary | 4 | P1 | [x] |
+| T20 | Verify and fix resume/checkpoint system | 4 | P2 | [x] |
+| T21 | Verify Gemini image token cost (258) | 4 | P2 | [x] |
+| T22 | Verify and annotate Gemini 3 Flash pricing | 4 | P3 | [x] |
+| T23 | Session recovery on page refresh | 4 | P2 | [x] |
+| T24 | Add `importance` + `difficulty` to concept schema | 4 | P2 | [x] |
+| T25 | Remove TTL-based session pruning; explicit temp-file cleanup | 4 | P3 | [x] |
 | T26 | Native Gemini PDF upload (Generation 2.0) | 5 | P3 | [ ] |
 | T27 | Decompose `lectern_service.py` monolith | 5 | P3 | [ ] |
 | T28 | Expose estimated card count pre-generation | 5 | P3 | [ ] |
