@@ -92,12 +92,14 @@ describe('HomeView', () => {
             output_cost: 0.02,
             cost: 0.03,
             tokens: 1500,
-            model: 'gemini-1.5-flash'
+            model: 'gemini-3-flash',
+            estimated_card_count: 45,
         };
         render(<HomeView {...defaultProps} estimation={estimation} />);
         expect(screen.getByText('$0.030')).toBeInTheDocument();
         expect(screen.getByText('1.0k')).toBeInTheDocument();
         expect(screen.getByText('0.5k')).toBeInTheDocument();
+        expect(screen.getByText('~45 cards')).toBeInTheDocument();
     });
 
     it('shows estimating state', () => {
@@ -120,11 +122,52 @@ describe('HomeView', () => {
         expect(screen.getByText(/Extraction Granularity: 1.0x/i)).toBeInTheDocument();
     });
 
+    it('shows EST. TOTAL CARDS badge in script mode when estimation has estimated_card_count', () => {
+        const estimation = {
+            pages: 72,
+            cost: 0.017,
+            model: 'gemini-3-flash',
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            tokens: 0,
+            estimated_card_count: 62,
+        };
+        render(<HomeView {...defaultProps} sourceType="script" estimation={estimation} />);
+        expect(screen.getByText(/EST. 62 TOTAL CARDS/i)).toBeInTheDocument();
+    });
+
+    it('does not show EST. TOTAL CARDS badge in script mode when estimation lacks estimated_card_count', () => {
+        const estimation = {
+            pages: 72,
+            cost: 0.017,
+            model: 'gemini-3-flash',
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            tokens: 0,
+        };
+        render(<HomeView {...defaultProps} sourceType="script" estimation={estimation} />);
+        expect(screen.queryByText(/EST. \d+ TOTAL CARDS/i)).not.toBeInTheDocument();
+    });
+
     it('displays correct density description for slides mode', () => {
-        const estimation = { pages: 10, cost: 0, model: '', input_tokens: 0, output_tokens: 0, input_cost: 0, output_cost: 0, tokens: 0 };
+        const estimation = {
+            pages: 10,
+            cost: 0,
+            model: '',
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            tokens: 0,
+            estimated_card_count: 18,
+        };
         render(<HomeView {...defaultProps} estimation={estimation} densityTarget={2.0} />);
         expect(screen.getByText(/Target: ~2.0 cards per active slide/i)).toBeInTheDocument();
-        expect(screen.getByText(/EST. 20 TOTAL CARDS/i)).toBeInTheDocument();
+        expect(screen.getByText(/EST. 18 TOTAL CARDS/i)).toBeInTheDocument();
     });
 
     it('calls handleGenerate when button is clicked', () => {

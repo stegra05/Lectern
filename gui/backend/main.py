@@ -330,7 +330,12 @@ async def delete_history_entry(entry_id: str):
     return {"status": "deleted"}
 
 @app.post("/estimate")
-async def estimate_cost(pdf_file: UploadFile = File(...), model_name: Optional[str] = None):
+async def estimate_cost(
+    pdf_file: UploadFile = File(...),
+    model_name: Optional[str] = None,
+    source_type: str = "auto",
+    density_target: Optional[float] = None,
+):
     from starlette.concurrency import run_in_threadpool
     
     # Save uploaded file to temp in threadpool to avoid blocking
@@ -347,7 +352,12 @@ async def estimate_cost(pdf_file: UploadFile = File(...), model_name: Optional[s
 
     try:
         service = LecternGenerationService()
-        data = await service.estimate_cost(tmp_path, model_name)
+        data = await service.estimate_cost(
+            tmp_path,
+            model_name=model_name,
+            source_type=source_type,
+            density_target=density_target,
+        )
         return data
     except Exception as e:
         print(f"Estimation failed: {e}")

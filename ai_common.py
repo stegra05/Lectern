@@ -54,6 +54,14 @@ def _compose_multimodal_content(
     return parts
 
 
+def _compose_native_file_content(file_uri: str, prompt: str, mime_type: str = "application/pdf") -> List[Any]:
+    """Compose Gemini content parts from an uploaded file URI."""
+    return [
+        prompt,
+        types.Part.from_uri(file_uri=file_uri, mime_type=mime_type),
+    ]
+
+
 def _build_loggable_parts(parts: List[Any]) -> List[Dict[str, Any]]:
     snapshot: List[Dict[str, Any]] = []
     for part in parts:
@@ -68,6 +76,16 @@ def _build_loggable_parts(parts: List[Any]) -> List[Dict[str, Any]]:
                     "inline_data": {
                         "mime_type": inline.mime_type,
                         "data_len": len(inline.data) if inline.data else 0,
+                    }
+                }
+            )
+        elif hasattr(part, "file_data") and part.file_data:
+            file_data = part.file_data
+            snapshot.append(
+                {
+                    "file_data": {
+                        "mime_type": file_data.mime_type,
+                        "file_uri": file_data.file_uri,
                     }
                 }
             )

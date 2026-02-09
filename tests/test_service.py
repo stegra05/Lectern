@@ -70,6 +70,14 @@ def generation_env(mock_pdf_pages):
         mock_ai = MagicMock()
         mock_ai.log_path = "/tmp/test.log"
         mock_ai.concept_map.return_value = {"concepts": [], "relations": []}
+        mock_ai.concept_map_from_file.return_value = {
+            "concepts": [],
+            "relations": [],
+            "page_count": 3,
+            "estimated_text_chars": 1200,
+            "slide_set_name": "Test Lecture",
+        }
+        mock_ai.upload_pdf.return_value = {"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
         mock_ai.generate_more_cards.return_value = {"cards": [], "done": True}
         mock_ai.get_history.return_value = []
         mock_ai.reflect.return_value = {"cards": []}
@@ -383,43 +391,33 @@ class TestServiceAdvanced:
         assert stop_flag == True
 
     @pytest.mark.asyncio
-    @patch('lectern_service.extract_content_from_pdf')
-    @patch('ai_common._compose_multimodal_content')
-    @patch('lectern_service.LecternAIClient')
+    @patch('cost_estimator._compose_multimodal_content')
+    @patch('cost_estimator.LecternAIClient')
     async def test_estimate_cost(
         self,
         mock_ai_client_class,
         mock_compose,
-        mock_extract,
         service
     ):
         """Test the estimate_cost async method."""
-        class MockPage:
-            def __init__(self, text, img_count):
-                self.text = text
-                self.image_count = img_count
-                self.pages = 1 # Not used by service but for clarity
-        
-        # Mock extract_content_from_pdf which is awaited in estimate_cost
-        mock_extract.return_value = [MockPage("Test", 2)]
-        
         mock_ai = MagicMock()
-        mock_ai.count_tokens.return_value = 100
+        mock_ai.upload_pdf.return_value = {"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
+        mock_ai.count_tokens_for_pdf.return_value = 100
         mock_ai_client_class.return_value = mock_ai
         
-        # We need to mock asyncio.to_thread because it will still try to run the real function if not careful
         with patch('asyncio.to_thread') as mock_to_thread:
-            mock_to_thread.return_value = [MockPage("Test", 2)]
-            result = await service.estimate_cost("/fake/path.pdf", model_name="gemini-1.5-flash")
+            mock_to_thread.return_value = b"%PDF-1.4\n/Type /Page\n"
+            result = await service.estimate_cost("/fake/path.pdf", model_name="gemini-3-flash")
         
         assert "tokens" in result
         assert "cost" in result
         assert result["pages"] == 1
-        # image tokens = 2 * 258 = 516. 100 + 516 = 616
+        assert result["estimated_card_count"] == 3
+        assert result["image_token_source"] == "native_embedded"
 
     @pytest.mark.asyncio
-    @patch('ai_common._compose_multimodal_content')
-    @patch('lectern_service.LecternAIClient')
+    @patch('cost_estimator._compose_multimodal_content')
+    @patch('cost_estimator.LecternAIClient')
     async def test_verify_image_token_cost(
         self,
         mock_ai_client_class,
@@ -450,21 +448,22 @@ class TestServiceAdvanced:
         mock_check,
         service
     ):
-        """Test that service handles PDF with no extractable content."""
+        """Test that service surfaces native upload failures clearly."""
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [] # Empty content
+        mock_extract.return_value = []
+        with patch('lectern_service.LecternAIClient') as mock_ai_class:
+            mock_ai = mock_ai_class.return_value
+            mock_ai.upload_pdf.side_effect = RuntimeError("Upload failed")
+            events = list(service.run(
+                pdf_path="/fake/path.pdf",
+                deck_name="Test Deck",
+                model_name="gemini",
+                tags=[]
+            ))
         
-        events = list(service.run(
-            pdf_path="/fake/path.pdf",
-            deck_name="Test Deck",
-            model_name="gemini",
-            tags=[]
-        ))
-        
-        # Should yield an error about empty content
-        assert any("no content" in e.message.lower() for e in events if e.type == "error")
+        assert any("native pdf upload failed" in e.message.lower() for e in events if e.type == "error")
 
     def test_get_card_key_with_html_and_punctuation(self, service):
         """Test card key normalization with HTML and punctuation."""
@@ -600,20 +599,22 @@ class TestServiceAdvanced:
         mock_check,
         service
     ):
-        """Test handling of exception during PDF parsing."""
+        """Test handling of exception during native upload."""
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
         mock_extract.side_effect = Exception("Parsing error")
+        with patch('lectern_service.LecternAIClient') as mock_ai_class:
+            mock_ai = mock_ai_class.return_value
+            mock_ai.upload_pdf.side_effect = RuntimeError("Upload failed")
+            events = list(service.run(
+                pdf_path="/fake/path.pdf",
+                deck_name="T",
+                model_name="M",
+                tags=[]
+            ))
         
-        events = list(service.run(
-            pdf_path="/fake/path.pdf",
-            deck_name="T",
-            model_name="M",
-            tags=[]
-        ))
-        
-        assert any(e.type == "error" and "parsing failed" in e.message for e in events)
+        assert any(e.type == "error" and "native pdf upload failed" in e.message.lower() for e in events)
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.sample_examples_from_deck')
@@ -699,7 +700,8 @@ class TestServiceAdvanced:
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
-        mock_ai.concept_map.return_value = {}
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.return_value = {"page_count": 1, "estimated_text_chars": 3000}
         mock_ai.generate_more_cards.return_value = {"cards": []}
         
         events = list(service.run(
@@ -901,12 +903,12 @@ class TestServiceAdvanced:
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
-        mock_ai.concept_map.return_value = {}
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.return_value = {"page_count": 110, "estimated_text_chars": 44000}
         mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(50)]}
         mock_ai.get_history.return_value = []
         mock_ai.log_path = "/tmp/test.log"
         mock_ai.reflect.return_value = {"cards": []}
-        
         events = list(service.run(
             pdf_path="/fake/path.pdf",
             deck_name="T",
@@ -918,34 +920,66 @@ class TestServiceAdvanced:
         assert any("Reflection Round 1/5" in e.message for e in events if e.type == "status")
 
     @pytest.mark.asyncio
-    @patch('lectern_service.extract_content_from_pdf')
-    @patch('ai_common._compose_multimodal_content')
-    @patch('lectern_service.LecternAIClient')
+    @patch('cost_estimator._compose_multimodal_content')
+    @patch('cost_estimator.LecternAIClient')
     @patch('asyncio.to_thread')
     async def test_estimate_cost_pricing_matching(
         self,
         mock_to_thread,
         mock_ai_client_class,
         mock_compose,
-        mock_extract,
         service
     ):
         """Test pricing matching for different models in estimate_cost."""
-        class MockPage:
-            def __init__(self):
-                self.text = "T"
-                self.image_count = 1
-        
-        mock_to_thread.return_value = [MockPage()]
+        mock_to_thread.return_value = b"%PDF-1.4\n/Type /Page\n"
         mock_ai = MagicMock()
-        mock_ai.count_tokens.return_value = 100
+        mock_ai.upload_pdf.return_value = {"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
+        mock_ai.count_tokens_for_pdf.return_value = 100
         mock_ai_client_class.return_value = mock_ai
         
-        result = await service.estimate_cost("/fake/path.pdf", model_name="gemini-1.5-pro")
-        assert result["model"] == "gemini-1.5-pro"
+        result = await service.estimate_cost("/fake/path.pdf", model_name="gemini-3-pro")
+        assert result["model"] == "gemini-3-pro"
+        assert result["estimated_card_count"] == 3
         
         result_default = await service.estimate_cost("/fake/path.pdf", model_name="unknown-model")
         assert result_default["model"] == "unknown-model"
+        assert result_default["estimated_card_count"] == 3
+
+    @pytest.mark.asyncio
+    @patch('cost_estimator._compose_multimodal_content')
+    @patch('cost_estimator.LecternAIClient')
+    @patch('asyncio.to_thread')
+    async def test_estimate_cost_mode_card_count_behavior(
+        self,
+        mock_to_thread,
+        mock_ai_client_class,
+        mock_compose,
+        service,
+    ):
+        """Test that estimate_cost card count follows script/slides mode formulas."""
+        mock_to_thread.return_value = b"%PDF-1.4\n/Type /Page\n"
+        mock_ai = MagicMock()
+        mock_ai.upload_pdf.return_value = {"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
+        mock_ai.count_tokens_for_pdf.return_value = 100
+        mock_ai_client_class.return_value = mock_ai
+
+        script_result = await service.estimate_cost(
+            "/fake/path.pdf",
+            model_name="gemini-3-flash",
+            source_type="script",
+            density_target=2.0,
+        )
+        # Uses byte-size heuristic in native mode and should still satisfy script minimum.
+        assert script_result["estimated_card_count"] >= 5
+
+        slides_result = await service.estimate_cost(
+            "/fake/path.pdf",
+            model_name="gemini-3-flash",
+            source_type="slides",
+            density_target=2.0,
+        )
+        # Slides mode: max(3, int(1 * 2.0)) = 3
+        assert slides_result["estimated_card_count"] == 3
 
     @patch('lectern_service.check_connection')
     @patch('os.path.exists')
@@ -967,6 +1001,137 @@ class TestServiceAdvanced:
         ))
         
         assert any(e.type == "error" and "Critical error" in e.message for e in events)
+
+
+class TestLoopInternals:
+    def test_generation_loop_stops_on_zero_added_and_checkpoints(self, service):
+        ai = MagicMock()
+        ai.generate_more_cards.return_value = {"cards": []}
+        service._save_checkpoint = MagicMock()
+
+        events = list(
+            service._run_generation_loop(
+                ai=ai,
+                examples="",
+                all_cards=[],
+                seen_keys=set(),
+                pages=[MagicMock()],
+                total_cards_cap=10,
+                actual_batch_size=5,
+                focus_prompt=None,
+                effective_target=1.0,
+                stop_check=None,
+                concept_map={},
+                slide_set_name="Slides",
+                model_name="gemini",
+                tags=[],
+                pdf_path="/tmp/mock.pdf",
+                deck_name="Deck",
+                history_id="h1",
+                session_id="s1",
+            )
+        )
+
+        assert ai.generate_more_cards.call_count == 1
+        assert service._save_checkpoint.call_count == 1
+        assert any(e.type == "status" for e in events)
+        assert any(e.type == "progress_update" for e in events)
+
+    def test_generation_loop_honors_stop_check_before_ai_call(self, service):
+        ai = MagicMock()
+        service._save_checkpoint = MagicMock()
+
+        events = list(
+            service._run_generation_loop(
+                ai=ai,
+                examples="",
+                all_cards=[],
+                seen_keys=set(),
+                pages=[MagicMock()],
+                total_cards_cap=10,
+                actual_batch_size=5,
+                focus_prompt=None,
+                effective_target=1.0,
+                stop_check=lambda: True,
+                concept_map={},
+                slide_set_name="Slides",
+                model_name="gemini",
+                tags=[],
+                pdf_path="/tmp/mock.pdf",
+                deck_name="Deck",
+                history_id="h1",
+                session_id="s1",
+            )
+        )
+
+        ai.generate_more_cards.assert_not_called()
+        service._save_checkpoint.assert_not_called()
+        assert any(e.type == "warning" and "stopped" in e.message.lower() for e in events)
+
+    def test_reflection_loop_checkpoints_per_round_until_no_new_cards(self, service):
+        ai = MagicMock()
+        ai.reflect.side_effect = [
+            {"cards": [{"fields": {"Front": "Q1"}}]},
+            {"cards": []},
+        ]
+        service._save_checkpoint = MagicMock()
+
+        all_cards = [{"fields": {"Front": "Seed"}}]
+        events = list(
+            service._run_reflection_loop(
+                ai=ai,
+                all_cards=all_cards,
+                seen_keys={service._get_card_key(all_cards[0])},
+                total_cards_cap=10,
+                actual_batch_size=5,
+                rounds=3,
+                stop_check=None,
+                concept_map={},
+                slide_set_name="Slides",
+                model_name="gemini",
+                tags=[],
+                pdf_path="/tmp/mock.pdf",
+                deck_name="Deck",
+                history_id="h1",
+                session_id="s1",
+            )
+        )
+
+        assert ai.reflect.call_count == 2
+        assert service._save_checkpoint.call_count == 2
+        assert any(e.type == "status" and "Reflection Round 1/3" in e.message for e in events)
+
+    def test_reflection_loop_emits_cap_reached_info(self, service):
+        ai = MagicMock()
+        service._save_checkpoint = MagicMock()
+
+        total_cards_cap = 10
+        reflection_hard_cap = int(total_cards_cap * 1.2) + 5
+        all_cards = [{"fields": {"Front": f"Q{i}"}} for i in range(reflection_hard_cap)]
+
+        events = list(
+            service._run_reflection_loop(
+                ai=ai,
+                all_cards=all_cards,
+                seen_keys={service._get_card_key(c) for c in all_cards},
+                total_cards_cap=total_cards_cap,
+                actual_batch_size=5,
+                rounds=3,
+                stop_check=None,
+                concept_map={},
+                slide_set_name="Slides",
+                model_name="gemini",
+                tags=[],
+                pdf_path="/tmp/mock.pdf",
+                deck_name="Deck",
+                history_id="h1",
+                session_id="s1",
+            )
+        )
+
+        ai.reflect.assert_not_called()
+        service._save_checkpoint.assert_not_called()
+        assert any(e.type == "info" and "cap reached" in e.message.lower() for e in events)
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.extract_content_from_pdf')
@@ -993,7 +1158,8 @@ class TestServiceAdvanced:
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
         # Concept map fails
-        mock_ai.concept_map.side_effect = Exception("AI error")
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.side_effect = Exception("AI error")
         mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": "Q"}}]}
         mock_ai.get_history.return_value = []
         mock_ai.log_path = "/tmp/test.log"
@@ -1080,7 +1246,8 @@ class TestServiceAdvanced:
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
-        mock_ai.concept_map.return_value = {}
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.return_value = {"page_count": 40, "estimated_text_chars": 12000}
         mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": "Q"}}]}
         mock_ai.reflect.return_value = {"cards": []}
         mock_ai.get_history.return_value = []

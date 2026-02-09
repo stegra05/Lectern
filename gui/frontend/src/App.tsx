@@ -107,7 +107,13 @@ function App() {
       }
       setIsEstimating(true);
       try {
-        const est = await api.estimateCost(pdfFile, health?.gemini_model, controller.signal);
+        const est = await api.estimateCost(
+          pdfFile,
+          health?.gemini_model,
+          sourceType,
+          densityTarget,
+          controller.signal
+        );
         if (est) setEstimation(est);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
@@ -122,7 +128,7 @@ function App() {
     };
     fetchEstimate();
     return () => controller.abort();
-  }, [pdfFile, health?.gemini_model, setEstimation, setIsEstimating]);
+  }, [pdfFile, health?.gemini_model, sourceType, densityTarget, setEstimation, setIsEstimating]);
 
   useEffect(() => {
     recoverSessionOnRefresh();

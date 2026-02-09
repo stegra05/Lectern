@@ -120,8 +120,9 @@ class PromptBuilder:
             "- Language: Detect the primary language of the slides (e.g. 'en', 'de', 'fr'). Return the ISO 639-1 code.\n"
             "- Slide Set Name: Generate a semantic name for this slide set (e.g., 'Lecture 2 Introduction To Machine Learning'). "
             "Use Title Case, max 8 words. Include lecture/week number if present.\n"
+            "- Metadata: Estimate `page_count` (integer) and `estimated_text_chars` (integer) for pacing calculations.\n"
             "- Formatting: STRICTLY AVOID Markdown in text fields. Use HTML.\n"
-            "Return ONLY a JSON object with keys: objectives, concepts, relations, language, slide_set_name. No prose.\n"
+            "Return ONLY a JSON object with keys: objectives, concepts, relations, language, slide_set_name, page_count, estimated_text_chars. No prose.\n"
         )
 
     def generation(

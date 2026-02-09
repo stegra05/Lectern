@@ -1,9 +1,5 @@
 # Core dependencies for Lectern
 
-# PDF parsing and image extraction
-pypdf>=4.0.0
-pypdfium2>=4.0.0
-
 # Google Gemini API client
 google-genai>=1.0.0
 

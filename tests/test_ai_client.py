@@ -126,13 +126,36 @@ def test_count_tokens_failure(ai_client, mock_genai_client):
 
 def test_concept_map(ai_client, mock_genai_client):
     mock_response = MagicMock()
-    mock_response.text = '{"objectives": ["O1"], "concepts": [], "relations": [], "language": "en", "slide_set_name": "Test"}'
+    mock_response.text = '{"objectives": ["O1"], "concepts": [], "relations": [], "language": "en", "slide_set_name": "Test", "page_count": 10, "estimated_text_chars": 5000}'
     ai_client._chat.send_message.return_value = mock_response
     
     with patch("ai_client._compose_multimodal_content", return_value=[]):
         result = ai_client.concept_map([])
         assert result["slide_set_name"] == "Test"
         assert ai_client._prompt_config.language == "en"
+
+
+def test_upload_pdf_retries_then_succeeds(ai_client, mock_genai_client):
+    upload_fail = Exception("temporary upload failure")
+    upload_ok = MagicMock(uri="gs://file.pdf", mime_type="application/pdf")
+    mock_genai_client.files.upload.side_effect = [upload_fail, upload_ok]
+
+    with patch("ai_client.time.sleep") as mock_sleep:
+        result = ai_client.upload_pdf("/tmp/fake.pdf", retries=2)
+
+    assert result["uri"] == "gs://file.pdf"
+    assert mock_genai_client.files.upload.call_count == 2
+    mock_sleep.assert_called_once()
+
+
+def test_count_tokens_for_pdf_retries_then_succeeds(ai_client):
+    with patch.object(ai_client, "count_tokens", side_effect=[Exception("transient"), 123]) as mock_count:
+        with patch("ai_client.time.sleep") as mock_sleep:
+            result = ai_client.count_tokens_for_pdf(file_uri="gs://file.pdf", prompt="Analyze", retries=2)
+
+    assert result == 123
+    assert mock_count.call_count == 2
+    mock_sleep.assert_called_once()
 
 def test_reflect(ai_client, mock_genai_client):
     mock_response = MagicMock()

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Tuple, Optional
+import time
+from typing import Any, Dict, List, Optional
 
 from google import genai  # type: ignore
 from google.genai import types  # type: ignore
@@ -9,6 +10,7 @@ from google.genai import types  # type: ignore
 import config
 from ai_common import (
     _compose_multimodal_content,
+    _compose_native_file_content,
     _start_session_log,
     _append_session_log,
 )
@@ -72,9 +74,17 @@ _CONCEPT_MAP_SCHEMA = {
         "slide_set_name": {
             "type": "string",
             "description": "Semantic name for this slide set in Title Case, max 8 words (e.g., 'Lecture 2 Supervised Learning')"
-        }
+        },
+        "page_count": {
+            "type": "integer",
+            "description": "Approximate number of pages/slides in the uploaded PDF."
+        },
+        "estimated_text_chars": {
+            "type": "integer",
+            "description": "Approximate total character count across the PDF."
+        },
     },
-    "required": ["objectives", "concepts", "relations", "language", "slide_set_name"]
+    "required": ["objectives", "concepts", "relations", "language", "slide_set_name", "page_count", "estimated_text_chars"]
 }
 
 _ANKI_CARD_SCHEMA = {
@@ -292,6 +302,67 @@ class LecternAIClient:
         except Exception as e:
             logger.debug(f"[AI] History pruning failed: {e}")
 
+    def _with_retry(self, operation_name: str, fn: Any, retries: int = 3, base_delay_s: float = 1.0) -> Any:
+        """Execute a callable with exponential backoff."""
+        for attempt in range(1, retries + 1):
+            try:
+                return fn()
+            except Exception as exc:
+                if attempt == retries:
+                    raise RuntimeError(
+                        f"{operation_name} failed after {retries} attempts: {exc}"
+                    ) from exc
+                sleep_seconds = base_delay_s * (2 ** (attempt - 1))
+                logger.warning(
+                    "[AI] %s attempt %s/%s failed: %s; retrying in %.1fs",
+                    operation_name,
+                    attempt,
+                    retries,
+                    exc,
+                    sleep_seconds,
+                )
+                time.sleep(sleep_seconds)
+
+    def upload_pdf(self, pdf_path: str, retries: int = 3) -> Dict[str, str]:
+        """Upload a PDF to Gemini Files API and return metadata."""
+        def _upload() -> Any:
+            return self._client.files.upload(file=pdf_path)
+
+        uploaded = self._with_retry("PDF upload", _upload, retries=retries)
+        uri = str(getattr(uploaded, "uri", "") or "")
+        mime_type = str(getattr(uploaded, "mime_type", "") or "application/pdf")
+        if not uri:
+            raise RuntimeError("PDF upload returned no URI.")
+        return {"uri": uri, "mime_type": mime_type}
+
+    def concept_map_from_file(self, file_uri: str, mime_type: str = "application/pdf") -> Dict[str, Any]:
+        prompt = self._prompt_builder.concept_map()
+        parts = _compose_native_file_content(file_uri=file_uri, prompt=prompt, mime_type=mime_type)
+        logger.debug(f"[Chat/ConceptMap] native parts={len(parts)} prompt_len={len(prompt)}")
+
+        call_config = self._generation_config.model_copy(update={
+            "response_schema": _CONCEPT_MAP_SCHEMA,
+            "thinking_config": self._thinking_config_for("concept_map"),
+        })
+
+        response = self._chat.send_message(
+            message=parts,
+            config=call_config
+        )
+
+        text = response.text or ""
+        text_snippet = text[:200].replace('\n', ' ')
+        logger.debug(f"[Chat/ConceptMap] Response snippet: {text_snippet}...")
+        _append_session_log(self._log_path, "conceptmap", parts, text, True)
+
+        data = self._safe_parse_json(text, ConceptMapResponse)
+        if isinstance(data, dict):
+            detected_lang = data.get("language")
+            if detected_lang:
+                self.update_language(detected_lang)
+            return data
+        return {"concepts": []}
+
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         prompt = self._prompt_builder.concept_map()
         
@@ -321,6 +392,14 @@ class LecternAIClient:
                 self.update_language(detected_lang)
             return data
         return {"concepts": []}
+
+    def count_tokens_for_pdf(self, *, file_uri: str, prompt: str, mime_type: str = "application/pdf", retries: int = 3) -> int:
+        content = _compose_native_file_content(file_uri=file_uri, prompt=prompt, mime_type=mime_type)
+
+        def _count() -> int:
+            return self.count_tokens(content)
+
+        return int(self._with_retry("Token counting", _count, retries=retries))
 
     def generate_more_cards(
         self,
@@ -455,7 +534,7 @@ class LecternAIClient:
         except Exception as e:
             logger.debug(f"[AI] Failed to restore history: {e}")
 
-    def count_tokens(self, content: List[Dict[str, Any]]) -> int:
+    def count_tokens(self, content: List[Any]) -> int:
         """Count tokens for a given content list."""
         try:
             parsed_content = [types.Content(**c) if isinstance(c, dict) else c for c in content]

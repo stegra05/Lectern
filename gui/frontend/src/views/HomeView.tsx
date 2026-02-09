@@ -170,15 +170,24 @@ export function HomeView({
                                 <div className="text-xs text-text-muted leading-relaxed">
                                     {densitySummary.mode === 'script' ? (
                                         <>
-                                            <span className="font-bold text-primary">
-                                                Extraction Granularity: {densitySummary.ratio}x
-                                            </span>
-                                            <br />
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold text-primary">
+                                                    Extraction Granularity: {densitySummary.ratio}x
+                                                </span>
+                                                {estimation?.estimated_card_count !== undefined && (
+                                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
+                                                        EST. {estimation.estimated_card_count} TOTAL CARDS
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span>
                                                 Controls how "deep" the AI digs. At <b>1.0x (Balanced)</b>, it targets
                                                 core concepts. Higher values force the AI to extract more nuanced details
                                                 (paragraph-level resolution), while lower values stick to high-level
-                                                summaries.
+                                                summaries.{' '}
+                                                {estimation?.estimated_card_count !== undefined
+                                                    ? 'Final card estimate comes from backend content analysis.'
+                                                    : 'Run estimation to see a backend card count.'}
                                             </span>
                                         </>
                                     ) : (
@@ -187,17 +196,17 @@ export function HomeView({
                                                 <span className="font-bold text-primary">
                                                     Target: ~{densitySummary.targetPerSlide} cards per active slide
                                                 </span>
-                                                {densitySummary.pageCount > 0 && (
+                                                {estimation?.estimated_card_count !== undefined && (
                                                     <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
-                                                        EST. {densitySummary.totalEst} TOTAL CARDS
+                                                        EST. {estimation.estimated_card_count} TOTAL CARDS
                                                     </span>
                                                 )}
                                             </div>
                                             <span>
                                                 Heuristic goal for the AI.{' '}
-                                                {densitySummary.pageCount > 0
-                                                    ? `Based on your ${densitySummary.pageCount} pages.`
-                                                    : 'Adjusts based on content density.'}
+                                                {estimation?.estimated_card_count !== undefined
+                                                    ? 'Final card estimate comes from backend content analysis.'
+                                                    : 'Run estimation to see a backend card count.'}
                                             </span>
                                         </>
                                     )}
@@ -253,7 +262,14 @@ export function HomeView({
                                             {isEstimating ? (
                                                 <div className="h-7 w-20 bg-surface animate-pulse rounded mt-1" />
                                             ) : (
-                                                <span className="text-2xl font-bold text-primary">${estimation?.cost.toFixed(3)}</span>
+                                                <div className="flex flex-col">
+                                                    {estimation?.estimated_card_count !== undefined && (
+                                                        <span className="text-xs text-text-muted">
+                                                            ~{estimation.estimated_card_count} cards
+                                                        </span>
+                                                    )}
+                                                    <span className="text-2xl font-bold text-primary">${estimation?.cost.toFixed(3)}</span>
+                                                </div>
                                             )}
                                         </div>
                                         {!isEstimating && (
