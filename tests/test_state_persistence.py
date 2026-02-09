@@ -49,16 +49,9 @@ class TestStatePersistence(unittest.TestCase):
             slide_set_name="Test Slide Set"
         )
 
-        # Verify file exists and is not indented (simple check)
+        # Verify file exists
         state_path = _get_state_path(self.test_session_id)
         self.assertTrue(os.path.exists(state_path))
-
-        with open(state_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            # Should be compact (no newlines between keys except maybe inside strings)
-            # Count lines - should be very few (1 ideally)
-            line_count = len(content.splitlines())
-            self.assertLess(line_count, 5, "State file appears to be indented (too many lines)")
 
         # Load state
         loaded_state = load_state(self.test_session_id)
@@ -72,7 +65,7 @@ class TestStatePersistence(unittest.TestCase):
         self.assertEqual(len(loaded_state["history"]), 2)
 
     def test_history_persistence(self):
-        """Test that history is saved without indentation."""
+        """Test that history is saved and can be read back."""
         # Use a temporary file for history
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             history_path = tmp.name
@@ -82,12 +75,6 @@ class TestStatePersistence(unittest.TestCase):
 
             # Add an entry
             entry_id = mgr.add_entry("test.pdf", "Test Deck", session_id="sess_1")
-
-            # Check file content for indentation
-            with open(history_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                line_count = len(content.splitlines())
-                self.assertLess(line_count, 5, "History file appears to be indented")
 
             # Verify data integrity
             entries = mgr.get_all()

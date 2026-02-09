@@ -11,8 +11,8 @@ def mock_load_state():
         yield mock
 
 @pytest.fixture
-def mock_save_state():
-    with patch('gui.backend.main.save_state') as mock:
+def mock_update_cards():
+    with patch('gui.backend.main.StateFile.update_cards', return_value=True) as mock:
         yield mock
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def mock_delete_notes():
 
 def test_delete_session_card(
     mock_load_state,
-    mock_save_state,
+    mock_update_cards,
     mock_history_manager
 ):
     session_id = "test-session"
@@ -50,11 +50,11 @@ def test_delete_session_card(
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "remaining": 1}
 
-    # Verify save_state called with updated cards
-    mock_save_state.assert_called_once()
-    _, kwargs = mock_save_state.call_args
-    assert len(kwargs["cards"]) == 1
-    assert kwargs["cards"][0]["id"] == 2
+    # Verify update_cards called with updated cards
+    mock_update_cards.assert_called_once()
+    args, _ = mock_update_cards.call_args
+    assert len(args[0]) == 1
+    assert args[0][0]["id"] == 2
 
     # Verify history updated
     mock_history_manager.update_entry.assert_called_once_with(session_id, card_count=1)

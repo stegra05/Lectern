@@ -1,37 +1,50 @@
 import asyncio
-import json
 import logging
 import os
-import time
 import base64
 from typing import AsyncGenerator, Dict, List, Any, Optional
 
 import config
 from lectern_service import LecternGenerationService, ServiceEvent
-
-# Mocking rich-like events for the GUI
-class ProgressEvent:
-    def __init__(self, type: str, message: str = "", data: Dict[str, Any] = None):
-        self.type = type
-        self.message = message
-        self.data = data or {}
-
-    def to_json(self):
-        return json.dumps({
-            "type": self.type,
-            "message": self.message,
-            "data": self.data,
-            "timestamp": time.time()
-        })
+from utils.state import load_state, save_state, StateFile
 
 class DraftStore:
-    def __init__(self):
-        self.cards = []
+    def __init__(self, session_id: Optional[str] = None):
+        self.session_id = session_id
         self.deck_name = ""
         self.slide_set_name = ""  # NOTE(Tags): Required for hierarchical tagging
         self.model_name = ""
         self.tags = []
-        self.entry_id = None
+        self.entry_id: Optional[str] = None
+        self._state_cache: Optional[Dict[str, Any]] = None
+        self._state_file = StateFile(session_id)
+
+    def set_session_id(self, session_id: str) -> None:
+        self.session_id = session_id
+        self._state_file = StateFile(session_id)
+        self._state_cache = None
+
+    def _load_state(self, refresh: bool = False) -> Optional[Dict[str, Any]]:
+        if not self.session_id:
+            return None
+        if self._state_cache is None or refresh:
+            self._state_cache = load_state(self.session_id)
+        return self._state_cache
+
+    def _persist_state(self, cards: List[Dict[str, Any]]) -> None:
+        state = self._load_state()
+        if not state:
+            return
+        self._state_cache = {
+            **state,
+            "cards": cards,
+            "deck_name": state.get("deck_name", self.deck_name),
+            "slide_set_name": state.get("slide_set_name", self.slide_set_name),
+            "model_name": state.get("model_name", self.model_name),
+            "tags": state.get("tags", self.tags),
+            "entry_id": state.get("entry_id", self.entry_id),
+        }
+        self._state_file.update_cards(cards, **{k: v for k, v in self._state_cache.items() if k != "cards"})
 
     def set_drafts(
         self, 
@@ -42,36 +55,49 @@ class DraftStore:
         entry_id: str = None,
         slide_set_name: str = "",  # NOTE(Tags): Pass through for hierarchical tagging
     ):
-        self.cards = cards
         self.deck_name = deck_name
         self.slide_set_name = slide_set_name
         self.model_name = model_name
         self.tags = tags
         if entry_id:
             self.entry_id = entry_id
+        self._persist_state(cards)
         
     def get_drafts(self):
-        return self.cards
+        state = self._load_state()
+        if state and "cards" in state:
+            return state.get("cards", [])
+        return []
         
     def update_draft(self, index: int, card: Dict[str, Any]):
-        if 0 <= index < len(self.cards):
-            self.cards[index] = card
+        state = self._load_state()
+        if not state or "cards" not in state:
+            return False
+        cards = state.get("cards", [])
+        if 0 <= index < len(cards):
+            cards[index] = card
+            self._persist_state(cards)
             return True
         return False
         
     def delete_draft(self, index: int):
-        if 0 <= index < len(self.cards):
-            self.cards.pop(index)
+        state = self._load_state()
+        if not state or "cards" not in state:
+            return False
+        cards = state.get("cards", [])
+        if 0 <= index < len(cards):
+            cards.pop(index)
+            self._persist_state(cards)
             return True
         return False
         
     def clear(self):
-        self.cards = []
         self.deck_name = ""
         self.slide_set_name = ""
         self.model_name = ""
         self.tags = []
         self.entry_id = None
+        self._state_cache = None
 
 class GenerationService:
     def __init__(self, draft_store: DraftStore):
@@ -134,7 +160,7 @@ class GenerationService:
 
         while True:
             if self.stop_requested:
-                yield ProgressEvent("cancelled", "Generation cancelled by user", {}).to_json()
+                yield ServiceEvent("cancelled", "Generation cancelled by user", {}).to_json()
                 break
 
             # Execute the blocking next() in a thread
@@ -143,48 +169,20 @@ class GenerationService:
             if event is None:
                 break
             
-            # Map Core ServiceEvent to GUI ProgressEvent JSON
-            
-            gui_type = "status"
-            gui_msg = event.message
-            gui_data = event.data
-            
-            if event.type == "error":
-                gui_type = "error"
-            elif event.type == "warning":
-                gui_type = "warning"
-            elif event.type == "info":
-                gui_type = "info"
-            elif event.type == "status":
-                gui_type = "status"
-            elif event.type == "card":
-                gui_type = "card_generated"
-            elif event.type == "note":
-                gui_type = "note_created"
-            elif event.type == "progress_start":
-                gui_type = "progress_start"
-            elif event.type == "progress_update":
-                gui_type = "progress_update"
-            elif event.type == "done":
-                gui_type = "done"
-                # Capture cards for draft store
-                if gui_data and "cards" in gui_data:
+            if event.type == "done":
+                # Capture cards for draft store when generation completes
+                if event.data and isinstance(event.data, dict) and "cards" in event.data:
                     self.draft_store.set_drafts(
-                        gui_data["cards"], 
-                        deck_name, 
-                        model_name, 
+                        event.data["cards"],
+                        deck_name,
+                        model_name,
                         tags,
                         entry_id,
-                        slide_set_name=gui_data.get("slide_set_name", ""),  # NOTE(Tags): Pass through for hierarchical tagging
+                        slide_set_name=event.data.get("slide_set_name", ""),  # NOTE(Tags): hierarchical tagging
                     )
-            elif event.type == "step_start":
-                gui_type = "step_start"
-                gui_msg = event.message
             elif event.type == "step_end":
+                # Preserve success/failure in data but make message user-friendly
                 if event.data.get("success"):
-                    gui_type = "info"
-                    gui_msg = f"✔ {event.message}"
-                else:
-                    gui_type = "warning"
-            
-            yield ProgressEvent(gui_type, gui_msg, gui_data).to_json()
+                    event.message = f"✔ {event.message}"
+
+            yield event.to_json()

@@ -7,6 +7,52 @@ import type { Phase } from '../components/PhaseIndicator';
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
+const buildDefaultState = () => ({
+    step: 'generating' as const,
+    setStep: vi.fn(),
+    currentPhase: 'generating' as Phase,
+    logs: [],
+    handleCopyLogs: vi.fn(),
+    copied: false,
+    isCancelling: false,
+    handleCancel: vi.fn(),
+    progress: { current: 5, total: 10 },
+    cards: [],
+    handleReset: vi.fn(),
+    sessionId: null,
+    sortBy: 'creation' as const,
+    setSortBy: vi.fn(),
+    searchQuery: '',
+    setSearchQuery: vi.fn(),
+    isHistorical: false,
+    isError: false,
+
+    // Edit & Sync Props
+    editingIndex: null,
+    editForm: null,
+    isSyncing: false,
+    syncSuccess: false,
+    syncProgress: { current: 0, total: 0 },
+    syncLogs: [],
+    handleDelete: vi.fn(),
+    handleAnkiDelete: vi.fn(),
+    startEdit: vi.fn(),
+    cancelEdit: vi.fn(),
+    saveEdit: vi.fn(),
+    handleFieldChange: vi.fn(),
+    handleSync: vi.fn(),
+    confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 },
+    setConfirmModal: vi.fn(),
+});
+
+let storeState: ReturnType<typeof buildDefaultState>;
+
+const useLecternStore = vi.fn(() => storeState);
+
+vi.mock('../store', () => ({
+    useLecternStore: () => useLecternStore(),
+}));
+
 vi.mock('framer-motion', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const MockComponent = ({ children, ...props }: any) => {
@@ -28,52 +74,19 @@ vi.mock('framer-motion', () => {
 
 describe('ProgressView', () => {
     afterEach(cleanup);
-    const defaultProps = {
-        step: 'generating' as const,
-        setStep: vi.fn(),
-        currentPhase: 'generating' as Phase,
-        logs: [],
-        handleCopyLogs: vi.fn(),
-        copied: false,
-        isCancelling: false,
-        handleCancel: vi.fn(),
-        progress: { current: 5, total: 10 },
-        cards: [],
-        handleReset: vi.fn(),
-        logsEndRef: { current: document.createElement('div') },
-        sortBy: 'creation' as const,
-        setSortBy: vi.fn(),
-        searchQuery: '',
-        setSearchQuery: vi.fn(),
-        isError: false,
-
-        // Edit & Sync Props
-        editingIndex: null,
-        editForm: null,
-        isSyncing: false,
-        syncSuccess: false,
-        syncProgress: { current: 0, total: 0 },
-        syncLogs: [],
-        handleDelete: vi.fn(),
-        handleAnkiDelete: vi.fn(),
-        startEdit: vi.fn(),
-        cancelEdit: vi.fn(),
-        saveEdit: vi.fn(),
-        handleFieldChange: vi.fn(),
-        handleSync: vi.fn(),
-        confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 },
-        setConfirmModal: vi.fn(),
-    };
+    beforeEach(() => {
+        storeState = buildDefaultState();
+    });
 
     it('renders progress indicators', () => {
-        render(<ProgressView {...defaultProps} />);
+        render(<ProgressView />);
         expect(screen.getByText(/Generation Status/i)).toBeInTheDocument();
         expect(screen.getByText('50%')).toBeInTheDocument();
         expect(screen.getByText('PROCESSING')).toBeInTheDocument();
     });
 
     it('renders sorting pills', () => {
-        render(<ProgressView {...defaultProps} />);
+        render(<ProgressView />);
         expect(screen.getByText('creation')).toBeInTheDocument();
         expect(screen.getByText('topic')).toBeInTheDocument();
         expect(screen.getByText('slide')).toBeInTheDocument();
@@ -81,14 +94,14 @@ describe('ProgressView', () => {
     });
 
     it('calls setSortBy when a pill is clicked', () => {
-        render(<ProgressView {...defaultProps} />);
+        render(<ProgressView />);
         const topicPill = screen.getByText('topic');
         topicPill.click();
-        expect(defaultProps.setSortBy).toHaveBeenCalledWith('topic');
+        expect(storeState.setSortBy).toHaveBeenCalledWith('topic');
     });
 
     it('shows cancel button when generating', () => {
-        render(<ProgressView {...defaultProps} />);
+        render(<ProgressView />);
         expect(screen.getByText('CANCEL')).toBeInTheDocument();
     });
 
@@ -99,31 +112,34 @@ describe('ProgressView', () => {
         ];
 
         // Test slide sorting
-        const { rerender } = render(<ProgressView {...defaultProps} cards={cards} sortBy="slide" />);
+        storeState = { ...storeState, cards, sortBy: 'slide' };
+        const { rerender } = render(<ProgressView />);
         const slideTexts = screen.getAllByText(/SLIDE \d/i).map(el => el.textContent);
         expect(slideTexts).toEqual(['SLIDE 1', 'SLIDE 2']);
 
         // Test topic sorting
-        rerender(<ProgressView {...defaultProps} cards={cards} sortBy="topic" />);
+        storeState = { ...storeState, cards, sortBy: 'topic' };
+        rerender(<ProgressView />);
         let cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'DIV').map(el => el.textContent);
         // Topic 'A' has model 'Basic', Topic 'Z' has model 'Cloze' -> Order should be Basic, Cloze
         expect(cardTypes).toEqual(['Basic', 'Cloze']);
 
         // Test type sorting
-        rerender(<ProgressView {...defaultProps} cards={cards} sortBy="type" />);
+        storeState = { ...storeState, cards, sortBy: 'type' };
+        rerender(<ProgressView />);
         cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'DIV').map(el => el.textContent);
         // Basic < Cloze -> Order should be Basic, Cloze
         expect(cardTypes).toEqual(['Basic', 'Cloze']);
     });
 
     it('shows completion state correctly', () => {
-        const props = {
-            ...defaultProps,
+        storeState = {
+            ...storeState,
             step: 'done' as const,
             currentPhase: 'complete' as Phase,
             progress: { current: 10, total: 10 },
         };
-        render(<ProgressView {...props} />);
+        render(<ProgressView />);
         expect(screen.getByText(/Generation Complete/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
     });
@@ -136,13 +152,15 @@ describe('ProgressView', () => {
         ];
 
         // Match "Apple"
-        const { rerender } = render(<ProgressView {...defaultProps} cards={cards} searchQuery="Apple" />);
+        storeState = { ...storeState, cards, searchQuery: 'Apple' };
+        const { rerender } = render(<ProgressView />);
         expect(screen.getByText('Apple')).toBeInTheDocument();
         expect(screen.queryByText('Banana')).not.toBeInTheDocument();
         expect(screen.queryByText('Carrot')).not.toBeInTheDocument();
 
         // Match "fruit" (case insensitive)
-        rerender(<ProgressView {...defaultProps} cards={cards} searchQuery="fruit" />);
+        storeState = { ...storeState, cards, searchQuery: 'fruit' };
+        rerender(<ProgressView />);
         expect(screen.getByText('Apple')).toBeInTheDocument(); // Back is Fruit
         expect(screen.getByText('Banana')).toBeInTheDocument(); // Back is Fruit
         expect(screen.queryByText('Carrot')).not.toBeInTheDocument();
@@ -156,40 +174,41 @@ describe('ProgressView', () => {
         ];
 
         // Regex /^[CB]at/ -> Cat, Bat
-        render(<ProgressView {...defaultProps} cards={cards} searchQuery="/^[CB]at/" />);
+        storeState = { ...storeState, cards, searchQuery: '/^[CB]at/' };
+        render(<ProgressView />);
         expect(screen.getByText('Cat')).toBeInTheDocument();
         expect(screen.getByText('Bat')).toBeInTheDocument();
         expect(screen.queryByText('Rat')).not.toBeInTheDocument();
     });
     it('shows sync overlay when isSyncing is true', () => {
-        const props = {
-            ...defaultProps,
+        storeState = {
+            ...storeState,
             isSyncing: true,
             syncProgress: { current: 1, total: 2 },
             syncLogs: [{ type: 'status' as const, message: 'Uploading...', timestamp: Date.now() / 1000 }],
         };
-        render(<ProgressView {...props} />);
+        render(<ProgressView />);
         expect(screen.getByText(/Syncing to Anki/i)).toBeInTheDocument();
         expect(screen.getByText('50%')).toBeInTheDocument();
         expect(screen.getByText('Uploading...')).toBeInTheDocument();
     });
 
     it('shows success overlay when syncSuccess is true', () => {
-        const props = {
-            ...defaultProps,
+        storeState = {
+            ...storeState,
             syncSuccess: true,
         };
-        render(<ProgressView {...props} />);
+        render(<ProgressView />);
         expect(screen.getByText(/Sync Complete/i)).toBeInTheDocument();
     });
 
     it('shows error overlay when isError is true', () => {
-        const props = {
-            ...defaultProps,
+        storeState = {
+            ...storeState,
             isError: true,
             logs: [{ type: 'error' as const, message: 'Fatal error', timestamp: Date.now() / 1000 }],
         };
-        render(<ProgressView {...props} />);
+        render(<ProgressView />);
         expect(screen.getByText(/Process Interrupted/i)).toBeInTheDocument();
         expect(screen.getAllByText('Fatal error').length).toBeGreaterThan(0);
     });
@@ -199,7 +218,8 @@ describe('ProgressView', () => {
             front: 'A', back: 'B', tag: 't1', tags: ['t1', 't2'],
             slide_number: 42, model_name: 'Basic'
         }];
-        render(<ProgressView {...defaultProps} cards={cards} />);
+        storeState = { ...storeState, cards };
+        render(<ProgressView />);
         expect(screen.getByText('#t1')).toBeInTheDocument();
         expect(screen.getByText('#t2')).toBeInTheDocument();
         expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
@@ -209,34 +229,34 @@ describe('ProgressView', () => {
         const cards = [{
             front: 'A', back: 'B', model_name: 'Basic', anki_note_id: 101
         }];
-        const props = { ...defaultProps, cards, step: 'done' as const };
-        render(<ProgressView {...props} />);
+        storeState = { ...storeState, cards, step: 'done' as const };
+        render(<ProgressView />);
 
         // Edit
         const editBtn = screen.getByTitle('Edit');
         editBtn.click();
-        expect(defaultProps.startEdit).toHaveBeenCalledWith(0);
+        expect(storeState.startEdit).toHaveBeenCalledWith(0);
 
         // Archive (Lectern remove)
         const archiveBtn = screen.getByTitle('Remove');
         archiveBtn.click();
-        expect(defaultProps.setConfirmModal).toHaveBeenCalledWith(expect.objectContaining({ type: 'lectern', index: 0 }));
+        expect(storeState.setConfirmModal).toHaveBeenCalledWith(expect.objectContaining({ type: 'lectern', index: 0 }));
 
         // Delete (Anki)
         const deleteBtn = screen.getByTitle('Delete from Anki');
         deleteBtn.click();
-        expect(defaultProps.setConfirmModal).toHaveBeenCalledWith(expect.objectContaining({ type: 'anki', noteId: 101 }));
+        expect(storeState.setConfirmModal).toHaveBeenCalledWith(expect.objectContaining({ type: 'anki', noteId: 101 }));
     });
 
     it('renders Edit mode correctly', () => {
         const cards = [{ front: 'A', back: 'B', model_name: 'Basic', fields: { Front: 'A', Back: 'B' } }];
-        const props = {
-            ...defaultProps,
+        storeState = {
+            ...storeState,
             cards,
             editingIndex: 0,
             editForm: cards[0],
         };
-        render(<ProgressView {...props} />);
+        render(<ProgressView />);
         expect(screen.getByText(/Editing Card/i)).toBeInTheDocument();
         expect(screen.getByDisplayValue('A')).toBeInTheDocument();
 
@@ -244,26 +264,26 @@ describe('ProgressView', () => {
         const saveBtn = screen.getAllByRole('button').find(btn => btn.querySelector('svg.lucide-save'));
         if (saveBtn) {
             (saveBtn as HTMLElement).click();
-            expect(defaultProps.saveEdit).toHaveBeenCalledWith(0);
+            expect(storeState.saveEdit).toHaveBeenCalledWith(0);
         }
     });
 
     it('handles confirm modal callbacks', () => {
-        const props = {
-            ...defaultProps,
+        storeState = {
+            ...storeState,
             confirmModal: { isOpen: true, type: 'anki' as const, index: 0, noteId: 101 },
         };
-        render(<ProgressView {...props} />);
+        render(<ProgressView />);
 
         // We need to find the Confirm button in the modal.
         // ConfirmModal is a separate component, let's see if we need to mock it or if it's rendered.
         // It's rendered.
         const confirmBtn = screen.getByText('Permanently Delete');
         confirmBtn.click();
-        expect(defaultProps.handleAnkiDelete).toHaveBeenCalledWith(101, 0);
+        expect(storeState.handleAnkiDelete).toHaveBeenCalledWith(101, 0);
 
         const closeBtn = screen.getByText('Cancel');
         closeBtn.click();
-        expect(defaultProps.setConfirmModal).toHaveBeenCalled();
+        expect(storeState.setConfirmModal).toHaveBeenCalled();
     });
 });

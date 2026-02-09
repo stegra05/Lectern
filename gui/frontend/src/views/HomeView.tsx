@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { FilePicker } from '../components/FilePicker';
 import { DeckSelector } from '../components/DeckSelector';
+import { computeDensitySummary } from '../utils/density';
 
 import type { HealthStatus } from '../hooks/useAppState';
 import type { Estimation } from '../api';
@@ -56,49 +57,8 @@ export function HomeView({
         show: { opacity: 1, y: 0 }
     };
 
-    // Human readable feedback for density
-    const getDensityDescription = () => {
-        const pageCount = estimation?.pages || 0;
-
-        // Match backend logic from lectern_service.py:
-        // base_target defaults to 1.2 in config.py
-        const baseTarget = densityTarget;
-        let effectiveTarget = baseTarget;
-
-        // Boost for large decks
-        if (pageCount >= 100 && effectiveTarget < 2.0) effectiveTarget = 2.0;
-        else if (pageCount >= 50 && effectiveTarget < 1.8) effectiveTarget = 1.8;
-
-
-        if (sourceType === 'script') {
-            const ratio = (densityTarget / 1.5).toFixed(1);
-            return (
-                <>
-                    <span className="font-bold text-primary">Extraction Granularity: {ratio}x</span>
-                    <br />
-                    <span>Controls how "deep" the AI digs. At <b>1.0x (Balanced)</b>, it targets core concepts. Higher values force the AI to extract more nuanced details (paragraph-level resolution), while lower values stick to high-level summaries.</span>
-                </>
-            );
-        }
-
-        // Slides/Normal mode logic
-        const targetPerSlide = effectiveTarget.toFixed(1);
-        const totalEst = Math.max(3, Math.round(pageCount * effectiveTarget));
-
-        return (
-            <>
-                <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-primary">Target: ~{targetPerSlide} cards per active slide</span>
-                    {pageCount > 0 && (
-                        <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
-                            EST. {totalEst} TOTAL CARDS
-                        </span>
-                    )}
-                </div>
-                <span>Heuristic goal for the AI. {pageCount > 0 ? `Based on your ${pageCount} pages.` : 'Adjusts based on content density.'}</span>
-            </>
-        );
-    };
+    const pageCount = estimation?.pages || 0;
+    const densitySummary = computeDensitySummary(densityTarget, sourceType, pageCount);
 
     return (
         <motion.div
@@ -208,7 +168,39 @@ export function HomeView({
                             <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-start gap-3">
                                 <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                                 <div className="text-xs text-text-muted leading-relaxed">
-                                    {getDensityDescription()}
+                                    {densitySummary.mode === 'script' ? (
+                                        <>
+                                            <span className="font-bold text-primary">
+                                                Extraction Granularity: {densitySummary.ratio}x
+                                            </span>
+                                            <br />
+                                            <span>
+                                                Controls how "deep" the AI digs. At <b>1.0x (Balanced)</b>, it targets
+                                                core concepts. Higher values force the AI to extract more nuanced details
+                                                (paragraph-level resolution), while lower values stick to high-level
+                                                summaries.
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold text-primary">
+                                                    Target: ~{densitySummary.targetPerSlide} cards per active slide
+                                                </span>
+                                                {densitySummary.pageCount > 0 && (
+                                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
+                                                        EST. {densitySummary.totalEst} TOTAL CARDS
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span>
+                                                Heuristic goal for the AI.{' '}
+                                                {densitySummary.pageCount > 0
+                                                    ? `Based on your ${densitySummary.pageCount} pages.`
+                                                    : 'Adjusts based on content density.'}
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

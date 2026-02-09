@@ -364,7 +364,7 @@ class LecternAIClient:
                         
             return data_dict
         except Exception as e:
-            logger.debug(f"[AI] JSON parsing failed: {e}")
+            logger.warning("[AI] JSON parsing failed: %s", e)
             return None
 
     def get_history(self) -> List[Dict[str, Any]]:

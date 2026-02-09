@@ -56,7 +56,22 @@ export interface Card {
 }
 
 export interface ProgressEvent {
-    type: "session_start" | "status" | "info" | "warning" | "error" | "progress_start" | "progress_update" | "card_generated" | "note_created" | "done" | "cancelled" | "step_start";
+    type:
+        | "session_start"
+        | "status"
+        | "info"
+        | "warning"
+        | "error"
+        | "progress_start"
+        | "progress_update"
+        | "card"
+        | "note_created"
+        | "note_updated"
+        | "note_recreated"
+        | "done"
+        | "cancelled"
+        | "step_start"
+        | "step_end";
     message: string;
     data?: unknown;
     timestamp: number;
@@ -88,6 +103,45 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutM
     } catch (error) {
         clearTimeout(timeout);
         throw error;
+    }
+};
+
+const parseNDJSONStream = async (
+    res: Response,
+    onEvent: (event: ProgressEvent) => void
+): Promise<void> => {
+    if (!res.body) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+            if (line.trim()) {
+                try {
+                    const event = JSON.parse(line);
+                    onEvent(event);
+                } catch (e) {
+                    console.error("Failed to parse event:", line, e);
+                }
+            }
+        }
+    }
+
+    if (buffer.trim()) {
+        try {
+            const event = JSON.parse(buffer);
+            onEvent(event);
+        } catch (e) {
+            console.error("Failed to parse event:", buffer, e);
+        }
     }
 };
 
@@ -258,31 +312,7 @@ export const api = {
             body: formData,
         });
 
-        if (!res.body) return;
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-                if (line.trim()) {
-                    try {
-                        const event = JSON.parse(line);
-                        onEvent(event);
-                    } catch (e) {
-                        console.error("Failed to parse event:", line, e);
-                    }
-                }
-            }
-        }
+        await parseNDJSONStream(res, onEvent);
     },
 
     stopGeneration: async (sessionId?: string) => {
@@ -320,31 +350,7 @@ export const api = {
             method: "POST",
         });
 
-        if (!res.body) return;
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-                if (line.trim()) {
-                    try {
-                        const event = JSON.parse(line);
-                        onEvent(event);
-                    } catch (e) {
-                        console.error("Failed to parse event:", line, e);
-                    }
-                }
-            }
-        }
+        await parseNDJSONStream(res, onEvent);
     },
 
     getSession: async (sessionId: string) => {
@@ -368,31 +374,7 @@ export const api = {
             method: "POST",
         });
 
-        if (!res.body) return;
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-                if (line.trim()) {
-                    try {
-                        const event = JSON.parse(line);
-                        onEvent(event);
-                    } catch (e) {
-                        console.error("Failed to parse event:", line, e);
-                    }
-                }
-            }
-        }
+        await parseNDJSONStream(res, onEvent);
     },
 
     deleteSessionCard: async (sessionId: string, cardIndex: number) => {

@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 import shutil
 import tempfile
 import json
@@ -23,8 +23,7 @@ import threading
 import requests
 from uuid import uuid4
 
-
-
+from cachetools import TTLCache
 from pypdf import PdfReader
 import io
 from starlette.concurrency import run_in_threadpool
@@ -32,12 +31,19 @@ from starlette.concurrency import run_in_threadpool
 from anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes
 import config
 from service import GenerationService, DraftStore
-from lectern_service import LecternGenerationService
+from lectern_service import LecternGenerationService, ServiceEvent
 from utils.note_export import export_card_to_anki
 from utils.history import HistoryManager
-from utils.state import load_state, save_state
+from utils.state import load_state, save_state, StateFile, resolve_state_context
+from session import (
+    SessionManager,
+    SessionState,
+    session_manager,
+    _get_session_or_404,
+    _get_runtime_or_404,
+)
 
-app = FastAPI(title='Lectern API', version='1.1.11')
+app = FastAPI(title='Lectern API', version='1.2.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,120 +53,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SESSION_TTL_SECONDS = 60 * 60 * 4
-
-@dataclass
-class SessionState:
-    session_id: str
-    pdf_path: str
-    generation_service: GenerationService
-    draft_store: DraftStore
-    thumbnail_cache: Dict[int, bytes] = field(default_factory=dict)
-    created_at: float = field(default_factory=time.time)
-    last_accessed: float = field(default_factory=time.time)
-    status: str = "active"
-    completed_at: Optional[float] = None
-
-    def touch(self) -> None:
-        self.last_accessed = time.time()
-
-class SessionManager:
-    def __init__(self):
-        self._sessions: Dict[str, SessionState] = {}
-        self._lock = threading.Lock()
-        self._latest_session_id: Optional[str] = None
-
-    def create_session(self, pdf_path: str, generation_service: GenerationService, draft_store: DraftStore) -> SessionState:
-        session_id = uuid4().hex
-        session = SessionState(
-            session_id=session_id,
-            pdf_path=pdf_path,
-            generation_service=generation_service,
-            draft_store=draft_store,
-        )
-        with self._lock:
-            self._sessions[session_id] = session
-            self._latest_session_id = session_id
-            self._prune_locked()
-        return session
-
-    def get_session(self, session_id: str) -> Optional[SessionState]:
-        with self._lock:
-            session = self._sessions.get(session_id)
-            if session:
-                session.touch()
-            self._prune_locked()
-            return session
-
-    def get_latest_session(self) -> Optional[SessionState]:
-        if not self._latest_session_id:
-            return None
-        return self.get_session(self._latest_session_id)
-
-    def mark_status(self, session_id: str, status: str) -> None:
-        with self._lock:
-            session = self._sessions.get(session_id)
-            if not session:
-                return
-            session.status = status
-            if status in {"completed", "cancelled", "error"}:
-                session.completed_at = time.time()
-
-    def stop_session(self, session_id: str) -> None:
-        session = self.get_session(session_id)
-        if not session:
-            return
-        session.generation_service.stop()
-        self.mark_status(session_id, "cancelled")
-        self._cleanup_session_files(session)
-        with self._lock:
-            self._sessions.pop(session_id, None)
-
-    def cleanup_session(self, session_id: str) -> None:
-        session = self.get_session(session_id)
-        if not session:
-            return
-        self._cleanup_session_files(session)
-        with self._lock:
-            self._sessions.pop(session_id, None)
-
-    def prune(self) -> None:
-        with self._lock:
-            self._prune_locked()
-
-    def _cleanup_session_files(self, session: SessionState) -> None:
-        if session.pdf_path and os.path.exists(session.pdf_path):
-            try:
-                os.remove(session.pdf_path)
-            except Exception as e:
-                print(f"Warning: Failed to cleanup PDF: {e}")
-        session.thumbnail_cache = {}
-
-    def _prune_locked(self) -> None:
-        now = time.time()
-        to_remove = []
-        for session_id, session in self._sessions.items():
-            if session.status == "active":
-                continue
-            completed_at = session.completed_at or session.last_accessed
-            if now - completed_at > SESSION_TTL_SECONDS:
-                to_remove.append(session_id)
-        for session_id in to_remove:
-            session = self._sessions.get(session_id)
-            if session:
-                self._cleanup_session_files(session)
-            self._sessions.pop(session_id, None)
-
-session_manager = SessionManager()
-
-def _get_session_or_404(session_id: Optional[str], *, require_session_id: bool = False) -> SessionState:
-    if require_session_id and not session_id:
-        raise HTTPException(status_code=400, detail="session_id is required")
-    session = session_manager.get_session(session_id) if session_id else session_manager.get_latest_session()
-    if not session:
-        raise HTTPException(status_code=404, detail="No active session")
-    return session
-
 # Configuration Models
 class ConfigUpdate(BaseModel):
     gemini_api_key: Optional[str] = None
@@ -169,24 +61,85 @@ class ConfigUpdate(BaseModel):
     cloze_model: Optional[str] = None
     gemini_model: Optional[str] = None
 
-# Update Cache
-_update_cache = {
-    "data": None,
-    "expires_at": 0
-}
-_update_lock = threading.Lock()
+
+def event_json(event_type: str, message: str = "", data: Optional[Dict] = None) -> str:
+    return ServiceEvent(event_type, message, data or {}).to_json()
+
+
+async def stream_sync_cards(
+    cards: List[dict],
+    deck_name: str,
+    slide_set_name: str,
+    additional_tags: List[str],
+    *,
+    allow_updates: bool,
+    on_complete: Optional[Callable[[List[dict], int, int, int], None]] = None,
+):
+    created = 0
+    updated = 0
+    failed = 0
+
+    yield event_json("progress_start", "Syncing to Anki...", {"total": len(cards)})
+
+    for idx, card in enumerate(cards, start=1):
+        note_id = card.get("anki_note_id")
+        try:
+            if allow_updates and note_id:
+                info = notes_info([note_id])
+                if info and info[0].get("noteId"):
+                    update_note_fields(note_id, card["fields"])
+                    updated += 1
+                    yield event_json("note_updated", f"Updated note {note_id}", {"id": note_id})
+                else:
+                    result = export_card_to_anki(
+                        card=card,
+                        card_index=idx,
+                        deck_name=deck_name,
+                        slide_set_name=slide_set_name,
+                        fallback_model=config.DEFAULT_BASIC_MODEL,
+                        additional_tags=additional_tags,
+                    )
+                    if result.success:
+                        card["anki_note_id"] = result.note_id
+                        created += 1
+                        yield event_json("note_recreated", f"Re-created note {result.note_id}", {"id": result.note_id})
+                    else:
+                        failed += 1
+                        yield event_json("warning", f"Failed to create note: {result.error}")
+            else:
+                result = export_card_to_anki(
+                    card=card,
+                    card_index=idx,
+                    deck_name=deck_name,
+                    slide_set_name=slide_set_name,
+                    fallback_model=config.DEFAULT_BASIC_MODEL,
+                    additional_tags=additional_tags,
+                )
+                if result.success:
+                    card["anki_note_id"] = result.note_id
+                    created += 1
+                    yield event_json("note_created", f"Created note {result.note_id}", {"id": result.note_id})
+                else:
+                    failed += 1
+                    yield event_json("warning", f"Failed to create note: {result.error}")
+        except Exception as e:
+            failed += 1
+            yield event_json("warning", f"Sync failed for card {idx}: {str(e)}")
+
+        yield event_json("progress_update", "", {"current": created + updated + failed})
+
+    if on_complete:
+        on_complete(cards, created, updated, failed)
+
+    yield event_json(
+        "done",
+        "Sync Complete",
+        {"created": created, "updated": updated, "failed": failed},
+    )
 
 @app.get("/version")
 async def get_version():
     """Returns local version and checks GitHub for updates."""
-    global _update_cache
-    
-    now = time.time()
-    
-    with _update_lock:
-        if _update_cache["data"] and now < _update_cache["expires_at"]:
-            return _update_cache["data"]
-
     # Check GitHub
     try:
         # We use a timeout to avoid hanging the UI
@@ -206,18 +159,13 @@ async def get_version():
             
             update_available = late_parts > curr_parts
             
-            result = {
+            result: Dict[str, str | bool] = {
                 "current": __version__,
                 "latest": latest_version,
                 "update_available": update_available,
                 "release_url": release_url
             }
-            
-            with _update_lock:
-                _update_cache = {
-                    "data": result,
-                    "expires_at": now + 3600  # 1 hour cache
-                }
+
             return result
     except Exception as e:
         print(f"Update check failed: {e}")
@@ -468,14 +416,13 @@ async def generate_cards(
     )
 
     async def event_generator():
-        yield json.dumps({
-            "type": "session_start",
-            "message": "Session started",
-            "data": {"session_id": session.session_id},
-            "timestamp": time.time(),
-        }) + "\n"
+        yield event_json(
+            "session_start",
+            "Session started",
+            {"session_id": session.session_id},
+        ) + "\n"
         try:
-            async for event_json in service.run_generation(
+            async for event_str in service.run_generation(
                 pdf_path=tmp_path,
                 deck_name=deck_name,
                 model_name=model_name,
@@ -490,9 +437,9 @@ async def generate_cards(
                 enable_reflection=enable_reflection,
                 session_id=session.session_id,
             ):
-                yield f"{event_json}\n"
+                yield f"{event_str}\n"
                 try:
-                    parsed = json.loads(event_json)
+                    parsed = json.loads(event_str)
                     event_type = parsed.get("type")
                     if event_type in {"done"}:
                         session_manager.mark_status(session.session_id, "completed")
@@ -513,7 +460,8 @@ async def generate_cards(
 @app.post("/stop")
 async def stop_generation(session_id: Optional[str] = None):
     session = _get_session_or_404(session_id)
-    session.draft_store.clear()
+    runtime = _get_runtime_or_404(session.session_id, session=session)
+    runtime.draft_store.clear()
     session_manager.stop_session(session.session_id)
     return {"status": "stopped", "session_id": session.session_id}
 
@@ -521,7 +469,8 @@ async def stop_generation(session_id: Optional[str] = None):
 @app.get("/drafts")
 async def get_drafts(session_id: Optional[str] = None):
     session = _get_session_or_404(session_id, require_session_id=True)
-    return {"cards": session.draft_store.get_drafts(), "session_id": session.session_id}
+    runtime = _get_runtime_or_404(session.session_id, session=session)
+    return {"cards": runtime.draft_store.get_drafts(), "session_id": session.session_id}
 
 class DraftUpdate(BaseModel):
     card: dict
@@ -529,7 +478,8 @@ class DraftUpdate(BaseModel):
 @app.put("/drafts/{index}")
 async def update_draft(index: int, update: DraftUpdate, session_id: Optional[str] = None):
     session = _get_session_or_404(session_id, require_session_id=True)
-    success = session.draft_store.update_draft(index, update.card)
+    runtime = _get_runtime_or_404(session.session_id, session=session)
+    success = runtime.draft_store.update_draft(index, update.card)
     if not success:
         raise HTTPException(status_code=404, detail="Draft not found")
     return {"status": "updated", "session_id": session.session_id}
@@ -537,7 +487,8 @@ async def update_draft(index: int, update: DraftUpdate, session_id: Optional[str
 @app.delete("/drafts/{index}")
 async def delete_draft(index: int, session_id: Optional[str] = None):
     session = _get_session_or_404(session_id, require_session_id=True)
-    success = session.draft_store.delete_draft(index)
+    runtime = _get_runtime_or_404(session.session_id, session=session)
+    success = runtime.draft_store.delete_draft(index)
     if not success:
         raise HTTPException(status_code=404, detail="Draft not found")
     return {"status": "deleted", "session_id": session.session_id}
@@ -545,67 +496,67 @@ async def delete_draft(index: int, session_id: Optional[str] = None):
 @app.post("/drafts/sync")
 async def sync_drafts(session_id: Optional[str] = None):
     session = _get_session_or_404(session_id, require_session_id=True)
-    store = session.draft_store
-    cards = store.get_drafts()
+    runtime = _get_runtime_or_404(session.session_id, session=session)
+    store = runtime.draft_store
+    state = load_state(session.session_id)
+    state_ctx = resolve_state_context(
+        session.session_id,
+        state=state,
+        fallback={
+            "cards": store.get_drafts(),
+            "deck_name": store.deck_name,
+            "model_name": store.model_name,
+            "tags": store.tags,
+            "slide_set_name": store.slide_set_name,
+            "entry_id": store.entry_id,
+        },
+    )
+    cards = state_ctx["cards"]
     
     if not cards:
         return {"created": 0, "failed": 0, "session_id": session.session_id}
         
-    deck_name = store.deck_name
-    model_name = store.model_name
-    tags = store.tags
-    
-    created = 0
-    failed = 0
-    
-    # We can stream progress here too if we want, but for now let's just do it and return result
-    # Or better, use StreamingResponse to show progress bar in UI
-    
-    async def sync_generator():
-        nonlocal created, failed
-        
-        yield json.dumps({"type": "progress_start", "message": "Syncing to Anki...", "data": {"total": len(cards)}}) + "\n"
-        
-        for idx, card in enumerate(cards, start=1):
-            result = export_card_to_anki(
-                card=card,
-                card_index=idx,
-                deck_name=deck_name,
-                slide_set_name=store.slide_set_name,
-                fallback_model=config.DEFAULT_BASIC_MODEL,
-                additional_tags=tags,
-            )
-            
-            if result.success:
-                created += 1
-                card["anki_note_id"] = result.note_id
-                # Update the card in the store so it has the note_id for session state persistence
-                store.update_draft(idx - 1, card)
-                yield json.dumps({"type": "note_created", "message": f"Created note {result.note_id}", "data": {"id": result.note_id}}) + "\n"
-            else:
-                failed += 1
-                yield json.dumps({"type": "warning", "message": f"Failed to create note: {result.error}"}) + "\n"
-            
-            yield json.dumps({"type": "progress_update", "message": "", "data": {"current": created + failed}}) + "\n"
+    deck_name = state_ctx["deck_name"] or store.deck_name
+    model_name = state_ctx["model_name"] or store.model_name
+    tags = state_ctx["tags"] or store.tags
+    slide_set_name = state_ctx["slide_set_name"] or store.slide_set_name
+    entry_id = state_ctx["entry_id"] or store.entry_id
 
-        yield json.dumps({"type": "done", "message": "Sync Complete", "data": {"created": created, "failed": failed}}) + "\n"
-        
-        # Update history entry
-        if store.entry_id:
+    def on_complete(updated_cards: List[dict], created: int, updated: int, failed: int) -> None:
+        StateFile(session.session_id).update_cards(
+            updated_cards,
+            deck_name=deck_name,
+            slide_set_name=slide_set_name,
+            model_name=model_name,
+            tags=tags,
+            entry_id=entry_id,
+        )
+
+        if entry_id:
             history_mgr = HistoryManager()
             history_mgr.update_entry(
-                entry_id=store.entry_id,
-                status="completed",
-                card_count=created
+                entry_id=entry_id,
+                status="completed" if failed == 0 else "error",
+                card_count=created + updated,
             )
 
-        # Clear drafts after successful sync
         store.clear()
         if failed == 0:
             session_manager.mark_status(session.session_id, "completed")
             session_manager.cleanup_session(session.session_id)
         else:
             session_manager.mark_status(session.session_id, "error")
+
+    async def sync_generator():
+        async for payload in stream_sync_cards(
+            cards=cards,
+            deck_name=deck_name,
+            slide_set_name=slide_set_name or "Draft Sync",
+            additional_tags=tags or [],
+            allow_updates=False,
+            on_complete=on_complete,
+        ):
+            yield f"{payload}\n"
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 
@@ -628,16 +579,7 @@ async def update_session_cards(session_id: str, update: SessionCardsUpdate):
         raise HTTPException(status_code=404, detail="Session not found")
     
     # Save the updated cards back to the session state
-    save_state(
-        pdf_path=state["pdf_path"],
-        deck_name=state["deck_name"],
-        cards=update.cards,
-        concept_map=state["concept_map"],
-        history=state["history"],
-        log_path=state.get("log_path", ""),
-        session_id=session_id,
-        slide_set_name=state.get("slide_set_name"),
-    )
+    StateFile(session_id).update_cards(update.cards)
     return {"status": "ok", "session_id": session_id}
 
 @app.delete("/session/{session_id}/cards/{card_index}")
@@ -653,16 +595,7 @@ async def delete_session_card(session_id: str, card_index: int):
     cards.pop(card_index)
     
     # Save the updated cards back to the session state
-    save_state(
-        pdf_path=state["pdf_path"],
-        deck_name=state["deck_name"],
-        cards=cards,
-        concept_map=state["concept_map"],
-        history=state["history"],
-        log_path=state.get("log_path", ""),
-        session_id=session_id,
-        slide_set_name=state.get("slide_set_name"),
-    )
+    StateFile(session_id).update_cards(cards)
 
     # Try to update history card count if this session corresponds to a history entry
     try:
@@ -704,96 +637,30 @@ async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
 @app.post("/session/{session_id}/sync")
 async def sync_session_to_anki(session_id: str):
     state = load_state(session_id)
-    if not state:
+    state_ctx = resolve_state_context(session_id, state=state)
+    if not state_ctx["state"]:
         raise HTTPException(status_code=404, detail="Session not found")
-    
-    cards = state["cards"]
+
+    cards = state_ctx["cards"]
     if not cards:
         return {"created": 0, "updated": 0, "failed": 0, "session_id": session_id}
         
-    deck_name = state["deck_name"]
-    # We need slide_set_name. If missing in state, try to infer from tags or use "Default"
-    # For re-sync, we usually have tags in cards.
-    # Note: history entry in state might have more details.
-    
-    created = 0
-    updated = 0
-    failed = 0
-    
+    deck_name = state_ctx["deck_name"]
+    slide_set_name = state_ctx["slide_set_name"] or "Session Sync"
+
+    def on_complete(updated_cards: List[dict], created: int, updated: int, failed: int) -> None:
+        StateFile(session_id).update_cards(updated_cards)
+
     async def sync_generator():
-        nonlocal created, updated, failed
-        
-        yield json.dumps({"type": "progress_start", "message": "Syncing to Anki...", "data": {"total": len(cards)}}) + "\n"
-        
-        # We need a slide_set_name for tag building if the card doesn't have it.
-        # Let's try to get it from historical tags if possible.
-        # We need a slide_set_name for tag building if the card doesn't have it.
-        # Let's try to get it from historical tags if possible.
-        slide_set_name = state.get("slide_set_name") or "Session Sync"
-
-        for idx, card in enumerate(cards, start=1):
-            note_id = card.get("anki_note_id")
-            
-            try:
-                if note_id:
-                    # Validate existence
-                    info = notes_info([note_id])
-                    if info and info[0].get("noteId"):
-                        # Update
-                        update_note_fields(note_id, card["fields"])
-                        updated += 1
-                        yield json.dumps({"type": "note_updated", "message": f"Updated note {note_id}", "data": {"id": note_id}}) + "\n"
-                    else:
-                        # Re-create (deleted externally)
-                        result = export_card_to_anki(
-                            card=card,
-                            card_index=idx,
-                            deck_name=deck_name,
-                            slide_set_name=slide_set_name,
-                            fallback_model=config.DEFAULT_BASIC_MODEL,
-                            additional_tags=[], # Assume tags already in card
-                        )
-                        if result.success:
-                            card["anki_note_id"] = result.note_id
-                            created += 1
-                            yield json.dumps({"type": "note_recreated", "message": f"Re-created note {result.note_id}", "data": {"id": result.note_id}}) + "\n"
-                        else:
-                            raise RuntimeError(result.error)
-                else:
-                    # New sync
-                    result = export_card_to_anki(
-                        card=card,
-                        card_index=idx,
-                        deck_name=deck_name,
-                        slide_set_name=slide_set_name,
-                        fallback_model=config.DEFAULT_BASIC_MODEL,
-                        additional_tags=[],
-                    )
-                    if result.success:
-                        card["anki_note_id"] = result.note_id
-                        created += 1
-                        yield json.dumps({"type": "note_created", "message": f"Created note {result.note_id}", "data": {"id": result.note_id}}) + "\n"
-                    else:
-                        raise RuntimeError(result.error)
-            except Exception as e:
-                failed += 1
-                yield json.dumps({"type": "warning", "message": f"Sync failed for card {idx}: {str(e)}"}) + "\n"
-            
-            yield json.dumps({"type": "progress_update", "message": "", "data": {"current": created + updated + failed}}) + "\n"
-
-        # Save updated state with new anki_note_ids
-        save_state(
-            pdf_path=state["pdf_path"],
-            deck_name=state["deck_name"],
+        async for payload in stream_sync_cards(
             cards=cards,
-            concept_map=state["concept_map"],
-            history=state["history"],
-            log_path=state.get("log_path", ""),
-            session_id=session_id,
-            slide_set_name=state.get("slide_set_name"),
-        )
-
-        yield json.dumps({"type": "done", "message": "Sync Complete", "data": {"created": created, "updated": updated, "failed": failed}}) + "\n"
+            deck_name=deck_name,
+            slide_set_name=slide_set_name,
+            additional_tags=[],
+            allow_updates=True,
+            on_complete=on_complete,
+        ):
+            yield f"{payload}\n"
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 

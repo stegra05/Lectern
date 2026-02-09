@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 
-export type Step = 'dashboard' | 'config' | 'generating' | 'done';
-
 export interface HealthStatus {
   anki_connected: boolean;
   gemini_configured: boolean;
@@ -11,7 +9,6 @@ export interface HealthStatus {
 }
 
 export function useAppState() {
-  const [step, setStep] = useState<Step>('dashboard');
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isCheckingHealth, setIsCheckingHealth] = useState(true);
@@ -100,8 +97,6 @@ export function useAppState() {
   }, [health?.anki_connected, health?.gemini_configured]);
 
   return {
-    step,
-    setStep,
     health,
     setHealth,
     showOnboarding,

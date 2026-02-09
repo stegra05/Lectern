@@ -5,12 +5,6 @@ import unittest.mock as mock
 
 client = TestClient(app)
 
-@pytest.fixture(autouse=True)
-def reset_cache():
-    from gui.backend.main import _update_cache
-    _update_cache["data"] = None
-    _update_cache["expires_at"] = 0
-
 def test_version_endpoint_success():
     # Mock requests.get to simulate GitHub API
     with mock.patch("requests.get") as mock_get:

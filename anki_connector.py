@@ -8,11 +8,14 @@ add notes and store media files. It never manipulates the collection directly.
 from __future__ import annotations
 
 import base64
+import logging
 from typing import Any, Dict, List, Optional
 
 import requests
 
 from config import ANKI_CONNECT_URL
+
+logger = logging.getLogger(__name__)
 
 
 def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15) -> Any:
@@ -140,7 +143,8 @@ def get_all_tags() -> List[str]:
         if isinstance(result, list):
             return [str(t) for t in result]
         return []
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to fetch Anki tags: %s", exc)
         return []
 
 
@@ -151,7 +155,8 @@ def get_deck_names() -> List[str]:
         if isinstance(result, list):
             return [str(name) for name in result]
         return []
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to fetch Anki deck names: %s", exc)
         return []
 
 
@@ -165,8 +170,8 @@ def create_deck(deck_name: str) -> bool:
         result = _invoke("createDeck", {"deck": deck_name})
         # createDeck returns the ID of the deck (int) on success
         return isinstance(result, int)
-    except Exception as e:
-        print(f"Failed to create deck '{deck_name}': {e}")
+    except Exception as exc:
+        logger.warning("Failed to create deck '%s': %s", deck_name, exc)
         return False
 
 
@@ -203,6 +208,7 @@ def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
                 lines.append(f"  Field {f_idx}: {value}")
             lines.append("")
         return "\n".join(lines).strip()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to sample examples from deck '%s': %s", deck_name, exc)
         return ""
 

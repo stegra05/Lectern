@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, type HistoryEntry } from '../api';
-import type { Step } from './useAppState';
+import type { Step } from '../store';
 
 export function useHistory(step: Step) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);

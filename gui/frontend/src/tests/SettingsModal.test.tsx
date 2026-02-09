@@ -29,8 +29,8 @@ describe('SettingsModal', () => {
         vi.clearAllMocks();
         vi.mocked(api.getConfig).mockResolvedValue(defaultConfig);
         vi.mocked(api.getVersion).mockResolvedValue({
-            current: '1.1.11',
-            latest: '1.1.11',
+            current: '1.2.0',
+            latest: '1.2.0',
             update_available: false,
             release_url: '',
         });
@@ -171,7 +171,7 @@ describe('SettingsModal', () => {
 
     it('checks for updates', async () => {
         vi.mocked(api.getVersion).mockResolvedValue({
-            current: '1.1.11',
+            current: '1.2.0',
             latest: '1.1.12',
             update_available: true,
             release_url: 'https://github.com/test/release',
