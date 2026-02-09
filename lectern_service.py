@@ -351,7 +351,7 @@ class LecternGenerationService:
             yield ServiceEvent("step_end", "Generation Phase Complete", {"success": True, "count": len(all_cards)})
 
             # 7. Reflection Phase
-            if cfg.enable_reflection and len(all_cards) > 0 and len(all_cards) < total_cards_cap:
+            if cfg.enable_reflection and len(all_cards) > 0:
                 yield ServiceEvent("step_start", "Reflection and improvement", {"phase": "reflecting"})
                 
                 # Dynamic rounds logic
@@ -396,6 +396,7 @@ class LecternGenerationService:
 
             # 8. Creation in Anki
             if cfg.skip_export:
+                 # Draft Mode: Save state but don't export
                  yield ServiceEvent("info", "Skipping Anki export (Draft Mode)")
                  history_mgr.update_entry(history_id, card_count=len(all_cards))
                  yield ServiceEvent("done", "Draft Generation Complete", {
@@ -686,9 +687,13 @@ class LecternGenerationService:
         history_id: Optional[str],
         session_id: Optional[str],
     ) -> Generator[ServiceEvent, None, None]:
+        # NOTE(Reflection): Allow exceeding the initial cap by 20% to accommodate refinement
+        reflection_hard_cap = int(total_cards_cap * 1.2) + 5
+        
         for round_idx in range(rounds):
-            remaining = max(0, total_cards_cap - len(all_cards))
+            remaining = max(0, reflection_hard_cap - len(all_cards))
             if remaining == 0:
+                yield ServiceEvent("info", "Reflection cap reached (120% of target).")
                 break
 
             yield ServiceEvent("status", f"Reflection Round {round_idx + 1}/{rounds}")
@@ -698,7 +703,9 @@ class LecternGenerationService:
                 return
 
             try:
-                out = ai.reflect(limit=min(actual_batch_size, remaining))
+                # Limit reflection batch to avoid overwhelming, but at least do 5 if space allows
+                batch_limit = min(actual_batch_size, remaining)
+                out = ai.reflect(limit=batch_limit)
                 new_cards = out.get("cards", [])
 
                 added_count = yield from self._yield_new_cards(
@@ -723,8 +730,9 @@ class LecternGenerationService:
                     history_id=history_id,
                 )
 
-                should_stop = len(all_cards) >= total_cards_cap or added_count == 0
+                should_stop = len(all_cards) >= reflection_hard_cap or added_count == 0
                 if should_stop:
                     break
             except Exception as e:
                 yield ServiceEvent("warning", f"Reflection error: {e}")
+

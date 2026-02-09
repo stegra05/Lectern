@@ -10,28 +10,26 @@ describe('computeDensitySummary', () => {
         }
     });
 
-    it('currently clamps density for large PDFs (reproduction)', () => {
-        // This test documents the Bug behavior.
+    it('does NOT clamp density for large PDFs (fix confirmed)', () => {
         // User sets 1.0, page count 72 (>= 50).
-        // Current logic clamps to 1.8.
+        // Previous logic clamped to 1.8. Now should be 1.0.
         const result = computeDensitySummary(1.0, 'slides', 72);
 
-        // Asserting the BUG exists:
         if (result.mode === 'slides') {
-            expect(result.targetPerSlide).toBe('1.8');
-            expect(result.totalEst).toBe(Math.round(72 * 1.8));
+            expect(result.targetPerSlide).toBe('1.0');
+            expect(result.totalEst).toBe(Math.round(72 * 1.0));
         } else {
             throw new Error('Expected slides mode');
         }
     });
 
-    it('currently clamps density even harder for very large PDFs', () => {
+    it('does NOT clamp density for very large PDFs', () => {
         // User sets 1.0, page count 120 (>= 100).
-        // Current logic clamps to 2.0.
+        // Previous logic clamped to 2.0. Now should be 1.0.
         const result = computeDensitySummary(1.0, 'slides', 120);
 
         if (result.mode === 'slides') {
-            expect(result.targetPerSlide).toBe('2.0');
+            expect(result.targetPerSlide).toBe('1.0');
         }
     });
 });
