@@ -20,11 +20,8 @@ export function computeDensitySummary(
     const baseTarget = densityTarget;
     let effectiveTarget = baseTarget;
 
-    if (pageCount >= 100 && effectiveTarget < 2.0) {
-        effectiveTarget = 2.0;
-    } else if (pageCount >= 50 && effectiveTarget < 1.8) {
-        effectiveTarget = 1.8;
-    }
+    // Clamping logic removed to give user full control
+
 
     if (sourceType === 'script') {
         return {
