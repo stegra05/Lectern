@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
+import hashlib
 import shutil
 import tempfile
 import json
@@ -24,6 +25,8 @@ import requests
 from uuid import uuid4
 
 from cachetools import TTLCache
+
+from cost_estimator import recompute_estimate
 from pypdf import PdfReader
 import io
 from starlette.concurrency import run_in_threadpool
@@ -46,6 +49,10 @@ from session import (
 
 app = FastAPI(title='Lectern API', version='1.2.0')
 session_manager.sweep_orphan_temp_files()
+
+# NOTE(Estimate): Session-level cache for estimate base data. Key = (content_sha256, model).
+# Reuse token count across density/source changes for same PDF. TTL ~1h covers typical session.
+_estimate_base_cache: TTLCache = TTLCache(maxsize=50, ttl=3600)
 
 app.add_middleware(
     CORSMiddleware,
@@ -329,15 +336,26 @@ async def delete_history_entry(entry_id: str):
         raise HTTPException(status_code=500, detail="Failed to delete history entry")
     return {"status": "deleted"}
 
+def _estimate_cache_key(tmp_path: str, model: str) -> tuple:
+    """Content-based key for same PDF+model. Reuses cache when same file uploaded again."""
+    h = hashlib.sha256()
+    with open(tmp_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return (h.hexdigest(), model or "")
+
+
 @app.post("/estimate")
 async def estimate_cost(
     pdf_file: UploadFile = File(...),
-    model_name: Optional[str] = None,
-    source_type: str = "auto",
-    density_target: Optional[float] = None,
+    model_name: Optional[str] = Form(None),
+    source_type: str = Form("auto"),
+    density_target: Optional[float] = Form(None),
 ):
     from starlette.concurrency import run_in_threadpool
-    
+
+    model = model_name or config.DEFAULT_GEMINI_MODEL
+
     # Save uploaded file to temp in threadpool to avoid blocking
     def save_to_temp():
         with tempfile.NamedTemporaryFile(
@@ -347,17 +365,35 @@ async def estimate_cost(
         ) as tmp:
             shutil.copyfileobj(pdf_file.file, tmp)
             return tmp.name
-            
+
     tmp_path = await run_in_threadpool(save_to_temp)
 
     try:
+        cache_key = _estimate_cache_key(tmp_path, model)
+        base_data = _estimate_base_cache.get(cache_key)
+
+        if base_data is not None:
+            # Fast path: reuse token count, recompute card count + cost
+            data = recompute_estimate(
+                token_count=base_data["token_count"],
+                page_count=base_data["page_count"],
+                text_chars=base_data["text_chars"],
+                image_count=base_data["image_count"],
+                model=base_data["model"],
+                source_type=source_type,
+                density_target=density_target,
+            )
+            return data
+
+        # Full path: upload + token count, then cache base data
         service = LecternGenerationService()
-        data = await service.estimate_cost(
+        data, base_data = await service.estimate_cost_with_base(
             tmp_path,
             model_name=model_name,
             source_type=source_type,
             density_target=density_target,
         )
+        _estimate_base_cache[cache_key] = base_data
         return data
     except Exception as e:
         print(f"Estimation failed: {e}")

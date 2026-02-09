@@ -210,3 +210,5 @@ def run_reflection_loop(
                 break
         except Exception as e:
             yield event_factory("warning", f"Reflection error: {e}")
+
+    yield event_factory("progress_update", "", {"current": rounds})

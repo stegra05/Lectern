@@ -270,15 +270,14 @@ export const api = {
     ) => {
         const formData = new FormData();
         formData.append("pdf_file", file);
+        if (modelName) formData.append("model_name", modelName);
+        formData.append("source_type", sourceType);
+        if (densityTarget !== undefined) {
+            formData.append("density_target", String(densityTarget));
+        }
 
         try {
-            const params = new URLSearchParams();
-            if (modelName) params.set("model_name", modelName);
-            params.set("source_type", sourceType);
-            if (densityTarget !== undefined) {
-                params.set("density_target", String(densityTarget));
-            }
-            const url = params.toString() ? `${API_URL}/estimate?${params.toString()}` : `${API_URL}/estimate`;
+            const url = `${API_URL}/estimate`;
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout

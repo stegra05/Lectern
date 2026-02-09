@@ -3,6 +3,9 @@
 # Google Gemini API client
 google-genai>=1.0.0
 
+# PDF metadata extraction (text, images, page count)
+pypdf>=4.0.0
+
 # HTTP requests for AnkiConnect communication
 requests>=2.31.0,<2.33
 

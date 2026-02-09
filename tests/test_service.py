@@ -27,6 +27,16 @@ def service():
     return LecternGenerationService()
 
 
+@pytest.fixture(autouse=True)
+def mock_history_manager():
+    """Prevent test pollution: mock HistoryManager for all service tests."""
+    with patch('lectern_service.HistoryManager') as mock_cls:
+        mock_instance = MagicMock()
+        mock_instance.add_entry.return_value = "test-entry-id"
+        mock_cls.return_value = mock_instance
+        yield mock_cls
+
+
 @pytest.fixture
 def mock_pdf_pages():
     """Mock PageContent objects."""
@@ -391,28 +401,30 @@ class TestServiceAdvanced:
         assert stop_flag == True
 
     @pytest.mark.asyncio
+    @patch('cost_estimator._extract_pdf_metadata')
     @patch('cost_estimator._compose_multimodal_content')
     @patch('cost_estimator.LecternAIClient')
     async def test_estimate_cost(
         self,
         mock_ai_client_class,
         mock_compose,
+        mock_extract_metadata,
         service
     ):
         """Test the estimate_cost async method."""
+        mock_extract_metadata.return_value = {"page_count": 1, "text_chars": 600, "image_count": 0}
         mock_ai = MagicMock()
         mock_ai.upload_pdf.return_value = {"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
         mock_ai.count_tokens_for_pdf.return_value = 100
         mock_ai_client_class.return_value = mock_ai
-        
-        with patch('asyncio.to_thread') as mock_to_thread:
-            mock_to_thread.return_value = b"%PDF-1.4\n/Type /Page\n"
-            result = await service.estimate_cost("/fake/path.pdf", model_name="gemini-3-flash")
-        
+
+        result = await service.estimate_cost("/fake/path.pdf", model_name="gemini-3-flash")
+
         assert "tokens" in result
         assert "cost" in result
         assert result["pages"] == 1
         assert result["estimated_card_count"] == 3
+        assert result["image_count"] == 0
         assert result["image_token_source"] == "native_embedded"
 
     @pytest.mark.asyncio
@@ -743,7 +755,7 @@ class TestServiceAdvanced:
                 self.images = []
                 self.image_count = 0
         
-        mock_extract.return_value = [MockPage() for _ in range(30)] # 30 pages -> dynamic_rounds = 3
+        mock_extract.return_value = [MockPage() for _ in range(30)]  # 5 cards -> dynamic_rounds = 1
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -917,47 +929,48 @@ class TestServiceAdvanced:
             skip_export=True
         ))
         
-        assert any("Reflection Round 1/5" in e.message for e in events if e.type == "status")
+        # 50 cards -> dynamic_rounds = 2
+        assert any("Reflection Round 1/2" in e.message for e in events if e.type == "status")
 
     @pytest.mark.asyncio
+    @patch('cost_estimator._extract_pdf_metadata')
     @patch('cost_estimator._compose_multimodal_content')
     @patch('cost_estimator.LecternAIClient')
-    @patch('asyncio.to_thread')
     async def test_estimate_cost_pricing_matching(
         self,
-        mock_to_thread,
         mock_ai_client_class,
         mock_compose,
+        mock_extract_metadata,
         service
     ):
         """Test pricing matching for different models in estimate_cost."""
-        mock_to_thread.return_value = b"%PDF-1.4\n/Type /Page\n"
+        mock_extract_metadata.return_value = {"page_count": 1, "text_chars": 600, "image_count": 0}
         mock_ai = MagicMock()
         mock_ai.upload_pdf.return_value = {"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
         mock_ai.count_tokens_for_pdf.return_value = 100
         mock_ai_client_class.return_value = mock_ai
-        
+
         result = await service.estimate_cost("/fake/path.pdf", model_name="gemini-3-pro")
         assert result["model"] == "gemini-3-pro"
         assert result["estimated_card_count"] == 3
-        
+
         result_default = await service.estimate_cost("/fake/path.pdf", model_name="unknown-model")
         assert result_default["model"] == "unknown-model"
         assert result_default["estimated_card_count"] == 3
 
     @pytest.mark.asyncio
+    @patch('cost_estimator._extract_pdf_metadata')
     @patch('cost_estimator._compose_multimodal_content')
     @patch('cost_estimator.LecternAIClient')
-    @patch('asyncio.to_thread')
     async def test_estimate_cost_mode_card_count_behavior(
         self,
-        mock_to_thread,
         mock_ai_client_class,
         mock_compose,
+        mock_extract_metadata,
         service,
     ):
         """Test that estimate_cost card count follows script/slides mode formulas."""
-        mock_to_thread.return_value = b"%PDF-1.4\n/Type /Page\n"
+        mock_extract_metadata.return_value = {"page_count": 1, "text_chars": 600, "image_count": 0}
         mock_ai = MagicMock()
         mock_ai.upload_pdf.return_value = {"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
         mock_ai.count_tokens_for_pdf.return_value = 100
@@ -969,7 +982,7 @@ class TestServiceAdvanced:
             source_type="script",
             density_target=2.0,
         )
-        # Uses byte-size heuristic in native mode and should still satisfy script minimum.
+        # Script: text 600/1000*2 + 0 images = 1.2+0 -> max(5, 1) = 5
         assert script_result["estimated_card_count"] >= 5
 
         slides_result = await service.estimate_cost(
@@ -980,6 +993,23 @@ class TestServiceAdvanced:
         )
         # Slides mode: max(3, int(1 * 2.0)) = 3
         assert slides_result["estimated_card_count"] == 3
+
+    def test_recompute_estimate_matches_full_output(self):
+        """Test that recompute_estimate produces same output as full path for same base data."""
+        from cost_estimator import recompute_estimate
+
+        base = {"token_count": 1000, "page_count": 10, "text_chars": 8000, "image_count": 2, "model": "gemini-3-flash"}
+        result = recompute_estimate(
+            **base,
+            source_type="script",
+            density_target=2.0,
+        )
+        assert "estimated_card_count" in result
+        assert "cost" in result
+        assert "tokens" in result
+        assert result["pages"] == 10
+        assert result["model"] == "gemini-3-flash"
+        assert result["image_count"] == 2
 
     @patch('lectern_service.check_connection')
     @patch('os.path.exists')
@@ -1192,13 +1222,18 @@ class TestLoopInternals:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0)]
+        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0) for _ in range(40)]
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
-        mock_ai.concept_map.return_value = {}
-        # Initial card
-        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": "Original"}}]}
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.return_value = {"page_count": 40, "estimated_text_chars": 12000}
+        # 50 cards -> dynamic_rounds = 2, so second round can trigger the error
+        mock_ai.generate_more_cards.return_value = {
+            "cards": [{"fields": {"Front": f"Q{i}"}} for i in range(50)]
+        }
+        mock_ai.get_history.return_value = []
+        mock_ai.log_path = "/tmp/test.log"
         
         # 1. Test DEDUPLICATION in first round (returns same card)
         # 2. Test ERROR in second round (triggered by side_effect if we didn't break)
@@ -1238,7 +1273,7 @@ class TestLoopInternals:
         mock_check,
         service
     ):
-        """Test dynamic rounds for a document with 40 pages (should hit 3 rounds)."""
+        """Test dynamic rounds based on card count (1 card -> 1 round)."""
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
@@ -1254,12 +1289,12 @@ class TestLoopInternals:
         mock_ai.log_path = "/tmp/test.log"
         
         events = list(service.run(
-            pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], 
+            pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[],
             skip_export=True
         ))
         
-        # 40 pages -> dynamic_rounds = 3
-        assert any("Reflection Round 1/3" in e.message for e in events if e.type == "status")
+        # 1 card after generation -> dynamic_rounds = 1
+        assert any("Reflection Round 1/1" in e.message for e in events if e.type == "status")
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.extract_content_from_pdf')

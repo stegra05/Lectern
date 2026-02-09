@@ -8,6 +8,7 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { ToastContainer } from './components/Toast';
 
 import { useAppState } from './hooks/useAppState';
+import { useDebounce } from './hooks/useDebounce';
 import { useLecternStore } from './store';
 import { useHistory } from './hooks/useHistory';
 
@@ -97,6 +98,9 @@ function App() {
     deleteHistoryEntry
   } = useHistory(step);
 
+  // NOTE(Estimation): Debounce densityTarget to avoid many requests during slider drag.
+  const debouncedDensityTarget = useDebounce(densityTarget, 400);
+
   useEffect(() => {
     const controller = new AbortController();
     const fetchEstimate = async () => {
@@ -111,14 +115,14 @@ function App() {
           pdfFile,
           health?.gemini_model,
           sourceType,
-          densityTarget,
+          debouncedDensityTarget,
           controller.signal
         );
-        if (est) setEstimation(est);
+        if (!controller.signal.aborted && est) setEstimation(est);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           console.error(e);
-          setEstimation(null);
+          if (!controller.signal.aborted) setEstimation(null);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -128,7 +132,7 @@ function App() {
     };
     fetchEstimate();
     return () => controller.abort();
-  }, [pdfFile, health?.gemini_model, sourceType, densityTarget, setEstimation, setIsEstimating]);
+  }, [pdfFile, health?.gemini_model, sourceType, debouncedDensityTarget, setEstimation, setIsEstimating]);
 
   useEffect(() => {
     recoverSessionOnRefresh();

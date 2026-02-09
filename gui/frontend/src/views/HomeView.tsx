@@ -181,13 +181,10 @@ export function HomeView({
                                                 )}
                                             </div>
                                             <span>
-                                                Controls how "deep" the AI digs. At <b>1.0x (Balanced)</b>, it targets
-                                                core concepts. Higher values force the AI to extract more nuanced details
-                                                (paragraph-level resolution), while lower values stick to high-level
-                                                summaries.{' '}
+                                                Controls extraction depth. <b>1.0x</b> = core concepts, higher = more granular.{' '}
                                                 {estimation?.estimated_card_count !== undefined
-                                                    ? 'Final card estimate comes from backend content analysis.'
-                                                    : 'Run estimation to see a backend card count.'}
+                                                    ? `Based on ${estimation.pages} pages.`
+                                                    : 'Upload a file to see an estimate.'}
                                             </span>
                                         </>
                                     ) : (

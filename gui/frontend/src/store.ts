@@ -193,7 +193,12 @@ const processGenerationEvent = (
     if (typeof window !== 'undefined') {
       localStorage.removeItem(ACTIVE_SESSION_KEY);
     }
-    set(() => ({ step: 'done', currentPhase: 'complete', isCancelling: false }));
+    set((prev) => ({
+      step: 'done',
+      currentPhase: 'complete',
+      isCancelling: false,
+      progress: { ...prev.progress, current: prev.progress.total },
+    }));
     return;
   }
 
