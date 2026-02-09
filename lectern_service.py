@@ -11,7 +11,12 @@ import config
 from anki_connector import check_connection, sample_examples_from_deck
 from ai_client import LecternAIClient
 from checkpoint import save_checkpoint
-from cost_estimator import estimate_cost as estimate_cost_impl, verify_image_token_cost as verify_image_token_cost_impl
+from cost_estimator import (
+    estimate_cost as estimate_cost_impl,
+    estimate_cost_with_base as estimate_cost_with_base_impl,
+    recompute_estimate as recompute_estimate_impl,
+    verify_image_token_cost as verify_image_token_cost_impl,
+)
 from generation_loop import (
     collect_card_fronts as collect_card_fronts_impl,
     get_card_key as get_card_key_impl,
@@ -335,17 +340,12 @@ class LecternGenerationService:
             if len(all_cards) > 0:
                 yield ServiceEvent("step_start", "Reflection and improvement", {"phase": "reflecting"})
                 
-                # Dynamic rounds logic
-                page_count = len(pages)
-                if page_count < 20:
-                    dynamic_rounds = 2
-                elif page_count < 50:
-                    dynamic_rounds = 3
-                elif page_count < 100:
-                    dynamic_rounds = 4
+                # Dynamic rounds logic (card count reflects complexity)
+                card_count = len(all_cards)
+                if card_count < 50:
+                    dynamic_rounds = 1
                 else:
-                    dynamic_rounds = 5
-                
+                    dynamic_rounds = 2
                 rounds = dynamic_rounds
                 
                 yield ServiceEvent("progress_start", "Reflection", {"total": rounds, "label": "Reflection Rounds"})
@@ -452,6 +452,21 @@ class LecternGenerationService:
         Skips OCR and image extraction for speed during estimation.
         """
         return await estimate_cost_impl(
+            pdf_path=pdf_path,
+            model_name=model_name,
+            source_type=source_type,
+            density_target=density_target,
+        )
+
+    async def estimate_cost_with_base(
+        self,
+        pdf_path: str,
+        model_name: str | None = None,
+        source_type: str = "auto",
+        density_target: float | None = None,
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """Full estimate + base data for cache. Returns (response, base_data)."""
+        return await estimate_cost_with_base_impl(
             pdf_path=pdf_path,
             model_name=model_name,
             source_type=source_type,

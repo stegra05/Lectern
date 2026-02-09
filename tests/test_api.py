@@ -63,33 +63,87 @@ def test_version_endpoint():
         assert data["update_available"] is True
         assert data["latest"] == "9.9.9"
 
+def _clear_estimate_cache():
+    from gui.backend.main import _estimate_base_cache
+    _estimate_base_cache.clear()
+
+
 @patch('gui.backend.main.LecternGenerationService')
 def test_estimate_endpoint(mock_service_class):
-    """Test the /estimate endpoint."""
+    """Test the /estimate endpoint (cache miss path)."""
+    _clear_estimate_cache()
     mock_service = MagicMock()
-    mock_service.estimate_cost = AsyncMock(return_value={"cost": 0.05, "tokens": 1000, "estimated_card_count": 12})
+    result = {"cost": 0.05, "tokens": 1000, "estimated_card_count": 12, "pages": 10}
+    base_data = {"token_count": 1000, "page_count": 10, "text_chars": 5000, "image_count": 2, "model": "gemini-3-flash"}
+    mock_service.estimate_cost_with_base = AsyncMock(return_value=(result, base_data))
     mock_service_class.return_value = mock_service
-    
-    # Mock files
+
     files = {"pdf_file": ("test.pdf", b"pdf content", "application/pdf")}
-    
+    data = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "2.0"}
+
     with patch('gui.backend.main.shutil.copyfileobj'):
-        with patch('gui.backend.main.tempfile.NamedTemporaryFile') as mock_temp:
-            mock_temp.return_value.__enter__.return_value.name = "/tmp/test.pdf"
-            response = client.post(
-                "/estimate?model_name=gemini-3-flash&source_type=script&density_target=2.0",
-                files=files,
-            )
-            
-            assert response.status_code == 200
-            assert response.json()["cost"] == 0.05
-            assert response.json()["estimated_card_count"] == 12
-            mock_service.estimate_cost.assert_awaited_once_with(
-                "/tmp/test.pdf",
-                model_name="gemini-3-flash",
-                source_type="script",
-                density_target=2.0,
-            )
+        response = client.post("/estimate", files=files, data=data)
+
+        assert response.status_code == 200
+        assert response.json()["cost"] == 0.05
+        assert response.json()["estimated_card_count"] == 12
+        mock_service.estimate_cost_with_base.assert_awaited_once()
+        call_kwargs = mock_service.estimate_cost_with_base.call_args[1]
+        assert call_kwargs["model_name"] == "gemini-3-flash"
+        assert call_kwargs["source_type"] == "script"
+        assert call_kwargs["density_target"] == 2.0
+
+
+@patch('gui.backend.main.LecternGenerationService')
+def test_estimate_cache_hit(mock_service_class):
+    """Test /estimate uses fast path when same file+model requested again."""
+    _clear_estimate_cache()
+    mock_service = MagicMock()
+    result1 = {"cost": 0.05, "tokens": 1000, "estimated_card_count": 12, "pages": 10}
+    base_data = {"token_count": 1000, "page_count": 10, "text_chars": 5000, "image_count": 2, "model": "gemini-3-flash"}
+    mock_service.estimate_cost_with_base = AsyncMock(return_value=(result1, base_data))
+    mock_service_class.return_value = mock_service
+
+    files = {"pdf_file": ("test.pdf", b"same content both times", "application/pdf")}
+    data = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "2.0"}
+
+    with patch('gui.backend.main.shutil.copyfileobj'):
+        # First request: cache miss, full estimate
+        r1 = client.post("/estimate", files=files, data=data)
+        assert r1.status_code == 200
+        assert mock_service.estimate_cost_with_base.call_count == 1
+        # Second request: same file content -> cache hit, fast recompute (different density)
+        data2 = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "3.0"}
+        r2 = client.post("/estimate", files=files, data=data2)
+        assert r2.status_code == 200
+        # Service not called again; recompute_estimate used
+        assert mock_service.estimate_cost_with_base.call_count == 1
+        # Card count should reflect new density (3.0 vs 2.0)
+        assert r2.json()["estimated_card_count"] != r1.json()["estimated_card_count"]
+
+
+@patch('gui.backend.main.LecternGenerationService')
+def test_estimate_cache_miss_different_model(mock_service_class):
+    """Test cache miss when model changes."""
+    _clear_estimate_cache()
+    mock_service = MagicMock()
+    result_a = {"cost": 0.05, "tokens": 1000, "estimated_card_count": 12, "pages": 10}
+    base_a = {"token_count": 1000, "page_count": 10, "text_chars": 5000, "image_count": 2, "model": "gemini-3-flash"}
+    result_b = {"cost": 0.08, "tokens": 1000, "estimated_card_count": 12, "pages": 10}
+    base_b = {"token_count": 1000, "page_count": 10, "text_chars": 5000, "image_count": 2, "model": "gemini-3-pro"}
+    mock_service.estimate_cost_with_base = AsyncMock(side_effect=[(result_a, base_a), (result_b, base_b)])
+    mock_service_class.return_value = mock_service
+
+    files = {"pdf_file": ("test.pdf", b"same content", "application/pdf")}
+
+    with patch('gui.backend.main.shutil.copyfileobj'):
+        r1 = client.post("/estimate", files=files, data={"model_name": "gemini-3-flash", "source_type": "auto", "density_target": "1.5"})
+        assert r1.status_code == 200
+        r2 = client.post("/estimate", files=files, data={"model_name": "gemini-3-pro", "source_type": "auto", "density_target": "1.5"})
+        assert r2.status_code == 200
+        # Different model -> cache miss -> service called twice
+        assert mock_service.estimate_cost_with_base.call_count == 2
+
 
 def test_decks_endpoint():
     """Test the /decks endpoint."""
@@ -426,10 +480,10 @@ def test_history_deletion_failure():
 def test_estimate_cost_failure():
     """Test /estimate returns 500 when cost estimation crashes."""
     with patch('gui.backend.main.LecternGenerationService') as mock_service:
-        # Instead of patch, we can make it raise
-        mock_service.return_value.estimate_cost.side_effect = Exception("Parsing crash")
+        mock_service.return_value.estimate_cost_with_base = AsyncMock(side_effect=Exception("Parsing crash"))
         files = {"pdf_file": ("t.pdf", b"p", "application/pdf")}
-        response = client.post("/estimate", files=files)
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            response = client.post("/estimate", files=files)
         assert response.status_code == 500
 
 def test_generate_event_generator_errors():

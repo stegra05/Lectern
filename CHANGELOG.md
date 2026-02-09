@@ -16,5 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Overhaul content processing with a new generation loop and cost estimation
+- Remove obsolete audit documentation and finalize pending refactors
 - Check if ci / cd pipeline works since last release
 - Run all tests (and fix bugs)
