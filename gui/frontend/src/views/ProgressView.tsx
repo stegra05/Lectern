@@ -510,6 +510,12 @@ export function ProgressView() {
                                                 <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider border border-border px-2 py-1 rounded bg-background">
                                                     {card.model_name || 'Basic'}
                                                 </div>
+                                                {card.slide_number != null && (
+                                                    <span className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border border-border text-[10px] font-medium text-text-muted">
+                                                        <Layers className="w-3 h-3" />
+                                                        SLIDE {card.slide_number}
+                                                    </span>
+                                                )}
 
                                                 {/* Actions (Only when done) */}
                                                 {step === 'done' && (
@@ -566,15 +572,6 @@ export function ProgressView() {
                                                     </span>
                                                 ))}
                                             </div>
-
-                                            {card.slide_number && (
-                                                <div className="absolute bottom-4 right-4">
-                                                    <span className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border border-border text-[10px] font-medium text-text-muted">
-                                                        <Layers className="w-3 h-3" />
-                                                        SLIDE {card.slide_number}
-                                                    </span>
-                                                </div>
-                                            )}
                                         </>
                                     )}
                                 </motion.div>

@@ -49,25 +49,5 @@ class TestPlatformCompat(unittest.TestCase):
         except ImportError as e:
             self.fail(f"GUI dependencies missing: {e}")
 
-    @patch('pdf_parser.pytesseract.image_to_string')
-    def test_tesseract_graceful_failure(self, mock_ocr):
-        """Verify TesseractNotFoundError is handled gracefully."""
-        from pdf_parser import extract_content_from_pdf
-        import pytesseract
-        
-        # Mocking pytesseract.TesseractNotFoundError
-        # In actual code it's raised when binary is missing
-        mock_ocr.side_effect = pytesseract.TesseractNotFoundError()
-        
-        # This shouldn't crash the whole parsing process
-        # We'll use a nonexistent PDF to trigger the reader error early or mock the reader
-        with patch('pdf_parser.PdfReader') as mock_reader:
-            mock_reader.return_value.pages = [MagicMock()]
-            # Should not raise exception
-            try:
-                extract_content_from_pdf("dummy.pdf", skip_images=True)
-            except Exception as e:
-                self.fail(f"extract_content_from_pdf raised exception on missing Tesseract: {e}")
-
 if __name__ == "__main__":
     unittest.main()

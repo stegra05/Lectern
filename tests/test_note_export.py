@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-import base64
-from utils.note_export import resolve_model_name, build_card_tags, export_card_to_anki, ExportResult
+from utils.note_export import resolve_model_name, build_card_tags, export_card_to_anki
 import config
 
 # Test resolve_model_name
@@ -79,22 +78,16 @@ def test_build_card_tags_dedup(mock_build_hierarchical):
 
 # Test export_card_to_anki
 @patch("utils.note_export.add_note")
-@patch("utils.note_export.store_media_file")
 @patch("utils.note_export.build_hierarchical_tags")
-def test_export_card_to_anki_success(mock_build_tags, mock_store_media, mock_add_note):
-    """Test successful card export including media."""
+def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
+    """Test successful card export."""
     mock_add_note.return_value = 12345
-    mock_store_media.return_value = "lectern-1.png"
     mock_build_tags.return_value = ["Tag1"]
-    
-    # Create valid base64 data for the test
-    fake_b64 = base64.b64encode(b"fake_image_data").decode("utf-8")
-    
+
     card = {
         "model_name": "Basic",
         "fields": {"Front": "Q", "Back": "A"},
         "tags": ["tag1"],
-        "media": [{"filename": "img.png", "data": fake_b64}]
     }
     
     result = export_card_to_anki(
@@ -108,13 +101,9 @@ def test_export_card_to_anki_success(mock_build_tags, mock_store_media, mock_add
     
     assert result.success is True
     assert result.note_id == 12345
-    assert result.media_uploaded == ["img.png"]
     assert result.error is None
     
     # Verify interactions
-    # Check if store_media_file was called with filename "img.png"
-    mock_store_media.assert_called_with("img.png", b"fake_image_data")
-    
     # Check if add_note was called with correct model resolution
     mock_add_note.assert_called_once()
     args, _ = mock_add_note.call_args
@@ -122,10 +111,9 @@ def test_export_card_to_anki_success(mock_build_tags, mock_store_media, mock_add
     assert args[1] == config.DEFAULT_BASIC_MODEL
 
 @patch("utils.note_export.add_note")
-@patch("utils.note_export.store_media_file")
 @patch("utils.note_export.build_hierarchical_tags")
-def test_export_card_to_anki_no_media(mock_build_tags, mock_store_media, mock_add_note):
-    """Test export without media."""
+def test_export_card_to_anki_no_media(mock_build_tags, mock_add_note):
+    """Test export without optional fields."""
     mock_add_note.return_value = 12345
     
     card = {
@@ -143,8 +131,6 @@ def test_export_card_to_anki_no_media(mock_build_tags, mock_store_media, mock_ad
     )
     
     assert result.success is True
-    mock_store_media.assert_not_called()
-    assert result.media_uploaded == []
 
 @patch("utils.note_export.add_note")
 def test_export_card_to_anki_failure(mock_add_note):

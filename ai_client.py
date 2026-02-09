@@ -23,6 +23,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Manual schema definitions for Gemini API
+_THINKING_PROFILES = {
+    "concept_map": "high",
+    "generation": "low",
+    "reflection": "high",
+}
 
 _CONCEPT_SCHEMA = {
     "type": "object",
@@ -84,18 +89,6 @@ _ANKI_CARD_SCHEMA = {
         "slide_topic": {"type": "string", "nullable": True},
         "slide_number": {"type": "integer", "nullable": True},
         "rationale": {"type": "string", "nullable": True},
-        "media": {
-            "type": "array", 
-            "items": {
-                "type": "object",
-                "properties": {
-                    "filename": {"type": "string"},
-                    "data": {"type": "string"},
-                },
-                "required": ["filename", "data"]
-            }, 
-            "nullable": True
-        }
     },
     "required": ["model_name", "fields"]
 }
@@ -143,7 +136,13 @@ class LecternAIClient:
         self._model_name = model_name or config.DEFAULT_GEMINI_MODEL
         self._client = genai.Client(api_key=self._api_key)
 
-        self._slide_set_context = slide_set_context or {}
+        self._slide_set_context: Dict[str, Any] = {}
+        self._tag_context_cache = ""
+        if slide_set_context:
+            self.set_slide_set_context(
+                deck_name=str(slide_set_context.get("deck_name") or ""),
+                slide_set_name=str(slide_set_context.get("slide_set_name") or ""),
+            )
 
         # Initialize prompt builder
         self._prompt_config = PromptConfig(language=language, focus_prompt=focus_prompt)
@@ -157,10 +156,9 @@ class LecternAIClient:
 
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=config.GEMINI_GENERATION_TEMPERATURE,
+            temperature=config.GEMINI_TEMPERATURE,
             max_output_tokens=8192,
             system_instruction=system_inst,
-            thinking_config=types.ThinkingConfig(thinking_level=config.GEMINI_THINKING_LEVEL.lower()),
             safety_settings=[
                 types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
                 types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
@@ -195,30 +193,42 @@ class LecternAIClient:
             # For now, we rely on the per-turn prompts in PromptBuilder to enforce it 
             # if session was already started.
 
+    def _thinking_config_for(self, phase: str) -> types.ThinkingConfig:
+        level = _THINKING_PROFILES.get(phase, "low")
+        return types.ThinkingConfig(thinking_level=level)
+
+    def _compose_tag_context(self, deck_name: str, slide_set_name: str) -> str:
+        parts = []
+        if deck_name:
+            parts.append(deck_name.replace(" ", "-").lower()[:20])
+        if slide_set_name:
+            parts.append(slide_set_name.replace(" ", "-").lower()[:20])
+        parts.append("[topic]")
+        example_tag = "::".join(parts)
+        return (
+            f"- Metadata (Hierarchical Tagging):\\n"
+            f"    - Structure: Deck::SlideSet::Topic::Tag\\n"
+            f"    - Example: {example_tag}\\n"
+        )
+
+    def set_slide_set_context(self, deck_name: str, slide_set_name: str) -> None:
+        self._slide_set_context = {
+            "deck_name": deck_name,
+            "slide_set_name": slide_set_name,
+        }
+        self._tag_context_cache = self._compose_tag_context(deck_name, slide_set_name)
+
     def _build_tag_context(self) -> str:
         """Build the tag instruction context for AI prompts."""
+        if self._tag_context_cache:
+            return self._tag_context_cache
+
         ctx = self._slide_set_context
         if not ctx:
             return "- Metadata: tags (1-2 concise tags).\\n"
-        
-        deck_name = ctx.get('deck_name', '')
-        slide_set_name = ctx.get('slide_set_name', '')
-        pattern_info = ctx.get('pattern_info', {})
-        
-        # Build example tag string
-        parts = []
-        if deck_name: parts.append(deck_name.replace(' ', '-').lower()[:20])
-        if slide_set_name: parts.append(slide_set_name.replace(' ', '-').lower()[:20])
-        parts.append("[topic]")
-        example_tag = "::".join(parts)
-        
-        existing_sets = pattern_info.get('slide_sets', [])
-        existing_context = f" (Existing sets: {', '.join(existing_sets[:3])})" if existing_sets else ""
-        
-        return (
-            f"- Metadata (Hierarchical Tagging):\\n"
-            f"    - Structure: Deck::SlideSet::Topic::Tag {existing_context}\\n"
-            f"    - Example: {example_tag}\\n"
+        return self._compose_tag_context(
+            str(ctx.get("deck_name") or ""),
+            str(ctx.get("slide_set_name") or ""),
         )
 
     def _prune_history(self) -> None:
@@ -242,6 +252,7 @@ class LecternAIClient:
         
         call_config = self._generation_config.model_copy(update={
             "response_schema": _CONCEPT_MAP_SCHEMA,
+            "thinking_config": self._thinking_config_for("concept_map"),
         })
 
         response = self._chat.send_message(
@@ -294,12 +305,10 @@ class LecternAIClient:
             slide_coverage=slide_text
         )
         
-        # Temperature adjustment
-        gen_temperature = config.GEMINI_NORMAL_MODE_TEMPERATURE
-        
         call_config = self._generation_config.model_copy(update={
             "response_schema": _CARD_GENERATION_SCHEMA,
-            "temperature": gen_temperature,
+            "temperature": config.GEMINI_TEMPERATURE,
+            "thinking_config": self._thinking_config_for("generation"),
         })
 
         response = self._chat.send_message(
@@ -326,6 +335,7 @@ class LecternAIClient:
         
         call_config = self._generation_config.model_copy(update={
             "response_schema": _REFLECTION_SCHEMA,
+            "thinking_config": self._thinking_config_for("reflection"),
         })
 
         response = self._chat.send_message(

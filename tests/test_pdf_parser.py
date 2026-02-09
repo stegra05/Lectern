@@ -3,10 +3,6 @@ import io
 import pytest
 from unittest.mock import MagicMock, patch
 from PIL import Image
-try:
-    import pytesseract
-except ImportError:
-    pytesseract = MagicMock()
 
 from pdf_parser import (
     extract_content_from_pdf,
@@ -169,80 +165,6 @@ def test_extract_content_stop_check(mock_reader_cls, mock_pdfium_doc, mock_getsi
     
     assert len(pages) == 0
     stop_check.assert_called_once()
-
-@patch('os.path.getsize')
-@patch('pdf_parser.pytesseract.image_to_string')
-@patch('pdf_parser.pdfium.PdfDocument')
-@patch('pdf_parser.PdfReader')
-def test_ocr_fallback(mock_reader_cls, mock_pdfium_doc, mock_ocr, mock_getsize):
-    """Test that OCR is triggered when text is minimal."""
-    mock_getsize.return_value = 1024
-    
-    mock_reader = MagicMock()
-    mock_reader_cls.return_value = mock_reader
-    
-    mock_page = MagicMock()
-    # Minimal text (< 50 chars) to trigger OCR check
-    mock_page.extract_text.return_value = "   " 
-    # No embedded images
-    mock_page.images = []
-    
-    mock_reader.pages = [mock_page]
-    
-    # Mock pypdfium2: PdfDocument returns a mock that can be indexed
-    mock_doc = MagicMock()
-    mock_page_pdfium = MagicMock()
-    mock_bitmap = MagicMock()
-    mock_pil_img = MagicMock()
-    mock_bitmap.to_pil.return_value = mock_pil_img
-    mock_page_pdfium.render.return_value = mock_bitmap
-    mock_doc.__getitem__ = MagicMock(return_value=mock_page_pdfium)
-    mock_pdfium_doc.return_value = mock_doc
-    
-    # Mock OCR result
-    mock_ocr.return_value = "Extracted Text via OCR"
-    
-    pages = extract_content_from_pdf("dummy.pdf", skip_ocr=False)
-    
-    assert len(pages) == 1
-    assert "[OCR Extracted Content]" in pages[0].text
-    assert "Extracted Text via OCR" in pages[0].text
-    
-    mock_pdfium_doc.assert_called_once()
-    mock_ocr.assert_called_once()
-
-@patch('os.path.getsize')
-@patch('pdf_parser.pytesseract.image_to_string')
-@patch('pdf_parser.pdfium.PdfDocument')
-@patch('pdf_parser.PdfReader')
-def test_ocr_tesseract_not_found_handled(mock_reader_cls, mock_pdfium_doc, mock_ocr, mock_getsize):
-    """Test that TesseractNotFoundError is handled gracefully."""
-    mock_getsize.return_value = 1024
-    
-    mock_reader = MagicMock()
-    mock_reader_cls.return_value = mock_reader
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = " " # trigger OCR
-    mock_page.images = []
-    mock_reader.pages = [mock_page]
-    
-    # Mock pypdfium2
-    mock_doc = MagicMock()
-    mock_page_pdfium = MagicMock()
-    mock_bitmap = MagicMock()
-    mock_bitmap.to_pil.return_value = MagicMock()
-    mock_page_pdfium.render.return_value = mock_bitmap
-    mock_doc.__getitem__ = MagicMock(return_value=mock_page_pdfium)
-    mock_pdfium_doc.return_value = mock_doc
-    
-    # Simulate Tesseract missing
-    mock_ocr.side_effect = pytesseract.TesseractNotFoundError()
-    
-    pages = extract_content_from_pdf("dummy.pdf", skip_ocr=False)
-    
-    assert len(pages) == 1
-    # Should contain original empty text, no crash, no OCR tag
-    assert "[OCR Extracted Content]" not in pages[0].text
 
 @patch('os.path.getsize')
 @patch('pdf_parser._compress_image')

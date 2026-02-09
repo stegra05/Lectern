@@ -120,9 +120,6 @@ class GenerationService:
         focus_prompt: str = "",
         source_type: str = "auto",  # "auto", "slides", "script"
         density_target: float = config.CARDS_PER_SLIDE_TARGET,  # Detail level
-        max_notes_per_batch: int = config.MAX_NOTES_PER_BATCH,
-        reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
-        enable_reflection: bool = config.ENABLE_REFLECTION,
         session_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         
@@ -142,9 +139,6 @@ class GenerationService:
             focus_prompt=focus_prompt,
             source_type=source_type,
             density_target=density_target,
-            max_notes_per_batch=max_notes_per_batch,
-            reflection_rounds=reflection_rounds,
-            enable_reflection=enable_reflection,
             session_id=session_id,
         )
 
