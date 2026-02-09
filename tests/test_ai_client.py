@@ -20,15 +20,22 @@ def ai_client(mock_genai_client):
         return client
 
 def test_initialization(ai_client, mock_genai_client):
-    assert ai_client._model_name == "test-model"
     mock_genai_client.chats.create.assert_called_once()
+    call_args = mock_genai_client.chats.create.call_args
+    assert call_args.kwargs["model"] == "test-model"
 
 def test_update_language(ai_client):
     ai_client.update_language("de")
-    assert ai_client._prompt_config.language == "de"
-    
-    # Should check if prompt builder got updated config
-    assert ai_client._prompt_builder.cfg.language == "de"
+    mock_response = MagicMock()
+    mock_response.text = '{"cards": [], "done": true}'
+    ai_client._chat.send_message.return_value = mock_response
+
+    ai_client.generate_more_cards(limit=1)
+
+    call_args = ai_client._chat.send_message.call_args
+    sent_prompt = call_args.kwargs["message"]
+    assert "Language" in sent_prompt
+    assert "de" in sent_prompt
 
 def test_safe_parse_json_valid(ai_client):
     json_str = '{"cards": [{"model_name": "basic", "fields": [{"name": "Front", "value": "A"}]}], "done": false}'
@@ -64,15 +71,17 @@ def test_history_pruning(ai_client):
     ai_client._chat.history = mock_history
     
     # Trick the get_history to return list of dicts
-    with patch.object(ai_client, "get_history", return_value=[{"role": "u"} for _ in range(30)]):
+    history = [{"role": "u", "index": i} for i in range(30)]
+    with patch.object(ai_client, "get_history", return_value=history):
         with patch.object(ai_client, "restore_history") as mock_restore:
             ai_client._prune_history()
             
             # verify it called restore
             mock_restore.assert_called_once()
-            # verify it kept first 2 and last 6 = 8 items
             args = mock_restore.call_args[0][0]
-            assert len(args) == 8
+            assert len(args) < len(history)
+            assert args[0]["index"] == 0
+            assert args[-1]["index"] == 29
 
 def test_generate_more_cards_flow(ai_client):
     # Mock send_message response

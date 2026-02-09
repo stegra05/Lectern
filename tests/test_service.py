@@ -46,6 +46,45 @@ def mock_pdf_pages():
     ]
 
 
+@pytest.fixture
+def generation_env(mock_pdf_pages):
+    """Common patched environment for service integration tests.
+
+    Provides a ready-to-run environment with sane defaults:
+    - File exists (1024 bytes)
+    - AnkiConnect is reachable
+    - PDF extraction returns mock_pdf_pages
+    - AI client returns empty cards by default
+
+    Tests can override any mock via the returned dict, e.g.:
+        env["ai"].generate_more_cards.return_value = {"cards": [...], "done": True}
+    """
+    with patch('lectern_service.check_connection', return_value=True) as mock_check, \
+         patch('lectern_service.sample_examples_from_deck', return_value="") as mock_examples, \
+         patch('lectern_service.extract_content_from_pdf', return_value=mock_pdf_pages) as mock_extract, \
+         patch('lectern_service.extract_pdf_title', return_value="Test Lecture") as mock_title, \
+         patch('lectern_service.LecternAIClient') as mock_ai_class, \
+         patch('os.path.exists', return_value=True), \
+         patch('os.path.getsize', return_value=1024):
+
+        mock_ai = MagicMock()
+        mock_ai.log_path = "/tmp/test.log"
+        mock_ai.concept_map.return_value = {"concepts": [], "relations": []}
+        mock_ai.generate_more_cards.return_value = {"cards": [], "done": True}
+        mock_ai.get_history.return_value = []
+        mock_ai.reflect.return_value = {"cards": []}
+        mock_ai_class.return_value = mock_ai
+
+        yield {
+            "ai": mock_ai,
+            "ai_class": mock_ai_class,
+            "check": mock_check,
+            "extract": mock_extract,
+            "title": mock_title,
+            "examples": mock_examples,
+        }
+
+
 # --- Tests for ServiceEvent ---
 
 class TestServiceEvent:
@@ -200,48 +239,16 @@ class TestCardDeduplication:
 # --- Integration-style tests ---
 
 class TestServiceIntegration:
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.sample_examples_from_deck')
-    @patch('lectern_service.extract_content_from_pdf')
-    @patch('lectern_service.extract_pdf_title')
-    @patch('lectern_service.LecternAIClient')
-    @patch('os.path.exists')
-    @patch('os.path.getsize')
-    def test_full_flow_emits_expected_events(
-        self,
-        mock_getsize,
-        mock_exists,
-        mock_ai_client_class,
-        mock_extract_title,
-        mock_extract_pdf,
-        mock_examples,
-        mock_check,
-        service,
-        mock_pdf_pages
-    ):
+    def test_full_flow_emits_expected_events(self, service, generation_env):
         """Test that a full run emits the expected event sequence."""
-        # Setup mocks
-        mock_exists.return_value = True
-        mock_getsize.return_value = 1024
-        mock_check.return_value = True
-        mock_examples.return_value = ""
-        mock_extract_pdf.return_value = mock_pdf_pages
-        mock_extract_title.return_value = "Test Lecture"
-        
-        # Mock AI client
-        mock_ai = MagicMock()
-        mock_ai.log_path = "/tmp/test.log"
-        mock_ai.concept_map.return_value = {"concepts": [], "relations": []}
-        mock_ai.generate_more_cards.return_value = {
+        env = generation_env
+        env["ai"].generate_more_cards.return_value = {
             "cards": [
                 {"model_name": "Basic", "fields": {"Front": "Q1", "Back": "A1"}},
             ],
             "done": True
         }
-        mock_ai.get_history.return_value = []
-        mock_ai_client_class.return_value = mock_ai
-        
-        # Run with skip_export to avoid Anki dependency
+
         events = list(service.run(
             pdf_path="/fake/path.pdf",
             deck_name="Test Deck",
@@ -250,62 +257,22 @@ class TestServiceIntegration:
             skip_export=True,
             enable_reflection=False,
         ))
-        
-        # Check event types
+
         event_types = [e.type for e in events]
-        
-        # Should have step_start/step_end pairs
+
         assert "step_start" in event_types
         assert "step_end" in event_types
-        
-        # Should have card events
+
         card_events = [e for e in events if e.type == "card"]
         assert len(card_events) >= 1
-        
-        # Should end with done
+
         assert events[-1].type == "done"
         assert events[-1].data["total"] >= 1
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.sample_examples_from_deck')
-    @patch('lectern_service.extract_content_from_pdf')
-    @patch('lectern_service.extract_pdf_title')
-    @patch('lectern_service.LecternAIClient')
-    @patch('os.path.exists')
-    @patch('os.path.getsize')
-    def test_focus_prompt_passed_to_ai_client(
-        self,
-        mock_getsize,
-        mock_exists,
-        mock_ai_client_class,
-        mock_extract_title,
-        mock_extract_pdf,
-        mock_examples,
-        mock_check,
-        service,
-        mock_pdf_pages
-    ):
+    def test_focus_prompt_passed_to_ai_client(self, service, generation_env):
         """Test that focus_prompt is correctly passed to LecternAIClient."""
-        # Setup mocks
-        mock_exists.return_value = True
-        mock_getsize.return_value = 1024
-        mock_check.return_value = True
-        mock_examples.return_value = ""
-        mock_extract_pdf.return_value = mock_pdf_pages
-        mock_extract_title.return_value = "Test Lecture"
+        env = generation_env
 
-        # Mock AI client
-        mock_ai = MagicMock()
-        mock_ai.log_path = "/tmp/test.log"
-        mock_ai.concept_map.return_value = {"concepts": [], "relations": []}
-        mock_ai.generate_more_cards.return_value = {
-            "cards": [],
-            "done": True
-        }
-        mock_ai.get_history.return_value = []
-        mock_ai_client_class.return_value = mock_ai
-
-        # Run with focus_prompt
         list(service.run(
             pdf_path="/fake/path.pdf",
             deck_name="Test Deck",
@@ -315,9 +282,8 @@ class TestServiceIntegration:
             focus_prompt="Focus on key terms"
         ))
 
-        # Verify LecternAIClient was initialized with focus_prompt
-        mock_ai_client_class.assert_called()
-        _, kwargs = mock_ai_client_class.call_args
+        env["ai_class"].assert_called()
+        _, kwargs = env["ai_class"].call_args
         assert kwargs.get("focus_prompt") == "Focus on key terms"
 
 
@@ -1028,7 +994,7 @@ class TestServiceAdvanced:
         # Saved state has different path
         mock_load_state.return_value = {"pdf_path": "/different/path.pdf"}
         
-        # This will hit line 94: saved_state = None
+        # Path mismatch should discard saved state
         events = list(service.run(
             pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], resume=True
         ))
@@ -1199,7 +1165,6 @@ class TestServiceAdvanced:
         ))
         
         # 40 pages -> dynamic_rounds = 3
-        # lines 337-338
         assert any("Reflection Round 1/3" in e.message for e in events if e.type == "status")
 
     @patch('lectern_service.check_connection')
@@ -1252,7 +1217,7 @@ class TestServiceAdvanced:
         mock_check.return_value = True
         mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0)]
         
-        # Test stop after Check Anki (line 101)
+        # Stop immediately after Anki connection check
         res1 = list(service.run(
             pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], 
             stop_check=lambda: True

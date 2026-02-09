@@ -1,206 +1,81 @@
-import React, { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Terminal, Copy, Check, Loader2, CheckCircle2, RotateCcw, Search, Trash2, Edit2, Save, X, UploadCloud, Archive, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { PhaseIndicator } from '../components/PhaseIndicator';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { useLecternStore } from '../store';
+import { filterCards, findLastError, sortCards } from '../utils/cards';
 
-import type { Step } from '../hooks/useAppState';
 import type { Phase } from '../components/PhaseIndicator';
-import type { SortOption } from '../hooks/useGeneration';
-import type { ProgressEvent, Card } from '../api';
+import type { ProgressEvent } from '../api';
 
-interface ProgressViewProps {
-    step: Step;
-    setStep: (step: Step) => void;
-    currentPhase: Phase;
-    logs: ProgressEvent[];
-    handleCopyLogs: () => void;
-    copied: boolean;
-    isCancelling: boolean;
-    handleCancel: () => void;
-    progress: { current: number; total: number };
-    cards: Card[];
-    handleReset: () => void;
-    logsEndRef: React.RefObject<HTMLDivElement>;
-    sessionId?: string | null;
-    sortBy: SortOption;
-    setSortBy: (opt: SortOption) => void;
-    searchQuery: string;
-    setSearchQuery: (query: string) => void;
-    isHistorical?: boolean;
-    isError: boolean;
-
-    // Review & Edit Props
-    editingIndex: number | null;
-    editForm: Card | null;
-    isSyncing: boolean;
-    syncSuccess: boolean;
+interface SyncOverlayProps {
+    cardsCount: number;
     syncProgress: { current: number; total: number };
     syncLogs: ProgressEvent[];
-    handleDelete: (index: number) => void;
-    handleAnkiDelete: (noteId: number, index: number) => void;
-    startEdit: (index: number) => void;
-    cancelEdit: () => void;
-    saveEdit: (index: number) => void;
-    handleFieldChange: (field: string, value: string) => void;
-    handleSync: (onComplete: () => void) => void;
-    confirmModal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number; };
-    setConfirmModal: (modal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number; }) => void;
 }
 
-export function ProgressView({
-    step,
-    setStep,
-    currentPhase,
-    logs,
-    handleCopyLogs,
-    copied,
-    isCancelling,
-    handleCancel,
-    progress,
-    cards,
-    handleReset,
-    logsEndRef,
-    sessionId,
-    sortBy,
-    setSortBy,
-    searchQuery,
-    setSearchQuery,
-    isHistorical,
-    isError,
-
-    // Review Props
-    editingIndex,
-    editForm,
-    isSyncing,
-    syncSuccess,
-    syncProgress,
-    syncLogs,
-    handleDelete,
-    handleAnkiDelete,
-    startEdit,
-    cancelEdit,
-    saveEdit,
-    handleFieldChange,
-    handleSync,
-    confirmModal,
-    setConfirmModal
-}: ProgressViewProps) {
-    // Find the last error message
-    const lastError = useMemo(() => {
-        if (!isError) return null;
-        // Search backwards for the last error
-        for (let i = logs.length - 1; i >= 0; i--) {
-            if (logs[i].type === 'error') return logs[i].message;
-        }
-        return "Unknown error occurred";
-    }, [isError, logs]);
-
-    const filteredCards = useMemo(() => {
-        if (!searchQuery.trim()) return cards;
-
-        let regex: RegExp;
-        try {
-            // Advanced syntax: if starts with /, treat as regex
-            // Otherwise, treat as case-insensitive substring
-            if (searchQuery.startsWith('/') && searchQuery.length > 1) {
-                const pattern = searchQuery.replace(/^\/|\/$/g, '');
-                regex = new RegExp(pattern, 'i');
-            } else {
-                // Escape special regex chars for literal match
-                const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                regex = new RegExp(escaped, 'i');
-            }
-        } catch {
-            // If regex invalid, fallback to literal substring
-            const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            regex = new RegExp(escaped, 'i');
-        }
-
-        return cards.filter(card => {
-            const content = [
-                card.front,
-                card.back,
-                card.tag,
-                ...(card.tags || []),
-                card.model_name,
-                ...(Object.values(card.fields || {}))
-            ].join(' ');
-            return regex.test(content);
-        });
-    }, [cards, searchQuery]);
-
-    const sortedCards = useMemo(() => {
-        const sorted = [...filteredCards];
-        switch (sortBy) {
-            case 'topic':
-                return sorted.sort((a, b) => (a.slide_topic || '').localeCompare(b.slide_topic || ''));
-            case 'slide':
-                return sorted.sort((a, b) => (a.slide_number || 0) - (b.slide_number || 0));
-            case 'type':
-                return sorted.sort((a, b) => (a.model_name || '').localeCompare(b.model_name || ''));
-            default:
-                return sorted.reverse(); // newest first (creation order)
-        }
-    }, [filteredCards, sortBy]);
-
-    // Sync Overlay
-    if (isSyncing) {
-        return (
-            <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-                <div className="w-full max-w-2xl space-y-6">
-                    <GlassCard className="border-primary/20 bg-primary/5">
-                        <div className="flex flex-col items-center justify-center py-12 gap-6">
-                            <div className="relative w-16 h-16">
-                                <svg className="w-full h-full transform -rotate-90">
-                                    <circle
-                                        cx="32"
-                                        cy="32"
-                                        r="28"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
-                                        className="text-primary/20"
-                                    />
-                                    <circle
-                                        cx="32"
-                                        cy="32"
-                                        r="28"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
-                                        className="text-primary transition-all duration-300 ease-out"
-                                        strokeDasharray={175.93}
-                                        strokeDashoffset={175.93 - (175.93 * syncProgress.current) / (syncProgress.total || 1)}
-                                    />
-                                </svg>
-                                <div className="absolute inset-0 flex items-center justify-center font-mono text-sm font-bold text-primary">
-                                    {Math.round((syncProgress.current / (syncProgress.total || 1)) * 100)}%
-                                </div>
-                            </div>
-                            <div className="text-center">
-                                <h3 className="text-xl font-bold text-text-main">Syncing to Anki...</h3>
-                                <p className="text-text-muted mt-2">Exporting {cards.length} cards to your collection</p>
+function SyncOverlay({ cardsCount, syncProgress, syncLogs }: SyncOverlayProps) {
+    return (
+        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+            <div className="w-full max-w-2xl space-y-6">
+                <GlassCard className="border-primary/20 bg-primary/5">
+                    <div className="flex flex-col items-center justify-center py-12 gap-6">
+                        <div className="relative w-16 h-16">
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                    className="text-primary/20"
+                                />
+                                <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                    className="text-primary transition-all duration-300 ease-out"
+                                    strokeDasharray={175.93}
+                                    strokeDashoffset={175.93 - (175.93 * syncProgress.current) / (syncProgress.total || 1)}
+                                />
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center font-mono text-sm font-bold text-primary">
+                                {Math.round((syncProgress.current / (syncProgress.total || 1)) * 100)}%
                             </div>
                         </div>
-                    </GlassCard>
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-text-main">Syncing to Anki...</h3>
+                            <p className="text-text-muted mt-2">Exporting {cardsCount} cards to your collection</p>
+                        </div>
+                    </div>
+                </GlassCard>
 
-                    <GlassCard className="max-h-60 overflow-y-auto space-y-2 font-mono text-xs pr-2 scrollbar-thin scrollbar-thumb-border">
-                        {syncLogs.map((log, i) => (
-                            <div key={i} className="text-text-muted">
-                                <span className="opacity-50 mr-2">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
-                                {log.message}
-                            </div>
-                        ))}
-                    </GlassCard>
-                </div>
+                <GlassCard className="max-h-60 overflow-y-auto space-y-2 font-mono text-xs pr-2 scrollbar-thin scrollbar-thumb-border">
+                    {syncLogs.map((log, i) => (
+                        <div key={i} className="text-text-muted">
+                            <span className="opacity-50 mr-2">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
+                            {log.message}
+                        </div>
+                    ))}
+                </GlassCard>
             </div>
-        );
-    }
+        </div>
+    );
+}
 
-    const successOverlay = (
+interface SyncSuccessOverlayProps {
+    syncSuccess: boolean;
+}
+
+function SyncSuccessOverlay({ syncSuccess }: SyncSuccessOverlayProps) {
+    return (
         <AnimatePresence>
             {syncSuccess && (
                 <motion.div
@@ -217,7 +92,6 @@ export function ProgressView({
                         className="flex flex-col items-center"
                     >
                         <div className="relative w-32 h-32 mb-8">
-                            {/* Outer Glow Ring */}
                             <motion.div
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1.2, opacity: 1 }}
@@ -225,7 +99,6 @@ export function ProgressView({
                                 className="absolute inset-0 bg-primary/20 rounded-full blur-2xl"
                             />
 
-                            {/* Animated Circle */}
                             <svg className="w-full h-full" viewBox="0 0 100 100">
                                 <motion.circle
                                     initial={{ pathLength: 0, opacity: 0 }}
@@ -241,7 +114,6 @@ export function ProgressView({
                                     strokeLinecap="round"
                                 />
 
-                                {/* Animated Checkmark */}
                                 <motion.path
                                     initial={{ pathLength: 0, opacity: 0 }}
                                     animate={{ pathLength: 1, opacity: 1 }}
@@ -271,6 +143,121 @@ export function ProgressView({
             )}
         </AnimatePresence>
     );
+}
+
+interface ErrorOverlayProps {
+    isError: boolean;
+    lastError: string | null;
+    handleCopyLogs: () => void;
+    copied: boolean;
+    handleReset: () => void;
+    children: React.ReactNode;
+}
+
+function ErrorOverlay({ isError, lastError, handleCopyLogs, copied, handleReset, children }: ErrorOverlayProps) {
+    if (!isError) {
+        return <>{children}</>;
+    }
+
+    return (
+        <div className="relative">
+            <div className="filter blur-sm pointer-events-none opacity-50">
+                {children}
+            </div>
+
+            <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            >
+                <GlassCard className="max-w-md w-full border-red-500/30 bg-red-950/20 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
+                    <div className="flex flex-col items-center text-center p-4">
+                        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
+                            <span className="text-3xl">⚠️</span>
+                        </div>
+
+                        <h2 className="text-xl font-bold text-red-200 mb-2">Process Interrupted</h2>
+
+                        <div className="bg-red-950/40 p-3 rounded-lg border border-red-500/10 w-full mb-6 max-h-40 overflow-y-auto">
+                            <p className="text-sm font-mono text-red-300 break-words text-left">
+                                {lastError}
+                            </p>
+                        </div>
+
+                        <p className="text-sm text-text-muted mb-6">
+                            The generation process was stopped due to a critical error.
+                            Please check the logs or try again.
+                        </p>
+
+                        <div className="flex gap-3 w-full">
+                            <button
+                                onClick={handleCopyLogs}
+                                className="flex-1 py-2 px-4 rounded-lg border border-border bg-surface hover:bg-surface/80 text-text-muted hover:text-text-main transition-colors text-sm font-medium"
+                            >
+                                {copied ? "Copied Logs" : "Copy Logs"}
+                            </button>
+                            <button
+                                onClick={handleReset}
+                                className="flex-1 py-2 px-4 rounded-lg bg-red-500/80 hover:bg-red-500 text-white shadow-lg shadow-red-500/20 transition-all active:scale-95 text-sm font-bold"
+                            >
+                                Return to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </GlassCard>
+            </motion.div>
+        </div>
+    );
+}
+
+export function ProgressView() {
+    const {
+        step,
+        currentPhase,
+        logs,
+        handleCopyLogs,
+        copied,
+        isCancelling,
+        handleCancel,
+        progress,
+        cards,
+        handleReset,
+        sessionId,
+        sortBy,
+        setSortBy,
+        searchQuery,
+        setSearchQuery,
+        isHistorical,
+        isError,
+        editingIndex,
+        editForm,
+        isSyncing,
+        syncSuccess,
+        syncProgress,
+        syncLogs,
+        handleDelete,
+        handleAnkiDelete,
+        startEdit,
+        cancelEdit,
+        saveEdit,
+        handleFieldChange,
+        handleSync,
+        confirmModal,
+        setConfirmModal
+    } = useLecternStore();
+    const logsEndRef = useRef<HTMLDivElement>(null);
+
+    // Find the last error message
+    const lastError = useMemo(() => findLastError(logs, isError), [isError, logs]);
+
+    const filteredCards = useMemo(() => filterCards(cards, searchQuery), [cards, searchQuery]);
+
+    const sortedCards = useMemo(() => sortCards(filteredCards, sortBy), [filteredCards, sortBy]);
+
+    // Sync Overlay
+    if (isSyncing) {
+        return <SyncOverlay cardsCount={cards.length} syncProgress={syncProgress} syncLogs={syncLogs} />;
+    }
 
     const content = (
         <motion.div
@@ -442,7 +429,7 @@ export function ProgressView({
                     <div className="flex items-center gap-4">
                         {step === 'done' && (
                             <button
-                                onClick={() => handleSync(() => setStep('done'))}
+                                onClick={() => handleSync()}
                                 disabled={cards.length === 0}
                                 className="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-background rounded-lg font-bold shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
                             >
@@ -638,65 +625,18 @@ export function ProgressView({
         </motion.div >
     );
 
-    // Error Overlay
-    if (isError) {
-        return (
-            <div className="relative">
-                {/* Background (blurred) */}
-                <div className="filter blur-sm pointer-events-none opacity-50">
-                    {content}
-                </div>
-
-                {/* Modal */}
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                >
-                    <GlassCard className="max-w-md w-full border-red-500/30 bg-red-950/20 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
-                        <div className="flex flex-col items-center text-center p-4">
-                            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
-                                <span className="text-3xl">⚠️</span>
-                            </div>
-
-                            <h2 className="text-xl font-bold text-red-200 mb-2">Process Interrupted</h2>
-
-                            <div className="bg-red-950/40 p-3 rounded-lg border border-red-500/10 w-full mb-6 max-h-40 overflow-y-auto">
-                                <p className="text-sm font-mono text-red-300 break-words text-left">
-                                    {lastError}
-                                </p>
-                            </div>
-
-                            <p className="text-sm text-text-muted mb-6">
-                                The generation process was stopped due to a critical error.
-                                Please check the logs or try again.
-                            </p>
-
-                            <div className="flex gap-3 w-full">
-                                <button
-                                    onClick={handleCopyLogs}
-                                    className="flex-1 py-2 px-4 rounded-lg border border-border bg-surface hover:bg-surface/80 text-text-muted hover:text-text-main transition-colors text-sm font-medium"
-                                >
-                                    {copied ? "Copied Logs" : "Copy Logs"}
-                                </button>
-                                <button
-                                    onClick={handleReset}
-                                    className="flex-1 py-2 px-4 rounded-lg bg-red-500/80 hover:bg-red-500 text-white shadow-lg shadow-red-500/20 transition-all active:scale-95 text-sm font-bold"
-                                >
-                                    Return to Dashboard
-                                </button>
-                            </div>
-                        </div>
-                    </GlassCard>
-                </motion.div>
-            </div>
-        );
-    }
-
     return (
-        <div className="relative">
-            {successOverlay}
-            {content}
-        </div>
+        <ErrorOverlay
+            isError={isError}
+            lastError={lastError}
+            handleCopyLogs={handleCopyLogs}
+            copied={copied}
+            handleReset={handleReset}
+        >
+            <div className="relative">
+                <SyncSuccessOverlay syncSuccess={syncSuccess} />
+                {content}
+            </div>
+        </ErrorOverlay>
     );
 };

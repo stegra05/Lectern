@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -8,6 +9,8 @@ import sys
 from pathlib import Path
 
 from utils.path_utils import get_app_data_dir
+
+logger = logging.getLogger(__name__)
 
 def get_history_file_path() -> str:
     """
@@ -39,14 +42,17 @@ class HistoryManager:
             with open(self.history_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
+            logger.warning("Failed to load history file: %s", self.history_file)
             return []
 
-    def _save(self, history: List[Dict[str, Any]]) -> None:
+    def _save(self, history: List[Dict[str, Any]]) -> bool:
         try:
             with open(self.history_file, "w", encoding="utf-8") as f:
                 json.dump(history, f, ensure_ascii=False)
-        except Exception as e:
-            print(f"Warning: Failed to save history: {e}")
+            return True
+        except Exception:
+            logger.exception("Failed to save history file: %s", self.history_file)
+            return False
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Return all history entries, sorted by date desc."""
@@ -77,7 +83,8 @@ class HistoryManager:
             "status": status
         }
         history.insert(0, entry)
-        self._save(history)
+        if not self._save(history):
+            logger.warning("History entry not persisted: %s", entry_id)
         return entry_id
 
     def update_entry(self, 
@@ -99,7 +106,8 @@ class HistoryManager:
                 # I'll update the date to bring it to top of list if we sort by date.
                 entry["date"] = datetime.now().isoformat()
                 break
-        self._save(history)
+        if not self._save(history):
+            logger.warning("History update not persisted: %s", entry_id)
 
     def get_entry(self, entry_id: str) -> Optional[Dict[str, Any]]:
         history = self._load()
@@ -114,10 +122,10 @@ class HistoryManager:
         initial_len = len(history)
         history = [e for e in history if e["id"] != entry_id]
         if len(history) < initial_len:
-            self._save(history)
-            return True
+            return self._save(history)
         return False
 
     def clear_all(self) -> None:
         """Clear all history entries."""
-        self._save([])
+        if not self._save([]):
+            logger.warning("Failed to clear history file: %s", self.history_file)

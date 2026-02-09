@@ -1,4 +1,4 @@
-// React import removed because it is unused in this file.
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, BookOpen, Settings, Sun, Moon } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -8,7 +8,7 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { ToastContainer } from './components/Toast';
 
 import { useAppState } from './hooks/useAppState';
-import { useGeneration } from './hooks/useGeneration';
+import { useLecternStore } from './store';
 import { useHistory } from './hooks/useHistory';
 
 import { HomeView } from './views/HomeView';
@@ -58,7 +58,6 @@ const HealthStatus = ({ health, isChecking, onRefresh }: HealthStatusProps) => (
 
 function App() {
   const {
-    step, setStep,
     health,
     showOnboarding,
     isCheckingHealth,
@@ -69,56 +68,59 @@ function App() {
   } = useAppState();
 
   const {
-    pdfFile, setPdfFile,
-    deckName, setDeckName,
-    logs,
-    cards,
-    progress,
+    step,
+    pdfFile,
+    deckName,
+    focusPrompt,
+    sourceType,
+    densityTarget,
     estimation,
     isEstimating,
-    isCancelling,
-    isError,
-    currentPhase,
-    focusPrompt, setFocusPrompt,
-    sourceType, setSourceType,
-    densityTarget, setDensityTarget,
+    sessionId,
+    setPdfFile,
+    setDeckName,
+    setFocusPrompt,
+    setSourceType,
+    setDensityTarget,
+    setEstimation,
+    setIsEstimating,
     handleGenerate,
     handleReset,
-    handleCancel,
     loadSession,
-    logsEndRef,
-    handleCopyLogs,
-    copied,
-    sessionId,
-    isHistorical,
-    sortBy,
-    setSortBy,
-    searchQuery,
-    setSearchQuery,
-
-    // Edit & Sync State
-    editingIndex,
-    editForm,
-    isSyncing,
-    syncSuccess,
-    syncProgress,
-    syncLogs,
-    handleDelete,
-    handleAnkiDelete,
-    startEdit,
-    cancelEdit,
-    saveEdit,
-    handleFieldChange,
-    handleSync,
-    confirmModal,
-    setConfirmModal
-  } = useGeneration(setStep, health?.gemini_model);
+  } = useLecternStore();
 
   const {
     history,
     clearAllHistory,
     deleteHistoryEntry
   } = useHistory(step);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchEstimate = async () => {
+      if (!pdfFile) {
+        setEstimation(null);
+        setIsEstimating(false);
+        return;
+      }
+      setIsEstimating(true);
+      try {
+        const est = await api.estimateCost(pdfFile, health?.gemini_model, controller.signal);
+        if (est) setEstimation(est);
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          console.error(e);
+          setEstimation(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsEstimating(false);
+        }
+      }
+    };
+    fetchEstimate();
+    return () => controller.abort();
+  }, [pdfFile, health?.gemini_model, setEstimation, setIsEstimating]);
 
   if (isCheckingHealth) {
     return (
@@ -230,45 +232,7 @@ function App() {
                   )}
 
                   {(step === 'generating' || step === 'done') && (
-                    <ProgressView
-                      key="progress"
-                      step={step}
-                      setStep={setStep}
-                      currentPhase={currentPhase}
-                      logs={logs}
-                      handleCopyLogs={handleCopyLogs}
-                      copied={copied}
-                      isCancelling={isCancelling}
-                      handleCancel={handleCancel}
-                      progress={progress}
-                      cards={cards}
-                      handleReset={handleReset}
-                      logsEndRef={logsEndRef}
-                      sessionId={sessionId}
-                      sortBy={sortBy}
-                      setSortBy={setSortBy}
-                      searchQuery={searchQuery}
-                      setSearchQuery={setSearchQuery}
-                      isHistorical={isHistorical}
-                      isError={isError}
-
-                      // Edit & Sync Props
-                      editingIndex={editingIndex}
-                      editForm={editForm}
-                      isSyncing={isSyncing}
-                      syncSuccess={syncSuccess}
-                      syncProgress={syncProgress}
-                      syncLogs={syncLogs}
-                      handleDelete={handleDelete}
-                      handleAnkiDelete={handleAnkiDelete}
-                      startEdit={startEdit}
-                      cancelEdit={cancelEdit}
-                      saveEdit={saveEdit}
-                      handleFieldChange={handleFieldChange}
-                      handleSync={handleSync}
-                      confirmModal={confirmModal}
-                      setConfirmModal={setConfirmModal}
-                    />
+                    <ProgressView key="progress" />
                   )}
                 </AnimatePresence>
               </motion.div>

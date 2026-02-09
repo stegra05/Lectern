@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generator, List, Optional, Callable
+from typing import Any, Dict, Generator, List, Optional, Callable, Literal, Iterable
 
 import config
 from anki_connector import check_connection, sample_examples_from_deck
@@ -17,11 +18,59 @@ from utils.note_export import export_card_to_anki
 from utils.state import save_state, clear_state, load_state
 from utils.history import HistoryManager
 
+EventType = Literal[
+    "status",
+    "info",
+    "warning",
+    "error",
+    "step_start",
+    "step_end",
+    "progress_start",
+    "progress_update",
+    "card",
+    "note",
+    "done",
+    "cancelled",
+    "note_created",
+    "note_updated",
+    "note_recreated",
+]
+
+
 @dataclass
 class ServiceEvent:
-    type: str  # 'status', 'info', 'warning', 'error', 'step_start', 'step_end', 'progress_start', 'progress_update', 'card', 'note', 'done'
+    type: EventType
     message: str = ""
     data: Dict[str, Any] = field(default_factory=dict)
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {
+                "type": self.type,
+                "message": self.message,
+                "data": self.data,
+                "timestamp": time.time(),
+            }
+        )
+
+@dataclass(frozen=True)
+class GenerationConfig:
+    pdf_path: str
+    deck_name: str
+    model_name: str
+    tags: List[str]
+    context_deck: str = ""
+    resume: bool = False
+    max_notes_per_batch: int = config.MAX_NOTES_PER_BATCH
+    enable_reflection: bool = config.ENABLE_REFLECTION
+    reflection_rounds: int = config.REFLECTION_MAX_ROUNDS
+    skip_export: bool = False
+    stop_check: Optional[Callable[[], bool]] = None
+    focus_prompt: Optional[str] = None
+    source_type: str = "auto"  # "auto", "slides", "script"
+    density_target: Optional[float] = None  # Override for CARDS_PER_SLIDE_TARGET
+    session_id: Optional[str] = None
+    entry_id: Optional[str] = None
 
 class LecternGenerationService:
     """
@@ -51,29 +100,53 @@ class LecternGenerationService:
         entry_id: Optional[str] = None,
     ) -> Generator[ServiceEvent, None, None]:
         
+        cfg = GenerationConfig(
+            pdf_path=pdf_path,
+            deck_name=deck_name,
+            model_name=model_name,
+            tags=tags,
+            context_deck=context_deck,
+            resume=resume,
+            max_notes_per_batch=max_notes_per_batch,
+            enable_reflection=enable_reflection,
+            reflection_rounds=reflection_rounds,
+            skip_export=skip_export,
+            stop_check=stop_check,
+            focus_prompt=focus_prompt,
+            source_type=source_type,
+            density_target=density_target,
+            session_id=session_id,
+            entry_id=entry_id,
+        )
+
         start_time = time.perf_counter()
         history_mgr = HistoryManager()
         history_id = None
 
         # 1. Validation & Setup
-        if not os.path.exists(pdf_path):
-            yield ServiceEvent("error", f"PDF not found: {pdf_path}")
+        if not os.path.exists(cfg.pdf_path):
+            yield ServiceEvent("error", f"PDF not found: {cfg.pdf_path}")
             return
             
-        file_size = os.path.getsize(pdf_path)
+        file_size = os.path.getsize(cfg.pdf_path)
         if file_size == 0:
-            yield ServiceEvent("error", f"PDF file is empty (0 bytes): {os.path.basename(pdf_path)}")
+            yield ServiceEvent("error", f"PDF file is empty (0 bytes): {os.path.basename(cfg.pdf_path)}")
             return
             
-        yield ServiceEvent("info", f"Processing file: {os.path.basename(pdf_path)} ({file_size} bytes)")
+        yield ServiceEvent("info", f"Processing file: {os.path.basename(cfg.pdf_path)} ({file_size} bytes)")
 
         # Initialize History Entry
         # If entry_id provided (e.g. from GUI), use it. otherwise create new.
-        if entry_id:
-            history_id = entry_id
+        if cfg.entry_id:
+            history_id = cfg.entry_id
         else:
             # NOTE: Always create a new entry - resume logic uses state file, not history
-            history_id = history_mgr.add_entry(pdf_path, deck_name, status="draft", session_id=session_id)
+            history_id = history_mgr.add_entry(
+                cfg.pdf_path,
+                cfg.deck_name,
+                status="draft",
+                session_id=cfg.session_id,
+            )
 
         try:
             yield ServiceEvent("step_start", "Check AnkiConnect")
@@ -86,27 +159,27 @@ class LecternGenerationService:
 
             # State Resume Check
             saved_state = None
-            if resume:
-                saved_state = load_state(session_id=session_id)
-                if saved_state and saved_state.get("pdf_path") == os.path.abspath(pdf_path):
-                     yield ServiceEvent("info", f"Resuming session for {os.path.basename(pdf_path)}")
+            if cfg.resume:
+                saved_state = load_state(session_id=cfg.session_id)
+                if saved_state and saved_state.get("pdf_path") == os.path.abspath(cfg.pdf_path):
+                    yield ServiceEvent("info", f"Resuming session for {os.path.basename(cfg.pdf_path)}")
                 else:
-                    saved_state = None # Invalid state or mismatch
+                    saved_state = None  # Invalid state or mismatch
 
             # 2. Parse PDF
             pages = []
             total_text_chars = 0
 
 
-            if stop_check and stop_check():
+            if self._should_stop(cfg.stop_check):
                 return
 
             yield ServiceEvent("step_start", "Parse PDF")
             try:
-                pages = extract_content_from_pdf(pdf_path, stop_check=stop_check)
-                if stop_check and stop_check():
-                     yield ServiceEvent("warning", "PDF parsing stopped by user.")
-                     return
+                pages = extract_content_from_pdf(cfg.pdf_path, stop_check=cfg.stop_check)
+                if self._should_stop(cfg.stop_check):
+                    yield ServiceEvent("warning", "PDF parsing stopped by user.")
+                    return
                 total_chars = 0
                 non_empty_pages = 0
                 image_pages = 0
@@ -132,13 +205,13 @@ class LecternGenerationService:
                 return
 
             # 3. Sample Examples
-            if stop_check and stop_check():
+            if self._should_stop(cfg.stop_check):
                 return
 
             examples = ""
             yield ServiceEvent("step_start", "Sample examples from deck")
             try:
-                deck_for_examples = (context_deck or deck_name)
+                deck_for_examples = (cfg.context_deck or cfg.deck_name)
                 examples = sample_examples_from_deck(deck_name=deck_for_examples, sample_size=5)
                 if examples.strip():
                     yield ServiceEvent("info", "Loaded style examples from Anki")
@@ -149,9 +222,9 @@ class LecternGenerationService:
 
             # 3b. Extract PDF Title for Slide Set Naming
             pdf_title = ""
-            pdf_filename = os.path.splitext(os.path.basename(pdf_path))[0]
+            pdf_filename = os.path.splitext(os.path.basename(cfg.pdf_path))[0]
             try:
-                pdf_title = extract_pdf_title(pdf_path)
+                pdf_title = extract_pdf_title(cfg.pdf_path)
                 if pdf_title:
                     yield ServiceEvent("info", f"Extracted PDF title: '{pdf_title}'")
             except Exception as e:
@@ -161,12 +234,16 @@ class LecternGenerationService:
             # The concept map now returns slide_set_name, we'll extract it after step 5
 
             # 4. AI Session Init
-            if stop_check and stop_check():
+            if self._should_stop(cfg.stop_check):
                 return
 
             yield ServiceEvent("step_start", "Start AI session")
             # NOTE: slide_set_context is set after concept map for the slide_set_name
-            ai = LecternAIClient(model_name=model_name, focus_prompt=focus_prompt, slide_set_context=None)
+            ai = LecternAIClient(
+                model_name=cfg.model_name,
+                focus_prompt=cfg.focus_prompt,
+                slide_set_context=None,
+            )
             if saved_state:
                 history = saved_state.get("history", [])
                 if history:
@@ -179,10 +256,10 @@ class LecternGenerationService:
                 concept_map = saved_state["concept_map"]
                 yield ServiceEvent("info", "Restored Concept Map from state", {"map": concept_map})
             else:
-                if stop_check and stop_check():
+                if self._should_stop(cfg.stop_check):
                     return
 
-                yield ServiceEvent("step_start", "Build global concept map")
+                yield ServiceEvent("step_start", "Build global concept map", {"phase": "concept"})
                 try:
                     concept_map = ai.concept_map([p.__dict__ for p in pages])
                     yield ServiceEvent("step_end", "Concept Map Built", {"success": True})
@@ -201,8 +278,8 @@ class LecternGenerationService:
 
             # Build slide set context for AI
             slide_set_context = {
-                'deck_name': deck_name,
-                'slide_set_name': slide_set_name,
+                "deck_name": cfg.deck_name,
+                "slide_set_name": slide_set_name,
             }
             ai._slide_set_context = slide_set_context  # Update context for future calls
 
@@ -220,11 +297,17 @@ class LecternGenerationService:
 
             # Targets
             # NOTE(Density): Simple linear formula - user controls via density_target slider
-            effective_target = density_target if density_target is not None else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+            effective_target = (
+                cfg.density_target
+                if cfg.density_target is not None
+                else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+            )
             
             # Calculate chars per page for mode detection
             chars_per_page = total_text_chars / len(pages) if len(pages) > 0 else 0
-            is_script_mode = source_type == "script" or (source_type == "auto" and chars_per_page > 2000)
+            is_script_mode = cfg.source_type == "script" or (
+                cfg.source_type == "auto" and chars_per_page > 2000
+            )
             
             # Simple card cap calculation
             if is_script_mode:
@@ -237,96 +320,39 @@ class LecternGenerationService:
                 yield ServiceEvent("info", f"Slides mode: ~{total_cards_cap} cards target ({len(pages)} pages × {effective_target:.1f})")
 
             # Batch sizing
-            actual_batch_size = int(max_notes_per_batch or min(50, max(20, len(pages) // 2)))
+            actual_batch_size = int(cfg.max_notes_per_batch or min(50, max(20, len(pages) // 2)))
 
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})
 
-            yield ServiceEvent("step_start", "Generate cards")
+            yield ServiceEvent("step_start", "Generate cards", {"phase": "generating"})
             
             # Generation loop
-            while len(all_cards) < total_cards_cap:
-                remaining = total_cards_cap - len(all_cards)
-                limit = min(actual_batch_size, remaining)
-                
-                yield ServiceEvent("status", f"Generating batch (limit={limit})...")
-
-                if stop_check and stop_check():
-                    yield ServiceEvent("warning", "Generation stopped by user.")
-                    return
-                
-                try:
-                    # Pass examples only if we are starting fresh (or maybe always? logic said 'continue from prior')
-                    # Previous fix used: examples=examples if turn_idx == 0 else ""
-                    # We can approximate this: if len(all_cards) == 0 (and not resumed with cards)
-                    current_examples = examples if len(all_cards) == 0 else ""
-                    recent_keys = []
-                    for card in all_cards[-30:]:
-                        key = self._get_card_key(card)
-                        if key:
-                            recent_keys.append(key[:120])
-                    covered_slides = sorted(
-                        {
-                            int(card.get("slide_number"))
-                            for card in all_cards
-                            if isinstance(card, dict) and str(card.get("slide_number", "")).isdigit()
-                        }
-                    )
-
-                    # NOTE(Pacing): Calculate real-time feedback using PacingState
-                    pacing_hint = PacingState(
-                        current_cards=len(all_cards),
-                        covered_slides=covered_slides,
-                        total_pages=len(pages),
-                        focus_prompt=focus_prompt or "",
-                        target_density=effective_target,
-                    ).hint
-
-                    out = ai.generate_more_cards(
-                        limit=limit,
-                        examples=current_examples,
-                        avoid_fronts=recent_keys,
-                        covered_slides=covered_slides,
-                        pacing_hint=pacing_hint,
-                    )
-                    new_cards = out.get("cards", [])
-                    
-                    added_count = 0
-                    for card in new_cards:
-                        key = self._get_card_key(card)
-                        if key and key not in seen_keys:
-                            seen_keys.add(key)
-                            all_cards.append(card)
-                            added_count += 1
-                            yield ServiceEvent("card", "New card", {"card": card})
-                    
-                    yield ServiceEvent("progress_update", "", {"current": len(all_cards)})
-                    history_mgr.update_entry(history_id, card_count=len(all_cards))
-
-                    # Save state
-                    save_state(
-                        pdf_path=os.path.abspath(pdf_path),
-                        deck_name=deck_name,
-                        cards=all_cards,
-                        concept_map=concept_map,
-                        history=ai.get_history(),
-                        log_path=ai.log_path,
-                        session_id=session_id,
-                        slide_set_name=slide_set_name,
-                    )
-
-                    should_stop = added_count == 0
-                    
-                    if should_stop:
-                        break
-                except Exception as e:
-                    yield ServiceEvent("error", f"Generation error: {e}")
-                    break
+            yield from self._run_generation_loop(
+                ai=ai,
+                examples=examples,
+                all_cards=all_cards,
+                seen_keys=seen_keys,
+                pages=pages,
+                total_cards_cap=total_cards_cap,
+                actual_batch_size=actual_batch_size,
+                focus_prompt=cfg.focus_prompt,
+                effective_target=effective_target,
+                stop_check=cfg.stop_check,
+                concept_map=concept_map,
+                slide_set_name=slide_set_name,
+                model_name=cfg.model_name,
+                tags=cfg.tags,
+                pdf_path=cfg.pdf_path,
+                deck_name=cfg.deck_name,
+                history_id=history_id,
+                session_id=cfg.session_id,
+            )
             
             yield ServiceEvent("step_end", "Generation Phase Complete", {"success": True, "count": len(all_cards)})
 
             # 7. Reflection Phase
-            if enable_reflection and len(all_cards) > 0 and len(all_cards) < total_cards_cap:
-                yield ServiceEvent("step_start", "Reflection and improvement")
+            if cfg.enable_reflection and len(all_cards) > 0 and len(all_cards) < total_cards_cap:
+                yield ServiceEvent("step_start", "Reflection and improvement", {"phase": "reflecting"})
                 
                 # Dynamic rounds logic
                 page_count = len(pages)
@@ -339,54 +365,27 @@ class LecternGenerationService:
                 else:
                     dynamic_rounds = 5
                 
-                rounds = reflection_rounds if reflection_rounds > 0 else dynamic_rounds
+                rounds = cfg.reflection_rounds if cfg.reflection_rounds > 0 else dynamic_rounds
                 
                 yield ServiceEvent("progress_start", "Reflection", {"total": rounds, "label": "Reflection Rounds"})
                 
-                for round_idx in range(rounds):
-                    remaining = max(0, total_cards_cap - len(all_cards))
-                    if remaining == 0:
-                        break
-                        
-                    yield ServiceEvent("status", f"Reflection Round {round_idx + 1}/{rounds}")
-                    
-                    if stop_check and stop_check():
-                        yield ServiceEvent("warning", "Reflection stopped by user.")
-                        return
-
-                    try:
-                        out = ai.reflect(limit=min(actual_batch_size, remaining))
-                        new_cards = out.get("cards", [])
-                        
-                        added_count = 0
-                        for card in new_cards:
-                            key = self._get_card_key(card)
-                            if key and key not in seen_keys:
-                                seen_keys.add(key)
-                                all_cards.append(card)
-                                added_count += 1
-                                yield ServiceEvent("card", "Refined card", {"card": card})
-                        
-                        yield ServiceEvent("progress_update", "", {"current": round_idx + 1})
-                        history_mgr.update_entry(history_id, card_count=len(all_cards))
-                        
-                        # Save state
-                        save_state(
-                            pdf_path=os.path.abspath(pdf_path),
-                            deck_name=deck_name,
-                            cards=all_cards,
-                            concept_map=concept_map,
-                            history=ai.get_history(),
-                            log_path=ai.log_path,
-                            session_id=session_id,
-                            slide_set_name=slide_set_name,
-                        )
-
-                        should_stop = len(all_cards) >= total_cards_cap or added_count == 0
-                        if should_stop:
-                            break
-                    except Exception as e:
-                        yield ServiceEvent("warning", f"Reflection error: {e}")
+                yield from self._run_reflection_loop(
+                    ai=ai,
+                    all_cards=all_cards,
+                    seen_keys=seen_keys,
+                    total_cards_cap=total_cards_cap,
+                    actual_batch_size=actual_batch_size,
+                    rounds=rounds,
+                    stop_check=cfg.stop_check,
+                    concept_map=concept_map,
+                    slide_set_name=slide_set_name,
+                    model_name=cfg.model_name,
+                    tags=cfg.tags,
+                    pdf_path=cfg.pdf_path,
+                    deck_name=cfg.deck_name,
+                    history_id=history_id,
+                    session_id=cfg.session_id,
+                )
 
                 yield ServiceEvent("step_end", "Reflection Phase Complete", {"success": True})
 
@@ -396,8 +395,9 @@ class LecternGenerationService:
                 return
 
             # 8. Creation in Anki
-            if skip_export:
+            if cfg.skip_export:
                  yield ServiceEvent("info", "Skipping Anki export (Draft Mode)")
+                 history_mgr.update_entry(history_id, card_count=len(all_cards))
                  yield ServiceEvent("done", "Draft Generation Complete", {
                     "created": 0, 
                     "failed": 0, 
@@ -408,7 +408,7 @@ class LecternGenerationService:
                 })
                  return
 
-            if stop_check and stop_check():
+            if self._should_stop(cfg.stop_check):
                 return
 
             yield ServiceEvent("step_start", f"Create {len(all_cards)} notes in Anki")
@@ -421,10 +421,10 @@ class LecternGenerationService:
                 result = export_card_to_anki(
                     card=card,
                     card_index=idx,
-                    deck_name=deck_name,
+                    deck_name=cfg.deck_name,
                     slide_set_name=slide_set_name,
                     fallback_model=config.DEFAULT_BASIC_MODEL,  # NOTE: Anki note type, not Gemini model
-                    additional_tags=tags,
+                    additional_tags=cfg.tags,
                 )
                 
                 # Report media uploads
@@ -443,8 +443,8 @@ class LecternGenerationService:
             yield ServiceEvent("step_end", "Export Complete", {"success": True, "created": created, "failed": failed})
             
             # Clear state on success
-            clear_state(session_id=session_id)
-            history_mgr.update_entry(history_id, status="completed")
+            clear_state(session_id=cfg.session_id)
+            history_mgr.update_entry(history_id, status="completed", card_count=len(all_cards))
             
             elapsed = time.perf_counter() - start_time
             yield ServiceEvent("done", "Job Complete", {
@@ -458,7 +458,6 @@ class LecternGenerationService:
         except Exception as e:
             if history_id:
                 history_mgr.update_entry(history_id, status="error")
-            yield ServiceEvent("error", f"Critical error: {e}")
             yield ServiceEvent("error", f"Critical error: {e}")
             # Do not raise; let the generator exit gracefully so the frontend sees the error event
             return
@@ -522,3 +521,210 @@ class LecternGenerationService:
         fields = card.get("fields") or {}
         val = str(fields.get("Text") or fields.get("Front") or "")
         return " ".join(val.lower().split())
+
+    def _should_stop(self, stop_check: Optional[Callable[[], bool]]) -> bool:
+        return bool(stop_check and stop_check())
+
+    def _save_checkpoint(
+        self,
+        *,
+        pdf_path: str,
+        deck_name: str,
+        cards: List[Dict[str, Any]],
+        concept_map: Dict[str, Any],
+        ai: LecternAIClient,
+        session_id: Optional[str],
+        slide_set_name: str,
+        model_name: str,
+        tags: List[str],
+        history_id: Optional[str],
+    ) -> None:
+        save_state(
+            pdf_path=os.path.abspath(pdf_path),
+            deck_name=deck_name,
+            cards=cards,
+            concept_map=concept_map,
+            history=ai.get_history(),
+            log_path=ai.log_path,
+            session_id=session_id,
+            slide_set_name=slide_set_name,
+            model_name=model_name,
+            tags=tags,
+            entry_id=history_id,
+        )
+
+    def _yield_new_cards(
+        self,
+        *,
+        new_cards: Iterable[Dict[str, Any]],
+        all_cards: List[Dict[str, Any]],
+        seen_keys: set,
+        message: str,
+    ) -> Generator[ServiceEvent, None, int]:
+        added_count = 0
+        for card in new_cards:
+            key = self._get_card_key(card)
+            if key and key not in seen_keys:
+                seen_keys.add(key)
+                all_cards.append(card)
+                added_count += 1
+                yield ServiceEvent("card", message, {"card": card})
+        return added_count
+
+    def _run_generation_loop(
+        self,
+        *,
+        ai: LecternAIClient,
+        examples: str,
+        all_cards: List[Dict[str, Any]],
+        seen_keys: set,
+        pages: List[Any],
+        total_cards_cap: int,
+        actual_batch_size: int,
+        focus_prompt: Optional[str],
+        effective_target: float,
+        stop_check: Optional[Callable[[], bool]],
+        concept_map: Dict[str, Any],
+        slide_set_name: str,
+        model_name: str,
+        tags: List[str],
+        pdf_path: str,
+        deck_name: str,
+        history_id: Optional[str],
+        session_id: Optional[str],
+    ) -> Generator[ServiceEvent, None, None]:
+        while len(all_cards) < total_cards_cap:
+            remaining = total_cards_cap - len(all_cards)
+            limit = min(actual_batch_size, remaining)
+
+            yield ServiceEvent("status", f"Generating batch (limit={limit})...")
+
+            if self._should_stop(stop_check):
+                yield ServiceEvent("warning", "Generation stopped by user.")
+                return
+
+            try:
+                # Pass examples only if we are starting fresh (or maybe always? logic said 'continue from prior')
+                # Previous fix used: examples=examples if turn_idx == 0 else ""
+                # We can approximate this: if len(all_cards) == 0 (and not resumed with cards)
+                current_examples = examples if len(all_cards) == 0 else ""
+                recent_keys = []
+                for card in all_cards[-30:]:
+                    key = self._get_card_key(card)
+                    if key:
+                        recent_keys.append(key[:120])
+                covered_slides = sorted(
+                    {
+                        int(card.get("slide_number"))
+                        for card in all_cards
+                        if isinstance(card, dict) and str(card.get("slide_number", "")).isdigit()
+                    }
+                )
+
+                # NOTE(Pacing): Calculate real-time feedback using PacingState
+                pacing_hint = PacingState(
+                    current_cards=len(all_cards),
+                    covered_slides=covered_slides,
+                    total_pages=len(pages),
+                    focus_prompt=focus_prompt or "",
+                    target_density=effective_target,
+                ).hint
+
+                out = ai.generate_more_cards(
+                    limit=limit,
+                    examples=current_examples,
+                    avoid_fronts=recent_keys,
+                    covered_slides=covered_slides,
+                    pacing_hint=pacing_hint,
+                )
+                new_cards = out.get("cards", [])
+
+                added_count = yield from self._yield_new_cards(
+                    new_cards=new_cards,
+                    all_cards=all_cards,
+                    seen_keys=seen_keys,
+                    message="New card",
+                )
+
+                yield ServiceEvent("progress_update", "", {"current": len(all_cards)})
+
+                self._save_checkpoint(
+                    pdf_path=pdf_path,
+                    deck_name=deck_name,
+                    cards=all_cards,
+                    concept_map=concept_map,
+                    ai=ai,
+                    session_id=session_id,
+                    slide_set_name=slide_set_name,
+                    model_name=model_name,
+                    tags=tags,
+                    history_id=history_id,
+                )
+
+                if added_count == 0:
+                    break
+            except Exception as e:
+                yield ServiceEvent("error", f"Generation error: {e}")
+                break
+
+    def _run_reflection_loop(
+        self,
+        *,
+        ai: LecternAIClient,
+        all_cards: List[Dict[str, Any]],
+        seen_keys: set,
+        total_cards_cap: int,
+        actual_batch_size: int,
+        rounds: int,
+        stop_check: Optional[Callable[[], bool]],
+        concept_map: Dict[str, Any],
+        slide_set_name: str,
+        model_name: str,
+        tags: List[str],
+        pdf_path: str,
+        deck_name: str,
+        history_id: Optional[str],
+        session_id: Optional[str],
+    ) -> Generator[ServiceEvent, None, None]:
+        for round_idx in range(rounds):
+            remaining = max(0, total_cards_cap - len(all_cards))
+            if remaining == 0:
+                break
+
+            yield ServiceEvent("status", f"Reflection Round {round_idx + 1}/{rounds}")
+
+            if self._should_stop(stop_check):
+                yield ServiceEvent("warning", "Reflection stopped by user.")
+                return
+
+            try:
+                out = ai.reflect(limit=min(actual_batch_size, remaining))
+                new_cards = out.get("cards", [])
+
+                added_count = yield from self._yield_new_cards(
+                    new_cards=new_cards,
+                    all_cards=all_cards,
+                    seen_keys=seen_keys,
+                    message="Refined card",
+                )
+
+                yield ServiceEvent("progress_update", "", {"current": round_idx + 1})
+
+                self._save_checkpoint(
+                    pdf_path=pdf_path,
+                    deck_name=deck_name,
+                    cards=all_cards,
+                    concept_map=concept_map,
+                    ai=ai,
+                    session_id=session_id,
+                    slide_set_name=slide_set_name,
+                    model_name=model_name,
+                    tags=tags,
+                    history_id=history_id,
+                )
+
+                should_stop = len(all_cards) >= total_cards_cap or added_count == 0
+                if should_stop:
+                    break
+            except Exception as e:
+                yield ServiceEvent("warning", f"Reflection error: {e}")
