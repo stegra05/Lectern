@@ -3,7 +3,6 @@
 # PDF parsing and image extraction
 pypdf>=4.0.0
 pypdfium2>=4.0.0
-pytesseract>=0.3.10
 
 # Google Gemini API client
 google-genai>=1.0.0

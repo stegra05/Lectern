@@ -8,12 +8,11 @@ and reduces maintenance burden.
 
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import config
-from anki_connector import add_note, store_media_file
+from anki_connector import add_note
 from utils.tags import build_hierarchical_tags
 
 
@@ -23,11 +22,6 @@ class ExportResult:
     success: bool
     note_id: Optional[int] = None
     error: Optional[str] = None
-    media_uploaded: List[str] = None
-    
-    def __post_init__(self):
-        if self.media_uploaded is None:
-            self.media_uploaded = []
 
 
 def resolve_model_name(card_model: str, fallback_model: str) -> str:
@@ -97,39 +91,6 @@ def build_card_tags(
     )
 
 
-def upload_card_media(
-    card: Dict[str, Any],
-    card_index: int,
-    on_upload: Optional[Callable[[str], None]] = None,
-) -> List[str]:
-    """Upload media files attached to a card.
-    
-    Parameters:
-        card: Card data containing optional 'media' array
-        card_index: Index for generating default filenames
-        on_upload: Optional callback called with filename after each upload
-        
-    Returns:
-        List of uploaded filenames
-    """
-    uploaded = []
-    
-    for media in card.get("media", []) or []:
-        filename = media.get("filename", f"lectern-{card_index}.png")
-        data_b64 = media.get("data", "")
-        
-        if data_b64:
-            # Decode if string, else assume bytes
-            data_bytes = base64.b64decode(data_b64) if isinstance(data_b64, str) else data_b64
-            store_media_file(filename, data_bytes)
-            uploaded.append(filename)
-            
-            if on_upload:
-                on_upload(filename)
-    
-    return uploaded
-
-
 def export_card_to_anki(
     card: Dict[str, Any],
     card_index: int,
@@ -137,42 +98,37 @@ def export_card_to_anki(
     slide_set_name: str,
     fallback_model: str,
     additional_tags: List[str],
-    on_media_upload: Optional[Callable[[str], None]] = None,
 ) -> ExportResult:
     """Export a single card to Anki.
     
     This is the unified export logic used by both CLI and GUI code paths.
-    Handles media upload, model resolution, tag building, and note creation.
+    Handles model resolution, tag building, and note creation.
     
     Parameters:
         card: Card data from AI generation
-        card_index: Index for generating default media filenames
+        card_index: 1-based card index for logging/debug context
         deck_name: Target Anki deck name
         slide_set_name: Inferred slide set name for hierarchical tags
         fallback_model: Model to use if card doesn't specify one
         additional_tags: User-provided tags to merge with AI tags
-        on_media_upload: Optional callback for media upload notifications
         
     Returns:
         ExportResult with success status, note_id, and any errors
     """
     try:
-        # 1. Upload media
-        media_uploaded = upload_card_media(card, card_index, on_media_upload)
-        
-        # 2. Resolve model
+        # 1. Resolve model
         card_model = resolve_model_name(
             card.get("model_name", ""),
             fallback_model,
         )
         
-        # 3. Extract fields
+        # 2. Extract fields
         note_fields = {
             str(k): str(v) 
             for k, v in (card.get("fields") or {}).items()
         }
         
-        # 4. Build tags
+        # 3. Build tags
         final_tags = build_card_tags(
             card=card,
             deck_name=deck_name,
@@ -180,13 +136,12 @@ def export_card_to_anki(
             additional_tags=additional_tags,
         )
         
-        # 5. Create note
+        # 4. Create note
         note_id = add_note(deck_name, card_model, note_fields, final_tags)
         
         return ExportResult(
             success=True,
             note_id=note_id,
-            media_uploaded=media_uploaded,
         )
         
     except Exception as e:

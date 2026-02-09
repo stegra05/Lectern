@@ -117,10 +117,6 @@ Contents: Request/response snapshots for concept map, generation, and reflection
 
 - Python 3.9+
 - Node.js 18+
-- Tesseract (optional, for OCR):
-  - **macOS:** `brew install tesseract`
-  - **Windows:** Download installer from [UB-Mannheim](https://github.com/UB-Mannheim/tesseract/wiki)
-  - **Linux:** `sudo apt install tesseract-ocr`
 
 #### Setup
 

@@ -265,7 +265,7 @@ export const api = {
                 : `${API_URL}/estimate`;
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
             // If an external signal is provided, chain it
             if (signal) {

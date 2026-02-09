@@ -13,7 +13,6 @@ import io
 import os
 
 from PIL import Image
-import pytesseract  # type: ignore
 import pypdfium2 as pdfium
 
 # Lightweight PDF libraries (no external dependencies)
@@ -48,7 +47,7 @@ def extract_content_from_pdf(
     Parameters:
         pdf_path: Absolute or relative path to the PDF file.
         stop_check: Optional callback that returns True if processing should stop.
-        skip_ocr: If True, skips Tesseract OCR on minimal-text pages.
+        skip_ocr: Deprecated compatibility flag. Local OCR has been removed.
         skip_images: If True, skips image extraction/compression but still counts embedded images.
 
     Returns:
@@ -88,30 +87,7 @@ def extract_content_from_pdf(
         # Extract text using pypdf
         text_content: str = page.extract_text() or ""
 
-        # NOTE(OCR): If text is minimal (<50 chars), assume it's a flattened image and try OCR.
         page_img: Optional[Image.Image] = None
-        if not skip_ocr and len(text_content.strip()) < 50:
-            print(f"Info: Page {page_index + 1} has minimal text. Attempting OCR...")
-            try:
-                page_img = render_page_image(page_index + 1, dpi=150)
-                if page_img is None:
-                    raise RuntimeError("Page render failed for OCR")
-                # Perform OCR
-                ocr_text = pytesseract.image_to_string(page_img)
-
-                if ocr_text.strip():
-                    text_content += "\n\n[OCR Extracted Content]\n" + ocr_text
-                    print(f"Info: OCR successful for Page {page_index + 1}.")
-                else:
-                    print(f"Warning: OCR yielded no text for Page {page_index + 1}.")
-
-            except pytesseract.TesseractNotFoundError:
-                print(
-                    f"Warning: OCR failed for Page {page_index + 1}. "
-                    "Tesseract not found. Please install Tesseract-OCR."
-                )
-            except Exception as e:
-                print(f"Warning: OCR failed for Page {page_index + 1}: {e}")
 
         # Extract images
         images: List[bytes] = []

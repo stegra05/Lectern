@@ -360,9 +360,6 @@ async def generate_cards(
     focus_prompt: str = Form(""),  # Optional user focus
     source_type: str = Form("auto"),  # "auto", "slides", "script"
     density_target: float = Form(config.CARDS_PER_SLIDE_TARGET),  # Detail level
-    max_notes_per_batch: int = Form(config.MAX_NOTES_PER_BATCH),
-    reflection_rounds: int = Form(config.REFLECTION_MAX_ROUNDS),
-    enable_reflection: bool = Form(config.ENABLE_REFLECTION),
 ):
     draft_store = DraftStore()
     service = GenerationService(draft_store)
@@ -432,9 +429,6 @@ async def generate_cards(
                 focus_prompt=focus_prompt,
                 source_type=source_type,
                 density_target=density_target,
-                max_notes_per_batch=max_notes_per_batch,
-                reflection_rounds=reflection_rounds,
-                enable_reflection=enable_reflection,
                 session_id=session.session_id,
             ):
                 yield f"{event_str}\n"

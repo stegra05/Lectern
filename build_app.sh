@@ -96,7 +96,6 @@ check_tool "node"
 check_tool "npm"
 check_tool "python"
 warn_tool "pdftoppm"
-warn_tool "tesseract"
 success "All tools found"
 
 # Preparation

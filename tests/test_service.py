@@ -255,7 +255,6 @@ class TestServiceIntegration:
             model_name="gemini-3-flash-preview",
             tags=[],
             skip_export=True,
-            enable_reflection=False,
         ))
 
         event_types = [e.type for e in events]
@@ -534,7 +533,6 @@ class TestServiceAdvanced:
         mock_export_result = MagicMock()
         mock_export_result.success = True
         mock_export_result.note_id = 12345
-        mock_export_result.media_uploaded = []
         mock_export.return_value = mock_export_result
         
         events = list(service.run(
@@ -759,8 +757,6 @@ class TestServiceAdvanced:
             deck_name="T",
             model_name="M",
             tags=[],
-            enable_reflection=True,
-            reflection_rounds=0, # Use dynamic
             stop_check=stop_check,
             skip_export=True
         )
@@ -805,7 +801,6 @@ class TestServiceAdvanced:
         mock_res = MagicMock()
         mock_res.success = False
         mock_res.error = "Anki busy"
-        mock_res.media_uploaded = []
         mock_export.return_value = mock_res
         
         events = list(service.run(
@@ -913,8 +908,6 @@ class TestServiceAdvanced:
             deck_name="T",
             model_name="M",
             tags=[],
-            enable_reflection=True,
-            reflection_rounds=0,
             skip_export=True
         ))
         
@@ -1082,52 +1075,13 @@ class TestServiceAdvanced:
         
         events = list(service.run(
             pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], 
-            enable_reflection=True, reflection_rounds=2, skip_export=True
+            skip_export=True
         ))
         
         # Verify card was added in reflection
         assert any(e.type == "card" and "Refined card" in e.message for e in events)
         # Verify error was caught and reported
         assert any(e.type == "warning" and "Reflection error" in e.message for e in events)
-
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.export_card_to_anki')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    def test_export_media_status_events(
-        self,
-        mock_getsize,
-        mock_exists,
-        mock_export,
-        mock_ai_class,
-        mock_extract,
-        mock_check,
-        service
-    ):
-        """Test that media upload status events are yielded during export."""
-        mock_exists.return_value = True
-        mock_getsize.return_value = 1024
-        mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0)]
-        
-        mock_ai = MagicMock()
-        mock_ai_class.return_value = mock_ai
-        mock_ai.concept_map.return_value = {}
-        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": "Q"}}]}
-        
-        mock_res = MagicMock()
-        mock_res.success = True
-        mock_res.note_id = 1
-        mock_res.media_uploaded = ["image1.png"]
-        mock_export.return_value = mock_res
-        
-        events = list(service.run(
-            pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], skip_export=False
-        ))
-        
-        assert any("Uploaded media image1.png" in e.message for e in events if e.type == "status")
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.extract_content_from_pdf')
@@ -1161,7 +1115,7 @@ class TestServiceAdvanced:
         
         events = list(service.run(
             pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], 
-            enable_reflection=True, reflection_rounds=0, skip_export=True
+            skip_export=True
         ))
         
         # 40 pages -> dynamic_rounds = 3

@@ -153,11 +153,6 @@ def _get_session_or_404(session_id: Optional[str], *, require_session_id: bool =
 def _get_runtime_or_404(session_id: str, session: Optional[SessionState] = None) -> SessionRuntime:
     runtime = session_manager.get_runtime(session_id)
     if not runtime:
-        if session and hasattr(session, "draft_store") and hasattr(session, "generation_service"):
-            return SessionRuntime(
-                generation_service=session.generation_service,
-                draft_store=session.draft_store,
-            )
         raise HTTPException(status_code=404, detail="No active session")
     return runtime
 

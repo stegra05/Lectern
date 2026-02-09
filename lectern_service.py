@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -17,6 +16,9 @@ from utils.tags import infer_slide_set_name
 from utils.note_export import export_card_to_anki
 from utils.state import save_state, clear_state, load_state
 from utils.history import HistoryManager
+
+_MIN_NOTES_PER_BATCH = 20
+_MAX_NOTES_PER_BATCH = 50
 
 EventType = Literal[
     "status",
@@ -61,9 +63,6 @@ class GenerationConfig:
     tags: List[str]
     context_deck: str = ""
     resume: bool = False
-    max_notes_per_batch: int = config.MAX_NOTES_PER_BATCH
-    enable_reflection: bool = config.ENABLE_REFLECTION
-    reflection_rounds: int = config.REFLECTION_MAX_ROUNDS
     skip_export: bool = False
     stop_check: Optional[Callable[[], bool]] = None
     focus_prompt: Optional[str] = None
@@ -87,10 +86,6 @@ class LecternGenerationService:
         tags: List[str],
         context_deck: str = "",
         resume: bool = False,
-        # Options matching CLI args/config
-        max_notes_per_batch: int = config.MAX_NOTES_PER_BATCH,
-        enable_reflection: bool = config.ENABLE_REFLECTION,
-        reflection_rounds: int = config.REFLECTION_MAX_ROUNDS,
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
         focus_prompt: Optional[str] = None,
@@ -107,9 +102,6 @@ class LecternGenerationService:
             tags=tags,
             context_deck=context_deck,
             resume=resume,
-            max_notes_per_batch=max_notes_per_batch,
-            enable_reflection=enable_reflection,
-            reflection_rounds=reflection_rounds,
             skip_export=skip_export,
             stop_check=stop_check,
             focus_prompt=focus_prompt,
@@ -230,8 +222,7 @@ class LecternGenerationService:
             except Exception as e:
                 yield ServiceEvent("warning", f"PDF title extraction failed: {e}")
 
-            # 3c. Slide Set Name - DEFERRED until after concept map
-            # The concept map now returns slide_set_name, we'll extract it after step 5
+            # 3c. Slide Set Name -- extracted from concept map response in step 5b below.
 
             # 4. AI Session Init
             if self._should_stop(cfg.stop_check):
@@ -281,7 +272,10 @@ class LecternGenerationService:
                 "deck_name": cfg.deck_name,
                 "slide_set_name": slide_set_name,
             }
-            ai._slide_set_context = slide_set_context  # Update context for future calls
+            ai.set_slide_set_context(
+                deck_name=slide_set_context["deck_name"],
+                slide_set_name=slide_set_context["slide_set_name"],
+            )
 
             # 6. Generation Loop
             all_cards = []
@@ -306,7 +300,7 @@ class LecternGenerationService:
             # Calculate chars per page for mode detection
             chars_per_page = total_text_chars / len(pages) if len(pages) > 0 else 0
             is_script_mode = cfg.source_type == "script" or (
-                cfg.source_type == "auto" and chars_per_page > 2000
+                cfg.source_type == "auto" and chars_per_page > config.DENSE_THRESHOLD_CHARS_PER_PAGE
             )
             
             # Simple card cap calculation
@@ -320,7 +314,9 @@ class LecternGenerationService:
                 yield ServiceEvent("info", f"Slides mode: ~{total_cards_cap} cards target ({len(pages)} pages × {effective_target:.1f})")
 
             # Batch sizing
-            actual_batch_size = int(cfg.max_notes_per_batch or min(50, max(20, len(pages) // 2)))
+            # Clamp batch size: at least 20, at most 50, targeting half the page count.
+            batch_size = max(_MIN_NOTES_PER_BATCH, min(_MAX_NOTES_PER_BATCH, len(pages) // 2))
+            actual_batch_size = int(batch_size)
 
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})
 
@@ -351,7 +347,7 @@ class LecternGenerationService:
             yield ServiceEvent("step_end", "Generation Phase Complete", {"success": True, "count": len(all_cards)})
 
             # 7. Reflection Phase
-            if cfg.enable_reflection and len(all_cards) > 0:
+            if len(all_cards) > 0:
                 yield ServiceEvent("step_start", "Reflection and improvement", {"phase": "reflecting"})
                 
                 # Dynamic rounds logic
@@ -365,7 +361,7 @@ class LecternGenerationService:
                 else:
                     dynamic_rounds = 5
                 
-                rounds = cfg.reflection_rounds if cfg.reflection_rounds > 0 else dynamic_rounds
+                rounds = dynamic_rounds
                 
                 yield ServiceEvent("progress_start", "Reflection", {"total": rounds, "label": "Reflection Rounds"})
                 
@@ -427,10 +423,6 @@ class LecternGenerationService:
                     fallback_model=config.DEFAULT_BASIC_MODEL,  # NOTE: Anki note type, not Gemini model
                     additional_tags=cfg.tags,
                 )
-                
-                # Report media uploads
-                for media_file in result.media_uploaded:
-                    yield ServiceEvent("status", f"Uploaded media {media_file}")
                 
                 if result.success:
                     created += 1
@@ -605,9 +597,6 @@ class LecternGenerationService:
                 return
 
             try:
-                # Pass examples only if we are starting fresh (or maybe always? logic said 'continue from prior')
-                # Previous fix used: examples=examples if turn_idx == 0 else ""
-                # We can approximate this: if len(all_cards) == 0 (and not resumed with cards)
                 current_examples = examples if len(all_cards) == 0 else ""
                 recent_keys = []
                 for card in all_cards[-30:]:

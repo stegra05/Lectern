@@ -100,9 +100,3 @@ def infer_slide_set_name(pdf_title: str, pdf_filename: str = "") -> str:
             return _clean_tag_part(clean_name, title_case=True)
     
     return ""
-
-
-# NOTE: infer_slide_set_name_with_ai was removed - slide_set_name now comes from concept map
-# NOTE: Legacy build_grouped_tags function removed in favor of build_hierarchical_tags
-# The 4-level format (Deck::SlideSet::Topic::Tag) is now the only supported format.
-

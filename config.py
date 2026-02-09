@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 try:
@@ -40,17 +42,30 @@ def _load_environment_files() -> None:
 _load_environment_files()
 
 # --- User Config (JSON) Loading ---
-# Path for user configuration file (adjacent to config.py or in app data)
-_CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
-_USER_CONFIG_PATH = os.path.join(_CONFIG_DIR, "user_config.json")
+from utils.path_utils import get_app_data_dir
+
+_CONFIG_DIR = Path(__file__).resolve().parent
+_LEGACY_USER_CONFIG_PATH = _CONFIG_DIR / "user_config.json"
+_USER_CONFIG_PATH = get_app_data_dir() / "user_config.json"
 _USER_CONFIG: Dict[str, Any] = {}
+
+
+def _prepare_user_config_path() -> None:
+    """Ensure user config path exists and migrate from legacy path once."""
+    try:
+        _USER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if _LEGACY_USER_CONFIG_PATH.exists() and not _USER_CONFIG_PATH.exists():
+            shutil.copy2(_LEGACY_USER_CONFIG_PATH, _USER_CONFIG_PATH)
+    except Exception as e:
+        print(f"Warning: Failed to prepare user_config.json path: {e}")
 
 def _load_user_config() -> Dict[str, Any]:
     """Load user configuration from JSON file if it exists."""
     global _USER_CONFIG
+    _prepare_user_config_path()
     if os.path.exists(_USER_CONFIG_PATH):
         try:
-            with open(_USER_CONFIG_PATH, "r") as f:
+            with open(_USER_CONFIG_PATH, "r", encoding="utf-8") as f:
                 _USER_CONFIG = json.load(f)
         except Exception as e:
             print(f"Warning: Failed to load user_config.json: {e}")
@@ -62,7 +77,8 @@ def save_user_config(config: Dict[str, Any]) -> None:
     global _USER_CONFIG
     _USER_CONFIG.update(config)
     try:
-        with open(_USER_CONFIG_PATH, "w") as f:
+        _prepare_user_config_path()
+        with open(_USER_CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(_USER_CONFIG, f, indent=2)
     except Exception as e:
         print(f"Warning: Failed to save user_config.json: {e}")
@@ -91,10 +107,6 @@ GEMINI_API_KEY: str = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
 # Default Gemini model name for generation.
 # Centralizes the model selection to avoid hardcoding in modules.
 DEFAULT_GEMINI_MODEL: str = _get_config("gemini_model", "gemini-3-flash-preview", "DEFAULT_GEMINI_MODEL")
-
-# Thinking level for Gemini 3 Flash models (minimal, low, medium, high).
-# Controls reasoning depth and latency.
-GEMINI_THINKING_LEVEL: str = _get_config("gemini_thinking_level", "low", "GEMINI_THINKING_LEVEL")
 
 # Lightweight model for fast, cheap inference tasks like naming and classification.
 # Uses Gemini 3 Flash by default for speed and cost efficiency.
@@ -148,20 +160,7 @@ def assert_required_config() -> None:
 
 
 
-# Batch generation and reflection settings
-# Maximum notes the model should emit per batch. Keep small to avoid truncation.
-MAX_NOTES_PER_BATCH: int = int(os.getenv("MAX_NOTES_PER_BATCH", "30"))
-
-# Maximum number of reflection rounds to attempt after initial generation
-REFLECTION_MAX_ROUNDS: int = int(os.getenv("REFLECTION_MAX_ROUNDS", "2"))
-
-# Enable/disable reflection phase
-ENABLE_REFLECTION: bool = os.getenv("ENABLE_REFLECTION", "true").lower() not in (
-    "0",
-    "false",
-    "no",
-)
-
+# Batch generation settings
 # Caps for total note creation per run
 # Minimum cards per slide (enforced threshold, e.g., 0.8 -> at least 80% of page count)
 MIN_CARDS_PER_SLIDE: float = float(os.getenv("MIN_CARDS_PER_SLIDE", "0.8"))
@@ -185,11 +184,8 @@ SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
 # Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 
-# Temperature settings for Gemini 3 structured output (optimal range: 0.8-0.9 per docs)
-# Base temperature for card generation (normal mode)
-GEMINI_GENERATION_TEMPERATURE: float = float(os.getenv("GEMINI_GENERATION_TEMPERATURE", "0.8"))
-# Temperature for normal mode (higher for variety)
-GEMINI_NORMAL_MODE_TEMPERATURE: float = float(os.getenv("GEMINI_NORMAL_MODE_TEMPERATURE", "0.9"))
+# Gemini 3 generation temperature (Google recommends 1.0).
+GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "1.0"))
 
 # Session logging controls
 LOG_SESSION_CONTENT: bool = os.getenv("LOG_SESSION_CONTENT", "true").lower() not in (
