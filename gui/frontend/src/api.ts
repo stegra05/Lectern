@@ -164,6 +164,11 @@ export interface HealthStatus {
     gemini_model?: string;
 }
 
+export interface SessionStatus {
+    active: boolean;
+    status: string;
+}
+
 export const api = {
     checkHealth: async () => {
         try {
@@ -356,6 +361,12 @@ export const api = {
     getSession: async (sessionId: string) => {
         const res = await fetch(`${API_URL}/session/${sessionId}`);
         if (!res.ok) throw new Error("Failed to load session");
+        return res.json();
+    },
+
+    getSessionStatus: async (sessionId: string): Promise<SessionStatus> => {
+        const res = await fetch(`${API_URL}/session/${sessionId}/status`);
+        if (!res.ok) throw new Error("Failed to load session status");
         return res.json();
     },
 

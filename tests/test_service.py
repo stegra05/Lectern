@@ -288,38 +288,25 @@ class TestServiceIntegration:
 
 class TestServiceAdvanced:
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.load_state')
     @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
-    @patch('os.path.abspath')
-    def test_run_resume_logic(
+    def test_run_starts_fresh_without_resume(
         self,
-        mock_abspath,
         mock_getsize,
         mock_exists,
         mock_ai_client_class,
         mock_extract_pdf,
-        mock_load_state,
         mock_check,
         service,
         mock_pdf_pages
     ):
-        """Test that run correctly resumes from saved state."""
+        """Test that run starts fresh and does not restore history from old state."""
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
         mock_extract_pdf.return_value = mock_pdf_pages
-        mock_abspath.side_effect = lambda x: x
-        
-        # Setup saved state
-        mock_load_state.return_value = {
-            "pdf_path": "/fake/path.pdf",
-            "concept_map": {"slide_set_name": "Resumed Set"},
-            "cards": [{"fields": {"Front": "Already exists"}}],
-            "history": [("user", "prompt"), ("model", "response")]
-        }
         
         mock_ai = MagicMock()
         mock_ai.log_path = "/tmp/test.log"
@@ -331,16 +318,12 @@ class TestServiceAdvanced:
             deck_name="Test Deck",
             model_name="gemini",
             tags=[],
-            resume=True,
             skip_export=True
         ))
         
-        # Should have info about resuming
-        assert any("Resuming" in e.message for e in events if e.type == "info")
-        # Should have restored cards message
-        assert any("Restored 1 cards" in e.message for e in events if e.type == "info")
-        # AI client should have history restored
-        mock_ai.restore_history.assert_called_once()
+        assert not any("Resuming" in e.message for e in events if e.type == "info")
+        assert not any("Restored" in e.message for e in events if e.type == "info")
+        mock_ai.restore_history.assert_not_called()
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.extract_content_from_pdf')
@@ -433,6 +416,27 @@ class TestServiceAdvanced:
         assert "cost" in result
         assert result["pages"] == 1
         # image tokens = 2 * 258 = 516. 100 + 516 = 616
+
+    @pytest.mark.asyncio
+    @patch('ai_common._compose_multimodal_content')
+    @patch('lectern_service.LecternAIClient')
+    async def test_verify_image_token_cost(
+        self,
+        mock_ai_client_class,
+        mock_compose,
+        service,
+    ):
+        """Test image token verification via token-delta method."""
+        mock_compose.side_effect = [
+            [{"role": "user", "parts": [{"text": "t"}]}],
+            [{"role": "user", "parts": [{"text": "t+img"}]}],
+        ]
+        mock_ai = MagicMock()
+        mock_ai.count_tokens.side_effect = [100, 358]
+        mock_ai_client_class.return_value = mock_ai
+
+        result = await service.verify_image_token_cost(model_name="gemini-3-flash-preview")
+        assert result["delta_per_image"] == 258
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.extract_content_from_pdf')
@@ -963,37 +967,6 @@ class TestServiceAdvanced:
         ))
         
         assert any(e.type == "error" and "Critical error" in e.message for e in events)
-
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.load_state')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.os.path.abspath')
-    def test_resume_invalid_path_mismatch(
-        self,
-        mock_abspath,
-        mock_getsize,
-        mock_exists,
-        mock_load_state,
-        mock_check,
-        service
-    ):
-        """Test resume logic when the saved PDF path doesn't match."""
-        mock_exists.return_value = True
-        mock_getsize.return_value = 1024
-        mock_check.return_value = True
-        mock_abspath.side_effect = lambda x: x
-        
-        # Saved state has different path
-        mock_load_state.return_value = {"pdf_path": "/different/path.pdf"}
-        
-        # Path mismatch should discard saved state
-        events = list(service.run(
-            pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], resume=True
-        ))
-        
-        # Should not see "Resuming" info even though we passed resume=True
-        assert not any("Resuming session" in e.message for e in events if e.type == "info")
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.extract_content_from_pdf')

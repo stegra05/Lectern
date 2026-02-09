@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict
+from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -7,6 +7,8 @@ class Concept(BaseModel):
     name: str
     definition: str
     category: str
+    importance: Literal["high", "medium", "low"]
+    difficulty: Literal["foundational", "intermediate", "advanced"]
 
 
 class Relation(BaseModel):

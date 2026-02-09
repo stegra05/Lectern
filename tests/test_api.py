@@ -131,7 +131,7 @@ def test_session_management_logic():
     mock_drafts = MagicMock()
     
     # create_session
-    session = sm.create_session("test.pdf", mock_service, mock_drafts)
+    session = sm.create_session("/tmp/lectern_test.pdf", mock_service, mock_drafts)
     assert session.session_id is not None
     assert sm.get_latest_session().session_id == session.session_id
     
@@ -148,7 +148,7 @@ def test_session_management_logic():
     assert session.status == "completed"
     assert session.completed_at is not None
     
-    # prune (nothing to remove yet as TTL is high)
+    # prune is a compatibility no-op
     sm.prune()
     assert sm.get_session(session.session_id) is not None
     
@@ -157,7 +157,7 @@ def test_session_management_logic():
         with patch('gui.backend.main.os.remove') as mock_remove:
             sm.stop_session(session.session_id)
             mock_service.stop.assert_called_once()
-            mock_remove.assert_called_once_with("test.pdf")
+            mock_remove.assert_called_once_with("/tmp/lectern_test.pdf")
             assert sm.get_session(session.session_id) is None
 
 def test_config_update_complex():
@@ -245,22 +245,24 @@ def test_sync_drafts_endpoint():
     """Test /drafts/sync SSE endpoint."""
     mock_session = MagicMock()
     mock_session.session_id = "test_session"
-    mock_session.draft_store.get_drafts.return_value = [{"fields": {"F": "B"}}]
-    mock_session.draft_store.deck_name = "D"
-    mock_session.draft_store.model_name = "M"
-    mock_session.draft_store.tags = []
+    mock_runtime = MagicMock()
+    mock_runtime.draft_store.get_drafts.return_value = [{"fields": {"F": "B"}}]
+    mock_runtime.draft_store.deck_name = "D"
+    mock_runtime.draft_store.model_name = "M"
+    mock_runtime.draft_store.tags = []
     
     with patch('gui.backend.main._get_session_or_404', return_value=mock_session):
-        with patch('gui.backend.main.export_card_to_anki') as mock_export:
-            mock_export.return_value.success = True
-            mock_export.return_value.note_id = 123
-            
-            response = client.post("/drafts/sync?session_id=test_session")
-            assert response.status_code == 200
-            lines = [l for l in response.iter_lines() if l]
-            assert any("progress_start" in str(l) for l in lines)
-            assert any("note_created" in str(l) for l in lines)
-            assert any("done" in str(l) for l in lines)
+        with patch('gui.backend.main._get_runtime_or_404', return_value=mock_runtime):
+            with patch('gui.backend.main.export_card_to_anki') as mock_export:
+                mock_export.return_value.success = True
+                mock_export.return_value.note_id = 123
+                
+                response = client.post("/drafts/sync?session_id=test_session")
+                assert response.status_code == 200
+                lines = [l for l in response.iter_lines() if l]
+                assert any("progress_start" in str(l) for l in lines)
+                assert any("note_created" in str(l) for l in lines)
+                assert any("done" in str(l) for l in lines)
 
 def test_session_api_more():
     """Test more session API edge cases."""
@@ -275,6 +277,20 @@ def test_session_api_more():
     with patch('gui.backend.main.load_state', return_value={"cards": []}):
         response = client.delete("/session/s1/cards/99")
         assert response.status_code == 404
+
+def test_session_status_endpoint():
+    from gui.backend.main import session_manager
+
+    session = session_manager.create_session("/tmp/lectern_status.pdf", MagicMock(), MagicMock())
+    active = client.get(f"/session/{session.session_id}/status")
+    assert active.status_code == 200
+    assert active.json()["active"] is True
+    assert active.json()["status"] == "active"
+
+    session_manager.mark_status(session.session_id, "cancelled")
+    missing = client.get(f"/session/{session.session_id}/status")
+    assert missing.status_code == 200
+    assert missing.json()["active"] is False
 
 def test_anki_notes_api():
     """Test Anki notes update/delete endpoints."""
@@ -332,7 +348,7 @@ def test_get_decks_failure():
         assert response.json()["decks"] == []
 
 def test_session_manager_edge_cases():
-    """Test session manager pruning and cleanup errors."""
+    """Test session manager cleanup and orphan sweep behavior."""
     from gui.backend.main import SessionManager, SessionState
     sm = SessionManager()
     
@@ -342,23 +358,19 @@ def test_session_manager_edge_cases():
     # Cleanup handles file removal errors gracefully
     mock_service = MagicMock()
     mock_drafts = MagicMock()
-    session = sm.create_session("/nonexistent/file.pdf", mock_service, mock_drafts)
+    session = sm.create_session("/tmp/lectern_cleanup.pdf", mock_service, mock_drafts)
     
     with patch('gui.backend.main.os.path.exists', return_value=True):
         with patch('gui.backend.main.os.remove', side_effect=Exception("Perm error")):
             # Should not raise
             sm._cleanup_session_files(session)
     
-    # Pruning removes expired completed sessions
-    # create a session and mark it completed
-    session2 = sm.create_session("p.pdf", mock_service, mock_drafts)
-    sm.mark_status(session2.session_id, "completed")
-    
-    # Fake time to avoid waiting
-    with patch('gui.backend.main.time.time', return_value=time.time() + 3600*5):
-        # Trigger pruning via create_session or direct call
-        sm.prune()
-        assert sm.get_session(session2.session_id) is None
+    # sweep_orphan_temp_files removes Lectern temp PDFs not tied to active sessions
+    with patch('gui.backend.session.glob.glob', return_value=["/tmp/lectern_orphan.pdf"]):
+        with patch('gui.backend.main.os.remove') as mock_remove:
+            removed = sm.sweep_orphan_temp_files()
+            assert removed == 1
+            mock_remove.assert_called_once_with("/tmp/lectern_orphan.pdf")
 
 def test_config_update_failures():
     """Test /config POST returns 500 on keychain or save failures."""
@@ -435,7 +447,7 @@ def test_generate_event_generator_errors():
                     # The first line should be session_start
                     session_id = lines[0]["data"]["session_id"]
                     assert any("Generation failed: SSE Crash" in str(l) for l in lines)
-                    assert session_manager.get_session(session_id).status == "error"
+                    assert session_manager.get_session(session_id) is None
 
 def test_sync_session_to_anki_recreate_branch():
     """Test session sync recreates externally deleted Anki notes."""
@@ -551,10 +563,14 @@ def test_simple_session_actions():
     
     # Sync empty drafts
     mock_session = MagicMock()
-    mock_session.draft_store.get_drafts.return_value = []
+    mock_session.session_id = "s1"
+    mock_runtime = MagicMock()
+    mock_runtime.draft_store.get_drafts.return_value = []
     with patch('gui.backend.main._get_session_or_404', return_value=mock_session):
-        response = client.post("/drafts/sync?session_id=s1")
-        assert response.json()["created"] == 0
+        with patch('gui.backend.main._get_runtime_or_404', return_value=mock_runtime):
+            with patch('gui.backend.main.load_state', return_value={"cards": []}):
+                response = client.post("/drafts/sync?session_id=s1")
+                assert response.json()["created"] == 0
 
 def test_session_card_management_success():
     """Test successful card deletion and history update."""
@@ -614,7 +630,7 @@ def test_api_status_event_handling():
     
     # cancelled event
     session_manager.mark_status(session.session_id, "cancelled")
-    assert session_manager.get_session(session.session_id).status == "cancelled"
+    assert session_manager.get_session(session.session_id) is None
 
 def test_draft_api_failures():
     """Test draft update/delete return 404 when index is out of range."""
@@ -632,17 +648,20 @@ def test_draft_api_failures():
 def test_sync_failures_reporting():
     """Test /drafts/sync reports individual export failures in SSE stream."""
     mock_session = MagicMock()
-    mock_session.draft_store.get_drafts.return_value = [{"fields": {"F": "B"}}]
+    mock_session.session_id = "s1"
+    mock_runtime = MagicMock()
+    mock_runtime.draft_store.get_drafts.return_value = [{"fields": {"F": "B"}}]
     # Export fails
     with patch('gui.backend.main._get_session_or_404', return_value=mock_session):
-        with patch('gui.backend.main.export_card_to_anki') as mock_export:
-            mock_export.return_value.success = False
-            mock_export.return_value.error = "Anki busy"
-            
-            response = client.post("/drafts/sync?session_id=s1")
-            lines = [l for l in response.iter_lines() if l]
-            assert any("Failed to create note: Anki busy" in str(l) for l in lines)
-            assert any('"failed": 1' in str(l) for l in lines)
+        with patch('gui.backend.main._get_runtime_or_404', return_value=mock_runtime):
+            with patch('gui.backend.main.export_card_to_anki') as mock_export:
+                mock_export.return_value.success = False
+                mock_export.return_value.error = "Anki busy"
+                
+                response = client.post("/drafts/sync?session_id=s1")
+                lines = [l for l in response.iter_lines() if l]
+                assert any("Failed to create note: Anki busy" in str(l) for l in lines)
+                assert any('"failed": 1' in str(l) for l in lines)
 
 def test_session_state_loading_failures():
     """Test session endpoints return 404 for missing state and handle empty cards."""

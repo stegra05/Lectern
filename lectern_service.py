@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -14,7 +15,7 @@ from ai_client import LecternAIClient
 from ai_pacing import PacingState
 from utils.tags import infer_slide_set_name
 from utils.note_export import export_card_to_anki
-from utils.state import save_state, clear_state, load_state
+from utils.state import save_state, clear_state
 from utils.history import HistoryManager
 
 _MIN_NOTES_PER_BATCH = 20
@@ -62,7 +63,6 @@ class GenerationConfig:
     model_name: str
     tags: List[str]
     context_deck: str = ""
-    resume: bool = False
     skip_export: bool = False
     stop_check: Optional[Callable[[], bool]] = None
     focus_prompt: Optional[str] = None
@@ -85,7 +85,6 @@ class LecternGenerationService:
         model_name: str,
         tags: List[str],
         context_deck: str = "",
-        resume: bool = False,
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
         focus_prompt: Optional[str] = None,
@@ -101,7 +100,6 @@ class LecternGenerationService:
             model_name=model_name,
             tags=tags,
             context_deck=context_deck,
-            resume=resume,
             skip_export=skip_export,
             stop_check=stop_check,
             focus_prompt=focus_prompt,
@@ -132,7 +130,7 @@ class LecternGenerationService:
         if cfg.entry_id:
             history_id = cfg.entry_id
         else:
-            # NOTE: Always create a new entry - resume logic uses state file, not history
+            # NOTE: Always create a new entry for a new run.
             history_id = history_mgr.add_entry(
                 cfg.pdf_path,
                 cfg.deck_name,
@@ -148,15 +146,6 @@ class LecternGenerationService:
                 history_mgr.update_entry(history_id, status="error")
                 return
             yield ServiceEvent("step_end", "AnkiConnect Connected", {"success": True})
-
-            # State Resume Check
-            saved_state = None
-            if cfg.resume:
-                saved_state = load_state(session_id=cfg.session_id)
-                if saved_state and saved_state.get("pdf_path") == os.path.abspath(cfg.pdf_path):
-                    yield ServiceEvent("info", f"Resuming session for {os.path.basename(cfg.pdf_path)}")
-                else:
-                    saved_state = None  # Invalid state or mismatch
 
             # 2. Parse PDF
             pages = []
@@ -235,29 +224,21 @@ class LecternGenerationService:
                 focus_prompt=cfg.focus_prompt,
                 slide_set_context=None,
             )
-            if saved_state:
-                history = saved_state.get("history", [])
-                if history:
-                    ai.restore_history(history)
             yield ServiceEvent("step_end", "Session Started", {"success": True})
             
             # 5. Concept Map
             concept_map = {}
-            if saved_state and saved_state.get("concept_map"):
-                concept_map = saved_state["concept_map"]
-                yield ServiceEvent("info", "Restored Concept Map from state", {"map": concept_map})
-            else:
-                if self._should_stop(cfg.stop_check):
-                    return
+            if self._should_stop(cfg.stop_check):
+                return
 
-                yield ServiceEvent("step_start", "Build global concept map", {"phase": "concept"})
-                try:
-                    concept_map = ai.concept_map([p.__dict__ for p in pages])
-                    yield ServiceEvent("step_end", "Concept Map Built", {"success": True})
-                    yield ServiceEvent("info", "Concept Map built", {"map": concept_map})
-                except Exception as e:
-                    yield ServiceEvent("warning", f"Concept map failed: {e}")
-                    yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})
+            yield ServiceEvent("step_start", "Build global concept map", {"phase": "concept"})
+            try:
+                concept_map = ai.concept_map([p.__dict__ for p in pages])
+                yield ServiceEvent("step_end", "Concept Map Built", {"success": True})
+                yield ServiceEvent("info", "Concept Map built", {"map": concept_map})
+            except Exception as e:
+                yield ServiceEvent("warning", f"Concept map failed: {e}")
+                yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})
 
             # 5b. Extract Slide Set Name from Concept Map (or fallback to heuristic)
             slide_set_name = concept_map.get('slide_set_name', '') if concept_map else ''
@@ -280,14 +261,6 @@ class LecternGenerationService:
             # 6. Generation Loop
             all_cards = []
             seen_keys = set()
-            
-            if saved_state:
-                all_cards = saved_state.get("cards", [])
-                for card in all_cards:
-                    key = self._get_card_key(card)
-                    if key:
-                        seen_keys.add(key)
-                yield ServiceEvent("info", f"Restored {len(all_cards)} cards from state")
 
             # Targets
             # NOTE(Density): Simple linear formula - user controls via density_target slider
@@ -474,10 +447,19 @@ class LecternGenerationService:
         # Count tokens (Text only)
         ai = LecternAIClient()
         token_count = ai.count_tokens(content)
+
+        image_token_cost = config.GEMINI_IMAGE_TOKEN_COST
+        image_token_source = "config_default"
+        if config.ESTIMATION_VERIFY_IMAGE_TOKEN_COST:
+            verification = await self.verify_image_token_cost(model_name=model_name)
+            verified_cost = int(verification.get("delta_per_image", 0))
+            if verified_cost > 0:
+                image_token_cost = verified_cost
+                image_token_source = "count_tokens_verified"
         
-        # Add image tokens manually (Gemini: 258 tokens per image)
+        # Add image tokens manually (baseline, or verified delta if enabled)
         total_images = sum(p.image_count for p in pages)
-        image_tokens = total_images * config.GEMINI_IMAGE_TOKEN_COST
+        image_tokens = total_images * image_token_cost
         token_count += image_tokens
         
         # Account for overhead (system prompt, concept map prompt, history)
@@ -508,6 +490,32 @@ class LecternGenerationService:
             "cost": input_cost + output_cost,
             "pages": len(pages),
             "model": model,
+            "image_token_cost": image_token_cost,
+            "image_token_source": image_token_source,
+        }
+
+    async def verify_image_token_cost(self, model_name: str | None = None) -> Dict[str, Any]:
+        """Estimate per-image token cost via count_tokens delta (text+image vs text-only)."""
+        from ai_common import _compose_multimodal_content
+
+        # 1x1 transparent PNG, useful for deterministic token-delta checks.
+        tiny_png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Zz8QAAAAASUVORK5CYII="
+        )
+        prompt = "Token counting probe."
+
+        text_only_content = _compose_multimodal_content([{"text": "probe", "images": []}], prompt)
+        image_content = _compose_multimodal_content([{"text": "probe", "images": [tiny_png]}], prompt)
+
+        ai = LecternAIClient(model_name=model_name)
+        text_tokens = ai.count_tokens(text_only_content)
+        image_tokens = ai.count_tokens(image_content)
+        delta = max(0, image_tokens - text_tokens)
+
+        return {
+            "text_tokens": text_tokens,
+            "image_tokens": image_tokens,
+            "delta_per_image": delta,
         }
 
     def _get_card_key(self, card: Dict[str, Any]) -> str:
@@ -563,6 +571,14 @@ class LecternGenerationService:
                 added_count += 1
                 yield ServiceEvent("card", message, {"card": card})
         return added_count
+
+    def _collect_card_fronts(self, cards: List[Dict[str, Any]]) -> List[str]:
+        fronts: List[str] = []
+        for card in cards:
+            key = self._get_card_key(card)
+            if key:
+                fronts.append(key[:120])
+        return fronts
 
     def _run_generation_loop(
         self,
@@ -626,6 +642,7 @@ class LecternGenerationService:
                     avoid_fronts=recent_keys,
                     covered_slides=covered_slides,
                     pacing_hint=pacing_hint,
+                    all_card_fronts=self._collect_card_fronts(all_cards),
                 )
                 new_cards = out.get("cards", [])
 
@@ -694,7 +711,10 @@ class LecternGenerationService:
             try:
                 # Limit reflection batch to avoid overwhelming, but at least do 5 if space allows
                 batch_limit = min(actual_batch_size, remaining)
-                out = ai.reflect(limit=batch_limit)
+                out = ai.reflect(
+                    limit=batch_limit,
+                    all_card_fronts=self._collect_card_fronts(all_cards),
+                )
                 new_cards = out.get("cards", [])
 
                 added_count = yield from self._yield_new_cards(

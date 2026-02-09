@@ -38,12 +38,14 @@ from utils.state import load_state, save_state, StateFile, resolve_state_context
 from session import (
     SessionManager,
     SessionState,
+    LECTERN_TEMP_PREFIX,
     session_manager,
     _get_session_or_404,
     _get_runtime_or_404,
 )
 
 app = FastAPI(title='Lectern API', version='1.2.0')
+session_manager.sweep_orphan_temp_files()
 
 app.add_middleware(
     CORSMiddleware,
@@ -333,7 +335,11 @@ async def estimate_cost(pdf_file: UploadFile = File(...), model_name: Optional[s
     
     # Save uploaded file to temp in threadpool to avoid blocking
     def save_to_temp():
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            prefix=LECTERN_TEMP_PREFIX,
+            suffix=".pdf",
+        ) as tmp:
             shutil.copyfileobj(pdf_file.file, tmp)
             return tmp.name
             
@@ -382,7 +388,11 @@ async def generate_cards(
     # Run in threadpool to avoid blocking
     from starlette.concurrency import run_in_threadpool
     def save_generate_temp():
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            prefix=LECTERN_TEMP_PREFIX,
+            suffix=".pdf",
+        ) as tmp:
             shutil.copyfileobj(pdf_file.file, tmp)
             return tmp.name
             
@@ -437,6 +447,7 @@ async def generate_cards(
                     event_type = parsed.get("type")
                     if event_type in {"done"}:
                         session_manager.mark_status(session.session_id, "completed")
+                        session_manager.cleanup_temp_file(session.session_id)
                     elif event_type in {"cancelled"}:
                         session_manager.mark_status(session.session_id, "cancelled")
                     elif event_type in {"error"}:
@@ -446,8 +457,6 @@ async def generate_cards(
         except Exception as e:
             session_manager.mark_status(session.session_id, "error")
             yield f'{{"type": "error", "message": "Generation failed: {str(e)}", "timestamp": 0}}\n'
-        finally:
-            session_manager.prune()
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
@@ -566,6 +575,14 @@ async def get_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     return state
 
+@app.get("/session/{session_id}/status")
+async def get_session_status(session_id: str):
+    session = session_manager.get_session(session_id)
+    if not session:
+        return {"active": False, "status": "missing"}
+    is_active = session.status == "active"
+    return {"active": is_active, "status": session.status}
+
 @app.put("/session/{session_id}/cards")
 async def update_session_cards(session_id: str, update: SessionCardsUpdate):
     state = load_state(session_id)
@@ -680,4 +697,9 @@ if os.path.exists(frontend_dist):
         return FileResponse(os.path.join(frontend_dist, "index.html"))
 else:
     print(f"Warning: Frontend build not found at {frontend_dist}")
+
+
+@app.on_event("shutdown")
+async def shutdown_cleanup():
+    session_manager.shutdown()
 

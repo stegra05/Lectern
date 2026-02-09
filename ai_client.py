@@ -36,8 +36,16 @@ _CONCEPT_SCHEMA = {
         "name": {"type": "string"},
         "definition": {"type": "string"},
         "category": {"type": "string"},
+        "importance": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+        },
+        "difficulty": {
+            "type": "string",
+            "enum": ["foundational", "intermediate", "advanced"],
+        },
     },
-    "required": ["id", "name", "definition", "category"]
+    "required": ["id", "name", "definition", "category", "importance", "difficulty"]
 }
 
 _RELATION_SCHEMA = {
@@ -231,14 +239,54 @@ class LecternAIClient:
             str(ctx.get("slide_set_name") or ""),
         )
 
-    def _prune_history(self) -> None:
+    def _build_rolling_card_summary(self, all_card_fronts: List[str]) -> str:
+        cleaned_fronts = [" ".join(str(front).split()) for front in all_card_fronts if str(front).strip()]
+        if not cleaned_fronts:
+            return ""
+
+        omitted_count = 0
+        if len(cleaned_fronts) > 200:
+            omitted_count = len(cleaned_fronts) - 200
+            cleaned_fronts = cleaned_fronts[-200:]
+
+        summary_lines = [
+            "Rolling summary of previously generated card fronts.",
+            "Use this to avoid repetition with earlier batches.",
+        ]
+        if omitted_count > 0:
+            summary_lines.append(
+                f"Only the latest 200 fronts are listed ({omitted_count} earlier cards omitted)."
+            )
+
+        for idx, front in enumerate(cleaned_fronts, start=1):
+            summary_lines.append(f"{idx}. {front[:120]}")
+
+        return "\n".join(summary_lines)
+
+    def _prune_history(self, all_card_fronts: List[str] | None = None) -> None:
         """Prune chat history to manage token usage (sliding window)."""
         try:
             history = self.get_history()
             if len(history) <= 20:
                 return
 
-            new_history = history[:2] + history[-6:]
+            summary_text = self._build_rolling_card_summary(all_card_fronts or [])
+            summary_turn: List[Dict[str, Any]] = []
+            if summary_text:
+                summary_turn = [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": "Summarize generated coverage so far before continuing."}
+                        ],
+                    },
+                    {
+                        "role": "model",
+                        "parts": [{"text": summary_text}],
+                    },
+                ]
+
+            new_history = history[:2] + summary_turn + history[-6:]
             self.restore_history(new_history)
             logger.debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
         except Exception as e:
@@ -281,8 +329,9 @@ class LecternAIClient:
         avoid_fronts: List[str] | None = None,
         covered_slides: List[int] | None = None,
         pacing_hint: str = "",
+        all_card_fronts: List[str] | None = None,
     ) -> Dict[str, Any]:
-        self._prune_history()
+        self._prune_history(all_card_fronts=all_card_fronts)
         
         # Build context strings
         avoid_text = ""
@@ -328,8 +377,13 @@ class LecternAIClient:
             return {"cards": cards, "done": done}
         return {"cards": [], "done": True}
 
-    def reflect(self, limit: int, reflection_prompt: str | None = None) -> Dict[str, Any]:
-        self._prune_history()
+    def reflect(
+        self,
+        limit: int,
+        reflection_prompt: str | None = None,
+        all_card_fronts: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        self._prune_history(all_card_fronts=all_card_fronts)
         
         prompt = reflection_prompt or self._prompt_builder.reflection(limit=limit)
         

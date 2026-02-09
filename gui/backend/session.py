@@ -1,4 +1,6 @@
+import glob
 import os
+import tempfile
 import time
 import threading
 from dataclasses import dataclass, field
@@ -6,9 +8,10 @@ from typing import Dict, Optional
 
 from fastapi import HTTPException
 
-from service import GenerationService, DraftStore
+from service import DraftStore, GenerationService
 
-SESSION_TTL_SECONDS = 60 * 60 * 4
+LECTERN_TEMP_PREFIX = "lectern_"
+LECTERN_TEMP_SUFFIX = ".pdf"
 
 
 @dataclass
@@ -37,6 +40,7 @@ class SessionManager:
         self._runtime: Dict[str, SessionRuntime] = {}
         self._lock = threading.Lock()
         self._latest_session_id: Optional[str] = None
+        self.sweep_orphan_temp_files()
 
     def create_session(
         self,
@@ -60,7 +64,6 @@ class SessionManager:
             self._sessions[session_id] = session
             self._runtime[session_id] = runtime
             self._latest_session_id = session_id
-            self._prune_locked()
         return session
 
     def get_session(self, session_id: str) -> Optional[SessionState]:
@@ -68,7 +71,6 @@ class SessionManager:
             session = self._sessions.get(session_id)
             if session:
                 session.touch()
-            self._prune_locked()
             return session
 
     def get_runtime(self, session_id: str) -> Optional[SessionRuntime]:
@@ -81,6 +83,8 @@ class SessionManager:
         return self.get_session(self._latest_session_id)
 
     def mark_status(self, session_id: str, status: str) -> None:
+        remove_after_status = status in {"cancelled", "error"}
+        session: Optional[SessionState] = None
         with self._lock:
             session = self._sessions.get(session_id)
             if not session:
@@ -88,6 +92,11 @@ class SessionManager:
             session.status = status
             if status in {"completed", "cancelled", "error"}:
                 session.completed_at = time.time()
+        if remove_after_status and session:
+            self._cleanup_session_files(session)
+            with self._lock:
+                self._sessions.pop(session_id, None)
+                self._runtime.pop(session_id, None)
 
     def stop_session(self, session_id: str) -> None:
         session = self.get_session(session_id)
@@ -97,10 +106,6 @@ class SessionManager:
         if runtime:
             runtime.generation_service.stop()
         self.mark_status(session_id, "cancelled")
-        self._cleanup_session_files(session)
-        with self._lock:
-            self._sessions.pop(session_id, None)
-            self._runtime.pop(session_id, None)
 
     def cleanup_session(self, session_id: str) -> None:
         session = self.get_session(session_id)
@@ -112,31 +117,49 @@ class SessionManager:
             self._runtime.pop(session_id, None)
 
     def prune(self) -> None:
-        with self._lock:
-            self._prune_locked()
+        # Legacy no-op kept for compatibility with existing call sites.
+        return
 
     def _cleanup_session_files(self, session: SessionState) -> None:
-        if session.pdf_path and os.path.exists(session.pdf_path):
+        if session.pdf_path and self._is_lectern_temp_pdf(session.pdf_path) and os.path.exists(session.pdf_path):
             try:
                 os.remove(session.pdf_path)
             except Exception as e:  # pragma: no cover - best-effort cleanup
                 print(f"Warning: Failed to cleanup PDF: {e}")
 
-    def _prune_locked(self) -> None:
-        now = time.time()
-        to_remove = []
-        for session_id, session in self._sessions.items():
-            if session.status == "active":
-                continue
-            completed_at = session.completed_at or session.last_accessed
-            if now - completed_at > SESSION_TTL_SECONDS:
-                to_remove.append(session_id)
-        for session_id in to_remove:
-            session = self._sessions.get(session_id)
-            if session:
-                self._cleanup_session_files(session)
-            self._sessions.pop(session_id, None)
-            self._runtime.pop(session_id, None)
+    def cleanup_temp_file(self, session_id: str) -> None:
+        session = self.get_session(session_id)
+        if session:
+            self._cleanup_session_files(session)
+
+    def shutdown(self) -> None:
+        with self._lock:
+            sessions = list(self._sessions.values())
+            self._sessions.clear()
+            self._runtime.clear()
+            self._latest_session_id = None
+        for session in sessions:
+            self._cleanup_session_files(session)
+
+    @staticmethod
+    def _is_lectern_temp_pdf(path: str) -> bool:
+        base = os.path.basename(path)
+        return base.startswith(LECTERN_TEMP_PREFIX) and base.endswith(LECTERN_TEMP_SUFFIX)
+
+    def sweep_orphan_temp_files(self) -> int:
+        temp_dir = tempfile.gettempdir()
+        pattern = os.path.join(temp_dir, f"{LECTERN_TEMP_PREFIX}*{LECTERN_TEMP_SUFFIX}")
+        with self._lock:
+            active_paths = {s.pdf_path for s in self._sessions.values() if s.pdf_path}
+
+        removed = 0
+        for path in [p for p in sorted(glob.glob(pattern)) if p not in active_paths]:
+            try:
+                os.remove(path)
+                removed += 1
+            except Exception as e:  # pragma: no cover - best-effort cleanup
+                print(f"Warning: Failed to remove orphan temp PDF '{path}': {e}")
+        return removed
 
 
 session_manager = SessionManager()
