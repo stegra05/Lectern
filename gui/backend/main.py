@@ -47,7 +47,7 @@ from session import (
     _get_runtime_or_404,
 )
 
-app = FastAPI(title='Lectern API', version='1.2.0')
+app = FastAPI(title='Lectern API', version='1.3.0')
 session_manager.sweep_orphan_temp_files()
 
 # NOTE(Estimate): Session-level cache for estimate base data. Key = (content_sha256, model).
