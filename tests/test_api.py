@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import json
 import os
 import sys
@@ -67,10 +67,7 @@ def test_version_endpoint():
 def test_estimate_endpoint(mock_service_class):
     """Test the /estimate endpoint."""
     mock_service = MagicMock()
-    # It identifies that it's an async method in the code
-    async def mock_estimate(*args, **kwargs):
-        return {"cost": 0.05, "tokens": 1000}
-    mock_service.estimate_cost = mock_estimate
+    mock_service.estimate_cost = AsyncMock(return_value={"cost": 0.05, "tokens": 1000, "estimated_card_count": 12})
     mock_service_class.return_value = mock_service
     
     # Mock files
@@ -79,10 +76,20 @@ def test_estimate_endpoint(mock_service_class):
     with patch('gui.backend.main.shutil.copyfileobj'):
         with patch('gui.backend.main.tempfile.NamedTemporaryFile') as mock_temp:
             mock_temp.return_value.__enter__.return_value.name = "/tmp/test.pdf"
-            response = client.post("/estimate", files=files)
+            response = client.post(
+                "/estimate?model_name=gemini-3-flash&source_type=script&density_target=2.0",
+                files=files,
+            )
             
             assert response.status_code == 200
             assert response.json()["cost"] == 0.05
+            assert response.json()["estimated_card_count"] == 12
+            mock_service.estimate_cost.assert_awaited_once_with(
+                "/tmp/test.pdf",
+                model_name="gemini-3-flash",
+                source_type="script",
+                density_target=2.0,
+            )
 
 def test_decks_endpoint():
     """Test the /decks endpoint."""
@@ -94,17 +101,22 @@ def test_decks_endpoint():
         assert "decks" in response.json()
         assert "Default" in response.json()["decks"]
 
-@patch('gui.backend.main.LecternGenerationService')
-def test_generate_endpoint(mock_service_class):
+@patch('gui.backend.main.HistoryManager')
+@patch('gui.backend.main.GenerationService')
+def test_generate_endpoint(mock_generation_service_class, mock_history_manager_class):
     """Test the /generate endpoint (SSE stream)."""
     mock_service = MagicMock()
-    
-    async def mock_generator(*args, **kwargs):
-        yield json.dumps({"type": "info", "message": "starting"}) + "\n"
-        yield json.dumps({"type": "done", "message": "completed"}) + "\n"
-        
-    mock_service.generate_cards_stream.return_value = mock_generator()
-    mock_service_class.return_value = mock_service
+
+    async def mock_run_generation(*args, **kwargs):
+        yield json.dumps({"type": "info", "message": "starting", "data": {}})
+        yield json.dumps({"type": "done", "message": "completed", "data": {}})
+
+    mock_service.run_generation = mock_run_generation
+    mock_generation_service_class.return_value = mock_service
+
+    mock_history_manager = MagicMock()
+    mock_history_manager.add_entry.return_value = "entry-test-id"
+    mock_history_manager_class.return_value = mock_history_manager
     
     files = {"pdf_file": ("test.pdf", b"pdf content", "application/pdf")}
     data = {"deck_name": "Test Deck"}
@@ -119,6 +131,7 @@ def test_generate_endpoint(mock_service_class):
                 lines = [l for l in response.iter_lines() if l]
                 assert len(lines) >= 2
                 assert "session_start" in str(lines[0])
+                assert any("done" in str(line) for line in lines)
 
 def test_session_management_logic():
     """Test SessionManager internal logic via direct instantiation if needed, 

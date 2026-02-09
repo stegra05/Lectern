@@ -24,13 +24,15 @@ class ConceptMapResponse(BaseModel):
     relations: List[Relation]
     language: Optional[str] = None
     slide_set_name: Optional[str] = None
+    page_count: Optional[int] = None
+    estimated_text_chars: Optional[int] = None
 
 
 class AnkiCard(BaseModel):
     """Anki card model. Now receives 'fields' directly as a dict from AI."""
     model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")
     fields: List[Dict[str, str]] = Field(default_factory=list)  # List of {name: "Front", value: "..."}
-    tags: List[str] = []
+    tags: List[str] = Field(default_factory=list)
     slide_topic: Optional[str] = None
     rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
 

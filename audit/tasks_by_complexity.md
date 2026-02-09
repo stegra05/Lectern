@@ -56,8 +56,8 @@
 | T24 | Add `importance` + `difficulty` to concept schema | 4 | P2 | [x] |
 | T25 | Remove TTL-based session pruning; explicit temp-file cleanup | 4 | P3 | [x] |
 | T26 | Native Gemini PDF upload (Generation 2.0) | 5 | P3 | [ ] |
-| T27 | Decompose `lectern_service.py` monolith | 5 | P3 | [ ] |
-| T28 | Expose estimated card count pre-generation | 5 | P3 | [ ] |
+| T27 | Decompose `lectern_service.py` monolith | 5 | P3 | [x] |
+| T28 | Expose estimated card count pre-generation | 5 | P3 | [x] |
 
 ---
 

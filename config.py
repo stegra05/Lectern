@@ -186,6 +186,7 @@ MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 
 # Gemini 3 generation temperature (Google recommends 1.0).
 GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "1.0"))
+USE_NATIVE_PDF: bool = os.getenv("USE_NATIVE_PDF", "true").lower() in ("1", "true", "yes")
 
 # Session logging controls
 LOG_SESSION_CONTENT: bool = os.getenv("LOG_SESSION_CONTENT", "true").lower() not in (

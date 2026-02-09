@@ -154,6 +154,7 @@ export interface Estimation {
     cost: number;
     pages: number;
     model: string;
+    estimated_card_count?: number;
 }
 
 export interface HealthStatus {
@@ -260,14 +261,24 @@ export const api = {
         return res.json();
     },
 
-    estimateCost: async (file: File, modelName?: string, signal?: AbortSignal) => {
+    estimateCost: async (
+        file: File,
+        modelName?: string,
+        sourceType: string = "auto",
+        densityTarget?: number,
+        signal?: AbortSignal
+    ) => {
         const formData = new FormData();
         formData.append("pdf_file", file);
 
         try {
-            const url = modelName
-                ? `${API_URL}/estimate?model_name=${encodeURIComponent(modelName)}`
-                : `${API_URL}/estimate`;
+            const params = new URLSearchParams();
+            if (modelName) params.set("model_name", modelName);
+            params.set("source_type", sourceType);
+            if (densityTarget !== undefined) {
+                params.set("density_target", String(densityTarget));
+            }
+            const url = params.toString() ? `${API_URL}/estimate?${params.toString()}` : `${API_URL}/estimate`;
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout

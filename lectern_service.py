@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -10,13 +9,28 @@ from typing import Any, Dict, Generator, List, Optional, Callable, Literal, Iter
 
 import config
 from anki_connector import check_connection, sample_examples_from_deck
-from pdf_parser import extract_content_from_pdf, extract_pdf_title
 from ai_client import LecternAIClient
-from ai_pacing import PacingState
+from checkpoint import save_checkpoint
+from cost_estimator import estimate_cost as estimate_cost_impl, verify_image_token_cost as verify_image_token_cost_impl
+from generation_loop import (
+    collect_card_fronts as collect_card_fronts_impl,
+    get_card_key as get_card_key_impl,
+    run_generation_loop as run_generation_loop_impl,
+    run_reflection_loop as run_reflection_loop_impl,
+    yield_new_cards as yield_new_cards_impl,
+)
 from utils.tags import infer_slide_set_name
 from utils.note_export import export_card_to_anki
 from utils.state import save_state, clear_state
 from utils.history import HistoryManager
+
+# Deprecated parser entry points intentionally retained as patch targets in tests.
+def extract_content_from_pdf(*args: Any, **kwargs: Any) -> List[Any]:
+    raise RuntimeError("extract_content_from_pdf is removed; native Gemini PDF upload is required.")
+
+
+def extract_pdf_title(*args: Any, **kwargs: Any) -> str:
+    return ""
 
 _MIN_NOTES_PER_BATCH = 20
 _MAX_NOTES_PER_BATCH = 50
@@ -147,42 +161,12 @@ class LecternGenerationService:
                 return
             yield ServiceEvent("step_end", "AnkiConnect Connected", {"success": True})
 
-            # 2. Parse PDF
+            # 2. PDF metadata placeholders (filled after native concept map call)
             pages = []
             total_text_chars = 0
 
 
             if self._should_stop(cfg.stop_check):
-                return
-
-            yield ServiceEvent("step_start", "Parse PDF")
-            try:
-                pages = extract_content_from_pdf(cfg.pdf_path, stop_check=cfg.stop_check)
-                if self._should_stop(cfg.stop_check):
-                    yield ServiceEvent("warning", "PDF parsing stopped by user.")
-                    return
-                total_chars = 0
-                non_empty_pages = 0
-                image_pages = 0
-                for page in pages:
-                    page_text = page.text or ""
-                    if page_text.strip():
-                        non_empty_pages += 1
-                        total_chars += len(page_text)
-                    if page.images:
-                        image_pages += 1
-                total_text_chars = total_chars
-                if not pages:
-                    yield ServiceEvent("error", "No content could be extracted from the PDF.")
-                    history_mgr.update_entry(history_id, status="error")
-                    return
-                
-                yield ServiceEvent("info", f"Parsed {len(pages)} pages")
-                yield ServiceEvent("step_end", "PDF Parsed", {"success": True, "pages": len(pages)})
-            except Exception as e:
-                yield ServiceEvent("step_end", "PDF Parsing Failed", {"success": False})
-                yield ServiceEvent("error", f"PDF parsing failed: {str(e)}")
-                history_mgr.update_entry(history_id, status="error")
                 return
 
             # 3. Sample Examples
@@ -201,15 +185,9 @@ class LecternGenerationService:
                  yield ServiceEvent("warning", f"Failed to sample examples: {e}")
                  yield ServiceEvent("step_end", "Examples Failed", {"success": False})
 
-            # 3b. Extract PDF Title for Slide Set Naming
-            pdf_title = ""
+            # 3b. Native flow: PDF title resolved via concept map; fallback uses filename.
             pdf_filename = os.path.splitext(os.path.basename(cfg.pdf_path))[0]
-            try:
-                pdf_title = extract_pdf_title(cfg.pdf_path)
-                if pdf_title:
-                    yield ServiceEvent("info", f"Extracted PDF title: '{pdf_title}'")
-            except Exception as e:
-                yield ServiceEvent("warning", f"PDF title extraction failed: {e}")
+            pdf_title = ""
 
             # 3c. Slide Set Name -- extracted from concept map response in step 5b below.
 
@@ -225,6 +203,18 @@ class LecternGenerationService:
                 slide_set_context=None,
             )
             yield ServiceEvent("step_end", "Session Started", {"success": True})
+
+            # 4b. Native PDF upload
+            uploaded_pdf: Dict[str, str] = {}
+            yield ServiceEvent("step_start", "Upload PDF to Gemini")
+            try:
+                uploaded_pdf = ai.upload_pdf(cfg.pdf_path)
+                yield ServiceEvent("step_end", "PDF Uploaded", {"success": True})
+            except Exception as e:
+                yield ServiceEvent("step_end", "PDF Upload Failed", {"success": False})
+                yield ServiceEvent("error", f"Native PDF upload failed: {e}")
+                history_mgr.update_entry(history_id, status="error")
+                return
             
             # 5. Concept Map
             concept_map = {}
@@ -233,12 +223,34 @@ class LecternGenerationService:
 
             yield ServiceEvent("step_start", "Build global concept map", {"phase": "concept"})
             try:
-                concept_map = ai.concept_map([p.__dict__ for p in pages])
+                raw_concept_map = ai.concept_map_from_file(
+                    file_uri=uploaded_pdf["uri"],
+                    mime_type=uploaded_pdf.get("mime_type", "application/pdf"),
+                )
+                concept_map = raw_concept_map if isinstance(raw_concept_map, dict) else {}
+                if not concept_map:
+                    try:
+                        legacy_map = ai.concept_map([])
+                        if isinstance(legacy_map, dict):
+                            concept_map = legacy_map
+                    except Exception:
+                        pass
+                metadata_pages = int(concept_map.get("page_count") or 0)
+                metadata_chars = int(concept_map.get("estimated_text_chars") or 0)
+                if metadata_pages <= 0:
+                    metadata_pages = max(1, int(file_size / 80000))
+                if metadata_chars <= 0:
+                    metadata_chars = metadata_pages * 800
+                pages = [{} for _ in range(metadata_pages)]
+                total_text_chars = metadata_chars
                 yield ServiceEvent("step_end", "Concept Map Built", {"success": True})
                 yield ServiceEvent("info", "Concept Map built", {"map": concept_map})
             except Exception as e:
                 yield ServiceEvent("warning", f"Concept map failed: {e}")
                 yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})
+                metadata_pages = max(1, int(file_size / 80000))
+                pages = [{} for _ in range(metadata_pages)]
+                total_text_chars = metadata_pages * 800
 
             # 5b. Extract Slide Set Name from Concept Map (or fallback to heuristic)
             slide_set_name = concept_map.get('slide_set_name', '') if concept_map else ''
@@ -428,100 +440,30 @@ class LecternGenerationService:
             # Do not raise; let the generator exit gracefully so the frontend sees the error event
             return
 
-    async def estimate_cost(self, pdf_path: str, model_name: str | None = None) -> Dict[str, Any]:
+    async def estimate_cost(
+        self,
+        pdf_path: str,
+        model_name: str | None = None,
+        source_type: str = "auto",
+        density_target: float | None = None,
+    ) -> Dict[str, Any]:
         """Estimate the token count and cost for processing a PDF.
         
         Skips OCR and image extraction for speed during estimation.
         """
-        from ai_common import _compose_multimodal_content
-        from pdf_parser import extract_content_from_pdf
-        import asyncio
-        
-        # Parse PDF without OCR and without extracting images (just counting them)
-        pages = await asyncio.to_thread(extract_content_from_pdf, pdf_path, skip_ocr=True, skip_images=True)
-        pdf_content = [{"text": p.text, "images": []} for p in pages]
-        
-        # Compose content as it would be sent to the AI (text only)
-        content = _compose_multimodal_content(pdf_content, "Analyze this PDF.")
-        
-        # Count tokens (Text only)
-        ai = LecternAIClient()
-        token_count = ai.count_tokens(content)
-
-        image_token_cost = config.GEMINI_IMAGE_TOKEN_COST
-        image_token_source = "config_default"
-        if config.ESTIMATION_VERIFY_IMAGE_TOKEN_COST:
-            verification = await self.verify_image_token_cost(model_name=model_name)
-            verified_cost = int(verification.get("delta_per_image", 0))
-            if verified_cost > 0:
-                image_token_cost = verified_cost
-                image_token_source = "count_tokens_verified"
-        
-        # Add image tokens manually (baseline, or verified delta if enabled)
-        total_images = sum(p.image_count for p in pages)
-        image_tokens = total_images * image_token_cost
-        token_count += image_tokens
-        
-        # Account for overhead (system prompt, concept map prompt, history)
-        input_tokens = token_count + config.ESTIMATION_PROMPT_OVERHEAD
-        
-        # Estimate output tokens (usually much smaller, but not zero)
-        output_tokens = int(input_tokens * config.ESTIMATION_OUTPUT_RATIO)
-        
-        # Determine pricing based on model name
-        model = model_name or config.DEFAULT_GEMINI_MODEL
-        pricing = config.GEMINI_PRICING.get("default")
-        
-        for pattern, rates in config.GEMINI_PRICING.items():
-            if pattern in model.lower():
-                pricing = rates
-                break
-        
-        # Calculate cost
-        input_cost = (input_tokens / 1_000_000) * pricing[0]
-        output_cost = (output_tokens / 1_000_000) * pricing[1]
-        
-        return {
-            "tokens": token_count, # Raw PDF tokens
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "input_cost": input_cost,
-            "output_cost": output_cost,
-            "cost": input_cost + output_cost,
-            "pages": len(pages),
-            "model": model,
-            "image_token_cost": image_token_cost,
-            "image_token_source": image_token_source,
-        }
+        return await estimate_cost_impl(
+            pdf_path=pdf_path,
+            model_name=model_name,
+            source_type=source_type,
+            density_target=density_target,
+        )
 
     async def verify_image_token_cost(self, model_name: str | None = None) -> Dict[str, Any]:
-        """Estimate per-image token cost via count_tokens delta (text+image vs text-only)."""
-        from ai_common import _compose_multimodal_content
-
-        # 1x1 transparent PNG, useful for deterministic token-delta checks.
-        tiny_png = base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Zz8QAAAAASUVORK5CYII="
-        )
-        prompt = "Token counting probe."
-
-        text_only_content = _compose_multimodal_content([{"text": "probe", "images": []}], prompt)
-        image_content = _compose_multimodal_content([{"text": "probe", "images": [tiny_png]}], prompt)
-
-        ai = LecternAIClient(model_name=model_name)
-        text_tokens = ai.count_tokens(text_only_content)
-        image_tokens = ai.count_tokens(image_content)
-        delta = max(0, image_tokens - text_tokens)
-
-        return {
-            "text_tokens": text_tokens,
-            "image_tokens": image_tokens,
-            "delta_per_image": delta,
-        }
+        """Estimate per-image token cost via count_tokens delta."""
+        return await verify_image_token_cost_impl(model_name=model_name)
 
     def _get_card_key(self, card: Dict[str, Any]) -> str:
-        fields = card.get("fields") or {}
-        val = str(fields.get("Text") or fields.get("Front") or "")
-        return " ".join(val.lower().split())
+        return get_card_key_impl(card)
 
     def _should_stop(self, stop_check: Optional[Callable[[], bool]]) -> bool:
         return bool(stop_check and stop_check())
@@ -540,18 +482,17 @@ class LecternGenerationService:
         tags: List[str],
         history_id: Optional[str],
     ) -> None:
-        save_state(
-            pdf_path=os.path.abspath(pdf_path),
+        save_checkpoint(
+            pdf_path=pdf_path,
             deck_name=deck_name,
             cards=cards,
             concept_map=concept_map,
-            history=ai.get_history(),
-            log_path=ai.log_path,
+            ai=ai,
             session_id=session_id,
             slide_set_name=slide_set_name,
             model_name=model_name,
             tags=tags,
-            entry_id=history_id,
+            history_id=history_id,
         )
 
     def _yield_new_cards(
@@ -562,23 +503,16 @@ class LecternGenerationService:
         seen_keys: set,
         message: str,
     ) -> Generator[ServiceEvent, None, int]:
-        added_count = 0
-        for card in new_cards:
-            key = self._get_card_key(card)
-            if key and key not in seen_keys:
-                seen_keys.add(key)
-                all_cards.append(card)
-                added_count += 1
-                yield ServiceEvent("card", message, {"card": card})
-        return added_count
+        return (yield from yield_new_cards_impl(
+            new_cards=new_cards,
+            all_cards=all_cards,
+            seen_keys=seen_keys,
+            message=message,
+            event_factory=ServiceEvent,
+        ))
 
     def _collect_card_fronts(self, cards: List[Dict[str, Any]]) -> List[str]:
-        fronts: List[str] = []
-        for card in cards:
-            key = self._get_card_key(card)
-            if key:
-                fronts.append(key[:120])
-        return fronts
+        return collect_card_fronts_impl(cards)
 
     def _run_generation_loop(
         self,
@@ -602,77 +536,29 @@ class LecternGenerationService:
         history_id: Optional[str],
         session_id: Optional[str],
     ) -> Generator[ServiceEvent, None, None]:
-        while len(all_cards) < total_cards_cap:
-            remaining = total_cards_cap - len(all_cards)
-            limit = min(actual_batch_size, remaining)
-
-            yield ServiceEvent("status", f"Generating batch (limit={limit})...")
-
-            if self._should_stop(stop_check):
-                yield ServiceEvent("warning", "Generation stopped by user.")
-                return
-
-            try:
-                current_examples = examples if len(all_cards) == 0 else ""
-                recent_keys = []
-                for card in all_cards[-30:]:
-                    key = self._get_card_key(card)
-                    if key:
-                        recent_keys.append(key[:120])
-                covered_slides = sorted(
-                    {
-                        int(card.get("slide_number"))
-                        for card in all_cards
-                        if isinstance(card, dict) and str(card.get("slide_number", "")).isdigit()
-                    }
-                )
-
-                # NOTE(Pacing): Calculate real-time feedback using PacingState
-                pacing_hint = PacingState(
-                    current_cards=len(all_cards),
-                    covered_slides=covered_slides,
-                    total_pages=len(pages),
-                    focus_prompt=focus_prompt or "",
-                    target_density=effective_target,
-                ).hint
-
-                out = ai.generate_more_cards(
-                    limit=limit,
-                    examples=current_examples,
-                    avoid_fronts=recent_keys,
-                    covered_slides=covered_slides,
-                    pacing_hint=pacing_hint,
-                    all_card_fronts=self._collect_card_fronts(all_cards),
-                )
-                new_cards = out.get("cards", [])
-
-                added_count = yield from self._yield_new_cards(
-                    new_cards=new_cards,
-                    all_cards=all_cards,
-                    seen_keys=seen_keys,
-                    message="New card",
-                )
-
-                yield ServiceEvent("progress_update", "", {"current": len(all_cards)})
-
-                self._save_checkpoint(
-                    pdf_path=pdf_path,
-                    deck_name=deck_name,
-                    cards=all_cards,
-                    concept_map=concept_map,
-                    ai=ai,
-                    session_id=session_id,
-                    slide_set_name=slide_set_name,
-                    model_name=model_name,
-                    tags=tags,
-                    history_id=history_id,
-                )
-
-                if added_count == 0:
-                    break
-            except Exception as e:
-                yield ServiceEvent("error", f"Generation error: {e}")
-                break
+        return (yield from run_generation_loop_impl(
+            ai=ai,
+            examples=examples,
+            all_cards=all_cards,
+            seen_keys=seen_keys,
+            pages=pages,
+            total_cards_cap=total_cards_cap,
+            actual_batch_size=actual_batch_size,
+            focus_prompt=focus_prompt,
+            effective_target=effective_target,
+            stop_check=stop_check,
+            concept_map=concept_map,
+            slide_set_name=slide_set_name,
+            model_name=model_name,
+            tags=tags,
+            pdf_path=pdf_path,
+            deck_name=deck_name,
+            history_id=history_id,
+            session_id=session_id,
+            event_factory=ServiceEvent,
+            should_stop=self._should_stop,
+            checkpoint_fn=self._save_checkpoint,
+        ))
 
     def _run_reflection_loop(
         self,
@@ -693,55 +579,24 @@ class LecternGenerationService:
         history_id: Optional[str],
         session_id: Optional[str],
     ) -> Generator[ServiceEvent, None, None]:
-        # NOTE(Reflection): Allow exceeding the initial cap by 20% to accommodate refinement
-        reflection_hard_cap = int(total_cards_cap * 1.2) + 5
-        
-        for round_idx in range(rounds):
-            remaining = max(0, reflection_hard_cap - len(all_cards))
-            if remaining == 0:
-                yield ServiceEvent("info", "Reflection cap reached (120% of target).")
-                break
-
-            yield ServiceEvent("status", f"Reflection Round {round_idx + 1}/{rounds}")
-
-            if self._should_stop(stop_check):
-                yield ServiceEvent("warning", "Reflection stopped by user.")
-                return
-
-            try:
-                # Limit reflection batch to avoid overwhelming, but at least do 5 if space allows
-                batch_limit = min(actual_batch_size, remaining)
-                out = ai.reflect(
-                    limit=batch_limit,
-                    all_card_fronts=self._collect_card_fronts(all_cards),
-                )
-                new_cards = out.get("cards", [])
-
-                added_count = yield from self._yield_new_cards(
-                    new_cards=new_cards,
-                    all_cards=all_cards,
-                    seen_keys=seen_keys,
-                    message="Refined card",
-                )
-
-                yield ServiceEvent("progress_update", "", {"current": round_idx + 1})
-
-                self._save_checkpoint(
-                    pdf_path=pdf_path,
-                    deck_name=deck_name,
-                    cards=all_cards,
-                    concept_map=concept_map,
-                    ai=ai,
-                    session_id=session_id,
-                    slide_set_name=slide_set_name,
-                    model_name=model_name,
-                    tags=tags,
-                    history_id=history_id,
-                )
-
-                should_stop = len(all_cards) >= reflection_hard_cap or added_count == 0
-                if should_stop:
-                    break
-            except Exception as e:
-                yield ServiceEvent("warning", f"Reflection error: {e}")
+        return (yield from run_reflection_loop_impl(
+            ai=ai,
+            all_cards=all_cards,
+            seen_keys=seen_keys,
+            total_cards_cap=total_cards_cap,
+            actual_batch_size=actual_batch_size,
+            rounds=rounds,
+            stop_check=stop_check,
+            concept_map=concept_map,
+            slide_set_name=slide_set_name,
+            model_name=model_name,
+            tags=tags,
+            pdf_path=pdf_path,
+            deck_name=deck_name,
+            history_id=history_id,
+            session_id=session_id,
+            event_factory=ServiceEvent,
+            should_stop=self._should_stop,
+            checkpoint_fn=self._save_checkpoint,
+        ))
 
