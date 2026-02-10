@@ -44,22 +44,22 @@ jobs:
       - name: Build (macOS)
         if: matrix.platform == 'macos'
         run: |
-          ./build_app.sh
-          ./create_dmg.sh
+          ./scripts/build_app.sh
+          ./scripts/create_dmg.sh
 
       # Windows Build
       - name: Build (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          .\build_windows.ps1
+          .\scripts\build_windows.ps1
           Compress-Archive -Path dist\Lectern -DestinationPath dist\Lectern-windows.zip
 
       # Linux Build
       - name: Build (Linux)
         if: matrix.platform == 'linux'
         run: |
-          ./build_linux.sh
+          ./scripts/build_linux.sh
           tar -czvf dist/Lectern-linux.tar.gz -C dist Lectern
 
       - name: Upload Artifacts
