@@ -22,6 +22,7 @@ interface HomeViewProps {
     setTargetDeckSize: (target: number) => void;
     estimation: Estimation | null;
     isEstimating: boolean;
+    estimationError: string | null;
     handleGenerate: () => void;
     health: HealthStatus | null;
 }
@@ -39,6 +40,7 @@ export function HomeView({
     setTargetDeckSize,
     estimation,
     isEstimating,
+    estimationError,
     handleGenerate,
     health,
 }: HomeViewProps) {
@@ -157,10 +159,17 @@ export function HomeView({
                                 />
                             </div>
                             <div className="flex justify-between text-[10px] text-text-muted mt-2 px-1 font-medium">
-                                <span>{sliderConfig.disabled ? 'ANALYZING...' : sliderConfig.min}</span>
-                                <span>{sliderConfig.disabled ? 'WAITING FOR ESTIMATE' : estimation?.suggested_card_count}</span>
+                                <span>{isEstimating ? 'ANALYZING...' : sliderConfig.disabled ? '' : sliderConfig.min}</span>
+                                <span>{isEstimating ? 'WAITING FOR ESTIMATE' : sliderConfig.disabled ? '' : estimation?.suggested_card_count}</span>
                                 <span>{sliderConfig.disabled ? '' : sliderConfig.max}</span>
                             </div>
+
+                            {estimationError && !isEstimating && (
+                                <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2">
+                                    <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                                    <span className="text-xs text-red-300">{estimationError}</span>
+                                </div>
+                            )}
 
                             <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-start gap-3">
                                 <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
@@ -176,9 +185,11 @@ export function HomeView({
                                         )}
                                     </div>
                                     <span>
-                                        {sliderConfig.disabled
+                                        {isEstimating
                                             ? 'Analyzing document to determine a recommended card target.'
-                                            : 'Backend derives the density target from this total card goal.'}
+                                            : sliderConfig.disabled && estimationError
+                                                ? 'Could not analyze document. Check your API key.'
+                                                : 'Backend derives the density target from this total card goal.'}
                                     </span>
                                 </div>
                             </div>
