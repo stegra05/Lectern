@@ -66,7 +66,6 @@ vi.mock('framer-motion', () => {
             div: MockComponent,
             circle: MockComponent,
             path: MockComponent,
-            rect: MockComponent,
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
