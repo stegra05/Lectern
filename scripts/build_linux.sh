@@ -43,7 +43,7 @@ python3 -m pip show pyinstaller >/dev/null 2>&1 || pip3 install pyinstaller
 # Packaging
 header "Packaging"
 echo "Compiling Binary (this may take a while)..."
-python3 -m PyInstaller Lectern.linux.spec --noconfirm
+python3 -m PyInstaller specs/Lectern.linux.spec --noconfirm
 
 # Verify Artifact
 if [ -f "dist/Lectern/Lectern" ]; then

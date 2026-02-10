@@ -49,7 +49,7 @@ if (-not (python -m pip show pyinstaller)) {
 # Packaging
 Write-Header "Packaging"
 Write-Host "Compiling Binary (this may take a while)..."
-python -m PyInstaller Lectern.windows.spec --noconfirm
+python -m PyInstaller specs/Lectern.windows.spec --noconfirm
 
 # Verify Artifact
 if (Test-Path dist\Lectern\Lectern.exe) {
