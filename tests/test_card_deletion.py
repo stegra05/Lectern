@@ -37,7 +37,7 @@ def test_delete_session_card(
         {"id": 2, "front": "B", "anki_note_id": 101}
     ]
     mock_load_state.return_value = {
-        "pdf_path": "test.pdf",
+        "pdf_path": "test_slides.pdf",
         "deck_name": "Default",
         "cards": list(initial_cards), # Copy
         "concept_map": {},

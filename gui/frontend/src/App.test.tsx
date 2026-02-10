@@ -43,7 +43,7 @@ describe('App', () => {
 
     it('debounces estimate requests when density changes rapidly', async () => {
         const { setPdfFile, setDensityTarget } = useLecternStore.getState();
-        const pdf = new File(['content'], 'test.pdf', { type: 'application/pdf' });
+        const pdf = new File(['content'], 'test_slides.pdf', { type: 'application/pdf' });
 
         setPdfFile(pdf);
         setDensityTarget(1.0);

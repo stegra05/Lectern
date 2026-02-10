@@ -39,7 +39,7 @@ class TestStatePersistence(unittest.TestCase):
 
         # Save state
         save_state(
-            pdf_path="/tmp/test.pdf",
+            pdf_path="/tmp/test_slides.pdf",
             deck_name="Test Deck",
             cards=cards,
             concept_map=concept_map,
@@ -74,7 +74,7 @@ class TestStatePersistence(unittest.TestCase):
             mgr = HistoryManager(history_file=history_path)
 
             # Add an entry
-            entry_id = mgr.add_entry("test.pdf", "Test Deck", session_id="sess_1")
+            entry_id = mgr.add_entry("test_slides.pdf", "Test Deck", session_id="sess_1")
 
             # Verify data integrity
             entries = mgr.get_all()

@@ -71,8 +71,6 @@ def generation_env(mock_pdf_pages):
     """
     with patch('lectern_service.check_connection', return_value=True) as mock_check, \
          patch('lectern_service.sample_examples_from_deck', return_value="") as mock_examples, \
-         patch('lectern_service.extract_content_from_pdf', return_value=mock_pdf_pages) as mock_extract, \
-         patch('lectern_service.extract_pdf_title', return_value="Test Lecture") as mock_title, \
          patch('lectern_service.LecternAIClient') as mock_ai_class, \
          patch('os.path.exists', return_value=True), \
          patch('os.path.getsize', return_value=1024):
@@ -97,8 +95,6 @@ def generation_env(mock_pdf_pages):
             "ai": mock_ai,
             "ai_class": mock_ai_class,
             "check": mock_check,
-            "extract": mock_extract,
-            "title": mock_title,
             "examples": mock_examples,
         }
 
@@ -138,14 +134,12 @@ class TestServiceValidation:
         assert "not found" in error_events[0].message.lower()
     
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_run_with_anki_disconnected(
         self, 
         mock_getsize,
         mock_exists, 
-        mock_extract, 
         mock_check,
         service
     ):
@@ -170,14 +164,14 @@ class TestServiceValidation:
 
 class TestStopCheck:
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
+    @patch('lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_stop_check_aborts_early(
         self,
         mock_getsize,
         mock_exists,
-        mock_extract,
+        mock_ai_client_class,
         mock_check,
         service
     ):
@@ -185,7 +179,6 @@ class TestStopCheck:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = []
         
         stop_flag = False
         def stop_check():
@@ -306,7 +299,6 @@ class TestServiceIntegration:
 
 class TestServiceAdvanced:
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
@@ -315,7 +307,6 @@ class TestServiceAdvanced:
         mock_getsize,
         mock_exists,
         mock_ai_client_class,
-        mock_extract_pdf,
         mock_check,
         service,
         mock_pdf_pages
@@ -324,7 +315,9 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract_pdf.return_value = mock_pdf_pages
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
         
         mock_ai = MagicMock()
         mock_ai.log_path = "/tmp/test.log"
@@ -344,7 +337,6 @@ class TestServiceAdvanced:
         mock_ai.restore_history.assert_not_called()
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
@@ -353,7 +345,6 @@ class TestServiceAdvanced:
         mock_getsize,
         mock_exists,
         mock_ai_client_class,
-        mock_extract_pdf,
         mock_check,
         service,
         mock_pdf_pages
@@ -362,7 +353,9 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract_pdf.return_value = mock_pdf_pages
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
     
         mock_ai = MagicMock()
         mock_ai.concept_map.return_value = {}
@@ -449,14 +442,12 @@ class TestServiceAdvanced:
         assert result["delta_per_image"] == 258
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
     def test_run_with_empty_pdf_content(
         self,
         mock_getsize,
         mock_exists,
-        mock_extract,
         mock_check,
         service
     ):
@@ -464,7 +455,9 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = []
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
         with patch('lectern_service.LecternAIClient') as mock_ai_class:
             mock_ai = mock_ai_class.return_value
             mock_ai.upload_pdf.side_effect = RuntimeError("Upload failed")
@@ -511,7 +504,6 @@ class TestServiceAdvanced:
         
         assert any("empty" in e.message.lower() for e in events if e.type == "error")
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.export_card_to_anki')
     @patch('lectern_service.os.path.exists')
@@ -522,7 +514,6 @@ class TestServiceAdvanced:
         mock_exists,
         mock_export,
         mock_ai_client_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -537,7 +528,9 @@ class TestServiceAdvanced:
                 self.images = images or []
                 self.image_count = len(self.images)
         
-        mock_extract.return_value = [MockPage("Slide 1")]
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
         
         mock_ai = MagicMock()
         mock_ai.concept_map.return_value = {"slide_set_name": "Test Set"}
@@ -562,14 +555,12 @@ class TestServiceAdvanced:
         assert any(e.type == "done" for e in events)
         mock_export.assert_called()
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_stop_check_during_parsing(
         self,
         mock_getsize,
         mock_exists,
-        mock_extract,
         mock_check,
         service
     ):
@@ -580,7 +571,6 @@ class TestServiceAdvanced:
         
         # stop_check is passed to extract_content_from_pdf
         # We simulate it being triggered inside or just after
-        mock_extract.return_value = []
         
         stop_count = 0
         def stop_check():
@@ -600,14 +590,12 @@ class TestServiceAdvanced:
         assert any(e.type == "warning" and "stopped" in e.message for e in events) or len(events) < 10
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_pdf_parsing_exception(
         self,
         mock_getsize,
         mock_exists,
-        mock_extract,
         mock_check,
         service
     ):
@@ -615,7 +603,9 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.side_effect = Exception("Parsing error")
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
         with patch('lectern_service.LecternAIClient') as mock_ai_class:
             mock_ai = mock_ai_class.return_value
             mock_ai.upload_pdf.side_effect = RuntimeError("Upload failed")
@@ -630,20 +620,16 @@ class TestServiceAdvanced:
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.sample_examples_from_deck')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.extract_pdf_title')
     @patch('lectern_service.save_state')
     @patch('lectern_service.HistoryManager')
     def test_example_sampling_exception(
         self,
         mock_history_class,
         mock_save,
-        mock_extract_title,
         mock_getsize,
         mock_exists,
-        mock_extract,
         mock_samples,
         mock_check,
         service
@@ -652,7 +638,6 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract_title.return_value = "Title"
 
         class MockPage:
             def __init__(self, text):
@@ -662,7 +647,6 @@ class TestServiceAdvanced:
             def __dict__(self):
                 return {"text": self.text, "images": self.images, "image_count": self.image_count}
         
-        mock_extract.return_value = [MockPage("Some text")]
         mock_samples.side_effect = Exception("Anki error")
         
         with patch('lectern_service.LecternAIClient') as mock_ai_class:
@@ -684,7 +668,6 @@ class TestServiceAdvanced:
         assert any(e.type == "done" for e in events)
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -693,7 +676,6 @@ class TestServiceAdvanced:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -708,7 +690,9 @@ class TestServiceAdvanced:
                 self.images = []
                 self.image_count = 0
         
-        mock_extract.return_value = [MockPage()]
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -731,7 +715,6 @@ class TestServiceAdvanced:
         assert any("Script mode: ~6 cards" in e.message for e in events if e.type == "info")
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -740,7 +723,6 @@ class TestServiceAdvanced:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -755,7 +737,9 @@ class TestServiceAdvanced:
                 self.images = []
                 self.image_count = 0
         
-        mock_extract.return_value = [MockPage() for _ in range(30)]  # 5 cards -> dynamic_rounds = 1
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -789,7 +773,6 @@ class TestServiceAdvanced:
         assert any(e.type == "warning" and "Reflection stopped" in e.message for e in events)
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.export_card_to_anki')
     @patch('lectern_service.os.path.exists')
@@ -800,7 +783,6 @@ class TestServiceAdvanced:
         mock_exists,
         mock_export,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -808,7 +790,6 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0)]
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -832,7 +813,6 @@ class TestServiceAdvanced:
         assert done_event.data["failed"] == 1
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -845,27 +825,19 @@ class TestServiceAdvanced:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
         """Test script mode and providing entry_id."""
         mock_exists.return_value = True
-        mock_getsize.return_value = 1024
+        mock_getsize.return_value = 5000
         mock_check.return_value = True
         
-        class MockPage:
-            def __init__(self):
-                self.text = "A" * 3000
-                self.images = [{"data": "..."}]
-                self.image_count = 1
-            def __dict__(self):
-                return {"text": self.text, "images": self.images, "image_count": self.image_count}
-        
-        mock_extract.return_value = [MockPage()]
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
-        mock_ai.concept_map.return_value = {}
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        # Script mode: high density
+        mock_ai.concept_map_from_file.return_value = {"page_count": 1, "estimated_text_chars": 5000}
         mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": "Q"}}]}
         mock_ai.get_history.return_value = []
         mock_ai.log_path = "/tmp/test.log"
@@ -883,7 +855,6 @@ class TestServiceAdvanced:
         assert any("Script mode" in e.message for e in events)
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -894,7 +865,6 @@ class TestServiceAdvanced:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -903,21 +873,11 @@ class TestServiceAdvanced:
         mock_getsize.return_value = 1024
         mock_check.return_value = True
         
-        class MockPage:
-            def __init__(self, i):
-                self.text = f"Page {i}"
-                self.images = []
-                self.image_count = 0
-            def __dict__(self):
-                return {"text": self.text, "images": self.images, "image_count": self.image_count}
-        
-        mock_extract.return_value = [MockPage(i) for i in range(110)]
-        
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
         mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
         mock_ai.concept_map_from_file.return_value = {"page_count": 110, "estimated_text_chars": 44000}
-        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(50)]}
+        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(60)]}
         mock_ai.get_history.return_value = []
         mock_ai.log_path = "/tmp/test.log"
         mock_ai.reflect.return_value = {"cards": []}
@@ -1164,7 +1124,6 @@ class TestLoopInternals:
         assert any(e.type == "info" and "cap reached" in e.message.lower() for e in events)
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -1175,7 +1134,6 @@ class TestLoopInternals:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -1183,7 +1141,6 @@ class TestLoopInternals:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0)]
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -1203,7 +1160,6 @@ class TestLoopInternals:
         assert any("Slide Set Name: 'Path'" in e.message for e in events if e.type == "info")
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -1214,7 +1170,6 @@ class TestLoopInternals:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -1222,7 +1177,6 @@ class TestLoopInternals:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0) for _ in range(40)]
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -1258,7 +1212,6 @@ class TestLoopInternals:
         assert any(e.type == "warning" and "Reflection error" in e.message for e in events)
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -1269,7 +1222,6 @@ class TestLoopInternals:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -1277,7 +1229,6 @@ class TestLoopInternals:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0) for _ in range(40)]
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -1297,7 +1248,6 @@ class TestLoopInternals:
         assert any("Reflection Round 1/1" in e.message for e in events if e.type == "status")
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
     @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
@@ -1306,7 +1256,6 @@ class TestLoopInternals:
         mock_getsize,
         mock_exists,
         mock_ai_class,
-        mock_extract,
         mock_check,
         service
     ):
@@ -1314,7 +1263,6 @@ class TestLoopInternals:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0)]
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
@@ -1329,14 +1277,14 @@ class TestLoopInternals:
         assert any(e.type == "error" and "Generation error" in e.message for e in events)
 
     @patch('lectern_service.check_connection')
-    @patch('lectern_service.extract_content_from_pdf')
+    @patch('lectern_service.LecternAIClient')
     @patch('lectern_service.os.path.exists')
     @patch('lectern_service.os.path.getsize')
     def test_stop_check_everywhere(
         self,
         mock_getsize,
         mock_exists,
-        mock_extract,
+        mock_ai_client_class,
         mock_check,
         service
     ):
@@ -1344,7 +1292,12 @@ class TestLoopInternals:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        mock_extract.return_value = [MagicMock(text="T", images=[], image_count=0)]
+        
+        mock_ai = MagicMock()
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.return_value = {"page_count": 5}
+        mock_ai.generate_more_cards.return_value = {"cards": []}
+        mock_ai_client_class.return_value = mock_ai
         
         # Stop immediately after Anki connection check
         res1 = list(service.run(

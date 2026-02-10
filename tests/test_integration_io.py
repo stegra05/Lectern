@@ -16,7 +16,7 @@ def test_statefile_roundtrip(tmp_path, monkeypatch):
     session_id = "s1"
 
     saved = state_utils.save_state(
-        pdf_path="/tmp/test.pdf",
+        pdf_path="/tmp/test_slides.pdf",
         deck_name="Deck",
         cards=[{"front": "Q", "back": "A"}],
         concept_map={"concepts": []},
@@ -53,7 +53,7 @@ def test_draft_store_roundtrip(tmp_path, monkeypatch):
     session_id = "s2"
 
     state_utils.save_state(
-        pdf_path="/tmp/test.pdf",
+        pdf_path="/tmp/test_slides.pdf",
         deck_name="Deck",
         cards=[],
         concept_map={},
@@ -92,7 +92,7 @@ def test_history_manager_roundtrip(tmp_path):
     history_file = os.path.join(tmp_path, "history.json")
     manager = HistoryManager(history_file=history_file)
 
-    entry_id = manager.add_entry("test.pdf", "Deck", session_id="s1")
+    entry_id = manager.add_entry("test_slides.pdf", "Deck", session_id="s1")
     assert entry_id
 
     manager.update_entry(entry_id, status="completed", card_count=3)

@@ -98,7 +98,7 @@ async def test_generation_service_run_flow(mock_core_service):
     with patch("gui.backend.service.load_state", return_value=state):
         with patch.object(draft_store._state_file, "update_cards"):
             async for event_json in service.run_generation(
-                pdf_path="test.pdf",
+                pdf_path="test_slides.pdf",
                 deck_name="Deck",
                 model_name="Basic",
                 tags=["tag"],

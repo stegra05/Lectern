@@ -36,7 +36,7 @@ def test_history_endpoint():
     """Test the /history endpoint."""
     with patch('gui.backend.main.HistoryManager') as mock_mgr_class:
         mock_mgr = MagicMock()
-        mock_mgr.get_all.return_value = [{"id": "1", "filename": "test.pdf"}]
+        mock_mgr.get_all.return_value = [{"id": "1", "filename": "test_slides.pdf"}]
         mock_mgr_class.return_value = mock_mgr
         
         # main.py uses run_in_threadpool for HistoryManager.get_all
@@ -78,7 +78,7 @@ def test_estimate_endpoint(mock_service_class):
     mock_service.estimate_cost_with_base = AsyncMock(return_value=(result, base_data))
     mock_service_class.return_value = mock_service
 
-    files = {"pdf_file": ("test.pdf", b"pdf content", "application/pdf")}
+    files = {"pdf_file": ("test_script.pdf", b"pdf content", "application/pdf")}
     data = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "2.0"}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
@@ -104,7 +104,7 @@ def test_estimate_cache_hit(mock_service_class):
     mock_service.estimate_cost_with_base = AsyncMock(return_value=(result1, base_data))
     mock_service_class.return_value = mock_service
 
-    files = {"pdf_file": ("test.pdf", b"same content both times", "application/pdf")}
+    files = {"pdf_file": ("test_script.pdf", b"same content both times", "application/pdf")}
     data = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "2.0"}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
@@ -134,7 +134,7 @@ def test_estimate_cache_miss_different_model(mock_service_class):
     mock_service.estimate_cost_with_base = AsyncMock(side_effect=[(result_a, base_a), (result_b, base_b)])
     mock_service_class.return_value = mock_service
 
-    files = {"pdf_file": ("test.pdf", b"same content", "application/pdf")}
+    files = {"pdf_file": ("test_slides.pdf", b"same content", "application/pdf")}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
         r1 = client.post("/estimate", files=files, data={"model_name": "gemini-3-flash", "source_type": "auto", "density_target": "1.5"})
@@ -172,12 +172,12 @@ def test_generate_endpoint(mock_generation_service_class, mock_history_manager_c
     mock_history_manager.add_entry.return_value = "entry-test-id"
     mock_history_manager_class.return_value = mock_history_manager
     
-    files = {"pdf_file": ("test.pdf", b"pdf content", "application/pdf")}
+    files = {"pdf_file": ("test_slides.pdf", b"pdf content", "application/pdf")}
     data = {"deck_name": "Test Deck"}
     
     with patch('gui.backend.main.shutil.copyfileobj'):
         with patch('gui.backend.main.tempfile.NamedTemporaryFile') as mock_temp:
-            mock_temp.return_value.__enter__.return_value.name = "/tmp/test.pdf"
+            mock_temp.return_value.__enter__.return_value.name = "/tmp/test_slides.pdf"
             with patch('gui.backend.main.os.path.getsize', return_value=123):
                 response = client.post("/generate", files=files, data=data)
                 assert response.status_code == 200
@@ -198,7 +198,7 @@ def test_session_management_logic():
     mock_drafts = MagicMock()
     
     # create_session
-    session = sm.create_session("/tmp/lectern_test.pdf", mock_service, mock_drafts)
+    session = sm.create_session("/tmp/lectern_test_slides.pdf", mock_service, mock_drafts)
     assert session.session_id is not None
     assert sm.get_latest_session().session_id == session.session_id
     
@@ -224,7 +224,7 @@ def test_session_management_logic():
         with patch('gui.backend.main.os.remove') as mock_remove:
             sm.stop_session(session.session_id)
             mock_service.stop.assert_called_once()
-            mock_remove.assert_called_once_with("/tmp/lectern_test.pdf")
+            mock_remove.assert_called_once_with("/tmp/lectern_test_slides.pdf")
             assert sm.get_session(session.session_id) is None
 
 def test_config_update_complex():
@@ -264,7 +264,7 @@ def test_history_actions():
 def test_generate_error_paths():
     """Test /generate with errors and SSE failures."""
     # Invalid tags JSON
-    files = {"pdf_file": ("test.pdf", b"pdf", "application/pdf")}
+    files = {"pdf_file": ("test_slides.pdf", b"pdf", "application/pdf")}
     data = {"deck_name": "D", "tags": "invalid-json"}
     
     with patch('gui.backend.main.shutil.copyfileobj'):
@@ -425,7 +425,7 @@ def test_session_manager_edge_cases():
     # Cleanup handles file removal errors gracefully
     mock_service = MagicMock()
     mock_drafts = MagicMock()
-    session = sm.create_session("/tmp/lectern_cleanup.pdf", mock_service, mock_drafts)
+    session = sm.create_session("/tmp/lectern_test_slides.pdf", mock_service, mock_drafts)
     
     with patch('gui.backend.main.os.path.exists', return_value=True):
         with patch('gui.backend.main.os.remove', side_effect=Exception("Perm error")):
@@ -481,7 +481,7 @@ def test_estimate_cost_failure():
     """Test /estimate returns 500 when cost estimation crashes."""
     with patch('gui.backend.main.LecternGenerationService') as mock_service:
         mock_service.return_value.estimate_cost_with_base = AsyncMock(side_effect=Exception("Parsing crash"))
-        files = {"pdf_file": ("t.pdf", b"p", "application/pdf")}
+        files = {"pdf_file": ("test_slides.pdf", b"p", "application/pdf")}
         with patch('gui.backend.main.shutil.copyfileobj'):
             response = client.post("/estimate", files=files)
         assert response.status_code == 500
@@ -496,13 +496,13 @@ def test_generate_event_generator_errors():
         raise Exception("SSE Crash")
         
     # We'll use a session already in manager to avoid full /generate setup
-    session = session_manager.create_session("t.pdf", MagicMock(), MagicMock())
+    session = session_manager.create_session("test_slides.pdf", MagicMock(), MagicMock())
     
     with patch('gui.backend.main.LecternGenerationService') as mock_s_class:
         mock_s = MagicMock()
         # Mock run_generation which is called inside event_generator
         with patch('gui.backend.main.GenerationService.run_generation', side_effect=failing_gen):
-             files = {"pdf_file": ("t.pdf", b"p", "application/pdf")}
+             files = {"pdf_file": ("test_slides.pdf", b"p", "application/pdf")}
              data = {"deck_name": "D", "session_id": session.session_id}
              
              with patch('gui.backend.main.shutil.copyfileobj'):
@@ -607,7 +607,7 @@ def test_history_clear_all():
 
 def test_generate_with_overrides():
     """Test generating cards with focus prompt and source type override."""
-    files = {"pdf_file": ("t.pdf", b"p", "application/pdf")}
+    files = {"pdf_file": ("test_slides.pdf", b"p", "application/pdf")}
     data = {
         "deck_name": "D",
         "focus_prompt": "Medical",
@@ -668,7 +668,7 @@ def test_spa_routing():
 def test_session_latest_fallback():
     """Test _get_session_or_404 uses latest session when ID is missing."""
     from gui.backend.main import session_manager
-    session = session_manager.create_session("t.pdf", MagicMock(), MagicMock())
+    session = session_manager.create_session("test_slides.pdf", MagicMock(), MagicMock())
     
     # No session_id provided, should find the latest one
     with patch('gui.backend.main.GenerationService.run_generation', return_value=(x for x in [])):
@@ -689,7 +689,7 @@ def test_session_manager_more_pruning():
 def test_api_status_event_handling():
     """Test session status transitions for completed and cancelled events."""
     from gui.backend.main import session_manager
-    session = session_manager.create_session("t.pdf", MagicMock(), MagicMock())
+    session = session_manager.create_session("test_slides.pdf", MagicMock(), MagicMock())
     
     # done event
     session_manager.mark_status(session.session_id, "completed")

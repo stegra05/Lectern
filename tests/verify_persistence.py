@@ -16,7 +16,7 @@ def test_persistence():
     
     # Mock data
     session_id = "test_session_123"
-    pdf_path = "/tmp/test.pdf"
+    pdf_path = "/tmp/test_slides.pdf"
     deck_name = "Test Deck"
     slide_set_name = "Lecture 1 Intro"
     cards = [{"front": "Q1", "back": "A1"}]

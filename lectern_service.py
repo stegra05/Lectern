@@ -29,16 +29,7 @@ from utils.note_export import export_card_to_anki
 from utils.state import save_state, clear_state
 from utils.history import HistoryManager
 
-# Deprecated parser entry points intentionally retained as patch targets in tests.
-def extract_content_from_pdf(*args: Any, **kwargs: Any) -> List[Any]:
-    raise RuntimeError("extract_content_from_pdf is removed; native Gemini PDF upload is required.")
 
-
-def extract_pdf_title(*args: Any, **kwargs: Any) -> str:
-    return ""
-
-_MIN_NOTES_PER_BATCH = 20
-_MAX_NOTES_PER_BATCH = 50
 
 EventType = Literal[
     "status",
@@ -296,7 +287,7 @@ class LecternGenerationService:
             # Simple card cap calculation
             if is_script_mode:
                 # Script/dense mode: text-based calculation
-                total_cards_cap = max(5, int(total_text_chars / 1000 * effective_target))
+                total_cards_cap = max(5, int(total_text_chars / config.SCRIPT_BASE_CHARS * effective_target))
                 yield ServiceEvent("info", f"Script mode: ~{total_cards_cap} cards target ({chars_per_page:.0f} chars/page)")
             else:
                 # Slides mode: page-based calculation
@@ -305,7 +296,7 @@ class LecternGenerationService:
 
             # Batch sizing
             # Clamp batch size: at least 20, at most 50, targeting half the page count.
-            batch_size = max(_MIN_NOTES_PER_BATCH, min(_MAX_NOTES_PER_BATCH, len(pages) // 2))
+            batch_size = max(config.MIN_NOTES_PER_BATCH, min(config.MAX_NOTES_PER_BATCH, len(pages) // 2))
             actual_batch_size = int(batch_size)
 
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})

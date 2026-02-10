@@ -6,7 +6,7 @@ import { HomeView } from '../views/HomeView';
 vi.mock('../components/FilePicker', () => ({
     FilePicker: ({ onFileSelect }: any) => (
         <div data-testid="file-picker">
-            <button onClick={() => onFileSelect(new File([''], 'test.pdf', { type: 'application/pdf' }))}>
+            <button onClick={() => onFileSelect(new File([''], 'test_slides.pdf', { type: 'application/pdf' }))}>
                 Select File
             </button>
         </div>
@@ -54,7 +54,7 @@ describe('HomeView', () => {
     it('enables generate button when file and deck are selected', () => {
         const props = {
             ...defaultProps,
-            pdfFile: new File([''], 'test.pdf'),
+            pdfFile: new File([''], 'test_slides.pdf'),
             deckName: 'Default',
         };
         render(<HomeView {...props} />);
@@ -62,7 +62,7 @@ describe('HomeView', () => {
     });
 
     it('handles source type selection', () => {
-        render(<HomeView {...defaultProps} pdfFile={new File([''], 'test.pdf')} />);
+        render(<HomeView {...defaultProps} pdfFile={new File([''], 'test_slides.pdf')} />);
 
         const slidesBtn = screen.getByText('Slides');
         fireEvent.click(slidesBtn);
@@ -173,7 +173,7 @@ describe('HomeView', () => {
     it('calls handleGenerate when button is clicked', () => {
         const props = {
             ...defaultProps,
-            pdfFile: new File([''], 'test.pdf'),
+            pdfFile: new File([''], 'test_slides.pdf'),
             deckName: 'Default',
         };
         render(<HomeView {...props} />);
