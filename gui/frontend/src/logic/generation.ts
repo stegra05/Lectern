@@ -1,6 +1,7 @@
 import { api, type ProgressEvent, type Card } from '../api';
 import type { StoreState, LecternStore, Phase } from '../store-types';
 import { processStreamEvent } from './stream';
+import { useLecternStore } from '../store';
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
 
@@ -35,6 +36,9 @@ export const processGenerationEvent = (
         const phase = (event.data as { phase?: Phase } | undefined)?.phase;
         if (phase) {
             set(() => ({ currentPhase: phase }));
+        } else {
+            // Pre-concept setup step — increment counter for progress tracking
+            useLecternStore.getState().incrementSetupStep();
         }
         return;
     }
@@ -43,6 +47,8 @@ export const processGenerationEvent = (
         if (typeof window !== 'undefined') {
             localStorage.removeItem(ACTIVE_SESSION_KEY);
         }
+        const cardCount = useLecternStore.getState().cards.length;
+        useLecternStore.getState().addToast('success', `Generation complete — ${cardCount} cards`);
         set((prev) => ({
             step: 'done',
             currentPhase: 'complete',
@@ -56,11 +62,14 @@ export const processGenerationEvent = (
         if (typeof window !== 'undefined') {
             localStorage.removeItem(ACTIVE_SESSION_KEY);
         }
+        useLecternStore.getState().addToast('warning', 'Generation cancelled');
         set(() => ({ isCancelling: false }));
         return;
     }
 
     if (event.type === 'error') {
+        const msg = event.message || 'An error occurred';
+        useLecternStore.getState().addToast('error', msg, 8000);
         set(() => ({ isError: true }));
     }
 };
@@ -82,6 +91,7 @@ export const handleGenerate = async (
         isCancelling: false,
         isHistorical: false,
         currentPhase: 'idle',
+        setupStepsCompleted: 0,
     });
     if (typeof window !== 'undefined') {
         localStorage.removeItem(ACTIVE_SESSION_KEY);

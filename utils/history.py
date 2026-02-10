@@ -55,10 +55,9 @@ class HistoryManager:
             return False
 
     def get_all(self) -> List[Dict[str, Any]]:
-        """Return all history entries, sorted by date desc."""
+        """Return all history entries, sorted by most recent activity desc."""
         history = self._load()
-        # Sort by date descending
-        history.sort(key=lambda x: x.get("date", ""), reverse=True)
+        history.sort(key=lambda x: x.get("last_modified", x.get("date", "")), reverse=True)
         return history
 
     def add_entry(self, 
@@ -95,16 +94,11 @@ class HistoryManager:
         history = self._load()
         for entry in history:
             if entry["id"] == entry_id:
-                if status:
+                if status is not None:
                     entry["status"] = status
                 if card_count is not None:
                     entry["card_count"] = card_count
-                entry["date"] = datetime.now().isoformat() # Update timestamp on change? Maybe keep creation time.
-                # Let's keep creation time as "date" and maybe add "last_modified" if needed. 
-                # For now, user request said "date", usually implies creation or start time.
-                # But "Recent Sessions" might imply last accessed. 
-                # I'll update the date to bring it to top of list if we sort by date.
-                entry["date"] = datetime.now().isoformat()
+                entry["last_modified"] = datetime.now().isoformat()
                 break
         if not self._save(history):
             logger.warning("History update not persisted: %s", entry_id)
@@ -116,6 +110,14 @@ class HistoryManager:
                 return entry
         return None
 
+    def get_entry_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Find a history entry by its session_id field."""
+        history = self._load()
+        for entry in history:
+            if entry.get("session_id") == session_id:
+                return entry
+        return None
+
     def delete_entry(self, entry_id: str) -> bool:
         """Delete a specific history entry by ID."""
         history = self._load()
@@ -124,6 +126,22 @@ class HistoryManager:
         if len(history) < initial_len:
             return self._save(history)
         return False
+
+    def delete_entries(self, entry_ids: List[str]) -> int:
+        """Delete multiple history entries by ID. Returns count of deleted entries."""
+        history = self._load()
+        id_set = set(entry_ids)
+        original_len = len(history)
+        history = [e for e in history if e["id"] not in id_set]
+        deleted = original_len - len(history)
+        if deleted > 0:
+            self._save(history)
+        return deleted
+
+    def get_entries_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """Return all history entries matching the given status."""
+        history = self._load()
+        return [e for e in history if e.get("status") == status]
 
     def clear_all(self) -> None:
         """Clear all history entries."""

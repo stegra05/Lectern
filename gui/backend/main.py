@@ -37,7 +37,7 @@ from service import GenerationService, DraftStore
 from lectern_service import LecternGenerationService, ServiceEvent
 from utils.note_export import export_card_to_anki
 from utils.history import HistoryManager
-from utils.state import load_state, save_state, StateFile, resolve_state_context
+from utils.state import load_state, save_state, StateFile, resolve_state_context, clear_state, sweep_orphan_state_temps
 from session import (
     SessionManager,
     SessionState,
@@ -49,6 +49,7 @@ from session import (
 
 app = FastAPI(title='Lectern API', version='1.3.0')
 session_manager.sweep_orphan_temp_files()
+sweep_orphan_state_temps()
 
 # NOTE(Estimate): Session-level cache for estimate base data. Key = (content_sha256, model).
 # Reuse token count across target/source changes for same PDF. TTL ~1h covers typical session.
@@ -312,6 +313,11 @@ async def create_deck_endpoint(req: DeckCreate):
 @app.delete("/history")
 async def clear_history():
     mgr = HistoryManager()
+    # Clean up state files before clearing history
+    for entry in mgr.get_all():
+        session_id = entry.get("session_id")
+        if session_id:
+            clear_state(session_id)
     mgr.clear_all()
     return {"status": "cleared"}
 
@@ -325,13 +331,38 @@ async def delete_history_entry(entry_id: str):
     # Clean up persistent session state
     session_id = entry.get("session_id")
     if session_id:
-        from utils.state import clear_state
         clear_state(session_id)
         
     success = mgr.delete_entry(entry_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete history entry")
     return {"status": "deleted"}
+
+
+class BatchDeleteRequest(BaseModel):
+    ids: Optional[List[str]] = None
+    status: Optional[str] = None
+
+@app.post("/history/batch-delete")
+async def batch_delete_history(req: BatchDeleteRequest):
+    mgr = HistoryManager()
+
+    if req.status:
+        entries = mgr.get_entries_by_status(req.status)
+    elif req.ids:
+        entries = [e for e in mgr.get_all() if e["id"] in set(req.ids)]
+    else:
+        raise HTTPException(status_code=400, detail="Provide 'ids' or 'status'")
+
+    # Clean up state files
+    for entry in entries:
+        sid = entry.get("session_id")
+        if sid:
+            clear_state(sid)
+
+    entry_ids = [e["id"] for e in entries]
+    deleted = mgr.delete_entries(entry_ids)
+    return {"status": "deleted", "count": deleted}
 
 def _estimate_cache_key(tmp_path: str, model: str) -> tuple:
     """Content-based key for same PDF+model. Reuses cache when same file uploaded again."""
@@ -655,11 +686,12 @@ async def delete_session_card(session_id: str, card_index: int):
     # Save the updated cards back to the session state
     StateFile(session_id).update_cards(cards)
 
-    # Try to update history card count if this session corresponds to a history entry
+    # Try to update history card count via session_id lookup
     try:
         mgr = HistoryManager()
-        # Assume session_id is the entry_id for persistent sessions
-        mgr.update_entry(session_id, card_count=len(cards))
+        entry = mgr.get_entry_by_session_id(session_id)
+        if entry:
+            mgr.update_entry(entry["id"], card_count=len(cards))
     except Exception as e:
         print(f"Warning: Failed to update history card count: {e}")
 

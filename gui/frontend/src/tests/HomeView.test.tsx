@@ -128,7 +128,8 @@ describe('HomeView', () => {
         expect(screen.getByText('$0.030')).toBeInTheDocument();
         expect(screen.getByText('1.0k')).toBeInTheDocument();
         expect(screen.getByText('0.5k')).toBeInTheDocument();
-        expect(screen.getByText('~45 cards')).toBeInTheDocument();
+        expect(screen.getByText(/Estimated Cost/i)).toBeInTheDocument();
+        expect(screen.queryByText('~45 cards')).not.toBeInTheDocument();
     });
 
     it('shows estimating state', () => {

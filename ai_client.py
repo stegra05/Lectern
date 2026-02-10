@@ -69,7 +69,6 @@ class LecternAIClient:
         self._client = genai.Client(api_key=self._api_key)
 
         self._slide_set_context: Dict[str, Any] = {}
-        self._tag_context_cache = ""
         if slide_set_context:
             self.set_slide_set_context(
                 deck_name=str(slide_set_context.get("deck_name") or ""),
@@ -129,39 +128,11 @@ class LecternAIClient:
         level = _THINKING_PROFILES.get(phase, "low")
         return types.ThinkingConfig(thinking_level=level)
 
-    def _compose_tag_context(self, deck_name: str, slide_set_name: str) -> str:
-        parts = []
-        if deck_name:
-            parts.append(deck_name.replace(" ", "-").lower()[:20])
-        if slide_set_name:
-            parts.append(slide_set_name.replace(" ", "-").lower()[:20])
-        parts.append("[topic]")
-        example_tag = "::".join(parts)
-        return (
-            f"- Metadata (Hierarchical Tagging):\\n"
-            f"    - Structure: Deck::SlideSet::Topic::Tag\\n"
-            f"    - Example: {example_tag}\\n"
-        )
-
     def set_slide_set_context(self, deck_name: str, slide_set_name: str) -> None:
         self._slide_set_context = {
             "deck_name": deck_name,
             "slide_set_name": slide_set_name,
         }
-        self._tag_context_cache = self._compose_tag_context(deck_name, slide_set_name)
-
-    def _build_tag_context(self) -> str:
-        """Build the tag instruction context for AI prompts."""
-        if self._tag_context_cache:
-            return self._tag_context_cache
-
-        ctx = self._slide_set_context
-        if not ctx:
-            return "- Metadata: tags (1-2 concise tags).\\n"
-        return self._compose_tag_context(
-            str(ctx.get("deck_name") or ""),
-            str(ctx.get("slide_set_name") or ""),
-        )
 
     def _build_rolling_card_summary(self, all_card_fronts: List[str]) -> str:
         cleaned_fronts = [" ".join(str(front).split()) for front in all_card_fronts if str(front).strip()]
@@ -319,14 +290,11 @@ class LecternAIClient:
         if covered_slides:
             slide_text = f"\\n- Already covered slides: {', '.join(str(s) for s in covered_slides[:50])}...\\n"
             
-        tag_context = self._build_tag_context()
-        
         # Use PromptBuilder
         prompt = self._prompt_builder.generation(
             limit=limit,
             pacing_hint=pacing_hint,
             avoid_text=avoid_text,
-            tag_context=tag_context,
             slide_coverage=slide_text
         )
         

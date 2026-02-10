@@ -7,24 +7,38 @@
 @layer base {
   :root {
     /* Light Mode - Zinc/Lime inspired but light */
-    --background: 250 250 250; /* Zinc 50 */
-    --surface: 255 255 255;    /* White */
-    --primary: 132 204 22;     /* Lime 500 (darker for visibility on light) */
-    --secondary: 161 161 170;  /* Zinc 400 */
-    --text-main: 24 24 27;     /* Zinc 950 */
-    --text-muted: 113 113 122; /* Zinc 500 */
-    --border: 228 228 231;     /* Zinc 200 */
+    --background: 250 250 250;
+    /* Zinc 50 */
+    --surface: 255 255 255;
+    /* White */
+    --primary: 132 204 22;
+    /* Lime 500 (darker for visibility on light) */
+    --secondary: 161 161 170;
+    /* Zinc 400 */
+    --text-main: 24 24 27;
+    /* Zinc 950 */
+    --text-muted: 113 113 122;
+    /* Zinc 500 */
+    --border: 228 228 231;
+    /* Zinc 200 */
   }
 
   .dark {
     /* Dark Mode - Original Zinc/Lime */
-    --background: 9 9 11;      /* Zinc 950 */
-    --surface: 24 24 27;       /* Zinc 900 */
-    --primary: 163 230 53;     /* Lime 400 */
-    --secondary: 161 161 170;  /* Zinc 400 */
-    --text-main: 244 244 245;  /* Zinc 100 */
-    --text-muted: 161 161 170; /* Zinc 400 */
-    --border: 39 39 42;        /* Zinc 800 */
+    --background: 9 9 11;
+    /* Zinc 950 */
+    --surface: 24 24 27;
+    /* Zinc 900 */
+    --primary: 163 230 53;
+    /* Lime 400 */
+    --secondary: 161 161 170;
+    /* Zinc 400 */
+    --text-main: 244 244 245;
+    /* Zinc 100 */
+    --text-muted: 161 161 170;
+    /* Zinc 400 */
+    --border: 39 39 42;
+    /* Zinc 800 */
   }
 }
 
@@ -49,4 +63,16 @@ body {
 
 .animate-spin-slow {
   animation: spin 3s linear infinite;
+}
+
+/* Cloze deletion highlight */
+.cloze-hl {
+  color: rgb(96 165 250);
+  /* blue-400 */
+  background: rgb(59 130 246 / 0.12);
+  /* blue-500/12 */
+  border-bottom: 1.5px solid rgb(96 165 250 / 0.5);
+  padding: 0.05em 0.25em;
+  border-radius: 3px;
+  font-weight: 600;
 }

@@ -49,15 +49,21 @@ def save_state(
         "tags": tags,
         "entry_id": entry_id,
     }
+    temp_path = None
     try:
         state_path = _get_state_path(session_id)
         with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", dir=os.path.dirname(state_path)) as tmp:
-            json.dump(state, tmp, ensure_ascii=False)
             temp_path = tmp.name
+            json.dump(state, tmp, ensure_ascii=False)
         os.replace(temp_path, state_path)
         return True
     except Exception:
         logger.exception("Failed to save state for session %s", session_id)
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
         return False
 
 def _save_state_dict(state: Dict[str, Any], session_id: Optional[str]) -> bool:
@@ -168,3 +174,19 @@ def clear_state(session_id: Optional[str] = None) -> None:
             os.remove(LEGACY_STATE_FILE)
         except Exception:
             pass
+
+
+def sweep_orphan_state_temps() -> int:
+    """Remove orphan temp files left by interrupted save_state() calls."""
+    state_dir = str(get_app_data_dir() / "state")
+    if not os.path.isdir(state_dir):
+        return 0
+    removed = 0
+    for name in os.listdir(state_dir):
+        if name.startswith("tmp") and not name.endswith(".json"):
+            try:
+                os.remove(os.path.join(state_dir, name))
+                removed += 1
+            except Exception:
+                pass
+    return removed

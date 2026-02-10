@@ -34,31 +34,27 @@ _CARD_DATA = [
         "fields": [
             {"name": "Front", "value": "State the quadratic formula."}, 
             {"name": "Back", "value": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\)."}
-        ],
-        "tags": ["algebra"]
+        ]
     },
     {
         "model_name": "Cloze",
         "fields": [
             {"name": "Text", "value": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}."}
-        ],
-        "tags": ["calculus"]
+        ]
     },
     {
         "model_name": "Basic",
         "fields": [
             {"name": "Front", "value": "Loss oscillates wildly during training. What is the most likely cause?"}, 
             {"name": "Back", "value": "<b>Learning rate is too high</b>. The steps overshoot the minimum."}
-        ], 
-        "tags": ["optimization"]
+        ]
     },
     {
         "model_name": "Basic",
         "fields": [
             {"name": "Front", "value": "Compare <b>L1</b> and <b>L2</b> regularization effects."}, 
             {"name": "Back", "value": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."}
-        ],
-        "tags": ["regularization"]
+        ]
     }
 ]
 CARD_EXAMPLES = _make_example_str(_CARD_DATA, "Examples:")
@@ -130,7 +126,6 @@ class PromptBuilder:
         limit: int,
         pacing_hint: str = "",
         avoid_text: str = "",
-        tag_context: str = "",
         slide_coverage: str = "",
     ) -> str:
         """Build the card generation prompt."""
@@ -155,7 +150,6 @@ class PromptBuilder:
             "- Format:\n"
             "    - Prefer Cloze for definitions/lists. Basic for open-ended questions.\n"
             "    - STRICTLY AVOID Markdown. Use HTML for formatting.\n"
-            f"{tag_context}"
             f"{avoid_text}"
             f"{slide_coverage}"
             "    - `slide_topic`: Specific section/topic (Title Case).\n"

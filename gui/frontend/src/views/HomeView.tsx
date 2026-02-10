@@ -58,6 +58,15 @@ export function HomeView({
     };
 
     const sliderConfig = computeTargetSliderConfig(estimation?.suggested_card_count);
+
+    // Clamp targetDeckSize into slider range whenever the range changes
+    const { min: sMin, max: sMax, disabled: sDisabled } = sliderConfig;
+    if (!sDisabled && (targetDeckSize < sMin || targetDeckSize > sMax)) {
+        const clamped = Math.min(Math.max(targetDeckSize, sMin), sMax);
+        // Defer to avoid setting state during render
+        queueMicrotask(() => setTargetDeckSize(clamped));
+    }
+
     const cardsPerUnit = computeCardsPerUnit(targetDeckSize, sourceType, estimation);
 
     return (
@@ -219,18 +228,11 @@ export function HomeView({
                                 <div className="p-4 rounded-xl bg-surface/30 border border-border/50">
                                     <div className="flex items-center justify-between mb-3 border-b border-border/30 pb-2">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Estimated Total</span>
+                                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Estimated Cost</span>
                                             {isEstimating ? (
                                                 <div className="h-7 w-20 bg-surface animate-pulse rounded mt-1" />
                                             ) : (
-                                                <div className="flex flex-col">
-                                                    {estimation?.estimated_card_count !== undefined && (
-                                                        <span className="text-xs text-text-muted">
-                                                            ~{estimation.estimated_card_count} cards
-                                                        </span>
-                                                    )}
-                                                    <span className="text-2xl font-bold text-primary">${estimation?.cost.toFixed(3)}</span>
-                                                </div>
+                                                <span className="text-2xl font-bold text-primary">${estimation?.cost.toFixed(3)}</span>
                                             )}
                                         </div>
                                         {!isEstimating && (
