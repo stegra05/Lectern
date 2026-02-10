@@ -5,9 +5,9 @@ import base64
 import re
 from typing import Any, Dict, Tuple
 
-import config
-from ai_client import LecternAIClient
-from ai_common import _compose_multimodal_content
+from lectern import config
+from lectern.ai_client import LecternAIClient
+from lectern.ai_common import _compose_multimodal_content
 
 
 def _estimate_page_count_from_pdf_bytes(pdf_bytes: bytes) -> int:

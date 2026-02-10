@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from config import ANKI_CONNECT_URL
+from lectern.config import ANKI_CONNECT_URL
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from utils.state import save_state, load_state, clear_state
-from lectern_service import LecternGenerationService
+from lectern.utils.state import save_state, load_state, clear_state
+from lectern.lectern_service import LecternGenerationService
 
 def test_persistence():
     print("Testing session state persistence...")

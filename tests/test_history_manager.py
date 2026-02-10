@@ -3,11 +3,11 @@ import os
 import json
 import sys
 from unittest.mock import patch, MagicMock
-from utils.history import HistoryManager, get_history_file_path
+from lectern.utils.history import HistoryManager, get_history_file_path
 
 def test_get_history_file_path_frozen():
     with patch('sys.frozen', True, create=True):
-        with patch('utils.history.get_app_data_dir') as mock_dir:
+        with patch('lectern.utils.history.get_app_data_dir') as mock_dir:
             from pathlib import Path
             mock_dir.return_value = Path("/tmp/appdata")
             path = get_history_file_path()
@@ -79,7 +79,7 @@ def test_history_manager_error_handling(tmp_path):
 
 
 def test_sweep_orphan_state_temps(tmp_path):
-    from utils.state import sweep_orphan_state_temps
+    from lectern.utils.state import sweep_orphan_state_temps
     state_dir = tmp_path / "state"
     state_dir.mkdir()
     
@@ -89,7 +89,7 @@ def test_sweep_orphan_state_temps(tmp_path):
     # This is a real session file — should NOT be deleted
     (state_dir / "session-abc123.json").write_text("{}")
     
-    with patch('utils.state.get_app_data_dir', return_value=tmp_path):
+    with patch('lectern.utils.state.get_app_data_dir', return_value=tmp_path):
         removed = sweep_orphan_state_temps()
     
     assert removed == 2

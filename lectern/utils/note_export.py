@@ -11,9 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-import config
-from anki_connector import add_note
-from utils.tags import build_hierarchical_tags
+from lectern import config
+from lectern.anki_connector import add_note
+from lectern.utils.tags import build_hierarchical_tags
 
 
 @dataclass

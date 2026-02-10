@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from utils.note_export import resolve_model_name, build_card_tags, export_card_to_anki
-import config
+from lectern.utils.note_export import resolve_model_name, build_card_tags, export_card_to_anki
+from lectern import config
 
 # Test resolve_model_name
 def test_resolve_model_name_basic():
@@ -27,7 +27,7 @@ def test_resolve_model_name_custom():
     assert resolve_model_name("CustomModel", "fallback") == "CustomModel"
 
 # Test build_card_tags
-@patch("utils.note_export.build_hierarchical_tags")
+@patch("lectern.utils.note_export.build_hierarchical_tags")
 def test_build_card_tags(mock_build_hierarchical):
     """Test building tags with user tags and defaults (3-level hierarchy)."""
     # Mock return value
@@ -55,7 +55,7 @@ def test_build_card_tags(mock_build_hierarchical):
     )
     assert result == ["Deck::Set::Topic"]
 
-@patch("utils.note_export.build_hierarchical_tags")
+@patch("lectern.utils.note_export.build_hierarchical_tags")
 def test_build_card_tags_dedup(mock_build_hierarchical):
     """Test that additional tags are deduplicated."""
     mock_build_hierarchical.return_value = []
@@ -75,8 +75,8 @@ def test_build_card_tags_dedup(mock_build_hierarchical):
          assert config.DEFAULT_TAG in extra_arg
 
 # Test export_card_to_anki
-@patch("utils.note_export.add_note")
-@patch("utils.note_export.build_hierarchical_tags")
+@patch("lectern.utils.note_export.add_note")
+@patch("lectern.utils.note_export.build_hierarchical_tags")
 def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
     """Test successful card export."""
     mock_add_note.return_value = 12345
@@ -107,8 +107,8 @@ def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
     # add_note(deck_name, model_name, fields, tags)
     assert args[1] == config.DEFAULT_BASIC_MODEL
 
-@patch("utils.note_export.add_note")
-@patch("utils.note_export.build_hierarchical_tags")
+@patch("lectern.utils.note_export.add_note")
+@patch("lectern.utils.note_export.build_hierarchical_tags")
 def test_export_card_to_anki_no_media(mock_build_tags, mock_add_note):
     """Test export without optional fields."""
     mock_add_note.return_value = 12345
@@ -128,7 +128,7 @@ def test_export_card_to_anki_no_media(mock_build_tags, mock_add_note):
     
     assert result.success is True
 
-@patch("utils.note_export.add_note")
+@patch("lectern.utils.note_export.add_note")
 def test_export_card_to_anki_failure(mock_add_note):
     """Test handling of AnkiConnect errors."""
     mock_add_note.side_effect = RuntimeError("Anki Error")

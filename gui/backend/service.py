@@ -4,9 +4,9 @@ import os
 import base64
 from typing import AsyncGenerator, Dict, List, Any, Optional
 
-import config
-from lectern_service import LecternGenerationService, ServiceEvent
-from utils.state import load_state, save_state, StateFile
+from lectern import config
+from lectern.lectern_service import LecternGenerationService, ServiceEvent
+from lectern.utils.state import load_state, save_state, StateFile
 
 class DraftStore:
     def __init__(self, session_id: Optional[str] = None):

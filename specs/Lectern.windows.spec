@@ -8,26 +8,16 @@ import os
 PROJECT_ROOT = os.path.abspath(os.getcwd())
 
 a = Analysis(
-    ['gui/launcher.py'],
+    [os.path.join(PROJECT_ROOT, 'gui', 'launcher.py')],
     pathex=[PROJECT_ROOT, os.path.join(PROJECT_ROOT, 'gui', 'backend')],
     binaries=binaries,
     datas=[
-        ('gui/frontend/dist', 'frontend/dist'),
-        ('gui/backend', 'backend'),
-        ('utils', 'utils'),
-        ('ai_client.py', '.'),
-        ('ai_common.py', '.'),
-        ('ai_pacing.py', '.'),
-        ('ai_prompts.py', '.'),
-        ('ai_schemas.py', '.'),
-        ('anki_connector.py', '.'),
-        ('config.py', '.'),
-        ('lectern_service.py', '.'),
-        ('version.py', '.'),
+        (os.path.join(PROJECT_ROOT, 'gui', 'frontend', 'dist'), 'frontend/dist'),
+        (os.path.join(PROJECT_ROOT, 'gui', 'backend'), 'backend'),
+        (os.path.join(PROJECT_ROOT, 'lectern'), 'lectern'),
     ] + datas,
     hiddenimports=['webview', 'uvicorn', 'PIL', 'PIL.Image',
-                   'lectern_service', 'ai_client', 'ai_common', 'ai_pacing', 'ai_prompts', 'ai_schemas',
-                   'anki_connector', 'config', 'utils'] + hiddenimports,
+                   'lectern', 'lectern.lectern_service', 'lectern.config'] + hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -59,7 +49,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['icon.png'],
+    icon=[os.path.join(PROJECT_ROOT, 'resources', 'icon.ico')],
 )
 coll = COLLECT(
     exe,

@@ -16,8 +16,8 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from lectern_service import LecternGenerationService, ServiceEvent
-from generation_loop import (
+from lectern.lectern_service import LecternGenerationService, ServiceEvent
+from lectern.generation_loop import (
     GenerationLoopConfig,
     GenerationLoopContext,
     GenerationLoopState,
@@ -36,7 +36,7 @@ def service():
 @pytest.fixture(autouse=True)
 def mock_history_manager():
     """Prevent test pollution: mock HistoryManager for all service tests."""
-    with patch('lectern_service.HistoryManager') as mock_cls:
+    with patch('lectern.lectern_service.HistoryManager') as mock_cls:
         mock_instance = MagicMock()
         mock_instance.add_entry.return_value = "test-entry-id"
         mock_cls.return_value = mock_instance
@@ -75,9 +75,9 @@ def generation_env(mock_pdf_pages):
     Tests can override any mock via the returned dict, e.g.:
         env["ai"].generate_more_cards.return_value = {"cards": [...], "done": True}
     """
-    with patch('lectern_service.check_connection', return_value=True) as mock_check, \
-         patch('lectern_service.sample_examples_from_deck', return_value="") as mock_examples, \
-         patch('lectern_service.LecternAIClient') as mock_ai_class, \
+    with patch('lectern.lectern_service.check_connection', return_value=True) as mock_check, \
+         patch('lectern.lectern_service.sample_examples_from_deck', return_value="") as mock_examples, \
+         patch('lectern.lectern_service.LecternAIClient') as mock_ai_class, \
          patch('os.path.exists', return_value=True), \
          patch('os.path.getsize', return_value=1024):
 
@@ -139,7 +139,7 @@ class TestServiceValidation:
         assert len(error_events) == 1
         assert "not found" in error_events[0].message.lower()
     
-    @patch('lectern_service.check_connection')
+    @patch('lectern.lectern_service.check_connection')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_run_with_anki_disconnected(
@@ -169,8 +169,8 @@ class TestServiceValidation:
 # --- Tests for stop_check ---
 
 class TestStopCheck:
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_stop_check_aborts_early(
@@ -304,8 +304,8 @@ class TestServiceIntegration:
 
 
 class TestServiceAdvanced:
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_run_starts_fresh_without_resume(
@@ -342,8 +342,8 @@ class TestServiceAdvanced:
         assert not any("Restored" in e.message for e in events if e.type == "info")
         mock_ai.restore_history.assert_not_called()
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_stop_check_during_generation(
@@ -400,11 +400,13 @@ class TestServiceAdvanced:
         assert stop_flag == True
 
     @pytest.mark.asyncio
-    @patch('cost_estimator._extract_pdf_metadata')
-    @patch('cost_estimator._compose_multimodal_content')
-    @patch('cost_estimator.LecternAIClient')
+    @patch('lectern.cost_estimator._extract_pdf_metadata')
+    @patch('lectern.cost_estimator._compose_multimodal_content')
+    @patch('lectern.cost_estimator.LecternAIClient')
+    @patch('os.path.exists', return_value=True)
     async def test_estimate_cost(
         self,
+        mock_exists,
         mock_ai_client_class,
         mock_compose,
         mock_extract_metadata,
@@ -427,8 +429,8 @@ class TestServiceAdvanced:
         assert result["image_token_source"] == "native_embedded"
 
     @pytest.mark.asyncio
-    @patch('cost_estimator._compose_multimodal_content')
-    @patch('cost_estimator.LecternAIClient')
+    @patch('lectern.cost_estimator._compose_multimodal_content')
+    @patch('lectern.cost_estimator.LecternAIClient')
     async def test_verify_image_token_cost(
         self,
         mock_ai_client_class,
@@ -447,9 +449,9 @@ class TestServiceAdvanced:
         result = await service.verify_image_token_cost(model_name="gemini-3-flash-preview")
         assert result["delta_per_image"] == 258
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_run_with_empty_pdf_content(
         self,
         mock_getsize,
@@ -464,7 +466,7 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        with patch('lectern_service.LecternAIClient') as mock_ai_class:
+        with patch('lectern.lectern_service.LecternAIClient') as mock_ai_class:
             mock_ai = mock_ai_class.return_value
             mock_ai.upload_pdf.side_effect = RuntimeError("Upload failed")
             events = list(service.run(
@@ -489,8 +491,8 @@ class TestServiceAdvanced:
         assert "ml" in key
         assert "is" in key
 
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_run_with_zero_byte_file(
         self,
         mock_getsize,
@@ -509,11 +511,11 @@ class TestServiceAdvanced:
         ))
         
         assert any("empty" in e.message.lower() for e in events if e.type == "error")
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.export_card_to_anki')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.export_card_to_anki')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_run_with_export(
         self,
         mock_getsize,
@@ -560,7 +562,7 @@ class TestServiceAdvanced:
         assert any(e.type == "note" for e in events)
         assert any(e.type == "done" for e in events)
         mock_export.assert_called()
-    @patch('lectern_service.check_connection')
+    @patch('lectern.lectern_service.check_connection')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_stop_check_during_parsing(
@@ -595,7 +597,7 @@ class TestServiceAdvanced:
         # Should stop after Anki check but before parsing completes or yields anything else
         assert any(e.type == "warning" and "stopped" in e.message for e in events) or len(events) < 10
 
-    @patch('lectern_service.check_connection')
+    @patch('lectern.lectern_service.check_connection')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_pdf_parsing_exception(
@@ -612,7 +614,7 @@ class TestServiceAdvanced:
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
-        with patch('lectern_service.LecternAIClient') as mock_ai_class:
+        with patch('lectern.lectern_service.LecternAIClient') as mock_ai_class:
             mock_ai = mock_ai_class.return_value
             mock_ai.upload_pdf.side_effect = RuntimeError("Upload failed")
             events = list(service.run(
@@ -624,12 +626,12 @@ class TestServiceAdvanced:
         
         assert any(e.type == "error" and "native pdf upload failed" in e.message.lower() for e in events)
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.sample_examples_from_deck')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.save_state')
-    @patch('lectern_service.HistoryManager')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.sample_examples_from_deck')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.save_state')
+    @patch('lectern.lectern_service.HistoryManager')
     def test_example_sampling_exception(
         self,
         mock_history_class,
@@ -655,7 +657,7 @@ class TestServiceAdvanced:
         
         mock_samples.side_effect = Exception("Anki error")
         
-        with patch('lectern_service.LecternAIClient') as mock_ai_class:
+        with patch('lectern.lectern_service.LecternAIClient') as mock_ai_class:
              mock_ai = mock_ai_class.return_value
              mock_ai.concept_map.return_value = {"slide_set_name": "Test"}
              mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": "Q1"}}]}
@@ -673,10 +675,10 @@ class TestServiceAdvanced:
         assert any(e.type == "warning" and "sample examples" in e.message for e in events)
         assert any(e.type == "done" for e in events)
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_script_mode_density_calculation(
         self,
         mock_getsize,
@@ -720,10 +722,10 @@ class TestServiceAdvanced:
         # 3000 / 1000 * 2.0 = 6
         assert any("Script mode: ~6 cards" in e.message for e in events if e.type == "info")
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_reflection_logic_and_stop_check(
         self,
         mock_getsize,
@@ -781,11 +783,11 @@ class TestServiceAdvanced:
         events.extend(list(gen))
         assert any(e.type == "warning" and "Reflection stopped" in e.message for e in events)
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.export_card_to_anki')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.export_card_to_anki')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_export_failure_reporting(
         self,
         mock_getsize,
@@ -821,12 +823,12 @@ class TestServiceAdvanced:
         assert done_event.data["created"] == 0
         assert done_event.data["failed"] == 1
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.save_state')
-    @patch('lectern_service.HistoryManager')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.save_state')
+    @patch('lectern.lectern_service.HistoryManager')
     def test_script_mode_and_entry_id(
         self,
         mock_history_class,
@@ -863,11 +865,11 @@ class TestServiceAdvanced:
         
         assert any("Script mode" in e.message for e in events)
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.save_state')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.save_state')
     def test_dynamic_reflection_rounds_large_doc(
         self,
         mock_save,
@@ -902,9 +904,9 @@ class TestServiceAdvanced:
         assert any("Reflection Round 1/2" in e.message for e in events if e.type == "status")
 
     @pytest.mark.asyncio
-    @patch('cost_estimator._extract_pdf_metadata')
-    @patch('cost_estimator._compose_multimodal_content')
-    @patch('cost_estimator.LecternAIClient')
+    @patch('lectern.cost_estimator._extract_pdf_metadata')
+    @patch('lectern.cost_estimator._compose_multimodal_content')
+    @patch('lectern.cost_estimator.LecternAIClient')
     async def test_estimate_cost_pricing_matching(
         self,
         mock_ai_client_class,
@@ -928,9 +930,9 @@ class TestServiceAdvanced:
         assert result_default["estimated_card_count"] == 3
 
     @pytest.mark.asyncio
-    @patch('cost_estimator._extract_pdf_metadata')
-    @patch('cost_estimator._compose_multimodal_content')
-    @patch('cost_estimator.LecternAIClient')
+    @patch('lectern.cost_estimator._extract_pdf_metadata')
+    @patch('lectern.cost_estimator._compose_multimodal_content')
+    @patch('lectern.cost_estimator.LecternAIClient')
     async def test_estimate_cost_mode_card_count_behavior(
         self,
         mock_ai_client_class,
@@ -963,7 +965,7 @@ class TestServiceAdvanced:
 
     def test_recompute_estimate_matches_full_output(self):
         """Test that recompute_estimate produces same output as full path for same base data."""
-        from cost_estimator import recompute_estimate
+        from lectern.cost_estimator import recompute_estimate
 
         base = {"token_count": 1000, "page_count": 10, "text_chars": 8000, "image_count": 2, "model": "gemini-3-flash"}
         result = recompute_estimate(
@@ -978,7 +980,7 @@ class TestServiceAdvanced:
         assert result["model"] == "gemini-3-flash"
         assert result["image_count"] == 2
 
-    @patch('lectern_service.check_connection')
+    @patch('lectern.lectern_service.check_connection')
     @patch('os.path.exists')
     @patch('os.path.getsize')
     def test_critical_error_graceful_exit(
@@ -1170,11 +1172,11 @@ class TestLoopInternals:
         service._save_checkpoint.assert_not_called()
         assert any(e.type == "info" and "cap reached" in e.message.lower() for e in events)
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.save_state')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.save_state')
     def test_concept_map_failure_and_fallback_name(
         self,
         mock_save,
@@ -1206,11 +1208,11 @@ class TestLoopInternals:
         # Fallback name should be derived from filename "path" -> "Path"
         assert any("Slide Set Name: 'Path'" in e.message for e in events if e.type == "info")
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.save_state')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.save_state')
     def test_reflection_deduplication_and_error(
         self,
         mock_save,
@@ -1258,11 +1260,11 @@ class TestLoopInternals:
         # Verify error was caught and reported
         assert any(e.type == "warning" and "Reflection error" in e.message for e in events)
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.save_state')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.save_state')
     def test_dynamic_rounds_mid_size(
         self,
         mock_save,
@@ -1294,11 +1296,11 @@ class TestLoopInternals:
         # 30 cards after generation -> dynamic_rounds = 1
         assert any("Reflection Round 1/1" in e.message for e in events if e.type == "status")
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
-    @patch('lectern_service.save_state')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.save_state')
     def test_dynamic_rounds_skipped_below_25(
         self,
         mock_save,
@@ -1331,10 +1333,10 @@ class TestLoopInternals:
         assert not any("Reflection" in e.message for e in events if e.type == "step_start")
         assert not any("Reflection Round" in e.message for e in events if e.type == "status")
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_generation_error_handling(
         self,
         mock_getsize,
@@ -1360,10 +1362,10 @@ class TestLoopInternals:
         
         assert any(e.type == "error" and "Generation error" in e.message for e in events)
 
-    @patch('lectern_service.check_connection')
-    @patch('lectern_service.LecternAIClient')
-    @patch('lectern_service.os.path.exists')
-    @patch('lectern_service.os.path.getsize')
+    @patch('lectern.lectern_service.check_connection')
+    @patch('lectern.lectern_service.LecternAIClient')
+    @patch('lectern.lectern_service.os.path.exists')
+    @patch('lectern.lectern_service.os.path.getsize')
     def test_stop_check_everywhere(
         self,
         mock_getsize,

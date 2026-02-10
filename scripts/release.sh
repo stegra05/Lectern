@@ -63,8 +63,8 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 # Update version.py
-echo "__version__ = \"${NEW_VERSION#v}\"" > version.py
-git add version.py
+echo "__version__ = \"${NEW_VERSION#v}\"" > lectern/version.py
+git add lectern/version.py
 
 # Update gui/backend/main.py
 sed -i '' "s/version='[0-9.]*'/version='${NEW_VERSION#v}'/" gui/backend/main.py

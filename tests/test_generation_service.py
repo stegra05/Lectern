@@ -3,7 +3,7 @@ import asyncio
 import json
 from unittest.mock import MagicMock, AsyncMock, patch
 from gui.backend.service import DraftStore, GenerationService
-from lectern_service import ServiceEvent
+from lectern.lectern_service import ServiceEvent
 
 # --- DraftStore Tests ---
 

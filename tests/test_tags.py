@@ -1,6 +1,6 @@
 
 import pytest
-from utils.tags import build_hierarchical_tags, infer_slide_set_name, _clean_tag_part
+from lectern.utils.tags import build_hierarchical_tags, infer_slide_set_name, _clean_tag_part
 
 class TestTags:
     def test_clean_tag_part_basic(self):

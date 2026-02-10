@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Iterable, List
 
-import config
+from lectern import config
 
 
 def _clean_tag_part(value: str, title_case: bool = False, slug: bool = False) -> str:

@@ -7,15 +7,15 @@ from typing import Any, Dict, List, Optional
 from google import genai  # type: ignore
 from google.genai import types  # type: ignore
 
-import config
-from ai_common import (
+from lectern import config
+from lectern.ai_common import (
     _compose_multimodal_content,
     _compose_native_file_content,
     _start_session_log,
     _append_session_log,
 )
-from ai_prompts import PromptBuilder, PromptConfig
-from ai_schemas import (
+from lectern.ai_prompts import PromptBuilder, PromptConfig
+from lectern.ai_schemas import (
     CardGenerationResponse,
     ConceptMapResponse,
     ReflectionResponse,

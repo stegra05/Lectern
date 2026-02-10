@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from utils.path_utils import get_app_data_dir
+from lectern.utils.path_utils import get_app_data_dir
 
 class TestPlatformCompat(unittest.TestCase):
     def test_app_data_dir_resolution(self):
