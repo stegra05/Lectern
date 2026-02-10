@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-10
+
+### Added
+- Introduce card count targeting and streaming logic for generation
+- Centralize PDF processing and generation logic
+- Add release workflow documentation
+
+### Changed
+- Remove unused PhaseAnimation and SkeletonCard components, update ProgressView for cleaner state handling
+- Update frontend store types and refresh test assets
+- Refactor and enhance various components and services
+
 ## [1.3.0] - 2026-02-10
 
 ### Added
