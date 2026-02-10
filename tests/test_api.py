@@ -229,7 +229,7 @@ def test_session_management_logic():
 
 def test_config_update_complex():
     """Test /config POST with API key and file updates."""
-    with patch('utils.keychain_manager.set_gemini_key') as mock_set_key:
+    with patch('lectern.utils.keychain_manager.set_gemini_key') as mock_set_key:
         with patch('gui.backend.main.run_in_threadpool', side_effect=lambda f: f()) as mock_run:
             with patch('builtins.open', create=True) as mock_open:
                 mock_file = MagicMock()
@@ -362,7 +362,7 @@ def test_session_status_endpoint():
 def test_anki_notes_api():
     """Test Anki notes update/delete endpoints."""
     # update_anki_note uses LOCAL import
-    with patch('anki_connector.update_note_fields') as mock_upd:
+    with patch('lectern.anki_connector.update_note_fields') as mock_upd:
         response = client.put("/anki/notes/1", json={"fields": {"f": "b"}})
         assert response.status_code == 200
         mock_upd.assert_called_with(1, {"f": "b"})
@@ -442,12 +442,12 @@ def test_session_manager_edge_cases():
 def test_config_update_failures():
     """Test /config POST returns 500 on keychain or save failures."""
     # API key update failure
-    with patch('utils.keychain_manager.set_gemini_key', side_effect=Exception("Keychain failed")):
+    with patch('lectern.utils.keychain_manager.set_gemini_key', side_effect=Exception("Keychain failed")):
         response = client.post("/config", json={"gemini_api_key": "k"})
         assert response.status_code == 500
         
     # JSON save failure
-    with patch('config.save_user_config', side_effect=Exception("IO Error")):
+    with patch('lectern.config.save_user_config', side_effect=Exception("IO Error")):
         response = client.post("/config", json={"anki_url": "u"})
         assert response.status_code == 500
 
@@ -458,11 +458,11 @@ def test_config_update_failures():
 
 def test_deck_creation_failure():
     """Test /decks POST returns 500 when deck creation fails."""
-    with patch('anki_connector.create_deck', return_value=False):
+    with patch('lectern.anki_connector.create_deck', return_value=False):
         response = client.post("/decks", json={"name": "Fail"})
         assert response.status_code == 500
     
-    with patch('anki_connector.create_deck', side_effect=Exception("Crash")):
+    with patch('lectern.anki_connector.create_deck', side_effect=Exception("Crash")):
         response = client.post("/decks", json={"name": "Crash"})
         assert response.status_code == 500
 
@@ -540,7 +540,7 @@ def test_anki_connector_failures_api():
         response = client.request("DELETE", "/anki/notes", json={"note_ids": [1]})
         assert response.status_code == 500
         
-    with patch('anki_connector.update_note_fields', side_effect=Exception("Note locked")):
+    with patch('lectern.anki_connector.update_note_fields', side_effect=Exception("Note locked")):
         response = client.put("/anki/notes/1", json={"fields": {"f": "b"}})
         assert response.status_code == 500
 
@@ -560,7 +560,7 @@ def test_no_active_session_404():
 
 def test_config_update_all_fields():
     """Test /config POST accepts and persists all supported fields."""
-    with patch('config.save_user_config') as mock_save:
+    with patch('lectern.config.save_user_config') as mock_save:
         with patch('importlib.reload'):
             response = client.post("/config", json={
                 "anki_url": "http://new:8765",
@@ -591,7 +591,7 @@ def test_deck_actions_success():
         response = client.get("/decks")
         assert "D1" in response.json()["decks"]
         
-    with patch('anki_connector.create_deck', return_value=True):
+    with patch('lectern.anki_connector.create_deck', return_value=True):
         response = client.post("/decks", json={"name": "NewDeck"})
         assert response.status_code == 200
         assert response.json()["status"] == "created"

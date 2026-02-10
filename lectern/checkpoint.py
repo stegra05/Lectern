@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional, Protocol
 
-from utils.state import save_state
+from lectern.utils.state import save_state
 
 
 class CheckpointAI(Protocol):

@@ -1,7 +1,7 @@
 import pytest
-from ai_common import _infer_mime_type, _compose_multimodal_content, _build_loggable_parts, _start_session_log, _append_session_log
+from lectern.ai_common import _infer_mime_type, _compose_multimodal_content, _build_loggable_parts, _start_session_log, _append_session_log
 from unittest.mock import MagicMock, patch, mock_open
-import config
+from lectern import config
 import json
 import os
 
@@ -18,7 +18,7 @@ def test_compose_multimodal_content():
         {"text": "page1", "images": [b"img1"]},
         {"text": "  ", "images": []} # Empty text
     ]
-    with patch('ai_common.types.Part.from_bytes') as mock_part:
+    with patch('lectern.ai_common.types.Part.from_bytes') as mock_part:
         mock_part.return_value = "part_obj"
         parts = _compose_multimodal_content(pages, "prompt")
         assert len(parts) == 3 # prompt, text1, img1
@@ -50,8 +50,8 @@ def test_build_loggable_parts():
 
 def test_session_logging_logic():
     # Test _start_session_log
-    with patch('config.LOG_SESSION_CONTENT', True):
-        with patch('utils.path_utils.get_app_data_dir') as mock_dir:
+    with patch('lectern.config.LOG_SESSION_CONTENT', True):
+        with patch('lectern.utils.path_utils.get_app_data_dir') as mock_dir:
             from pathlib import Path
             temp_dir = Path("/tmp/lectern_test_logs")
             mock_dir.return_value = temp_dir
@@ -62,7 +62,7 @@ def test_session_logging_logic():
                     assert "json" in path
 
     # Test _append_session_log error paths
-    with patch('config.LOG_SESSION_CONTENT', True):
+    with patch('lectern.config.LOG_SESSION_CONTENT', True):
         # Empty path
         assert _append_session_log("", "stage", [], "resp", True) is None
         

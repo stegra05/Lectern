@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-import anki_connector
+from lectern import anki_connector
 
 # --- Fixtures ---
 

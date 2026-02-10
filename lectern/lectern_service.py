@@ -7,11 +7,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Generator, List, Optional, Callable, Literal, Iterable
 
-import config
-from anki_connector import check_connection, sample_examples_from_deck
-from ai_client import LecternAIClient
-from checkpoint import save_checkpoint
-from cost_estimator import (
+from lectern import config
+from lectern.anki_connector import check_connection, sample_examples_from_deck
+from lectern.ai_client import LecternAIClient
+from lectern.checkpoint import save_checkpoint
+from lectern.cost_estimator import (
     derive_effective_target,
     estimate_card_cap,
     estimate_cost as estimate_cost_impl,
@@ -19,7 +19,7 @@ from cost_estimator import (
     recompute_estimate as recompute_estimate_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
 )
-from generation_loop import (
+from lectern.generation_loop import (
     GenerationLoopConfig,
     GenerationLoopContext,
     GenerationLoopState,
@@ -30,10 +30,10 @@ from generation_loop import (
     run_reflection_loop as run_reflection_loop_impl,
     yield_new_cards as yield_new_cards_impl,
 )
-from utils.tags import infer_slide_set_name
-from utils.note_export import export_card_to_anki
-from utils.state import save_state, clear_state
-from utils.history import HistoryManager
+from lectern.utils.tags import infer_slide_set_name
+from lectern.utils.note_export import export_card_to_anki
+from lectern.utils.state import save_state, clear_state
+from lectern.utils.history import HistoryManager
 
 
 logger = logging.getLogger(__name__)

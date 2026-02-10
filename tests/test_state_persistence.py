@@ -10,8 +10,8 @@ from unittest.mock import patch, MagicMock
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from utils.state import save_state, load_state, clear_state, _get_state_path
-from utils.history import HistoryManager
+from lectern.utils.state import save_state, load_state, clear_state, _get_state_path
+from lectern.utils.history import HistoryManager
 
 class TestStatePersistence(unittest.TestCase):
     def setUp(self):
@@ -88,7 +88,7 @@ class TestStatePersistence(unittest.TestCase):
 
     def test_load_state_legacy_migration(self):
         """Test migration from .lectern_state.json (legacy)."""
-        from utils.state import LEGACY_STATE_FILE
+        from lectern.utils.state import LEGACY_STATE_FILE
         legacy_data = {"pdf_path": "legacy.pdf", "deck_name": "Legacy Deck"}
         
         # Ensure new state doesn't exist

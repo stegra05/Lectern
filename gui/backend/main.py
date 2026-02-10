@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 # Add current directory to path to import local modules (service.py)
 sys.path.append(os.path.dirname(__file__))
 
-from version import __version__
+from lectern.version import __version__
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,18 +26,18 @@ from uuid import uuid4
 
 from cachetools import TTLCache
 
-from cost_estimator import recompute_estimate
+from lectern.cost_estimator import recompute_estimate
 from pypdf import PdfReader
 import io
 from starlette.concurrency import run_in_threadpool
 
-from anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes
-import config
+from lectern.anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes
+from lectern import config
 from service import GenerationService, DraftStore
-from lectern_service import LecternGenerationService, ServiceEvent
-from utils.note_export import export_card_to_anki
-from utils.history import HistoryManager
-from utils.state import load_state, save_state, StateFile, resolve_state_context, clear_state, sweep_orphan_state_temps
+from lectern.lectern_service import LecternGenerationService, ServiceEvent
+from lectern.utils.note_export import export_card_to_anki
+from lectern.utils.history import HistoryManager
+from lectern.utils.state import load_state, save_state, StateFile, resolve_state_context, clear_state, sweep_orphan_state_temps
 from session import (
     SessionManager,
     SessionState,
@@ -232,7 +232,7 @@ async def update_config(cfg: ConfigUpdate):
     # Handle API key separately (Keychain storage)
     if cfg.gemini_api_key:
         try:
-            from utils.keychain_manager import set_gemini_key
+            from lectern.utils.keychain_manager import set_gemini_key
             set_gemini_key(cfg.gemini_api_key)
             
             # Remove from .env if present to avoid confusion/leaks
@@ -300,7 +300,7 @@ class DeckCreate(BaseModel):
 
 @app.post("/decks")
 async def create_deck_endpoint(req: DeckCreate):
-    from anki_connector import create_deck
+    from lectern.anki_connector import create_deck
     try:
         success = await run_in_threadpool(create_deck, req.name)
         if not success:
@@ -716,7 +716,7 @@ class AnkiUpdateRequest(BaseModel):
 async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
     """Update fields on an existing Anki note."""
     try:
-        from anki_connector import update_note_fields
+        from lectern.anki_connector import update_note_fields
         update_note_fields(note_id, req.fields)
         return {"status": "updated", "note_id": note_id}
     except Exception as e:

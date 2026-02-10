@@ -42,7 +42,7 @@ def _load_environment_files() -> None:
 _load_environment_files()
 
 # --- User Config (JSON) Loading ---
-from utils.path_utils import get_app_data_dir
+from lectern.utils.path_utils import get_app_data_dir
 
 _CONFIG_DIR = Path(__file__).resolve().parent
 _LEGACY_USER_CONFIG_PATH = _CONFIG_DIR / "user_config.json"
@@ -99,7 +99,7 @@ def _get_config(key: str, default: Any, env_key: Optional[str] = None) -> Any:
 # Load user config at module init
 _load_user_config()
 
-from utils.keychain_manager import get_gemini_key
+from lectern.utils.keychain_manager import get_gemini_key
 
 # Google Gemini API key. Must be provided via environment variable or keychain for security.
 GEMINI_API_KEY: str = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")

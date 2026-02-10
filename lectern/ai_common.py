@@ -6,7 +6,7 @@ import os
 from datetime import datetime, UTC
 from typing import Any, Dict, Iterable, List
 
-import config
+from lectern import config
 
 def _infer_mime_type(image_bytes: bytes) -> str:
     """Best-effort inference of image MIME type from raw bytes.
@@ -103,7 +103,7 @@ def _start_session_log() -> str:
     if not getattr(config, "LOG_SESSION_CONTENT", True):
         return ""
     try:
-        from utils.path_utils import get_app_data_dir
+        from lectern.utils.path_utils import get_app_data_dir
         logs_dir = get_app_data_dir() / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")

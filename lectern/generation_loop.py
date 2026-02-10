@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generator, Iterable, List, Optional
 
-from ai_pacing import PacingState
+from lectern.ai_pacing import PacingState
 
 _RECENT_CARD_WINDOW = 30
 _REFLECTION_HARD_CAP_MULTIPLIER = 1.2

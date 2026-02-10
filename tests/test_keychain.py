@@ -7,7 +7,7 @@ import os
 # Add project root to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from utils.keychain_manager import get_gemini_key, set_gemini_key, delete_gemini_key
+from lectern.utils.keychain_manager import get_gemini_key, set_gemini_key, delete_gemini_key
 
 def test_get_set_delete_key():
     """Test standard success path for keychain operations."""
@@ -16,8 +16,8 @@ def test_get_set_delete_key():
          patch('keyring.delete_password') as mock_del:
         
         # Clear cache first (global state)
-        import utils.keychain_manager
-        utils.keychain_manager._cached_key = None
+        import lectern.utils.keychain_manager
+        lectern.utils.keychain_manager._cached_key = None
         
         # Test Set
         set_gemini_key("test-key")
@@ -29,7 +29,7 @@ def test_get_set_delete_key():
         mock_get.assert_not_called()
         
         # Clear cache and test Get (hit keyring)
-        utils.keychain_manager._cached_key = None
+        lectern.utils.keychain_manager._cached_key = None
         mock_get.return_value = "remote-key"
         key = get_gemini_key()
         assert key == "remote-key"
@@ -38,14 +38,14 @@ def test_get_set_delete_key():
         # Test Delete
         delete_gemini_key()
         mock_del.assert_called_once()
-        assert utils.keychain_manager._cached_key is None
+        assert lectern.utils.keychain_manager._cached_key is None
 
 def test_keychain_error_handling():
     """Test how the manager handles KeyringError."""
     with patch('keyring.get_password') as mock_get:
         # Clear cache
-        import utils.keychain_manager
-        utils.keychain_manager._cached_key = None
+        import lectern.utils.keychain_manager
+        lectern.utils.keychain_manager._cached_key = None
         
         mock_get.side_effect = KeyringError("Access Denied")
         key = get_gemini_key()

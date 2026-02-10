@@ -1,5 +1,5 @@
 import pytest
-from ai_pacing import PacingState
+from lectern.ai_pacing import PacingState
 
 class TestPacing:
     def test_startup_grace_period(self):

@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 import sys
 from pathlib import Path
 
-from utils.path_utils import get_app_data_dir
+from lectern.utils.path_utils import get_app_data_dir
 
 logger = logging.getLogger(__name__)
 

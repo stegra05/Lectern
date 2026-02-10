@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from ai_client import LecternAIClient
-from ai_schemas import ConceptMapResponse
+from lectern.ai_client import LecternAIClient
+from lectern.ai_schemas import ConceptMapResponse
 
-@patch("ai_client.genai.Client")
+@patch("lectern.ai_client.genai.Client")
 def test_language_detection_integration(mock_client_cls):
     # Setup mock
     mock_chat = MagicMock()
@@ -28,7 +28,7 @@ def test_language_detection_integration(mock_client_cls):
     # Verify prompt builder updated
     assert "Output language: de" in client._prompt_builder.system
 
-@patch("ai_client.genai.Client")
+@patch("lectern.ai_client.genai.Client")
 def test_client_init_with_language(mock_client_cls):
     client = LecternAIClient(language="fr")
     assert client._prompt_config.language == "fr"

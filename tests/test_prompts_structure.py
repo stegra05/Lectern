@@ -1,5 +1,5 @@
 import pytest
-from ai_prompts import PromptBuilder, PromptConfig, FORMATTING_RULES
+from lectern.ai_prompts import PromptBuilder, PromptConfig, FORMATTING_RULES
 
 class TestPromptStructure:
     def test_system_instruction_basic(self):

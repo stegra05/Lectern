@@ -3,8 +3,8 @@ import os
 import pytest
 
 from gui.backend.service import DraftStore
-from utils import state as state_utils
-from utils.history import HistoryManager
+from lectern.utils import state as state_utils
+from lectern.utils.history import HistoryManager
 
 
 def _patch_state_dir(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:

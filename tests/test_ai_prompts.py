@@ -1,5 +1,5 @@
 import pytest
-from ai_prompts import PromptBuilder, PromptConfig
+from lectern.ai_prompts import PromptBuilder, PromptConfig
 
 def test_prompt_builder_defaults():
     cfg = PromptConfig()
@@ -40,7 +40,7 @@ def test_concept_map_prompt():
     assert "language (string)" in prompt or "language" in prompt  # Schema key present
 
 import json
-from ai_prompts import CARD_EXAMPLES
+from lectern.ai_prompts import CARD_EXAMPLES
 
 def _parse_examples_helper(example_str):
     """

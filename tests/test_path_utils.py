@@ -3,7 +3,7 @@ import sys
 import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from utils.path_utils import get_app_data_dir, ensure_app_dirs
+from lectern.utils.path_utils import get_app_data_dir, ensure_app_dirs
 
 def test_get_app_data_dir_darwin():
     with patch("sys.platform", "darwin"), \
@@ -41,7 +41,7 @@ def test_get_app_data_dir_linux_no_xdg():
         assert path == Path("/home/test/.config/lectern")
 
 def test_ensure_app_dirs(tmp_path):
-    with patch("utils.path_utils.get_app_data_dir", return_value=tmp_path):
+    with patch("lectern.utils.path_utils.get_app_data_dir", return_value=tmp_path):
         ensure_app_dirs()
         assert (tmp_path / "logs").exists()
         assert (tmp_path / "state").exists()

@@ -9,7 +9,7 @@ STATE_FILENAME = "lectern_state.json"
 STATE_VERSION = 1
 LEGACY_STATE_FILE = ".lectern_state.json"
 
-from utils.path_utils import get_app_data_dir
+from lectern.utils.path_utils import get_app_data_dir
 
 logger = logging.getLogger(__name__)
 
