@@ -40,6 +40,19 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
         </div>
     );
 
+    const isValidUrl = (url: string) => {
+        try {
+            const u = new URL(url);
+            return u.protocol === 'http:' || u.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    };
+
+    const ankiUrlError = editedConfig && editedConfig.anki_url && !isValidUrl(editedConfig.anki_url)
+        ? 'Must be a valid URL (e.g. http://localhost:8765)'
+        : null;
+
     const hasChanges = config && editedConfig && (
         config.gemini_model !== editedConfig.gemini_model ||
         config.anki_url !== editedConfig.anki_url ||
@@ -80,7 +93,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
     };
 
     const handleSaveSettings = async () => {
-        if (!editedConfig || !hasChanges) return;
+        if (!editedConfig || !hasChanges || ankiUrlError) return;
         setIsSaving(true);
         setSaveSuccess(false);
         try {
@@ -267,8 +280,12 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                                 type="text"
                                                                 value={editedConfig.anki_url}
                                                                 onChange={(e) => updateField('anki_url', e.target.value)}
-                                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none font-mono text-sm"
+                                                                placeholder="http://localhost:8765"
+                                                                className={`w-full bg-background border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none font-mono text-sm ${ankiUrlError ? 'border-red-500' : 'border-border'}`}
                                                             />
+                                                            {ankiUrlError && (
+                                                                <p className="text-xs text-red-500 mt-1">{ankiUrlError}</p>
+                                                            )}
                                                         </div>
 
                                                         <div className="grid grid-cols-2 gap-4">
