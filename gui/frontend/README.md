@@ -76,7 +76,7 @@ The build artifact (`dist/`) is meant to be embedded into the Python application
 npm run build
 ```
 
-This populates `gui/frontend/dist`, which the Python `build_app.sh` script picks up.
+This populates `gui/frontend/dist`, which the Python `scripts/build_app.sh` script picks up.
 
 ## Testing
 

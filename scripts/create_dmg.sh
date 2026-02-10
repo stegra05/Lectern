@@ -14,7 +14,7 @@ DMG_NAME="Lectern.dmg"
 VOLUME_NAME="Lectern"
 
 if [ ! -d "$APP_PATH" ]; then
-    echo -e "${BOLD}Error:${NC} $APP_PATH not found. Run ./build_app.sh first."
+    echo -e "${BOLD}Error:${NC} $APP_PATH not found. Run ./scripts/build_app.sh first."
     exit 1
 fi
 

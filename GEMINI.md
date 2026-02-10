@@ -90,11 +90,11 @@ Real-time progress is streamed from backend to frontend via **Server-Sent Events
 | `Lectern.macos.spec` | PyInstaller spec for macOS (arm64 + x86_64). |
 | `Lectern.windows.spec` | PyInstaller spec for Windows. |
 | `Lectern.linux.spec` | PyInstaller spec for Linux. |
-| `build_app.sh` | macOS build script (venv + frontend + PyInstaller). |
-| `build_windows.ps1` | Windows build script. |
-| `build_linux.sh` | Linux build script. |
-| `create_dmg.sh` | Creates `.dmg` installer for macOS. |
-| `release.sh` | Version bump → git tag → triggers CI. |
+| `scripts/build_app.sh` | macOS build script (venv + frontend + PyInstaller). |
+| `scripts/build_windows.ps1` | Windows build script. |
+| `scripts/build_linux.sh` | Linux build script. |
+| `scripts/create_dmg.sh` | Creates `.dmg` installer for macOS. |
+| `scripts/release.sh` | Version bump → git tag → triggers CI. |
 | `.github/workflows/build.yml` | CI/CD: cross-platform build + GitHub Release on tag push. |
 
 ---

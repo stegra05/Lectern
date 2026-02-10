@@ -16,7 +16,7 @@ Everything is automated—building, tagging, and publishing. Run the orchestrato
 
 ```bash
 # Bumps version, tags, and triggers Cloud CI/CD
-./release.sh [major|minor|patch]
+./scripts/release.sh [major|minor|patch]
 ```
 
 ### 2. Monitor Builds
