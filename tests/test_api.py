@@ -566,7 +566,7 @@ def test_config_update_all_fields():
                 "anki_url": "http://new:8765",
                 "basic_model": "NewBasic",
                 "cloze_model": "NewCloze",
-                "gemini_model": "gemini-2.0-flash"
+                "gemini_model": "gemini-3-flash"
             })
             assert response.status_code == 200
             assert "anki_url" in response.json()["fields"]

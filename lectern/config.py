@@ -212,9 +212,10 @@ LOG_MAX_RESPONSE_CHARS: int = int(os.getenv("LOG_MAX_RESPONSE_CHARS", "20000"))
 # Gemini model pricing (per million tokens, checked against ai.google.dev/pricing on 2026-02-09)
 # Format: {model_pattern: (input_rate_usd, output_rate_usd)}
 GEMINI_PRICING = {
-    "gemini-2.5-pro": (1.25, 10.00),   # $1.25/M in, $10/M out
-    "gemini-2.5-flash": (0.30, 2.50),  # $0.30/M in, $2.50/M out
+    "gemini-3-pro": (2.00, 12.00),     # $2.00/M in, $12.00/M out
     "gemini-3-flash": (0.50, 3.00),    # Gemini 3 Flash Preview (Standard): $0.50/M in, $3.00/M out
+    "gemini-2.5-pro": (1.25, 10.00),   # $1.25/M in, $10.00/M out (Legacy)
+    "gemini-2.5-flash": (0.30, 2.50),  # $0.30/M in, $2.50/M out (Legacy)
     "default": (0.50, 4.00),           # Conservative fallback
 }
 

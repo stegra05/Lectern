@@ -133,6 +133,8 @@ def run_generation_loop(
                 pacing_hint=pacing_hint,
                 all_card_fronts=collect_card_fronts(state.all_cards),
             )
+            for w in context.ai.drain_warnings():
+                yield event_factory("warning", w)
             new_cards = out.get("cards", [])
 
             added_count = yield from yield_new_cards(
@@ -199,6 +201,8 @@ def run_reflection_loop(
                 limit=batch_limit,
                 all_card_fronts=collect_card_fronts(state.all_cards),
             )
+            for w in context.ai.drain_warnings():
+                yield event_factory("warning", w)
             new_cards = out.get("cards", [])
 
             added_count = yield from yield_new_cards(

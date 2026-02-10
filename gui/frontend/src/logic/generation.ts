@@ -72,6 +72,11 @@ export const processGenerationEvent = (
         useLecternStore.getState().addToast('error', msg, 8000);
         set(() => ({ isError: true }));
     }
+
+    if (event.type === 'warning') {
+        const msg = event.message || 'Warning';
+        useLecternStore.getState().addToast('warning', msg, 8000);
+    }
 };
 
 export const handleGenerate = async (

@@ -256,6 +256,21 @@ async def update_config(cfg: ConfigUpdate):
     if cfg.anki_url:
         json_updates["anki_url"] = cfg.anki_url
         updated_fields.append("anki_url")
+
+    # Validate note-type names against Anki before saving
+    warnings = []
+    if cfg.basic_model or cfg.cloze_model:
+        try:
+            from lectern.anki_connector import get_model_names
+            anki_models = await run_in_threadpool(get_model_names)
+        except Exception:
+            anki_models = []
+        if anki_models:
+            if cfg.basic_model and cfg.basic_model not in anki_models:
+                warnings.append(f"Note type '{cfg.basic_model}' not found in Anki — saving anyway.")
+            if cfg.cloze_model and cfg.cloze_model not in anki_models:
+                warnings.append(f"Note type '{cfg.cloze_model}' not found in Anki — saving anyway.")
+
     if cfg.basic_model:
         json_updates["basic_model"] = cfg.basic_model
         updated_fields.append("basic_model")
@@ -277,7 +292,13 @@ async def update_config(cfg: ConfigUpdate):
     if updated_fields:
         from importlib import reload
         reload(config)
-        return {"status": "updated", "fields": updated_fields}
+        # Also invalidate the note-export model cache
+        from lectern.utils import note_export as _ne
+        _ne._anki_models_cache = None
+        result: dict = {"status": "updated", "fields": updated_fields}
+        if warnings:
+            result["warnings"] = warnings
+        return result
             
     return {"status": "no_change"}
 

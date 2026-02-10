@@ -225,3 +225,4 @@ gui/frontend/coverage/
 # Local state
 history.json
 .lectern_state.json
+_test_thinking.py

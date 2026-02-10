@@ -161,6 +161,18 @@ def get_deck_names() -> List[str]:
         return []
 
 
+def get_model_names() -> List[str]:
+    """Fetch all note-type (model) names from Anki via AnkiConnect."""
+    try:
+        result = _invoke("modelNames")
+        if isinstance(result, list):
+            return [str(name) for name in result]
+        return []
+    except Exception as exc:
+        logger.warning("Failed to fetch Anki model names: %s", exc)
+        return []
+
+
 def create_deck(deck_name: str) -> bool:
     """Create a new deck in Anki via AnkiConnect.
     

@@ -250,6 +250,8 @@ class LecternGenerationService:
                 total_text_chars = metadata_chars
                 yield ServiceEvent("step_end", "Concept Map Built", {"success": True})
                 yield ServiceEvent("info", "Concept Map built", {"map": concept_map})
+                for w in ai.drain_warnings():
+                    yield ServiceEvent("warning", w)
             except Exception as e:
                 yield ServiceEvent("warning", f"Concept map failed: {e}")
                 yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})

@@ -12,8 +12,15 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from lectern import config
-from lectern.anki_connector import add_note
+from lectern.anki_connector import add_note, get_model_names
 from lectern.utils.tags import build_hierarchical_tags
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Cache of validated Anki model names (populated once per session).
+_anki_models_cache: list[str] | None = None
 
 
 @dataclass
@@ -30,6 +37,9 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     Maps generic names like "Basic" or "Cloze" to the user's configured
     note types (e.g., "Basic").
     
+    If the resolved name does not exist in Anki, falls back to the
+    built-in "Basic" / "Cloze" names.
+    
     Parameters:
         card_model: Model name from AI or card data
         fallback_model: Default model to use if card_model is empty
@@ -41,11 +51,36 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     lower_model = model.lower()
     
     if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
-        return config.DEFAULT_BASIC_MODEL
+        resolved = config.DEFAULT_BASIC_MODEL
     elif lower_model in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
-        return config.DEFAULT_CLOZE_MODEL
+        resolved = config.DEFAULT_CLOZE_MODEL
+    else:
+        resolved = model
     
-    return model
+    # Safety check: verify the resolved name actually exists in Anki.
+    if not _model_exists_in_anki(resolved):
+        builtin = "Cloze" if "cloze" in lower_model else "Basic"
+        if resolved != builtin:
+            logger.warning(
+                "Anki note type '%s' not found; falling back to '%s'",
+                resolved, builtin,
+            )
+        resolved = builtin
+    
+    return resolved
+
+
+def _model_exists_in_anki(name: str) -> bool:
+    """Return True if *name* is a valid Anki note type (cached per session)."""
+    global _anki_models_cache
+    if _anki_models_cache is None:
+        _anki_models_cache = get_model_names()  # [] on connection failure
+        if _anki_models_cache:
+            logger.debug("Anki models cache loaded: %s", _anki_models_cache)
+    # If we couldn't reach Anki, allow anything (export will fail anyway).
+    if not _anki_models_cache:
+        return True
+    return name in _anki_models_cache
 
 
 def build_card_tags(

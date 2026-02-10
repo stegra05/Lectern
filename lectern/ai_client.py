@@ -33,6 +33,18 @@ _THINKING_PROFILES = {
     "reflection": "high",
 }
 
+# Models known NOT to support thinking budgets.
+_THINKING_BLOCKED_PATTERNS = (
+    "gemini-1.5",
+    "gemini-2.0-flash-lite",
+)
+
+
+def _model_supports_thinking(model_name: str) -> bool:
+    """Heuristic: return False for model families that reject thinking_level."""
+    name = model_name.lower()
+    return not any(pat in name for pat in _THINKING_BLOCKED_PATTERNS)
+
 _CONCEPT_MAP_SCHEMA = concept_map_schema()
 _CARD_GENERATION_SCHEMA = card_generation_schema()
 _REFLECTION_SCHEMA = reflection_schema()
@@ -102,9 +114,14 @@ class LecternAIClient:
             model=self._model_name,
             config=self._generation_config
         )
+        self._thinking_supported: bool = _model_supports_thinking(self._model_name)
+        self._warnings: list[str] = []
         
         self._log_path = _start_session_log()
-        logger.debug(f"[AI] Started session via LecternAIClient (google-genai)")
+        logger.info(
+            "[AI] Session init: model=%s, thinking=%s, genai=%s",
+            self._model_name, self._thinking_supported, genai.__version__,
+        )
 
     @property
     def log_path(self) -> str:
@@ -124,9 +141,50 @@ class LecternAIClient:
             # For now, we rely on the per-turn prompts in PromptBuilder to enforce it 
             # if session was already started.
 
-    def _thinking_config_for(self, phase: str) -> types.ThinkingConfig:
+    def _thinking_config_for(self, phase: str) -> types.ThinkingConfig | None:
+        if not self._thinking_supported:
+            return None
         level = _THINKING_PROFILES.get(phase, "low")
         return types.ThinkingConfig(thinking_level=level)
+
+    def drain_warnings(self) -> list[str]:
+        """Return and clear any accumulated warnings (e.g. thinking fallback)."""
+        warnings = self._warnings
+        self._warnings = []
+        return warnings
+
+    @staticmethod
+    def _strip_thinking(call_config: Any) -> Any:
+        """Return a copy of *call_config* with thinking_config fully removed."""
+        fields = call_config.model_dump(exclude_none=True)
+        fields.pop("thinking_config", None)
+        return type(call_config)(**fields)
+
+    def _send_with_thinking_fallback(self, message: Any, call_config: Any) -> Any:
+        """Send a message; if thinking_level is rejected, retry without it."""
+        has_thinking = call_config.thinking_config is not None
+        logger.debug(
+            "[AI] send_message: model=%s, thinking=%s, config_keys=%s",
+            self._model_name, has_thinking,
+            [k for k, v in call_config.model_dump(exclude_none=True).items()],
+        )
+        try:
+            return self._chat.send_message(message=message, config=call_config)
+        except Exception as exc:
+            err_text = str(exc)
+            if "thinking" in err_text.lower() and ("not supported" in err_text.lower() or "INVALID_ARGUMENT" in err_text):
+                logger.warning(
+                    "[AI] thinking_level rejected (model=%s, genai=%s): %s",
+                    self._model_name, genai.__version__, err_text[:200],
+                )
+                self._thinking_supported = False
+                self._warnings.append(
+                    "Extended thinking is not supported by this model. "
+                    "Continuing without it — results may be less thorough."
+                )
+                clean_config = self._strip_thinking(call_config)
+                return self._chat.send_message(message=message, config=clean_config)
+            raise
 
     def set_slide_set_context(self, deck_name: str, slide_set_name: str) -> None:
         self._slide_set_context = {
@@ -225,15 +283,13 @@ class LecternAIClient:
         return {"uri": uri, "mime_type": mime_type}
 
     def _concept_map_for_parts(self, parts: List[Dict[str, Any]]) -> Dict[str, Any]:
-        call_config = self._generation_config.model_copy(update={
-            "response_schema": _CONCEPT_MAP_SCHEMA,
-            "thinking_config": self._thinking_config_for("concept_map"),
-        })
+        update: dict[str, Any] = {"response_schema": _CONCEPT_MAP_SCHEMA}
+        thinking = self._thinking_config_for("concept_map")
+        if thinking is not None:
+            update["thinking_config"] = thinking
+        call_config = self._generation_config.model_copy(update=update)
 
-        response = self._chat.send_message(
-            message=parts,
-            config=call_config
-        )
+        response = self._send_with_thinking_fallback(parts, call_config)
 
         text = response.text or ""
         text_snippet = text[:200].replace('\n', ' ')
@@ -298,16 +354,16 @@ class LecternAIClient:
             slide_coverage=slide_text
         )
         
-        call_config = self._generation_config.model_copy(update={
+        update: dict[str, Any] = {
             "response_schema": _CARD_GENERATION_SCHEMA,
             "temperature": config.GEMINI_TEMPERATURE,
-            "thinking_config": self._thinking_config_for("generation"),
-        })
+        }
+        thinking = self._thinking_config_for("generation")
+        if thinking is not None:
+            update["thinking_config"] = thinking
+        call_config = self._generation_config.model_copy(update=update)
 
-        response = self._chat.send_message(
-            message=prompt,
-            config=call_config
-        )
+        response = self._send_with_thinking_fallback(prompt, call_config)
         
         text = response.text or ""
         text_snippet = text[:200].replace('\n', ' ')
@@ -331,15 +387,13 @@ class LecternAIClient:
         
         prompt = reflection_prompt or self._prompt_builder.reflection(limit=limit)
         
-        call_config = self._generation_config.model_copy(update={
-            "response_schema": _REFLECTION_SCHEMA,
-            "thinking_config": self._thinking_config_for("reflection"),
-        })
+        update: dict[str, Any] = {"response_schema": _REFLECTION_SCHEMA}
+        thinking = self._thinking_config_for("reflection")
+        if thinking is not None:
+            update["thinking_config"] = thinking
+        call_config = self._generation_config.model_copy(update=update)
 
-        response = self._chat.send_message(
-            message=prompt,
-            config=call_config
-        )
+        response = self._send_with_thinking_fallback(prompt, call_config)
         
         text = response.text or ""
         text_snippet = text[:200].replace('\n', ' ')

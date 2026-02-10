@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2026-02-11
+
+### Fixed
+- Thinking fallback: AI client now gracefully handles models that reject `thinking_level` config (auto-detects support and retries without thinking)
+- Anki model name validation: `resolve_model_name` now verifies configured note types exist in Anki before export, falling back to built-in "Basic"/"Cloze" if not found
+- Config save now warns when configured `basic_model` or `cloze_model` names don't match any Anki note type
+- Added debug logging for AI model name, SDK version, and thinking state on init and each request
+
 ## [1.5.2] - 2026-02-10
 
 ### Fixed

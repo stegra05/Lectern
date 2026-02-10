@@ -31,7 +31,7 @@ describe('computeCardsPerUnit', () => {
             output_cost: 0,
             cost: 0,
             tokens: 0,
-            model: 'gemini',
+            model: 'gemini-3-flash',
         });
         expect(result.label).toBe('Cards per slide');
         expect(result.value).toBe('3.0');
@@ -47,7 +47,7 @@ describe('computeCardsPerUnit', () => {
             output_cost: 0,
             cost: 0,
             tokens: 0,
-            model: 'gemini',
+            model: 'gemini-3-flash',
         });
         expect(result.label).toBe('Cards per 1k chars');
         expect(result.value).toBe('6.0');
