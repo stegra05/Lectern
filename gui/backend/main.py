@@ -47,7 +47,7 @@ from session import (
     _get_runtime_or_404,
 )
 
-app = FastAPI(title='Lectern API', version='1.5.2')
+app = FastAPI(title='Lectern API', version='1.5.3')
 session_manager.sweep_orphan_temp_files()
 sweep_orphan_state_temps()
 
