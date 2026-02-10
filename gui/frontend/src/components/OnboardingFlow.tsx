@@ -71,6 +71,32 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
     startSequence();
   }, [startSequence]);
 
+  // Auto-poll for Anki connection when in error state
+  useEffect(() => {
+    if (ankiStatus !== 'error') return;
+
+    const poll = setInterval(async () => {
+      try {
+        const health = await api.checkHealth();
+        if (health.anki_connected) {
+          clearInterval(poll);
+          setAnkiStatus('success');
+          if (health.gemini_configured) {
+            setGeminiStatus('success');
+            completeOnboarding();
+          } else {
+            setGeminiStatus('active');
+          }
+        }
+      } catch {
+        // still offline, keep polling
+      }
+    }, 3000);
+
+    return () => clearInterval(poll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ankiStatus]);
+
   const submitApiKey = async () => {
     if (!apiKey.trim()) return;
 

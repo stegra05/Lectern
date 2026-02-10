@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from lectern.config import ANKI_CONNECT_URL
+from lectern import config as _config
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,11 @@ def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int =
     if params is not None:
         payload["params"] = params
 
+    url = _config.ANKI_CONNECT_URL
     try:
-        response = requests.post(ANKI_CONNECT_URL, json=payload, timeout=timeout)
+        response = requests.post(url, json=payload, timeout=timeout)
     except requests.RequestException as exc:
-        raise RuntimeError(f"Failed to reach AnkiConnect at {ANKI_CONNECT_URL}: {exc}") from exc
+        raise RuntimeError(f"Failed to reach AnkiConnect at {url}: {exc}") from exc
 
     try:
         data = response.json()
