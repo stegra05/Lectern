@@ -21,12 +21,12 @@ def test_history_manager_load_save(tmp_path):
     assert mgr.get_all() == []
     
     # Add entry
-    entry_id = mgr.add_entry("test.pdf", "Deck")
+    entry_id = mgr.add_entry("test_slides.pdf", "Deck")
     assert entry_id is not None
     
     all_history = mgr.get_all()
     assert len(all_history) == 1
-    assert all_history[0]["filename"] == "test.pdf"
+    assert all_history[0]["filename"] == "test_slides.pdf"
     
     # Update entry
     mgr.update_entry(entry_id, status="completed", card_count=5)

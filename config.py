@@ -184,6 +184,13 @@ SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
 # Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 
+# Batch Sizing
+MIN_NOTES_PER_BATCH: int = int(os.getenv("MIN_NOTES_PER_BATCH", "20"))
+MAX_NOTES_PER_BATCH: int = int(os.getenv("MAX_NOTES_PER_BATCH", "50"))
+
+# Script Mode Base Chars (for density normalization)
+SCRIPT_BASE_CHARS: int = int(os.getenv("SCRIPT_BASE_CHARS", "1000"))
+
 # Gemini 3 generation temperature (Google recommends 1.0).
 GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "1.0"))
 USE_NATIVE_PDF: bool = os.getenv("USE_NATIVE_PDF", "true").lower() in ("1", "true", "yes")

@@ -38,7 +38,7 @@ def test_sync_session_updates_existing_note(
 ):
     session_id = "test-session"
     mock_load_state.return_value = {
-        "pdf_path": "test.pdf",
+        "pdf_path": "test_slides.pdf",
         "deck_name": "Default",
         "cards": [{"anki_note_id": 123, "fields": {"Front": "F", "Back": "B"}}],
         "concept_map": {},
@@ -61,7 +61,7 @@ def test_sync_session_recreates_deleted_note(
 ):
     session_id = "test-session"
     mock_load_state.return_value = {
-        "pdf_path": "test.pdf",
+        "pdf_path": "test_slides.pdf",
         "deck_name": "Default",
         "cards": [{"anki_note_id": 123, "fields": {"Front": "F", "Back": "B"}}],
         "concept_map": {},
