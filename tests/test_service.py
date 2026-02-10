@@ -17,6 +17,12 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from lectern_service import LecternGenerationService, ServiceEvent
+from generation_loop import (
+    GenerationLoopConfig,
+    GenerationLoopContext,
+    GenerationLoopState,
+    ReflectionLoopConfig,
+)
 
 
 # --- Fixtures ---
@@ -706,7 +712,7 @@ class TestServiceAdvanced:
             model_name="M",
             tags=[],
             source_type="script",
-            density_target=2.0,
+            target_card_count=6,
             skip_export=True
         ))
         
@@ -940,18 +946,16 @@ class TestServiceAdvanced:
             "/fake/path.pdf",
             model_name="gemini-3-flash",
             source_type="script",
-            density_target=2.0,
+            target_card_count=8,
         )
-        # Script: text 600/1000*2 + 0 images = 1.2+0 -> max(5, 1) = 5
-        assert script_result["estimated_card_count"] >= 5
+        assert script_result["estimated_card_count"] == 8
 
         slides_result = await service.estimate_cost(
             "/fake/path.pdf",
             model_name="gemini-3-flash",
             source_type="slides",
-            density_target=2.0,
+            target_card_count=3,
         )
-        # Slides mode: max(3, int(1 * 2.0)) = 3
         assert slides_result["estimated_card_count"] == 3
 
     def test_recompute_estimate_matches_full_output(self):
@@ -962,7 +966,7 @@ class TestServiceAdvanced:
         result = recompute_estimate(
             **base,
             source_type="script",
-            density_target=2.0,
+            target_card_count=40,
         )
         assert "estimated_card_count" in result
         assert "cost" in result
@@ -999,31 +1003,40 @@ class TestLoopInternals:
         ai.generate_more_cards.return_value = {"cards": []}
         service._save_checkpoint = MagicMock()
 
+        context = GenerationLoopContext(
+            ai=ai,
+            examples="",
+            concept_map={},
+            slide_set_name="Slides",
+            model_name="gemini",
+            tags=[],
+            pdf_path="/tmp/mock.pdf",
+            deck_name="Deck",
+            history_id="h1",
+            session_id="s1",
+        )
+        state = GenerationLoopState(
+            all_cards=[],
+            seen_keys=set(),
+            pages=[MagicMock()],
+        )
+        config = GenerationLoopConfig(
+            total_cards_cap=10,
+            actual_batch_size=5,
+            focus_prompt=None,
+            effective_target=1.0,
+            stop_check=None,
+        )
         events = list(
             service._run_generation_loop(
-                ai=ai,
-                examples="",
-                all_cards=[],
-                seen_keys=set(),
-                pages=[MagicMock()],
-                total_cards_cap=10,
-                actual_batch_size=5,
-                focus_prompt=None,
-                effective_target=1.0,
-                stop_check=None,
-                concept_map={},
-                slide_set_name="Slides",
-                model_name="gemini",
-                tags=[],
-                pdf_path="/tmp/mock.pdf",
-                deck_name="Deck",
-                history_id="h1",
-                session_id="s1",
+                context=context,
+                state=state,
+                config=config,
             )
         )
 
         assert ai.generate_more_cards.call_count == 1
-        assert service._save_checkpoint.call_count == 1
+        assert service._save_checkpoint.call_count == 0
         assert any(e.type == "status" for e in events)
         assert any(e.type == "progress_update" for e in events)
 
@@ -1031,26 +1044,35 @@ class TestLoopInternals:
         ai = MagicMock()
         service._save_checkpoint = MagicMock()
 
+        context = GenerationLoopContext(
+            ai=ai,
+            examples="",
+            concept_map={},
+            slide_set_name="Slides",
+            model_name="gemini",
+            tags=[],
+            pdf_path="/tmp/mock.pdf",
+            deck_name="Deck",
+            history_id="h1",
+            session_id="s1",
+        )
+        state = GenerationLoopState(
+            all_cards=[],
+            seen_keys=set(),
+            pages=[MagicMock()],
+        )
+        config = GenerationLoopConfig(
+            total_cards_cap=10,
+            actual_batch_size=5,
+            focus_prompt=None,
+            effective_target=1.0,
+            stop_check=lambda: True,
+        )
         events = list(
             service._run_generation_loop(
-                ai=ai,
-                examples="",
-                all_cards=[],
-                seen_keys=set(),
-                pages=[MagicMock()],
-                total_cards_cap=10,
-                actual_batch_size=5,
-                focus_prompt=None,
-                effective_target=1.0,
-                stop_check=lambda: True,
-                concept_map={},
-                slide_set_name="Slides",
-                model_name="gemini",
-                tags=[],
-                pdf_path="/tmp/mock.pdf",
-                deck_name="Deck",
-                history_id="h1",
-                session_id="s1",
+                context=context,
+                state=state,
+                config=config,
             )
         )
 
@@ -1067,28 +1089,39 @@ class TestLoopInternals:
         service._save_checkpoint = MagicMock()
 
         all_cards = [{"fields": {"Front": "Seed"}}]
+        context = GenerationLoopContext(
+            ai=ai,
+            examples="",
+            concept_map={},
+            slide_set_name="Slides",
+            model_name="gemini",
+            tags=[],
+            pdf_path="/tmp/mock.pdf",
+            deck_name="Deck",
+            history_id="h1",
+            session_id="s1",
+        )
+        state = GenerationLoopState(
+            all_cards=all_cards,
+            seen_keys={service._get_card_key(all_cards[0])},
+            pages=[],
+        )
+        config = ReflectionLoopConfig(
+            total_cards_cap=10,
+            actual_batch_size=5,
+            rounds=3,
+            stop_check=None,
+        )
         events = list(
             service._run_reflection_loop(
-                ai=ai,
-                all_cards=all_cards,
-                seen_keys={service._get_card_key(all_cards[0])},
-                total_cards_cap=10,
-                actual_batch_size=5,
-                rounds=3,
-                stop_check=None,
-                concept_map={},
-                slide_set_name="Slides",
-                model_name="gemini",
-                tags=[],
-                pdf_path="/tmp/mock.pdf",
-                deck_name="Deck",
-                history_id="h1",
-                session_id="s1",
+                context=context,
+                state=state,
+                config=config,
             )
         )
 
         assert ai.reflect.call_count == 2
-        assert service._save_checkpoint.call_count == 2
+        assert service._save_checkpoint.call_count == 1
         assert any(e.type == "status" and "Reflection Round 1/3" in e.message for e in events)
 
     def test_reflection_loop_emits_cap_reached_info(self, service):
@@ -1099,23 +1132,34 @@ class TestLoopInternals:
         reflection_hard_cap = int(total_cards_cap * 1.2) + 5
         all_cards = [{"fields": {"Front": f"Q{i}"}} for i in range(reflection_hard_cap)]
 
+        context = GenerationLoopContext(
+            ai=ai,
+            examples="",
+            concept_map={},
+            slide_set_name="Slides",
+            model_name="gemini",
+            tags=[],
+            pdf_path="/tmp/mock.pdf",
+            deck_name="Deck",
+            history_id="h1",
+            session_id="s1",
+        )
+        state = GenerationLoopState(
+            all_cards=all_cards,
+            seen_keys={service._get_card_key(c) for c in all_cards},
+            pages=[],
+        )
+        config = ReflectionLoopConfig(
+            total_cards_cap=total_cards_cap,
+            actual_batch_size=5,
+            rounds=3,
+            stop_check=None,
+        )
         events = list(
             service._run_reflection_loop(
-                ai=ai,
-                all_cards=all_cards,
-                seen_keys={service._get_card_key(c) for c in all_cards},
-                total_cards_cap=total_cards_cap,
-                actual_batch_size=5,
-                rounds=3,
-                stop_check=None,
-                concept_map={},
-                slide_set_name="Slides",
-                model_name="gemini",
-                tags=[],
-                pdf_path="/tmp/mock.pdf",
-                deck_name="Deck",
-                history_id="h1",
-                session_id="s1",
+                context=context,
+                state=state,
+                config=config,
             )
         )
 

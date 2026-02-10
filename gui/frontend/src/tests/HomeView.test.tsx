@@ -4,7 +4,7 @@ import { HomeView } from '../views/HomeView';
 
 // Mock components to simplify HomeView testing
 vi.mock('../components/FilePicker', () => ({
-    FilePicker: ({ onFileSelect }: any) => (
+    FilePicker: ({ onFileSelect }: { onFileSelect: (file: File) => void }) => (
         <div data-testid="file-picker">
             <button onClick={() => onFileSelect(new File([''], 'test_slides.pdf', { type: 'application/pdf' }))}>
                 Select File
@@ -14,7 +14,7 @@ vi.mock('../components/FilePicker', () => ({
 }));
 
 vi.mock('../components/DeckSelector', () => ({
-    DeckSelector: ({ value, onChange, disabled }: any) => (
+    DeckSelector: ({ value, onChange, disabled }: { value: string; onChange: (val: string) => void; disabled?: boolean }) => (
         <div data-testid="deck-selector">
             <input
                 data-testid="deck-input"
@@ -36,8 +36,8 @@ describe('HomeView', () => {
         setFocusPrompt: vi.fn(),
         sourceType: 'auto' as const,
         setSourceType: vi.fn(),
-        densityTarget: 1.2,
-        setDensityTarget: vi.fn(),
+        targetDeckSize: 20,
+        setTargetDeckSize: vi.fn(),
         estimation: null,
         isEstimating: false,
         handleGenerate: vi.fn(),
@@ -56,6 +56,19 @@ describe('HomeView', () => {
             ...defaultProps,
             pdfFile: new File([''], 'test_slides.pdf'),
             deckName: 'Default',
+            estimation: {
+                pages: 10,
+                text_chars: 5000,
+                input_tokens: 1000,
+                output_tokens: 500,
+                input_cost: 0.01,
+                output_cost: 0.02,
+                cost: 0.03,
+                tokens: 1500,
+                model: 'gemini-3-flash',
+                estimated_card_count: 25,
+                suggested_card_count: 20,
+            },
         };
         render(<HomeView {...props} />);
         expect(screen.getByRole('button', { name: /Start Generation/i })).not.toBeDisabled();
@@ -69,18 +82,33 @@ describe('HomeView', () => {
         expect(defaultProps.setSourceType).toHaveBeenCalledWith('slides');
     });
 
-    it('updates density target via slider', () => {
-        render(<HomeView {...defaultProps} />);
+    it('updates total cards via slider', () => {
+        const props = {
+            ...defaultProps,
+            estimation: {
+                pages: 10,
+                text_chars: 8000,
+                input_tokens: 1000,
+                output_tokens: 500,
+                input_cost: 0.01,
+                output_cost: 0.02,
+                cost: 0.03,
+                tokens: 1500,
+                model: 'gemini-3-flash',
+                estimated_card_count: 25,
+                suggested_card_count: 20,
+            },
+        };
+        render(<HomeView {...props} />);
         const slider = screen.getByRole('slider');
-        fireEvent.change(slider, { target: { value: '3.5' } });
-        expect(defaultProps.setDensityTarget).toHaveBeenCalledWith(3.5);
+        fireEvent.change(slider, { target: { value: '30' } });
+        expect(defaultProps.setTargetDeckSize).toHaveBeenCalledWith(30);
     });
 
-    it('updates density target via number input', () => {
+    it('disables total cards slider before estimate is ready', () => {
         render(<HomeView {...defaultProps} />);
-        const numberInput = screen.getByRole('spinbutton');
-        fireEvent.change(numberInput, { target: { value: '2.5' } });
-        expect(defaultProps.setDensityTarget).toHaveBeenCalledWith(2.5);
+        const slider = screen.getByRole('slider');
+        expect(slider).toBeDisabled();
     });
 
     it('shows estimation results when available', () => {
@@ -94,6 +122,7 @@ describe('HomeView', () => {
             tokens: 1500,
             model: 'gemini-3-flash',
             estimated_card_count: 45,
+            suggested_card_count: 50,
         };
         render(<HomeView {...defaultProps} estimation={estimation} />);
         expect(screen.getByText('$0.030')).toBeInTheDocument();
@@ -104,7 +133,7 @@ describe('HomeView', () => {
 
     it('shows estimating state', () => {
         render(<HomeView {...defaultProps} isEstimating={true} />);
-        expect(screen.getByText('Analyzing content density...')).toBeInTheDocument();
+        expect(screen.getByText('Analyzing content...')).toBeInTheDocument();
     });
 
     it('shows Anki disconnection warning', () => {
@@ -117,45 +146,60 @@ describe('HomeView', () => {
         expect(screen.getByRole('button', { name: /Start Generation/i })).toBeDisabled();
     });
 
-    it('displays correct density description for script mode', () => {
-        render(<HomeView {...defaultProps} sourceType="script" densityTarget={1.5} />);
-        expect(screen.getByText(/Extraction Granularity: 1.0x/i)).toBeInTheDocument();
-    });
-
-    it('shows EST. TOTAL CARDS badge in script mode when estimation has estimated_card_count', () => {
-        const estimation = {
-            pages: 72,
-            cost: 0.017,
-            model: 'gemini-3-flash',
-            input_tokens: 0,
-            output_tokens: 0,
-            input_cost: 0,
-            output_cost: 0,
-            tokens: 0,
-            estimated_card_count: 62,
-        };
-        render(<HomeView {...defaultProps} sourceType="script" estimation={estimation} />);
-        expect(screen.getByText(/EST. 62 TOTAL CARDS/i)).toBeInTheDocument();
-    });
-
-    it('does not show EST. TOTAL CARDS badge in script mode when estimation lacks estimated_card_count', () => {
-        const estimation = {
-            pages: 72,
-            cost: 0.017,
-            model: 'gemini-3-flash',
-            input_tokens: 0,
-            output_tokens: 0,
-            input_cost: 0,
-            output_cost: 0,
-            tokens: 0,
-        };
-        render(<HomeView {...defaultProps} sourceType="script" estimation={estimation} />);
-        expect(screen.queryByText(/EST. \d+ TOTAL CARDS/i)).not.toBeInTheDocument();
-    });
-
-    it('displays correct density description for slides mode', () => {
+    it('displays cards per 1k chars for script mode', () => {
         const estimation = {
             pages: 10,
+            text_chars: 10000,
+            cost: 0.017,
+            model: 'gemini-3-flash',
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            tokens: 0,
+            suggested_card_count: 60,
+        };
+        render(<HomeView {...defaultProps} sourceType="script" estimation={estimation} targetDeckSize={60} />);
+        expect(screen.getByText(/Cards per 1k chars: 6.0/i)).toBeInTheDocument();
+    });
+
+    it('shows SUGGESTED badge when estimation has suggested_card_count', () => {
+        const estimation = {
+            pages: 72,
+            text_chars: 12000,
+            cost: 0.017,
+            model: 'gemini-3-flash',
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            tokens: 0,
+            suggested_card_count: 62,
+        };
+        render(<HomeView {...defaultProps} sourceType="script" estimation={estimation} />);
+        expect(screen.getByText(/SUGGESTED 62/i)).toBeInTheDocument();
+    });
+
+    it('does not show SUGGESTED badge when estimation lacks suggested_card_count', () => {
+        const estimation = {
+            pages: 72,
+            text_chars: 12000,
+            cost: 0.017,
+            model: 'gemini-3-flash',
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            tokens: 0,
+        };
+        render(<HomeView {...defaultProps} sourceType="script" estimation={estimation} />);
+        expect(screen.queryByText(/SUGGESTED \d+/i)).not.toBeInTheDocument();
+    });
+
+    it('displays cards-per-slide summary for slides mode', () => {
+        const estimation = {
+            pages: 10,
+            text_chars: 5000,
             cost: 0,
             model: '',
             input_tokens: 0,
@@ -164,10 +208,11 @@ describe('HomeView', () => {
             output_cost: 0,
             tokens: 0,
             estimated_card_count: 18,
+            suggested_card_count: 20,
         };
-        render(<HomeView {...defaultProps} estimation={estimation} densityTarget={2.0} />);
-        expect(screen.getByText(/Target: ~2.0 cards per active slide/i)).toBeInTheDocument();
-        expect(screen.getByText(/EST. 18 TOTAL CARDS/i)).toBeInTheDocument();
+        render(<HomeView {...defaultProps} estimation={estimation} sourceType="slides" targetDeckSize={20} />);
+        expect(screen.getByText(/Cards per slide: 2.0/i)).toBeInTheDocument();
+        expect(screen.getByText(/SUGGESTED 20/i)).toBeInTheDocument();
     });
 
     it('calls handleGenerate when button is clicked', () => {
@@ -175,6 +220,19 @@ describe('HomeView', () => {
             ...defaultProps,
             pdfFile: new File([''], 'test_slides.pdf'),
             deckName: 'Default',
+            estimation: {
+                pages: 10,
+                text_chars: 5000,
+                input_tokens: 1000,
+                output_tokens: 500,
+                input_cost: 0.01,
+                output_cost: 0.02,
+                cost: 0.03,
+                tokens: 1500,
+                model: 'gemini-3-flash',
+                estimated_card_count: 25,
+                suggested_card_count: 20,
+            },
         };
         render(<HomeView {...props} />);
         fireEvent.click(screen.getByRole('button', { name: /Start Generation/i }));

@@ -1,4 +1,7 @@
-from typing import Dict, List, Literal, Optional
+from __future__ import annotations
+
+from functools import lru_cache
+from typing import Any, Dict, List, Literal, Optional, Type
 from pydantic import BaseModel, Field
 
 
@@ -28,10 +31,15 @@ class ConceptMapResponse(BaseModel):
     estimated_text_chars: Optional[int] = None
 
 
+class FieldPair(BaseModel):
+    name: str
+    value: Optional[str] = None
+
+
 class AnkiCard(BaseModel):
-    """Anki card model. Now receives 'fields' directly as a dict from AI."""
+    """Anki card model. Receives fields as list of name/value pairs from AI."""
     model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")
-    fields: List[Dict[str, str]] = Field(default_factory=list)  # List of {name: "Front", value: "..."}
+    fields: List[FieldPair] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
     slide_topic: Optional[str] = None
     rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
@@ -46,3 +54,22 @@ class ReflectionResponse(BaseModel):
     reflection: str
     cards: List[AnkiCard]
     done: bool
+
+
+def _schema_for(model: Type[BaseModel]) -> Dict[str, Any]:
+    return model.model_json_schema()
+
+
+@lru_cache
+def concept_map_schema() -> Dict[str, Any]:
+    return _schema_for(ConceptMapResponse)
+
+
+@lru_cache
+def card_generation_schema() -> Dict[str, Any]:
+    return _schema_for(CardGenerationResponse)
+
+
+@lru_cache
+def reflection_schema() -> Dict[str, Any]:
+    return _schema_for(ReflectionResponse)

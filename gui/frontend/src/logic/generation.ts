@@ -1,42 +1,16 @@
 import { api, type ProgressEvent, type Card } from '../api';
 import type { StoreState, LecternStore, Phase } from '../store-types';
+import { processStreamEvent } from './stream';
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
-
-const getInitialState = (): Partial<StoreState> => ({
-    step: 'dashboard',
-    pdfFile: null,
-    deckName: '',
-    focusPrompt: '',
-    // sourceType and densityTarget are persistent, so we don't reset them here usually,
-    // but they are part of the full initial state in store.ts.
-    logs: [],
-    cards: [],
-    progress: { current: 0, total: 0 },
-    currentPhase: 'idle',
-    sessionId: null,
-    isError: false,
-    isCancelling: false,
-    estimation: null,
-    isEstimating: false,
-    isHistorical: false,
-    editingIndex: null,
-    editForm: null,
-    isSyncing: false,
-    syncSuccess: false,
-    syncProgress: { current: 0, total: 0 },
-    syncLogs: [],
-    confirmModal: { isOpen: false, type: 'lectern', index: -1 },
-    searchQuery: '',
-    copied: false,
-});
 
 export const processGenerationEvent = (
     event: ProgressEvent,
     set: (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void
 ) => {
-    set((prev) => ({ logs: [...prev.logs, event] }));
-
+    if (processStreamEvent(event, set, { logKey: 'logs', progressKey: 'progress' })) {
+        return;
+    }
     if (event.type === 'session_start') {
         const sid =
             event.data && typeof event.data === 'object' && 'session_id' in event.data
@@ -50,22 +24,7 @@ export const processGenerationEvent = (
         return;
     }
 
-    if (event.type === 'progress_start') {
-        set(() => ({ progress: { current: 0, total: (event.data as { total: number }).total } }));
-        return;
-    }
-
-    if (event.type === 'progress_update') {
-        set((prev) => ({
-            progress: {
-                ...prev.progress,
-                current: (event.data as { current: number }).current,
-            },
-        }));
-        return;
-    }
-
-    if (event.type === 'card' || event.type === 'card_generated') {
+    if (event.type === 'card') {
         set((prev) => ({
             cards: [...prev.cards, (event.data as { card: Card }).card],
         }));
@@ -135,7 +94,7 @@ export const handleGenerate = async (
                 deck_name: state.deckName,
                 focus_prompt: state.focusPrompt,
                 source_type: state.sourceType,
-                density_target: state.densityTarget,
+                target_card_count: state.targetDeckSize,
             },
             (event) => processGenerationEvent(event, set)
         );

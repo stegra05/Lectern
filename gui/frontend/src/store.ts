@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { api, type ProgressEvent, type Card } from './api';
+import { api, type ProgressEvent } from './api';
 import type { Phase } from './components/PhaseIndicator';
 import type {
   StoreState,
@@ -8,9 +8,9 @@ import type {
   GenerationActions,
   ReviewActions,
   UiActions,
-  ConfirmModalState,
 } from './store-types';
 import * as generationLogic from './logic/generation';
+import { processStreamEvent } from './logic/stream';
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
 
@@ -20,39 +20,49 @@ const getStored = <T>(key: string, fallback: T): T => {
   return (stored as T) || fallback;
 };
 
-const getStoredNumber = (key: string, fallback: number): number => {
-  if (typeof window === 'undefined') return fallback;
-  const stored = localStorage.getItem(key);
-  return stored ? Number.parseFloat(stored) : fallback;
-};
-
-const getInitialState = (): StoreState => ({
+const getGenerationState = () => ({
   step: 'dashboard',
   pdfFile: null,
   deckName: '',
   focusPrompt: '',
   sourceType: getStored('sourceType', 'auto'),
-  densityTarget: getStoredNumber('densityTarget', 1.5),
+  targetDeckSize: 1,
   logs: [],
-  cards: [],
   progress: { current: 0, total: 0 },
   currentPhase: 'idle',
-  sessionId: null,
   isError: false,
   isCancelling: false,
   estimation: null,
   isEstimating: false,
+});
+
+const getSessionState = () => ({
+  sessionId: null,
   isHistorical: false,
+});
+
+const getReviewState = () => ({
+  cards: [],
   editingIndex: null,
   editForm: null,
   isSyncing: false,
   syncSuccess: false,
   syncProgress: { current: 0, total: 0 },
   syncLogs: [],
+});
+
+const getUiState = () => ({
   confirmModal: { isOpen: false, type: 'lectern', index: -1 },
   searchQuery: '',
   sortBy: getStored('cardSortBy', 'creation'),
   copied: false,
+});
+
+const getInitialState = (): StoreState => ({
+  ...getGenerationState(),
+  ...getSessionState(),
+  ...getReviewState(),
+  ...getUiState(),
 });
 
 const processSyncEvent = async (
@@ -60,20 +70,7 @@ const processSyncEvent = async (
   set: (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void,
   get: () => LecternStore
 ) => {
-  set((state) => ({ syncLogs: [...state.syncLogs, event] }));
-
-  if (event.type === 'progress_start') {
-    set(() => ({ syncProgress: { current: 0, total: (event.data as { total: number }).total } }));
-    return;
-  }
-
-  if (event.type === 'progress_update') {
-    set((state) => ({
-      syncProgress: {
-        ...state.syncProgress,
-        current: (event.data as { current: number }).current,
-      },
-    }));
+  if (processStreamEvent(event, set, { logKey: 'syncLogs', progressKey: 'syncProgress' })) {
     return;
   }
 
@@ -95,6 +92,19 @@ const processSyncEvent = async (
   }
 };
 
+const setEditSession = (
+  set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
+  session: { index: number; form: StoreState['editForm'] } | null
+) => {
+  if (session) {
+    set({ editingIndex: session.index, editForm: session.form });
+  } else {
+    set({ editingIndex: null, editForm: null });
+  }
+};
+
+const resolveSessionId = (get: () => LecternStore) => get().sessionId ?? undefined;
+
 const createGenerationActions = (
   set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
   get: () => LecternStore
@@ -109,12 +119,7 @@ const createGenerationActions = (
     }
     set({ sourceType: type });
   },
-  setDensityTarget: (target) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('densityTarget', String(target));
-    }
-    set({ densityTarget: target });
-  },
+  setTargetDeckSize: (target) => set({ targetDeckSize: target }),
   setEstimation: (est) => set({ estimation: est }),
   setIsEstimating: (value) => set({ isEstimating: value }),
   setIsError: (value) => set({ isError: value }),
@@ -194,16 +199,17 @@ const createReviewActions = (
   setSyncLogs: (logs) => set({ syncLogs: logs }),
   startEdit: (index) => {
     const { cards } = get();
-    set({
-      editingIndex: index,
-      editForm: JSON.parse(JSON.stringify(cards[index])),
+    setEditSession(set, {
+      index,
+      form: JSON.parse(JSON.stringify(cards[index])),
     });
   },
   cancelEdit: () => {
-    set({ editingIndex: null, editForm: null });
+    setEditSession(set, null);
   },
   saveEdit: async (index) => {
-    const { editForm, cards, isHistorical, sessionId } = get();
+    const { editForm, cards, isHistorical } = get();
+    const sessionId = resolveSessionId(get);
     if (!editForm) return;
 
     try {
@@ -213,7 +219,7 @@ const createReviewActions = (
       if (isHistorical && sessionId) {
         await api.updateSessionCards(sessionId, newCards);
       } else {
-        await api.updateDraft(index, editForm, sessionId ?? undefined);
+        await api.updateDraft(index, editForm, sessionId);
       }
 
       if (editForm.anki_note_id && editForm.fields) {
@@ -224,7 +230,8 @@ const createReviewActions = (
         await api.updateAnkiNote(editForm.anki_note_id, stringFields);
       }
 
-      set({ cards: newCards, editingIndex: null, editForm: null });
+      setEditSession(set, null);
+      set({ cards: newCards });
     } catch (e) {
       console.error('Failed to update card', e);
     }
@@ -245,7 +252,8 @@ const createReviewActions = (
     });
   },
   handleDelete: async (index) => {
-    const { cards, isHistorical, sessionId } = get();
+    const { cards, isHistorical } = get();
+    const sessionId = resolveSessionId(get);
     try {
       const newCards = [...cards];
       newCards.splice(index, 1);
@@ -253,7 +261,7 @@ const createReviewActions = (
       if (isHistorical && sessionId) {
         await api.deleteSessionCard(sessionId, index);
       } else {
-        await api.deleteDraft(index, sessionId ?? undefined);
+        await api.deleteDraft(index, sessionId);
       }
 
       set((state) => ({
@@ -265,7 +273,8 @@ const createReviewActions = (
     }
   },
   handleAnkiDelete: async (noteId, index) => {
-    const { cards, isHistorical, sessionId } = get();
+    const { cards, isHistorical } = get();
+    const sessionId = resolveSessionId(get);
     try {
       await api.deleteAnkiNotes([noteId]);
       const newCards = [...cards];
@@ -274,7 +283,7 @@ const createReviewActions = (
         if (isHistorical && sessionId) {
           await api.updateSessionCards(sessionId, newCards);
         } else {
-          await api.updateDraft(index, newCards[index], sessionId ?? undefined);
+          await api.updateDraft(index, newCards[index], sessionId);
         }
         set({ cards: newCards });
       }
@@ -286,14 +295,15 @@ const createReviewActions = (
     }
   },
   handleSync: async () => {
-    const { isHistorical, sessionId } = get();
+    const { isHistorical } = get();
+    const sessionId = resolveSessionId(get);
     set({ isSyncing: true, syncSuccess: false, syncLogs: [] });
     try {
       const syncFn =
         isHistorical && sessionId
           ? (cb: (event: ProgressEvent) => void) => api.syncSessionToAnki(sessionId, cb)
           : (cb: (event: ProgressEvent) => void) =>
-            api.syncDrafts(cb, sessionId ?? undefined);
+            api.syncDrafts(cb, sessionId);
 
       await syncFn((event: ProgressEvent) => processSyncEvent(event, set, get));
     } catch (e) {

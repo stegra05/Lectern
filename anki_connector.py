@@ -32,12 +32,12 @@ def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int =
     try:
         response = requests.post(ANKI_CONNECT_URL, json=payload, timeout=timeout)
     except requests.RequestException as exc:
-        raise RuntimeError(f"Failed to reach AnkiConnect at {ANKI_CONNECT_URL}: {exc}")
+        raise RuntimeError(f"Failed to reach AnkiConnect at {ANKI_CONNECT_URL}: {exc}") from exc
 
     try:
         data = response.json()
     except ValueError as exc:
-        raise RuntimeError(f"AnkiConnect returned non-JSON response: {exc}")
+        raise RuntimeError(f"AnkiConnect returned non-JSON response: {exc}") from exc
 
     if data.get("error") is not None:
         raise RuntimeError(f"AnkiConnect error for {action}: {data['error']}")
@@ -196,13 +196,11 @@ def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
         for idx, info in enumerate(infos, start=1):
             fields_obj = info.get("fields", {}) if isinstance(info, dict) else {}
             # fields_obj is a dict: { fieldName: { "value": str, ... }, ... }
-            values: List[str] = []
-            if isinstance(fields_obj, dict):
-                for _fname, f in fields_obj.items():
-                    if isinstance(f, dict):
-                        v = f.get("value", "")
-                        if isinstance(v, str):
-                            values.append(v)
+            values = [
+                str(field.get("value", ""))
+                for field in fields_obj.values()
+                if isinstance(field, dict) and isinstance(field.get("value", ""), str)
+            ]
             lines.append(f"Example {idx}:")
             for f_idx, value in enumerate(values, start=1):
                 lines.append(f"  Field {f_idx}: {value}")
@@ -211,4 +209,3 @@ def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
     except Exception as exc:
         logger.warning("Failed to sample examples from deck '%s': %s", deck_name, exc)
         return ""
-

@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 from typing import List
 
+DENSITY_HIGH_MULTIPLIER = 1.25
+DENSITY_LOW_MULTIPLIER = 0.75
+
 @dataclass
 class PacingState:
     current_cards: int
@@ -30,9 +33,9 @@ class PacingState:
         ]
 
         target = self.target_density
-        if actual_density > target * 1.25:
+        if actual_density > target * DENSITY_HIGH_MULTIPLIER:
             lines.append(f"ADVICE: Density is too high (Target: ~{target:.1f}). Raise your bar for importance. Focus on more substantial concepts.")
-        elif actual_density < target * 0.75:
+        elif actual_density < target * DENSITY_LOW_MULTIPLIER:
             lines.append(f"ADVICE: Density is low (Target: ~{target:.1f}). Look closer at the slides for missed details or defined terms.")
         
         return "\n".join(lines) + "\n"

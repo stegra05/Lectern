@@ -119,7 +119,7 @@ class GenerationService:
         entry_id: str = None,
         focus_prompt: str = "",
         source_type: str = "auto",  # "auto", "slides", "script"
-        density_target: float = config.CARDS_PER_SLIDE_TARGET,  # Detail level
+        target_card_count: int | None = None,
         session_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         
@@ -137,7 +137,7 @@ class GenerationService:
             stop_check=lambda: self.stop_requested,
             focus_prompt=focus_prompt,
             source_type=source_type,
-            density_target=density_target,
+            target_card_count=target_card_count,
             session_id=session_id,
         )
 

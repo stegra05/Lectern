@@ -12,12 +12,18 @@ from anki_connector import check_connection, sample_examples_from_deck
 from ai_client import LecternAIClient
 from checkpoint import save_checkpoint
 from cost_estimator import (
+    derive_effective_target,
+    estimate_card_cap,
     estimate_cost as estimate_cost_impl,
     estimate_cost_with_base as estimate_cost_with_base_impl,
     recompute_estimate as recompute_estimate_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
 )
 from generation_loop import (
+    GenerationLoopConfig,
+    GenerationLoopContext,
+    GenerationLoopState,
+    ReflectionLoopConfig,
     collect_card_fronts as collect_card_fronts_impl,
     get_card_key as get_card_key_impl,
     run_generation_loop as run_generation_loop_impl,
@@ -28,6 +34,9 @@ from utils.tags import infer_slide_set_name
 from utils.note_export import export_card_to_anki
 from utils.state import save_state, clear_state
 from utils.history import HistoryManager
+
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -77,7 +86,7 @@ class GenerationConfig:
     stop_check: Optional[Callable[[], bool]] = None
     focus_prompt: Optional[str] = None
     source_type: str = "auto"  # "auto", "slides", "script"
-    density_target: Optional[float] = None  # Override for CARDS_PER_SLIDE_TARGET
+    target_card_count: Optional[int] = None
     session_id: Optional[str] = None
     entry_id: Optional[str] = None
 
@@ -99,7 +108,7 @@ class LecternGenerationService:
         stop_check: Optional[Callable[[], bool]] = None,
         focus_prompt: Optional[str] = None,
         source_type: str = "auto",  # "auto", "slides", "script"
-        density_target: Optional[float] = None,  # Override for CARDS_PER_SLIDE_TARGET
+        target_card_count: Optional[int] = None,
         session_id: Optional[str] = None,
         entry_id: Optional[str] = None,
     ) -> Generator[ServiceEvent, None, None]:
@@ -114,7 +123,7 @@ class LecternGenerationService:
             stop_check=stop_check,
             focus_prompt=focus_prompt,
             source_type=source_type,
-            density_target=density_target,
+            target_card_count=target_card_count,
             session_id=session_id,
             entry_id=entry_id,
         )
@@ -229,8 +238,8 @@ class LecternGenerationService:
                         legacy_map = ai.concept_map([])
                         if isinstance(legacy_map, dict):
                             concept_map = legacy_map
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Legacy concept map fallback failed: %s", e)
                 metadata_pages = int(concept_map.get("page_count") or 0)
                 metadata_chars = int(concept_map.get("estimated_text_chars") or 0)
                 if metadata_pages <= 0:
@@ -271,28 +280,37 @@ class LecternGenerationService:
             seen_keys = set()
 
             # Targets
-            # NOTE(Density): Simple linear formula - user controls via density_target slider
-            effective_target = (
-                cfg.density_target
-                if cfg.density_target is not None
-                else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+            effective_target, _ = derive_effective_target(
+                page_count=len(pages),
+                estimated_text_chars=total_text_chars,
+                source_type=cfg.source_type,
+                target_card_count=cfg.target_card_count,
+                density_target=None,
+                script_base_chars=config.SCRIPT_BASE_CHARS,
             )
-            
+
             # Calculate chars per page for mode detection
             chars_per_page = total_text_chars / len(pages) if len(pages) > 0 else 0
-            is_script_mode = cfg.source_type == "script" or (
-                cfg.source_type == "auto" and chars_per_page > config.DENSE_THRESHOLD_CHARS_PER_PAGE
+            total_cards_cap, is_script_mode = estimate_card_cap(
+                page_count=len(pages),
+                estimated_text_chars=total_text_chars,
+                image_count=0,
+                source_type=cfg.source_type,
+                density_target=None,
+                target_card_count=cfg.target_card_count,
+                script_base_chars=config.SCRIPT_BASE_CHARS,
             )
-            
-            # Simple card cap calculation
+
             if is_script_mode:
-                # Script/dense mode: text-based calculation
-                total_cards_cap = max(5, int(total_text_chars / config.SCRIPT_BASE_CHARS * effective_target))
-                yield ServiceEvent("info", f"Script mode: ~{total_cards_cap} cards target ({chars_per_page:.0f} chars/page)")
+                yield ServiceEvent(
+                    "info",
+                    f"Script mode: ~{total_cards_cap} cards target ({chars_per_page:.0f} chars/page)",
+                )
             else:
-                # Slides mode: page-based calculation
-                total_cards_cap = max(3, int(len(pages) * effective_target))
-                yield ServiceEvent("info", f"Slides mode: ~{total_cards_cap} cards target ({len(pages)} pages × {effective_target:.1f})")
+                yield ServiceEvent(
+                    "info",
+                    f"Slides mode: ~{total_cards_cap} cards target ({len(pages)} pages × {effective_target:.1f})",
+                )
 
             # Batch sizing
             # Clamp batch size: at least 20, at most 50, targeting half the page count.
@@ -303,18 +321,9 @@ class LecternGenerationService:
 
             yield ServiceEvent("step_start", "Generate cards", {"phase": "generating"})
             
-            # Generation loop
-            yield from self._run_generation_loop(
+            loop_context = GenerationLoopContext(
                 ai=ai,
                 examples=examples,
-                all_cards=all_cards,
-                seen_keys=seen_keys,
-                pages=pages,
-                total_cards_cap=total_cards_cap,
-                actual_batch_size=actual_batch_size,
-                focus_prompt=cfg.focus_prompt,
-                effective_target=effective_target,
-                stop_check=cfg.stop_check,
                 concept_map=concept_map,
                 slide_set_name=slide_set_name,
                 model_name=cfg.model_name,
@@ -323,6 +332,25 @@ class LecternGenerationService:
                 deck_name=cfg.deck_name,
                 history_id=history_id,
                 session_id=cfg.session_id,
+            )
+            loop_state = GenerationLoopState(
+                all_cards=all_cards,
+                seen_keys=seen_keys,
+                pages=pages,
+            )
+            loop_config = GenerationLoopConfig(
+                total_cards_cap=total_cards_cap,
+                actual_batch_size=actual_batch_size,
+                focus_prompt=cfg.focus_prompt,
+                effective_target=effective_target,
+                stop_check=cfg.stop_check,
+            )
+
+            # Generation loop
+            yield from self._run_generation_loop(
+                context=loop_context,
+                state=loop_state,
+                config=loop_config,
             )
             
             yield ServiceEvent("step_end", "Generation Phase Complete", {"success": True, "count": len(all_cards)})
@@ -341,22 +369,16 @@ class LecternGenerationService:
                 
                 yield ServiceEvent("progress_start", "Reflection", {"total": rounds, "label": "Reflection Rounds"})
                 
-                yield from self._run_reflection_loop(
-                    ai=ai,
-                    all_cards=all_cards,
-                    seen_keys=seen_keys,
+                reflection_config = ReflectionLoopConfig(
                     total_cards_cap=total_cards_cap,
                     actual_batch_size=actual_batch_size,
                     rounds=rounds,
                     stop_check=cfg.stop_check,
-                    concept_map=concept_map,
-                    slide_set_name=slide_set_name,
-                    model_name=cfg.model_name,
-                    tags=cfg.tags,
-                    pdf_path=cfg.pdf_path,
-                    deck_name=cfg.deck_name,
-                    history_id=history_id,
-                    session_id=cfg.session_id,
+                )
+                yield from self._run_reflection_loop(
+                    context=loop_context,
+                    state=loop_state,
+                    config=reflection_config,
                 )
 
                 yield ServiceEvent("step_end", "Reflection Phase Complete", {"success": True})
@@ -393,7 +415,6 @@ class LecternGenerationService:
             for idx, card in enumerate(all_cards, start=1):
                 result = export_card_to_anki(
                     card=card,
-                    card_index=idx,
                     deck_name=cfg.deck_name,
                     slide_set_name=slide_set_name,
                     fallback_model=config.DEFAULT_BASIC_MODEL,  # NOTE: Anki note type, not Gemini model
@@ -436,7 +457,7 @@ class LecternGenerationService:
         pdf_path: str,
         model_name: str | None = None,
         source_type: str = "auto",
-        density_target: float | None = None,
+        target_card_count: int | None = None,
     ) -> Dict[str, Any]:
         """Estimate the token count and cost for processing a PDF.
         
@@ -446,7 +467,7 @@ class LecternGenerationService:
             pdf_path=pdf_path,
             model_name=model_name,
             source_type=source_type,
-            density_target=density_target,
+            target_card_count=target_card_count,
         )
 
     async def estimate_cost_with_base(
@@ -454,14 +475,14 @@ class LecternGenerationService:
         pdf_path: str,
         model_name: str | None = None,
         source_type: str = "auto",
-        density_target: float | None = None,
+        target_card_count: int | None = None,
     ) -> tuple[Dict[str, Any], Dict[str, Any]]:
         """Full estimate + base data for cache. Returns (response, base_data)."""
         return await estimate_cost_with_base_impl(
             pdf_path=pdf_path,
             model_name=model_name,
             source_type=source_type,
-            density_target=density_target,
+            target_card_count=target_card_count,
         )
 
     async def verify_image_token_cost(self, model_name: str | None = None) -> Dict[str, Any]:
@@ -523,44 +544,14 @@ class LecternGenerationService:
     def _run_generation_loop(
         self,
         *,
-        ai: LecternAIClient,
-        examples: str,
-        all_cards: List[Dict[str, Any]],
-        seen_keys: set,
-        pages: List[Any],
-        total_cards_cap: int,
-        actual_batch_size: int,
-        focus_prompt: Optional[str],
-        effective_target: float,
-        stop_check: Optional[Callable[[], bool]],
-        concept_map: Dict[str, Any],
-        slide_set_name: str,
-        model_name: str,
-        tags: List[str],
-        pdf_path: str,
-        deck_name: str,
-        history_id: Optional[str],
-        session_id: Optional[str],
+        context: GenerationLoopContext,
+        state: GenerationLoopState,
+        config: GenerationLoopConfig,
     ) -> Generator[ServiceEvent, None, None]:
         return (yield from run_generation_loop_impl(
-            ai=ai,
-            examples=examples,
-            all_cards=all_cards,
-            seen_keys=seen_keys,
-            pages=pages,
-            total_cards_cap=total_cards_cap,
-            actual_batch_size=actual_batch_size,
-            focus_prompt=focus_prompt,
-            effective_target=effective_target,
-            stop_check=stop_check,
-            concept_map=concept_map,
-            slide_set_name=slide_set_name,
-            model_name=model_name,
-            tags=tags,
-            pdf_path=pdf_path,
-            deck_name=deck_name,
-            history_id=history_id,
-            session_id=session_id,
+            context=context,
+            state=state,
+            config=config,
             event_factory=ServiceEvent,
             should_stop=self._should_stop,
             checkpoint_fn=self._save_checkpoint,
@@ -569,40 +560,15 @@ class LecternGenerationService:
     def _run_reflection_loop(
         self,
         *,
-        ai: LecternAIClient,
-        all_cards: List[Dict[str, Any]],
-        seen_keys: set,
-        total_cards_cap: int,
-        actual_batch_size: int,
-        rounds: int,
-        stop_check: Optional[Callable[[], bool]],
-        concept_map: Dict[str, Any],
-        slide_set_name: str,
-        model_name: str,
-        tags: List[str],
-        pdf_path: str,
-        deck_name: str,
-        history_id: Optional[str],
-        session_id: Optional[str],
+        context: GenerationLoopContext,
+        state: GenerationLoopState,
+        config: ReflectionLoopConfig,
     ) -> Generator[ServiceEvent, None, None]:
         return (yield from run_reflection_loop_impl(
-            ai=ai,
-            all_cards=all_cards,
-            seen_keys=seen_keys,
-            total_cards_cap=total_cards_cap,
-            actual_batch_size=actual_batch_size,
-            rounds=rounds,
-            stop_check=stop_check,
-            concept_map=concept_map,
-            slide_set_name=slide_set_name,
-            model_name=model_name,
-            tags=tags,
-            pdf_path=pdf_path,
-            deck_name=deck_name,
-            history_id=history_id,
-            session_id=session_id,
+            context=context,
+            state=state,
+            config=config,
             event_factory=ServiceEvent,
             should_stop=self._should_stop,
             checkpoint_fn=self._save_checkpoint,
         ))
-

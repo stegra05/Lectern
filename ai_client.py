@@ -20,115 +20,29 @@ from ai_schemas import (
     ConceptMapResponse,
     ReflectionResponse,
     AnkiCard,
+    card_generation_schema,
+    concept_map_schema,
+    reflection_schema,
 )
 import logging
 logger = logging.getLogger(__name__)
 
-# Manual schema definitions for Gemini API
 _THINKING_PROFILES = {
     "concept_map": "high",
     "generation": "low",
     "reflection": "high",
 }
 
-_CONCEPT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "id": {"type": "string"},
-        "name": {"type": "string"},
-        "definition": {"type": "string"},
-        "category": {"type": "string"},
-        "importance": {
-            "type": "string",
-            "enum": ["high", "medium", "low"],
-        },
-        "difficulty": {
-            "type": "string",
-            "enum": ["foundational", "intermediate", "advanced"],
-        },
-    },
-    "required": ["id", "name", "definition", "category", "importance", "difficulty"]
-}
+_CONCEPT_MAP_SCHEMA = concept_map_schema()
+_CARD_GENERATION_SCHEMA = card_generation_schema()
+_REFLECTION_SCHEMA = reflection_schema()
 
-_RELATION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "source": {"type": "string"},
-        "target": {"type": "string"},
-        "type": {"type": "string"},
-        "page_reference": {"type": "string", "nullable": True},
-    },
-    "required": ["source", "target", "type"]
-}
-
-_CONCEPT_MAP_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "objectives": {"type": "array", "items": {"type": "string"}},
-        "concepts": {"type": "array", "items": _CONCEPT_SCHEMA},
-        "relations": {"type": "array", "items": _RELATION_SCHEMA},
-        "language": {
-            "type": "string",
-            "description": "ISO 639-1 code of primary document language (e.g., 'en', 'de', 'fr')"
-        },
-        "slide_set_name": {
-            "type": "string",
-            "description": "Semantic name for this slide set in Title Case, max 8 words (e.g., 'Lecture 2 Supervised Learning')"
-        },
-        "page_count": {
-            "type": "integer",
-            "description": "Approximate number of pages/slides in the uploaded PDF."
-        },
-        "estimated_text_chars": {
-            "type": "integer",
-            "description": "Approximate total character count across the PDF."
-        },
-    },
-    "required": ["objectives", "concepts", "relations", "language", "slide_set_name", "page_count", "estimated_text_chars"]
-}
-
-_ANKI_CARD_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "model_name": {"type": "string"},
-        "fields": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "value": {"type": "string"}
-                },
-                "required": ["name", "value"]  
-            },
-            "description": "List of field name/value pairs (e.g. [{'name': 'Front', 'value': '...'}, {'name': 'Back', 'value': '...'}])"
-        },
-        "tags": {"type": "array", "items": {"type": "string"}},
-        "slide_topic": {"type": "string", "nullable": True},
-        "slide_number": {"type": "integer", "nullable": True},
-        "rationale": {"type": "string", "nullable": True},
-    },
-    "required": ["model_name", "fields"]
-}
-
-_CARD_GENERATION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "cards": {"type": "array", "items": _ANKI_CARD_SCHEMA},
-        "done": {"type": "boolean"},
-    },
-    "required": ["cards", "done"]
-}
-
-_REFLECTION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "reflection": {"type": "string"},
-        "cards": {"type": "array", "items": _ANKI_CARD_SCHEMA},
-        "done": {"type": "boolean"},
-    },
-    "required": ["reflection", "cards", "done"]
-}
+_MAX_OUTPUT_TOKENS = 8192
+_HISTORY_PRUNE_THRESHOLD = 20
+_HISTORY_PRUNE_HEAD = 2
+_HISTORY_PRUNE_TAIL = 6
+_ROLLING_SUMMARY_MAX_FRONTS = 200
+_ROLLING_SUMMARY_FRONT_TRUNC = 120
 
 class LecternAIClient:
     def __init__(
@@ -175,7 +89,7 @@ class LecternAIClient:
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=config.GEMINI_TEMPERATURE,
-            max_output_tokens=8192,
+            max_output_tokens=_MAX_OUTPUT_TOKENS,
             system_instruction=system_inst,
             safety_settings=[
                 types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
@@ -255,9 +169,9 @@ class LecternAIClient:
             return ""
 
         omitted_count = 0
-        if len(cleaned_fronts) > 200:
-            omitted_count = len(cleaned_fronts) - 200
-            cleaned_fronts = cleaned_fronts[-200:]
+        if len(cleaned_fronts) > _ROLLING_SUMMARY_MAX_FRONTS:
+            omitted_count = len(cleaned_fronts) - _ROLLING_SUMMARY_MAX_FRONTS
+            cleaned_fronts = cleaned_fronts[-_ROLLING_SUMMARY_MAX_FRONTS:]
 
         summary_lines = [
             "Rolling summary of previously generated card fronts.",
@@ -269,7 +183,7 @@ class LecternAIClient:
             )
 
         for idx, front in enumerate(cleaned_fronts, start=1):
-            summary_lines.append(f"{idx}. {front[:120]}")
+            summary_lines.append(f"{idx}. {front[:_ROLLING_SUMMARY_FRONT_TRUNC]}")
 
         return "\n".join(summary_lines)
 
@@ -277,7 +191,7 @@ class LecternAIClient:
         """Prune chat history to manage token usage (sliding window)."""
         try:
             history = self.get_history()
-            if len(history) <= 20:
+            if len(history) <= _HISTORY_PRUNE_THRESHOLD:
                 return
 
             summary_text = self._build_rolling_card_summary(all_card_fronts or [])
@@ -296,7 +210,11 @@ class LecternAIClient:
                     },
                 ]
 
-            new_history = history[:2] + summary_turn + history[-6:]
+            new_history = (
+                history[:_HISTORY_PRUNE_HEAD]
+                + summary_turn
+                + history[-_HISTORY_PRUNE_TAIL:]
+            )
             self.restore_history(new_history)
             logger.debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
         except Exception as e:
@@ -335,11 +253,7 @@ class LecternAIClient:
             raise RuntimeError("PDF upload returned no URI.")
         return {"uri": uri, "mime_type": mime_type}
 
-    def concept_map_from_file(self, file_uri: str, mime_type: str = "application/pdf") -> Dict[str, Any]:
-        prompt = self._prompt_builder.concept_map()
-        parts = _compose_native_file_content(file_uri=file_uri, prompt=prompt, mime_type=mime_type)
-        logger.debug(f"[Chat/ConceptMap] native parts={len(parts)} prompt_len={len(prompt)}")
-
+    def _concept_map_for_parts(self, parts: List[Dict[str, Any]]) -> Dict[str, Any]:
         call_config = self._generation_config.model_copy(update={
             "response_schema": _CONCEPT_MAP_SCHEMA,
             "thinking_config": self._thinking_config_for("concept_map"),
@@ -362,36 +276,19 @@ class LecternAIClient:
                 self.update_language(detected_lang)
             return data
         return {"concepts": []}
+
+    def concept_map_from_file(self, file_uri: str, mime_type: str = "application/pdf") -> Dict[str, Any]:
+        prompt = self._prompt_builder.concept_map()
+        parts = _compose_native_file_content(file_uri=file_uri, prompt=prompt, mime_type=mime_type)
+        logger.debug(f"[Chat/ConceptMap] native parts={len(parts)} prompt_len={len(prompt)}")
+        return self._concept_map_for_parts(parts)
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         prompt = self._prompt_builder.concept_map()
         
         parts = _compose_multimodal_content(pdf_content, prompt)
         logger.debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
-        
-        call_config = self._generation_config.model_copy(update={
-            "response_schema": _CONCEPT_MAP_SCHEMA,
-            "thinking_config": self._thinking_config_for("concept_map"),
-        })
-
-        response = self._chat.send_message(
-            message=parts,
-            config=call_config
-        )
-        
-        text = response.text or ""
-        text_snippet = text[:200].replace('\n', ' ')
-        logger.debug(f"[Chat/ConceptMap] Response snippet: {text_snippet}...")
-        _append_session_log(self._log_path, "conceptmap", parts, text, True)
-        
-        data = self._safe_parse_json(text, ConceptMapResponse)
-        if isinstance(data, dict):
-             # Detect and update language from AI response
-            detected_lang = data.get("language")
-            if detected_lang:
-                self.update_language(detected_lang)
-            return data
-        return {"concepts": []}
+        return self._concept_map_for_parts(parts)
 
     def count_tokens_for_pdf(self, *, file_uri: str, prompt: str, mime_type: str = "application/pdf", retries: int = 3) -> int:
         content = _compose_native_file_content(file_uri=file_uri, prompt=prompt, mime_type=mime_type)
@@ -502,7 +399,8 @@ class LecternAIClient:
                         new_fields = {}
                         for field_item in card["fields"]:
                             if isinstance(field_item, dict) and "name" in field_item and "value" in field_item:
-                                new_fields[field_item["name"]] = field_item["value"]
+                                if field_item["value"] is not None:
+                                    new_fields[field_item["name"]] = field_item["value"]
                         card["fields"] = new_fields
                         
             return data_dict

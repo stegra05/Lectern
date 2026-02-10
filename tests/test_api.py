@@ -79,7 +79,7 @@ def test_estimate_endpoint(mock_service_class):
     mock_service_class.return_value = mock_service
 
     files = {"pdf_file": ("test_script.pdf", b"pdf content", "application/pdf")}
-    data = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "2.0"}
+    data = {"model_name": "gemini-3-flash", "source_type": "script", "target_card_count": "20"}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
         response = client.post("/estimate", files=files, data=data)
@@ -91,7 +91,7 @@ def test_estimate_endpoint(mock_service_class):
         call_kwargs = mock_service.estimate_cost_with_base.call_args[1]
         assert call_kwargs["model_name"] == "gemini-3-flash"
         assert call_kwargs["source_type"] == "script"
-        assert call_kwargs["density_target"] == 2.0
+        assert call_kwargs["target_card_count"] == 20
 
 
 @patch('gui.backend.main.LecternGenerationService')
@@ -105,7 +105,7 @@ def test_estimate_cache_hit(mock_service_class):
     mock_service_class.return_value = mock_service
 
     files = {"pdf_file": ("test_script.pdf", b"same content both times", "application/pdf")}
-    data = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "2.0"}
+    data = {"model_name": "gemini-3-flash", "source_type": "script", "target_card_count": "20"}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
         # First request: cache miss, full estimate
@@ -113,7 +113,7 @@ def test_estimate_cache_hit(mock_service_class):
         assert r1.status_code == 200
         assert mock_service.estimate_cost_with_base.call_count == 1
         # Second request: same file content -> cache hit, fast recompute (different density)
-        data2 = {"model_name": "gemini-3-flash", "source_type": "script", "density_target": "3.0"}
+        data2 = {"model_name": "gemini-3-flash", "source_type": "script", "target_card_count": "30"}
         r2 = client.post("/estimate", files=files, data=data2)
         assert r2.status_code == 200
         # Service not called again; recompute_estimate used
@@ -137,9 +137,9 @@ def test_estimate_cache_miss_different_model(mock_service_class):
     files = {"pdf_file": ("test_slides.pdf", b"same content", "application/pdf")}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
-        r1 = client.post("/estimate", files=files, data={"model_name": "gemini-3-flash", "source_type": "auto", "density_target": "1.5"})
+        r1 = client.post("/estimate", files=files, data={"model_name": "gemini-3-flash", "source_type": "auto", "target_card_count": "15"})
         assert r1.status_code == 200
-        r2 = client.post("/estimate", files=files, data={"model_name": "gemini-3-pro", "source_type": "auto", "density_target": "1.5"})
+        r2 = client.post("/estimate", files=files, data={"model_name": "gemini-3-pro", "source_type": "auto", "target_card_count": "15"})
         assert r2.status_code == 200
         # Different model -> cache miss -> service called twice
         assert mock_service.estimate_cost_with_base.call_count == 2
