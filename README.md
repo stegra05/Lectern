@@ -151,14 +151,14 @@ python gui/launcher.py
 
 ```bash
 # macOS
-./build_app.sh      # Creates dist/Lectern.app
-./create_dmg.sh     # Creates dist/Lectern.dmg
+./scripts/build_app.sh      # Creates dist/Lectern.app
+./scripts/create_dmg.sh     # Creates dist/Lectern.dmg
 
 # Windows (run in PowerShell)
-.\build_windows.ps1 # Creates dist/Lectern/Lectern.exe
+.\scripts\build_windows.ps1 # Creates dist/Lectern/Lectern.exe
 
 # Linux
-./build_linux.sh    # Creates dist/Lectern (directory)
+./scripts/build_linux.sh    # Creates dist/Lectern (directory)
 ```
 
 ---
