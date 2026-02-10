@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion';
-import { BrainCircuit, Sparkles, Check, FileSearch } from 'lucide-react';
+import { BrainCircuit, Sparkles, Check, FileSearch, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { PhaseAnimation } from './PhaseAnimation';
 
 export type Phase = 'concept' | 'generating' | 'reflecting' | 'complete' | 'idle';
 
@@ -82,7 +81,7 @@ export function PhaseIndicator({ currentPhase }: PhaseIndicatorProps) {
                                     )}
                                 >
                                     {isActive ? (
-                                        <PhaseAnimation phase={phase.id as Phase} className="text-background" />
+                                        <Loader2 className="w-4 h-4 text-background animate-spin" />
                                     ) : isPast ? (
                                         <Check className="w-4 h-4 text-primary" strokeWidth={3} />
                                     ) : (

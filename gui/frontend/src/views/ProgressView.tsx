@@ -5,7 +5,6 @@ import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { PhaseIndicator } from '../components/PhaseIndicator';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { SkeletonCard } from '../components/SkeletonCard';
 import { useLecternStore } from '../store';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
@@ -297,7 +296,6 @@ export function ProgressView() {
         setConfirmModal
     } = useLecternStore();
 
-    const estimation = useLecternStore((s) => s.estimation);
     const setupStepsCompleted = useLecternStore((s) => s.setupStepsCompleted);
 
     const logsEndRef = useRef<HTMLDivElement>(null);
@@ -785,33 +783,14 @@ export function ProgressView() {
                         })}
                     </AnimatePresence>
 
-                    {/* Empty State — skeleton cards during generation, plain message otherwise */}
-                    {cards.length === 0 && step === 'generating' && (() => {
-                        const expectedCount = progress.total || estimation?.suggested_card_count || 8;
-                        return (
-                            <>
-                                {Array.from({ length: Math.min(expectedCount, 12) }).map((_, i) => (
-                                    <SkeletonCard key={`skel-${i}`} index={i} />
-                                ))}
-                            </>
-                        );
-                    })()}
-                    {cards.length === 0 && step !== 'generating' && (
+                    {/* Empty State */}
+                    {cards.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-text-muted border-2 border-dashed border-border rounded-xl bg-surface/20 min-h-[300px]">
                             <AlertCircle className="w-8 h-8 mb-4 opacity-20" />
-                            <p className="font-medium">No cards found</p>
-                            <p className="text-sm opacity-50 mt-1">Try adjusting your prompts</p>
+                            <p className="font-medium">Waiting for cards…</p>
+                            <p className="text-sm opacity-50 mt-1">Cards will appear here as they are generated</p>
                         </div>
                     )}
-                    {/* Remaining skeleton placeholders when some cards have arrived */}
-                    {cards.length > 0 && step === 'generating' && (() => {
-                        const expectedCount = progress.total || estimation?.suggested_card_count || cards.length;
-                        const remaining = Math.max(0, expectedCount - cards.length);
-                        if (remaining === 0) return null;
-                        return Array.from({ length: Math.min(remaining, 8) }).map((_, i) => (
-                            <SkeletonCard key={`skel-tail-${i}`} index={i} />
-                        ));
-                    })()}
                 </div>
             </div>
 
