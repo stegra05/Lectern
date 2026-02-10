@@ -38,6 +38,7 @@ const getGenerationState = () => ({
   isCancelling: false,
   estimation: null,
   isEstimating: false,
+  estimationError: null as string | null,
   setupStepsCompleted: 0,
 });
 
@@ -148,7 +149,8 @@ const createGenerationActions = (
       }
     }
   },
-  setEstimation: (est) => set({ estimation: est }),
+  setEstimation: (est) => set({ estimation: est, estimationError: null }),
+  setEstimationError: (error) => set({ estimationError: error }),
   recommendTargetDeckSize: (est) => {
     if (typeof window !== 'undefined') {
       const pageCount = est.pages || 1;

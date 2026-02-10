@@ -77,6 +77,7 @@ function App() {
     targetDeckSize,
     estimation,
     isEstimating,
+    estimationError,
     sessionId,
     setPdfFile,
     setDeckName,
@@ -85,6 +86,7 @@ function App() {
     setTargetDeckSize,
     setEstimation,
     setIsEstimating,
+    setEstimationError,
     handleGenerate,
     handleReset,
     loadSession,
@@ -113,6 +115,7 @@ function App() {
         return;
       }
       setIsEstimating(true);
+      setEstimationError(null);
       try {
         const est = await api.estimateCost(
           pdfFile,
@@ -125,7 +128,13 @@ function App() {
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           console.error(e);
-          if (!controller.signal.aborted) setEstimation(null);
+          if (!controller.signal.aborted) {
+            setEstimation(null);
+            const msg = (e as Error).message || 'Estimation failed';
+            setEstimationError(
+              msg.includes('500') ? 'Estimation failed — check your Gemini API key in Settings.' : `Estimation failed: ${msg}`
+            );
+          }
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -135,7 +144,7 @@ function App() {
     };
     fetchEstimate();
     return () => controller.abort();
-  }, [pdfFile, health?.gemini_model, sourceType, debouncedTargetDeckSize, setEstimation, setIsEstimating]);
+  }, [pdfFile, health?.gemini_model, sourceType, debouncedTargetDeckSize, setEstimation, setIsEstimating, setEstimationError]);
 
   useEffect(() => {
     if (!pdfFile) {
@@ -267,6 +276,7 @@ function App() {
                       setFocusPrompt={setFocusPrompt}
                       estimation={estimation}
                       isEstimating={isEstimating}
+                      estimationError={estimationError}
                       handleGenerate={handleGenerate}
                       health={health}
                     />

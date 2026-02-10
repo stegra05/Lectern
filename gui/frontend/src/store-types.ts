@@ -37,6 +37,7 @@ export type StoreState = {
     isCancelling: boolean;
     estimation: Estimation | null;
     isEstimating: boolean;
+    estimationError: string | null;
 
     // Review / Sync
     isHistorical: boolean;
@@ -69,6 +70,7 @@ export type GenerationActions = {
     setTargetDeckSize: (target: number) => void;
     setEstimation: (est: Estimation | null) => void;
     setIsEstimating: (value: boolean) => void;
+    setEstimationError: (error: string | null) => void;
     setIsError: (value: boolean) => void;
     setIsCancelling: (value: boolean) => void;
     setSessionId: (id: string | null) => void;
