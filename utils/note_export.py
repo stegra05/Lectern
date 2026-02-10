@@ -56,38 +56,35 @@ def build_card_tags(
 ) -> List[str]:
     """Build hierarchical tags for a card.
     
-    Combines AI-generated tags with user-provided tags and applies
-    the 4-level hierarchical format: Deck::SlideSet::Topic::Tag
+    Builds a 3-level hierarchical tag (Deck::SlideSet::Topic) plus any
+    user-provided and default flat tags.
     
     Parameters:
-        card: Card data from AI (may include 'tags' and 'slide_topic')
+        card: Card data from AI (uses 'slide_topic' for topic level)
         deck_name: Target Anki deck name
         slide_set_name: Inferred slide set name
-        additional_tags: User-provided tags to merge
+        additional_tags: User-provided tags to append as flat tags
         
     Returns:
-        List of fully-qualified hierarchical tags
+        List of tags: one hierarchical tag + any additional flat tags
     """
-    # Extract AI-generated tags
-    ai_tags = [str(t) for t in (card.get("tags") or [])]
-    
-    # Merge with user tags, preserving order and removing duplicates
-    merged_tags = list(dict.fromkeys(ai_tags + additional_tags))
+    # Merge user tags with default tag, preserving order and removing duplicates
+    extra_tags = list(dict.fromkeys(additional_tags))
     
     # Add default tag if enabled
     if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG:
-        if config.DEFAULT_TAG not in merged_tags:
-            merged_tags.append(config.DEFAULT_TAG)
+        if config.DEFAULT_TAG not in extra_tags:
+            extra_tags.append(config.DEFAULT_TAG)
     
     # Get topic from card metadata
     slide_topic = str(card.get("slide_topic") or "").strip()
     
-    # Build hierarchical tags
+    # Build hierarchical tag (3-level) + flat additional tags
     return build_hierarchical_tags(
         deck_name=deck_name,
         slide_set_name=slide_set_name,
         topic=slide_topic,
-        tags=merged_tags,
+        additional_tags=extra_tags,
     )
 
 

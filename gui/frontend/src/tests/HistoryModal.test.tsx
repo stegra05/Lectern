@@ -33,6 +33,7 @@ describe('HistoryModal', () => {
         loadSession: vi.fn(),
         deleteHistoryEntry: vi.fn(),
         clearAllHistory: vi.fn(),
+        batchDeleteHistory: vi.fn(),
     };
 
     it('renders history entries', () => {
@@ -49,19 +50,22 @@ describe('HistoryModal', () => {
         expect(defaultProps.loadSession).toHaveBeenCalledWith('sess_1');
     });
 
-    it('calls deleteHistoryEntry when delete button is clicked', () => {
-        window.confirm = vi.fn().mockReturnValue(true);
+    it('calls deleteHistoryEntry after confirm flow', () => {
         render(<HistoryModal {...defaultProps} />);
         const deleteBtn = screen.getByTitle('Delete Session');
         fireEvent.click(deleteBtn);
+        // Confirm banner should appear
+        const confirmBtn = screen.getByText('Confirm');
+        fireEvent.click(confirmBtn);
         expect(defaultProps.deleteHistoryEntry).toHaveBeenCalledWith('1');
     });
 
-    it('calls clearAllHistory when clear history button is clicked', () => {
-        window.confirm = vi.fn().mockReturnValue(true);
+    it('calls clearAllHistory after confirm flow', () => {
         render(<HistoryModal {...defaultProps} />);
         const clearBtn = screen.getByText(/Clear All/i);
         fireEvent.click(clearBtn);
+        const confirmBtn = screen.getByText('Confirm');
+        fireEvent.click(confirmBtn);
         expect(defaultProps.clearAllHistory).toHaveBeenCalled();
     });
 
@@ -73,5 +77,18 @@ describe('HistoryModal', () => {
     it('does not render when isOpen is false', () => {
         const { container } = render(<HistoryModal {...defaultProps} isOpen={false} />);
         expect(container.firstChild).toBeNull();
+    });
+
+    it('shows cancelled status indicator', () => {
+        const entries = [{
+            ...mockEntries[0],
+            id: '3',
+            session_id: 'sess_3',
+            status: 'cancelled' as const,
+        }];
+        render(<HistoryModal {...defaultProps} history={entries} />);
+        // Default filter is 'completed'; switch to 'all' to see the entry
+        fireEvent.click(screen.getByText('All'));
+        expect(screen.getByTitle('Cancelled')).toBeInTheDocument();
     });
 });

@@ -47,7 +47,6 @@ export interface GenerateRequest {
 export interface Card {
     front: string;
     back: string;
-    tags?: string[];
     anki_note_id?: number;
     fields?: Record<string, string>;
     model_name?: string;
@@ -87,7 +86,7 @@ export interface HistoryEntry {
     deck: string;
     date: string;
     card_count: number;
-    status: "draft" | "completed" | "error";
+    status: "draft" | "completed" | "error" | "cancelled";
 }
 
 // Helper to make fetch calls with timeout
@@ -262,6 +261,16 @@ export const api = {
             method: "DELETE",
         });
         if (!res.ok) throw new Error("Failed to delete entry");
+        return res.json();
+    },
+
+    batchDeleteHistory: async (params: { ids?: string[]; status?: string }) => {
+        const res = await fetch(`${API_URL}/history/batch-delete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(params),
+        });
+        if (!res.ok) throw new Error("Failed to batch delete history");
         return res.json();
     },
 

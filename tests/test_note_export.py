@@ -29,12 +29,11 @@ def test_resolve_model_name_custom():
 # Test build_card_tags
 @patch("utils.note_export.build_hierarchical_tags")
 def test_build_card_tags(mock_build_hierarchical):
-    """Test building tags with AI tags, user tags, and defaults."""
+    """Test building tags with user tags and defaults (3-level hierarchy)."""
     # Mock return value
-    mock_build_hierarchical.return_value = ["Deck::Set::Topic::Tag"]
+    mock_build_hierarchical.return_value = ["Deck::Set::Topic"]
     
     card = {
-        "tags": ["ai_tag1", "ai_tag2"],
         "slide_topic": "MyTopic"
     }
     deck_name = "MyDeck"
@@ -43,38 +42,37 @@ def test_build_card_tags(mock_build_hierarchical):
     
     result = build_card_tags(card, deck_name, slide_set, additional_tags)
     
-    # Expected: ai_tags + additional_tags + default tag
-    expected_tags = ["ai_tag1", "ai_tag2", "user_tag"]
+    # Expected: additional_tags + default tag as flat tags
+    expected_extra = ["user_tag"]
     if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG:
-        expected_tags.append(config.DEFAULT_TAG)
+        expected_extra.append(config.DEFAULT_TAG)
         
     mock_build_hierarchical.assert_called_once_with(
         deck_name=deck_name,
         slide_set_name=slide_set,
         topic="MyTopic",
-        tags=expected_tags
+        additional_tags=expected_extra
     )
-    assert result == ["Deck::Set::Topic::Tag"]
+    assert result == ["Deck::Set::Topic"]
 
 @patch("utils.note_export.build_hierarchical_tags")
 def test_build_card_tags_dedup(mock_build_hierarchical):
-    """Test that tags are deduplicated."""
+    """Test that additional tags are deduplicated."""
     mock_build_hierarchical.return_value = []
-    card = {"tags": ["tag1"]}
-    additional_tags = ["tag1", "tag2"]
+    card = {"slide_topic": "Topic"}
+    additional_tags = ["tag1", "tag1", "tag2"]
     
     build_card_tags(card, "Deck", "Set", additional_tags)
     
     call_args = mock_build_hierarchical.call_args[1]
-    tags_arg = call_args["tags"]
+    extra_arg = call_args["additional_tags"]
     
     # "tag1" should appear only once. "tag2" should be present.
-    # We verify the list content ignoring order for robustness, although function preserves order
-    assert tags_arg.count("tag1") == 1
-    assert "tag2" in tags_arg
+    assert extra_arg.count("tag1") == 1
+    assert "tag2" in extra_arg
     
     if config.ENABLE_DEFAULT_TAG and config.DEFAULT_TAG:
-         assert config.DEFAULT_TAG in tags_arg
+         assert config.DEFAULT_TAG in extra_arg
 
 # Test export_card_to_anki
 @patch("utils.note_export.add_note")

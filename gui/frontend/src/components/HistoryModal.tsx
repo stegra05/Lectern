@@ -10,8 +10,19 @@ interface HistoryModalProps {
     history: HistoryEntry[];
     clearAllHistory: () => void;
     deleteHistoryEntry: (id: string) => void;
+    batchDeleteHistory: (params: { ids?: string[]; status?: string }) => void;
     loadSession: (sessionId: string) => void;
 }
+
+type FilterType = 'all' | 'completed' | 'draft' | 'error' | 'cancelled';
+
+const FILTER_LABELS: Record<FilterType, string> = {
+    all: 'All',
+    completed: 'Completed',
+    draft: 'In Progress',
+    error: 'Errors',
+    cancelled: 'Cancelled',
+};
 
 export function HistoryModal({
     isOpen,
@@ -19,25 +30,32 @@ export function HistoryModal({
     history,
     clearAllHistory,
     deleteHistoryEntry,
+    batchDeleteHistory,
     loadSession,
 }: HistoryModalProps) {
-    type FilterType = 'all' | 'completed' | 'draft' | 'error';
-
     const [historyFilter, setHistoryFilter] = useState<FilterType>(() => {
         const saved = localStorage.getItem('lectern-history-filter');
         return (saved as FilterType) || 'completed';
     });
 
+    const [confirmAction, setConfirmAction] = useState<null | { label: string; action: () => void }>(null);
+
     useEffect(() => {
         localStorage.setItem('lectern-history-filter', historyFilter);
     }, [historyFilter]);
 
-    const counts = {
+    const counts: Record<FilterType, number> = {
         all: history.length,
         completed: history.filter(h => h.status === 'completed').length,
         draft: history.filter(h => h.status === 'draft').length,
         error: history.filter(h => h.status === 'error').length,
+        cancelled: history.filter(h => h.status === 'cancelled').length,
     };
+
+    // Only show filter tabs that have entries (except 'all' which is always shown)
+    const visibleFilters = (Object.keys(FILTER_LABELS) as FilterType[]).filter(
+        f => f === 'all' || counts[f] > 0
+    );
 
     const filteredHistory = historyFilter === 'all'
         ? history
@@ -77,9 +95,10 @@ export function HistoryModal({
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                if (confirm('Clear all history?')) {
-                                                    clearAllHistory();
-                                                }
+                                                setConfirmAction({
+                                                    label: 'Clear all history?',
+                                                    action: clearAllHistory,
+                                                });
                                             }}
                                             className="text-xs text-text-muted hover:text-red-400 transition-colors flex items-center gap-1 px-2 py-1"
                                         >
@@ -97,33 +116,74 @@ export function HistoryModal({
                             </div>
 
                             {/* Filters */}
-                            <div className="px-6 py-4 bg-surface/30 border-b border-border/30 flex flex-wrap gap-2">
-                                {[
-                                    { id: 'all', label: 'All' },
-                                    { id: 'completed', label: 'Completed' },
-                                    { id: 'draft', label: 'In Progress' },
-                                    { id: 'error', label: 'Errors' }
-                                ].map((filter) => {
-                                    const isActive = historyFilter === filter.id;
+                            <div className="px-6 py-4 bg-surface/30 border-b border-border/30 flex flex-wrap items-center gap-2">
+                                {visibleFilters.map((filterId) => {
+                                    const isActive = historyFilter === filterId;
                                     return (
                                         <button
-                                            key={filter.id}
-                                            onClick={() => setHistoryFilter(filter.id as FilterType)}
+                                            key={filterId}
+                                            onClick={() => setHistoryFilter(filterId)}
                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${isActive
                                                 ? 'bg-primary/20 border-primary/50 text-primary'
                                                 : 'bg-surface/50 border-border/50 text-text-muted hover:border-primary/30'
                                                 }`}
                                         >
-                                            {filter.label}
+                                            {FILTER_LABELS[filterId]}
                                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-primary/30' : 'bg-surface-lighter'
                                                 }`}>
-                                                {counts[filter.id as keyof typeof counts]}
+                                                {counts[filterId]}
                                             </span>
                                             {isActive && <Check className="w-3 h-3" />}
                                         </button>
                                     );
                                 })}
+                                {/* Batch delete for active filter */}
+                                {historyFilter !== 'all' && filteredHistory.length > 0 && (
+                                    <button
+                                        onClick={() => setConfirmAction({
+                                            label: `Delete all ${filteredHistory.length} ${FILTER_LABELS[historyFilter].toLowerCase()} sessions?`,
+                                            action: () => batchDeleteHistory({ status: historyFilter }),
+                                        })}
+                                        className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium text-red-400 hover:bg-red-400/10 border border-red-400/30 hover:border-red-400/50 transition-all"
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                        Delete {FILTER_LABELS[historyFilter]}
+                                    </button>
+                                )}
                             </div>
+
+                            {/* Inline Confirm Banner */}
+                            <AnimatePresence>
+                                {confirmAction && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="overflow-hidden border-b border-red-400/30 bg-red-400/5"
+                                    >
+                                        <div className="px-6 py-3 flex items-center justify-between">
+                                            <span className="text-sm text-red-400">{confirmAction.label}</span>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setConfirmAction(null)}
+                                                    className="px-3 py-1 text-xs rounded-md bg-surface/50 border border-border/50 text-text-muted hover:text-text-main transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        confirmAction.action();
+                                                        setConfirmAction(null);
+                                                    }}
+                                                    className="px-3 py-1 text-xs rounded-md bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30 transition-colors"
+                                                >
+                                                    Confirm
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
                             {/* History List */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
@@ -133,7 +193,7 @@ export function HistoryModal({
                                         <span>
                                             {history.length === 0
                                                 ? "No sessions found."
-                                                : `No ${historyFilter === 'draft' ? 'in-progress' : historyFilter} sessions.`}
+                                                : `No ${FILTER_LABELS[historyFilter].toLowerCase()} sessions.`}
                                         </span>
                                         {history.length > 0 && historyFilter !== 'all' && (
                                             <button
@@ -164,6 +224,7 @@ export function HistoryModal({
                                                             {entry.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500" title="Completed" />}
                                                             {entry.status === 'draft' && <div className="w-2 h-2 rounded-full bg-yellow-500" title="In Progress" />}
                                                             {entry.status === 'error' && <div className="w-2 h-2 rounded-full bg-red-500" title="Error" />}
+                                                            {entry.status === 'cancelled' && <div className="w-2 h-2 rounded-full bg-orange-400" title="Cancelled" />}
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center justify-between text-xs text-text-muted">
@@ -176,9 +237,10 @@ export function HistoryModal({
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (confirm('Delete this history entry?')) {
-                                                        deleteHistoryEntry(entry.id);
-                                                    }
+                                                    setConfirmAction({
+                                                        label: `Delete "${entry.filename}" session?`,
+                                                        action: () => deleteHistoryEntry(entry.id),
+                                                    });
                                                 }}
                                                 className="absolute top-2 right-2 p-1.5 text-text-muted hover:text-red-400 hover:bg-surface rounded-md opacity-0 group-hover:opacity-100 transition-all"
                                                 title="Delete Session"

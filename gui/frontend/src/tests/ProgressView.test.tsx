@@ -66,6 +66,7 @@ vi.mock('framer-motion', () => {
             div: MockComponent,
             circle: MockComponent,
             path: MockComponent,
+            rect: MockComponent,
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
@@ -81,7 +82,7 @@ describe('ProgressView', () => {
     it('renders progress indicators', () => {
         render(<ProgressView />);
         expect(screen.getByText(/Generation Status/i)).toBeInTheDocument();
-        expect(screen.getByText('50%')).toBeInTheDocument();
+        expect(screen.getByText('48%')).toBeInTheDocument();
         expect(screen.getByText('PROCESSING')).toBeInTheDocument();
     });
 
@@ -120,14 +121,14 @@ describe('ProgressView', () => {
         // Test topic sorting
         storeState = { ...storeState, cards, sortBy: 'topic' };
         rerender(<ProgressView />);
-        let cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'DIV').map(el => el.textContent);
+        let cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'SPAN').map(el => el.textContent);
         // Topic 'A' has model 'Basic', Topic 'Z' has model 'Cloze' -> Order should be Basic, Cloze
         expect(cardTypes).toEqual(['Basic', 'Cloze']);
 
         // Test type sorting
         storeState = { ...storeState, cards, sortBy: 'type' };
         rerender(<ProgressView />);
-        cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'DIV').map(el => el.textContent);
+        cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'SPAN').map(el => el.textContent);
         // Basic < Cloze -> Order should be Basic, Cloze
         expect(cardTypes).toEqual(['Basic', 'Cloze']);
     });
@@ -140,7 +141,7 @@ describe('ProgressView', () => {
             progress: { current: 10, total: 10 },
         };
         render(<ProgressView />);
-        expect(screen.getByText(/Generation Complete/i)).toBeInTheDocument();
+        expect(screen.getByText(/Generation Insights/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
     });
 
@@ -213,16 +214,15 @@ describe('ProgressView', () => {
         expect(screen.getAllByText('Fatal error').length).toBeGreaterThan(0);
     });
 
-    it('renders tags and slide numbers', () => {
+    it('renders slide numbers and topics', () => {
         const cards = [{
-            front: 'A', back: 'B', tag: 't1', tags: ['t1', 't2'],
-            slide_number: 42, model_name: 'Basic'
+            front: 'A', back: 'B', tag: 't1',
+            slide_number: 42, slide_topic: 'Neural Networks', model_name: 'Basic'
         }];
         storeState = { ...storeState, cards };
         render(<ProgressView />);
-        expect(screen.getByText('#t1')).toBeInTheDocument();
-        expect(screen.getByText('#t2')).toBeInTheDocument();
         expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
+        expect(screen.getByText('Neural Networks')).toBeInTheDocument();
     });
 
     it('handles card actions: edit, archive, delete', () => {

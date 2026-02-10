@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
-import { BrainCircuit, Sparkles, CheckCircle2, FileSearch, Loader2 } from 'lucide-react';
+import { BrainCircuit, Sparkles, Check, FileSearch } from 'lucide-react';
 import { clsx } from 'clsx';
+import { PhaseAnimation } from './PhaseAnimation';
 
 export type Phase = 'concept' | 'generating' | 'reflecting' | 'complete' | 'idle';
 
@@ -34,69 +35,74 @@ export function PhaseIndicator({ currentPhase }: PhaseIndicatorProps) {
     const isComplete = currentPhase === 'complete';
 
     return (
-        <div className="w-full py-2">
-            <div className="relative flex flex-col gap-8">
-                {/* Vertical Line Background */}
-                <div className="absolute top-4 left-5 w-0.5 h-[calc(100%-32px)] bg-border -z-10" />
-
-                {/* Progress Line (Vertical) */}
-                <motion.div
-                    className="absolute top-4 left-5 w-0.5 bg-primary -z-10 origin-top"
-                    initial={{ height: '0%' }}
-                    animate={{
-                        height: isComplete ? 'calc(100% - 32px)' : currentIndex >= 0 ? `${(currentIndex / (phases.length - 1)) * 100}%` : '0%'
-                    }}
-                    transition={{ duration: 0.5, ease: "easeInOut" }}
-                />
-
+        <div className="w-full">
+            <div className="relative flex flex-col gap-0">
                 {phases.map((phase, index) => {
                     const isActive = phase.id === currentPhase;
                     const isPast = isComplete || (currentIndex > -1 && index < currentIndex);
+                    const isLast = index === phases.length - 1;
 
                     return (
-                        <div key={phase.id} className="flex items-center gap-4 group relative">
-                            <div className="relative">
+                        <div key={phase.id} className="relative pl-10 pb-6 last:pb-0">
+                            {/* Connector line */}
+                            {!isLast && (
+                                <div className="absolute left-[15px] top-[2rem] bottom-0 w-0.5">
+                                    <div className="absolute inset-0 bg-border" />
+                                    {isPast && (
+                                        <motion.div
+                                            className="absolute inset-0 bg-primary"
+                                            initial={{ scaleY: 0 }}
+                                            animate={{ scaleY: 1 }}
+                                            transition={{ duration: 0.4, ease: "easeOut" }}
+                                            style={{ transformOrigin: 'top' }}
+                                        />
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Circle */}
+                            <div className="absolute left-0 top-0">
                                 {isActive && (
                                     <motion.div
-                                        layoutId="active-glow"
                                         className="absolute inset-0 rounded-full bg-primary/30 blur-md"
-                                        initial={{ opacity: 0, scale: 0.8 }}
-                                        animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.2, 1] }}
+                                        animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.3, 1] }}
                                         transition={{ duration: 2, repeat: Infinity }}
                                     />
                                 )}
                                 <motion.div
                                     initial={false}
                                     animate={{
-                                        scale: isActive ? 1.1 : 1,
-                                        backgroundColor: isActive || isPast ? 'rgb(var(--primary))' : 'rgb(var(--surface))',
-                                        borderColor: isActive || isPast ? 'rgb(var(--primary))' : 'rgb(var(--border))',
-                                        color: isActive || isPast ? 'rgb(var(--background))' : 'rgb(var(--text-muted))'
+                                        scale: isActive ? 1.05 : 1,
                                     }}
                                     className={clsx(
-                                        "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors duration-300 z-10 relative",
-                                        isActive && "shadow-lg shadow-primary/20"
+                                        "w-8 h-8 rounded-full flex items-center justify-center border-2 z-10 relative transition-colors duration-300",
+                                        isActive && "bg-primary border-primary shadow-[0_0_15px_rgba(163,230,53,0.4)]",
+                                        isPast && "bg-primary/20 border-primary",
+                                        !isActive && !isPast && "bg-surface border-border"
                                     )}
                                 >
                                     {isActive ? (
-                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <PhaseAnimation phase={phase.id as Phase} className="text-background" />
                                     ) : isPast ? (
-                                        <CheckCircle2 className="w-5 h-5" />
+                                        <Check className="w-4 h-4 text-primary" strokeWidth={3} />
                                     ) : (
-                                        <phase.icon className="w-5 h-5" />
+                                        <phase.icon className="w-4 h-4 text-text-muted" />
                                     )}
                                 </motion.div>
                             </div>
 
-                            <div className="flex flex-col">
+                            {/* Label */}
+                            <div className="flex flex-col pt-1">
                                 <span className={clsx(
                                     "text-sm font-bold transition-colors duration-300",
                                     isActive ? "text-primary" : isPast ? "text-text-main" : "text-text-muted"
                                 )}>
                                     {phase.label}
                                 </span>
-
-                                <span className="text-xs text-text-muted leading-tight">
+                                <span className={clsx(
+                                    "text-xs leading-tight transition-colors duration-300",
+                                    isActive ? "text-primary/80" : "text-text-muted"
+                                )}>
                                     {phase.description}
                                 </span>
                             </div>

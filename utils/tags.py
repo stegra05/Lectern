@@ -1,8 +1,8 @@
 """
 Hierarchical tag utilities for Lectern.
 
-Tag Format: DeckName::SlideSetName::Topic::Tag
-Example: Introduction-to-Machine-Learning::Lecture-1-Supervised-Learning::Image-Classification::preprocessing
+Tag Format: DeckName::SlideSetName::Topic
+Example: Introduction-to-Machine-Learning::Lecture-1-Supervised-Learning::Image-Classification
 
 Simplified tag normalization - the AI generates most tags correctly.
 """
@@ -47,9 +47,8 @@ def build_hierarchical_tag(
     deck_name: str,
     slide_set_name: str,
     topic: str,
-    tag: str,
 ) -> str:
-    """Build a single hierarchical tag: Deck::SlideSet::Topic::Tag."""
+    """Build a single hierarchical tag: Deck::SlideSet::Topic."""
     parts = []
     
     # Deck: may already contain ::, split and clean each part
@@ -62,10 +61,6 @@ def build_hierarchical_tag(
     if topic:
         parts.append(_clean_tag_part(topic, title_case=True))
     
-    # Tag (leaf): lowercase slug
-    if tag:
-        parts.append(_clean_tag_part(tag, slug=True))
-    
     return "::".join(parts)
 
 
@@ -73,14 +68,23 @@ def build_hierarchical_tags(
     deck_name: str,
     slide_set_name: str,
     topic: str,
-    tags: Iterable[str],
+    additional_tags: Iterable[str] = (),
 ) -> List[str]:
-    """Build multiple hierarchical tags with the same prefix."""
-    return [
-        build_hierarchical_tag(deck_name, slide_set_name, topic, str(t))
-        for t in tags
-        if isinstance(t, (str, int)) and str(t).strip()
-    ]
+    """Build hierarchical tags: one Deck::SlideSet::Topic tag plus any additional flat tags."""
+    result: List[str] = []
+    
+    # Primary hierarchical tag (3-level)
+    primary = build_hierarchical_tag(deck_name, slide_set_name, topic)
+    if primary:
+        result.append(primary)
+    
+    # Additional flat tags (user-provided, default tag)
+    for t in additional_tags:
+        tag_str = str(t).strip()
+        if tag_str and tag_str not in result:
+            result.append(tag_str)
+    
+    return result
 
 
 def infer_slide_set_name(pdf_title: str, pdf_filename: str = "") -> str:

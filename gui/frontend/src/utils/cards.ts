@@ -34,8 +34,8 @@ export function filterCards(cards: Card[], query: string): Card[] {
             card.front,
             card.back,
             card.tag,
-            ...(card.tags || []),
             card.model_name,
+            card.slide_topic,
             ...(Object.values(card.fields || {})),
         ].join(' ');
         return regex.test(content);

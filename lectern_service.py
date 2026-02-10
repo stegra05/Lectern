@@ -356,16 +356,17 @@ class LecternGenerationService:
             yield ServiceEvent("step_end", "Generation Phase Complete", {"success": True, "count": len(all_cards)})
 
             # 7. Reflection Phase
-            if len(all_cards) > 0:
+            card_count = len(all_cards)
+            if card_count < 25:
+                dynamic_rounds = 0
+            elif card_count < 50:
+                dynamic_rounds = 1
+            else:
+                dynamic_rounds = 2
+            rounds = dynamic_rounds
+
+            if rounds > 0:
                 yield ServiceEvent("step_start", "Reflection and improvement", {"phase": "reflecting"})
-                
-                # Dynamic rounds logic (card count reflects complexity)
-                card_count = len(all_cards)
-                if card_count < 50:
-                    dynamic_rounds = 1
-                else:
-                    dynamic_rounds = 2
-                rounds = dynamic_rounds
                 
                 yield ServiceEvent("progress_start", "Reflection", {"total": rounds, "label": "Reflection Rounds"})
                 

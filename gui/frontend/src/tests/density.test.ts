@@ -14,7 +14,7 @@ describe('computeTargetSliderConfig', () => {
     it('builds range around suggested count', () => {
         expect(computeTargetSliderConfig(50)).toEqual({
             min: 25,
-            max: 100,
+            max: 75,
             disabled: false,
         });
     });

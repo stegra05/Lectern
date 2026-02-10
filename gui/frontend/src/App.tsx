@@ -5,7 +5,7 @@ import { clsx } from 'clsx';
 import { api } from './api';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingFlow } from './components/OnboardingFlow';
-import { ToastContainer } from './components/Toast';
+import { Toast, ToastContainer } from './components/Toast';
 
 import { useAppState } from './hooks/useAppState';
 import { useDebounce } from './hooks/useDebounce';
@@ -90,12 +90,14 @@ function App() {
     loadSession,
     recoverSessionOnRefresh,
     refreshRecoveredSession,
+    recommendTargetDeckSize,
   } = useLecternStore();
 
   const {
     history,
     clearAllHistory,
-    deleteHistoryEntry
+    deleteHistoryEntry,
+    batchDeleteHistory
   } = useHistory(step);
 
   // NOTE(Estimation): Debounce target card count to avoid many requests during slider drag.
@@ -144,10 +146,10 @@ function App() {
 
     const contextKey = `${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}:${sourceType}`;
     if (previousEstimateContextRef.current !== contextKey) {
-      setTargetDeckSize(estimation.suggested_card_count);
+      recommendTargetDeckSize(estimation);
       previousEstimateContextRef.current = contextKey;
     }
-  }, [pdfFile, sourceType, estimation?.suggested_card_count, setTargetDeckSize]);
+  }, [pdfFile, sourceType, estimation, recommendTargetDeckSize]);
 
   useEffect(() => {
     recoverSessionOnRefresh();
@@ -286,6 +288,7 @@ function App() {
         history={history}
         clearAllHistory={clearAllHistory}
         deleteHistoryEntry={deleteHistoryEntry}
+        batchDeleteHistory={batchDeleteHistory}
         loadSession={loadSession}
       />
 
@@ -296,12 +299,23 @@ function App() {
         toggleTheme={toggleTheme}
       />
 
-      <ToastContainer>
-        <div />
-      </ToastContainer>
+      <StoreToasts />
 
 
     </div>
+  );
+}
+
+/** Renders toasts from the Zustand store reactively. */
+function StoreToasts() {
+  const toasts = useLecternStore((s) => s.toasts);
+  const dismissToast = useLecternStore((s) => s.dismissToast);
+  return (
+    <ToastContainer>
+      {toasts.map((t) => (
+        <Toast key={t.id} {...t} onDismiss={dismissToast} />
+      ))}
+    </ToastContainer>
   );
 }
 

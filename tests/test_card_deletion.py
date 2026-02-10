@@ -56,8 +56,10 @@ def test_delete_session_card(
     assert len(args[0]) == 1
     assert args[0][0]["id"] == 2
 
-    # Verify history updated
-    mock_history_manager.update_entry.assert_called_once_with(session_id, card_count=1)
+    # Verify history updated via session_id lookup
+    mock_history_manager.get_entry_by_session_id.assert_called_once_with(session_id)
+    entry = mock_history_manager.get_entry_by_session_id.return_value
+    mock_history_manager.update_entry.assert_called_once_with(entry["id"], card_count=1)
 
 def test_delete_session_card_invalid_index(mock_load_state):
     session_id = "test-session"

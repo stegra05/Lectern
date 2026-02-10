@@ -2,6 +2,14 @@ import type { ProgressEvent, Card, Estimation } from './api';
 import type { Phase } from './components/PhaseIndicator';
 export type { Phase };
 import type { SortOption } from './hooks/types';
+import type { ToastType } from './components/Toast';
+
+export interface StoreToast {
+    id: string;
+    type: ToastType;
+    message: string;
+    duration?: number;
+}
 
 export type Step = 'dashboard' | 'config' | 'generating' | 'done';
 
@@ -44,6 +52,12 @@ export type StoreState = {
 
     // UI bits
     copied: boolean;
+
+    // Toast
+    toasts: StoreToast[];
+
+    // Progress tracking
+    setupStepsCompleted: number;
 };
 
 export type GenerationActions = {
@@ -69,6 +83,7 @@ export type GenerationActions = {
     loadSession: (sessionId: string) => Promise<void>;
     recoverSessionOnRefresh: () => Promise<void>;
     refreshRecoveredSession: () => Promise<void>;
+    recommendTargetDeckSize: (est: Estimation) => void;
     reset: () => void;
 };
 
@@ -93,5 +108,14 @@ export type UiActions = {
     setSortBy: (option: SortOption) => void;
 };
 
-export type StoreActions = GenerationActions & ReviewActions & UiActions;
+export type ToastActions = {
+    addToast: (type: ToastType, message: string, duration?: number) => void;
+    dismissToast: (id: string) => void;
+};
+
+export type ProgressTrackingActions = {
+    incrementSetupStep: () => void;
+};
+
+export type StoreActions = GenerationActions & ReviewActions & UiActions & ToastActions & ProgressTrackingActions;
 export type LecternStore = StoreState & StoreActions;

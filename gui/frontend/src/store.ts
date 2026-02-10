@@ -8,7 +8,11 @@ import type {
   GenerationActions,
   ReviewActions,
   UiActions,
+  ToastActions,
+  ProgressTrackingActions,
+  Step,
 } from './store-types';
+import type { SortOption } from './hooks/types';
 import * as generationLogic from './logic/generation';
 import { processStreamEvent } from './logic/stream';
 
@@ -21,19 +25,20 @@ const getStored = <T>(key: string, fallback: T): T => {
 };
 
 const getGenerationState = () => ({
-  step: 'dashboard',
+  step: 'dashboard' as Step,
   pdfFile: null,
   deckName: '',
   focusPrompt: '',
-  sourceType: getStored('sourceType', 'auto'),
+  sourceType: getStored('sourceType', 'auto') as 'auto' | 'slides' | 'script',
   targetDeckSize: 1,
   logs: [],
   progress: { current: 0, total: 0 },
-  currentPhase: 'idle',
+  currentPhase: 'idle' as Phase,
   isError: false,
   isCancelling: false,
   estimation: null,
   isEstimating: false,
+  setupStepsCompleted: 0,
 });
 
 const getSessionState = () => ({
@@ -52,10 +57,11 @@ const getReviewState = () => ({
 });
 
 const getUiState = () => ({
-  confirmModal: { isOpen: false, type: 'lectern', index: -1 },
+  confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 },
   searchQuery: '',
-  sortBy: getStored('cardSortBy', 'creation'),
+  sortBy: getStored<SortOption>('cardSortBy', 'creation'),
   copied: false,
+  toasts: [],
 });
 
 const getInitialState = (): StoreState => ({
@@ -88,6 +94,7 @@ const processSyncEvent = async (
       console.error('Failed to refresh cards after sync:', refreshErr);
     }
     set(() => ({ syncSuccess: true }));
+    get().addToast('success', 'Sync complete!');
     setTimeout(() => set(() => ({ syncSuccess: false })), 3000);
   }
 };
@@ -119,8 +126,65 @@ const createGenerationActions = (
     }
     set({ sourceType: type });
   },
-  setTargetDeckSize: (target) => set({ targetDeckSize: target }),
+  setTargetDeckSize: (target) => {
+    const { estimation } = get();
+    set({ targetDeckSize: target });
+
+    // Persist preference if we have an estimation context
+    if (estimation && typeof window !== 'undefined') {
+      const pageCount = estimation.pages || 1;
+      const textChars = estimation.text_chars || 0;
+      const avgChars = textChars / pageCount;
+      const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
+
+      if (isScript) {
+        // Preference: cards per 1k chars
+        const per1k = (target / textChars) * 1000;
+        localStorage.setItem('lectern_pref_cards_per_1k', per1k.toFixed(2));
+      } else {
+        // Preference: cards per slide
+        const perSlide = target / pageCount;
+        localStorage.setItem('lectern_pref_cards_per_slide', perSlide.toFixed(2));
+      }
+    }
+  },
   setEstimation: (est) => set({ estimation: est }),
+  recommendTargetDeckSize: (est) => {
+    if (typeof window !== 'undefined') {
+      const pageCount = est.pages || 1;
+      const textChars = est.text_chars || 0;
+      const avgChars = textChars / pageCount;
+      const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
+
+      let preferredTarget: number | null = null;
+
+      if (isScript) {
+        const stored = localStorage.getItem('lectern_pref_cards_per_1k');
+        if (stored) {
+          const per1k = parseFloat(stored);
+          if (!isNaN(per1k)) {
+            preferredTarget = Math.round((per1k * textChars) / 1000);
+          }
+        }
+      } else {
+        const stored = localStorage.getItem('lectern_pref_cards_per_slide');
+        if (stored) {
+          const perSlide = parseFloat(stored);
+          if (!isNaN(perSlide)) {
+            preferredTarget = Math.round(perSlide * pageCount);
+          }
+        }
+      }
+
+      if (preferredTarget !== null) {
+        // Clamp to min 1
+        set({ targetDeckSize: Math.max(1, preferredTarget) });
+      } else if (est.suggested_card_count) {
+        // Fallback to backend suggestion if no preference
+        set({ targetDeckSize: est.suggested_card_count });
+      }
+    }
+  },
   setIsEstimating: (value) => set({ isEstimating: value }),
   setIsError: (value) => set({ isError: value }),
   setIsCancelling: (value) => set({ isCancelling: value }),
@@ -180,6 +244,7 @@ const createGenerationActions = (
       .join('\n');
     navigator.clipboard.writeText(text);
     set({ copied: true });
+    get().addToast('success', 'Logs copied to clipboard', 2500);
     setTimeout(() => set({ copied: false }), 2000);
   },
   loadSession: (sessionId) => generationLogic.loadSession(sessionId, set),
@@ -268,8 +333,10 @@ const createReviewActions = (
         cards: newCards,
         confirmModal: { ...state.confirmModal, isOpen: false },
       }));
+      get().addToast('info', 'Card removed');
     } catch (e) {
       console.error('Failed to delete card', e);
+      get().addToast('error', 'Failed to delete card');
     }
   },
   handleAnkiDelete: async (noteId, index) => {
@@ -290,8 +357,10 @@ const createReviewActions = (
       set((state) => ({
         confirmModal: { ...state.confirmModal, isOpen: false },
       }));
+      get().addToast('warning', 'Note deleted from Anki');
     } catch (e) {
       console.error('Failed to delete Anki note', e);
+      get().addToast('error', 'Failed to delete from Anki');
     }
   },
   handleSync: async () => {
@@ -308,6 +377,7 @@ const createReviewActions = (
       await syncFn((event: ProgressEvent) => processSyncEvent(event, set, get));
     } catch (e) {
       console.error('Sync failed', e);
+      get().addToast('error', 'Sync failed');
     } finally {
       set({ isSyncing: false });
     }
@@ -326,9 +396,44 @@ const createUiActions = (
   },
 });
 
+let toastIdCounter = 0;
+
+const createToastActions = (
+  set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void
+): ToastActions => ({
+  addToast: (type, message, duration = 5000) => {
+    const id = `toast-${++toastIdCounter}-${Date.now()}`;
+    set((state) => ({
+      toasts: [...state.toasts, { id, type, message, duration }],
+    }));
+    if (duration > 0) {
+      setTimeout(() => {
+        set((state) => ({
+          toasts: state.toasts.filter((t) => t.id !== id),
+        }));
+      }, duration);
+    }
+  },
+  dismissToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id),
+    })),
+});
+
+const createProgressTrackingActions = (
+  set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void
+): ProgressTrackingActions => ({
+  incrementSetupStep: () =>
+    set((state) => ({
+      setupStepsCompleted: Math.min(state.setupStepsCompleted + 1, 4),
+    })),
+});
+
 export const useLecternStore = create<LecternStore>((set, get) => ({
   ...getInitialState(),
   ...createGenerationActions(set, get),
   ...createReviewActions(set, get),
   ...createUiActions(set),
+  ...createToastActions(set),
+  ...createProgressTrackingActions(set),
 }));

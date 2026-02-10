@@ -40,7 +40,6 @@ class AnkiCard(BaseModel):
     """Anki card model. Receives fields as list of name/value pairs from AI."""
     model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")
     fields: List[FieldPair] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
     slide_topic: Optional[str] = None
     rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
 

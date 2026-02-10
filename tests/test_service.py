@@ -749,9 +749,12 @@ class TestServiceAdvanced:
         
         mock_ai = MagicMock()
         mock_ai_class.return_value = mock_ai
-        mock_ai.concept_map.return_value = {"slide_set_name": "Test"}
-        # Generate 5 cards (less than target of ~45)
-        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(5)]}
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.return_value = {"page_count": 50, "estimated_text_chars": 20000, "slide_set_name": "Test"}
+        mock_ai.get_history.return_value = []
+        mock_ai.log_path = "/tmp/test.log"
+        # Generate 30 cards (>= 25 threshold for reflection)
+        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(30)]}
         
         # Return new cards during reflection
         mock_ai.reflect.return_value = {"cards": [{"fields": {"Front": "Refined"}}]}
@@ -1269,7 +1272,7 @@ class TestLoopInternals:
         mock_check,
         service
     ):
-        """Test dynamic rounds based on card count (1 card -> 1 round)."""
+        """Test dynamic rounds based on card count (30 cards -> 1 round, <25 -> 0 rounds)."""
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
@@ -1278,7 +1281,7 @@ class TestLoopInternals:
         mock_ai_class.return_value = mock_ai
         mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
         mock_ai.concept_map_from_file.return_value = {"page_count": 40, "estimated_text_chars": 12000}
-        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": "Q"}}]}
+        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(30)]}
         mock_ai.reflect.return_value = {"cards": []}
         mock_ai.get_history.return_value = []
         mock_ai.log_path = "/tmp/test.log"
@@ -1288,8 +1291,45 @@ class TestLoopInternals:
             skip_export=True
         ))
         
-        # 1 card after generation -> dynamic_rounds = 1
+        # 30 cards after generation -> dynamic_rounds = 1
         assert any("Reflection Round 1/1" in e.message for e in events if e.type == "status")
+
+    @patch('lectern_service.check_connection')
+    @patch('lectern_service.LecternAIClient')
+    @patch('lectern_service.os.path.exists')
+    @patch('lectern_service.os.path.getsize')
+    @patch('lectern_service.save_state')
+    def test_dynamic_rounds_skipped_below_25(
+        self,
+        mock_save,
+        mock_getsize,
+        mock_exists,
+        mock_ai_class,
+        mock_check,
+        service
+    ):
+        """Test that reflection is skipped when fewer than 25 cards are generated."""
+        mock_exists.return_value = True
+        mock_getsize.return_value = 1024
+        mock_check.return_value = True
+        
+        mock_ai = MagicMock()
+        mock_ai_class.return_value = mock_ai
+        mock_ai.upload_pdf.return_value = {"uri": "gs://mock", "mime_type": "application/pdf"}
+        mock_ai.concept_map_from_file.return_value = {"page_count": 40, "estimated_text_chars": 12000}
+        mock_ai.generate_more_cards.return_value = {"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(10)]}
+        mock_ai.reflect.return_value = {"cards": []}
+        mock_ai.get_history.return_value = []
+        mock_ai.log_path = "/tmp/test.log"
+        
+        events = list(service.run(
+            pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[],
+            skip_export=True
+        ))
+        
+        # 10 cards after generation -> dynamic_rounds = 0, no reflection
+        assert not any("Reflection" in e.message for e in events if e.type == "step_start")
+        assert not any("Reflection Round" in e.message for e in events if e.type == "status")
 
     @patch('lectern_service.check_connection')
     @patch('lectern_service.LecternAIClient')

@@ -14,7 +14,7 @@ export function computeTargetSliderConfig(suggestedCardCount?: number): TargetSl
     }
     return {
         min: Math.max(1, Math.floor(suggestedCardCount * 0.5)),
-        max: Math.max(2, Math.ceil(suggestedCardCount * 2.0)),
+        max: Math.max(2, Math.ceil(suggestedCardCount * 1.5)),
         disabled: false,
     };
 }

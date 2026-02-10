@@ -255,7 +255,7 @@ def test_history_actions():
         mock_mgr.delete_entry.return_value = True
         mock_mgr_class.return_value = mock_mgr
         
-        with patch('utils.state.clear_state') as mock_clear:
+        with patch('gui.backend.main.clear_state') as mock_clear:
             response = client.delete("/history/1")
             assert response.status_code == 200
             mock_clear.assert_called_with("sid1")

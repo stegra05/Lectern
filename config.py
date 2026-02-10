@@ -181,6 +181,10 @@ NORMAL_THRESHOLD_CHARS_PER_PAGE: int = int(os.getenv("NORMAL_THRESHOLD_CHARS_PER
 # Cards per character in dense mode (e.g., 500 -> ~1 card per paragraph)
 SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
 
+# Script suggestion: cards produced per 1 000 extracted characters.
+# 3.0 → ~18 cards for a 6 000-char (3-page) script PDF.
+SCRIPT_SUGGESTED_CARDS_PER_1K: float = float(os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "3.0"))
+
 # Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 

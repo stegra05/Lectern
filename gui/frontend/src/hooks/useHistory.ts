@@ -13,16 +13,22 @@ export function useHistory(step: Step) {
   }, [step]);
 
   const clearAllHistory = async () => {
-    if (confirm('Are you sure you want to clear all history?')) {
-      await api.clearHistory();
-      setHistory([]);
-    }
+    await api.clearHistory();
+    setHistory([]);
   };
 
   const deleteHistoryEntry = async (id: string) => {
-    if (confirm('Delete this session?')) {
-      await api.deleteHistoryEntry(id);
-      setHistory(prev => prev.filter(h => h.id !== id));
+    await api.deleteHistoryEntry(id);
+    setHistory(prev => prev.filter(h => h.id !== id));
+  };
+
+  const batchDeleteHistory = async (params: { ids?: string[]; status?: string }) => {
+    await api.batchDeleteHistory(params);
+    if (params.status) {
+      setHistory(prev => prev.filter(h => h.status !== params.status));
+    } else if (params.ids) {
+      const idSet = new Set(params.ids);
+      setHistory(prev => prev.filter(h => !idSet.has(h.id)));
     }
   };
   
@@ -36,6 +42,7 @@ export function useHistory(step: Step) {
     setHistory,
     clearAllHistory,
     deleteHistoryEntry,
+    batchDeleteHistory,
     refreshHistory
   };
 }
