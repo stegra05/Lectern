@@ -93,7 +93,6 @@ def build_card_tags(
 
 def export_card_to_anki(
     card: Dict[str, Any],
-    card_index: int,
     deck_name: str,
     slide_set_name: str,
     fallback_model: str,
@@ -106,7 +105,6 @@ def export_card_to_anki(
     
     Parameters:
         card: Card data from AI generation
-        card_index: 1-based card index for logging/debug context
         deck_name: Target Anki deck name
         slide_set_name: Inferred slide set name for hierarchical tags
         fallback_model: Model to use if card doesn't specify one

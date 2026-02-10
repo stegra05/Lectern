@@ -92,7 +92,6 @@ def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
     
     result = export_card_to_anki(
         card=card,
-        card_index=1,
         deck_name="Deck",
         slide_set_name="Set",
         fallback_model="Basic",
@@ -123,7 +122,6 @@ def test_export_card_to_anki_no_media(mock_build_tags, mock_add_note):
     
     result = export_card_to_anki(
         card=card,
-        card_index=1,
         deck_name="Deck",
         slide_set_name="Set",
         fallback_model="Basic",
@@ -140,7 +138,6 @@ def test_export_card_to_anki_failure(mock_add_note):
     card = {"fields": {}}
     result = export_card_to_anki(
         card=card,
-        card_index=1,
         deck_name="Deck",
         slide_set_name="Set",
         fallback_model="Basic",

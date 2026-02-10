@@ -4,7 +4,7 @@ import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { FilePicker } from '../components/FilePicker';
 import { DeckSelector } from '../components/DeckSelector';
-import { computeDensitySummary } from '../utils/density';
+import { computeCardsPerUnit, computeTargetSliderConfig } from '../utils/density';
 
 import type { HealthStatus } from '../hooks/useAppState';
 import type { Estimation } from '../api';
@@ -18,8 +18,8 @@ interface HomeViewProps {
     setFocusPrompt: (prompt: string) => void;
     sourceType: 'auto' | 'slides' | 'script';
     setSourceType: (type: 'auto' | 'slides' | 'script') => void;
-    densityTarget: number;
-    setDensityTarget: (target: number) => void;
+    targetDeckSize: number;
+    setTargetDeckSize: (target: number) => void;
     estimation: Estimation | null;
     isEstimating: boolean;
     handleGenerate: () => void;
@@ -35,8 +35,8 @@ export function HomeView({
     setFocusPrompt,
     sourceType,
     setSourceType,
-    densityTarget,
-    setDensityTarget,
+    targetDeckSize,
+    setTargetDeckSize,
     estimation,
     isEstimating,
     handleGenerate,
@@ -57,8 +57,8 @@ export function HomeView({
         show: { opacity: 1, y: 0 }
     };
 
-    const pageCount = estimation?.pages || 0;
-    const densitySummary = computeDensitySummary(densityTarget, sourceType, pageCount);
+    const sliderConfig = computeTargetSliderConfig(estimation?.suggested_card_count);
+    const cardsPerUnit = computeCardsPerUnit(targetDeckSize, sourceType, estimation);
 
     return (
         <motion.div
@@ -129,84 +129,48 @@ export function HomeView({
 
                         <div className="pt-4 border-t border-border/30">
                             <div className="flex justify-between items-end mb-4">
-                                <label className="text-sm font-medium text-text-muted uppercase tracking-wider">Density & Detail</label>
+                                <label className="text-sm font-medium text-text-muted uppercase tracking-wider">Total Cards</label>
                                 <div className="text-right">
-                                    <span className="text-xl font-bold text-primary">{densityTarget}</span>
-                                    <span className="text-xs text-text-muted ml-1">/ 5.0</span>
+                                    <span className="text-xl font-bold text-primary">{targetDeckSize}</span>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-4">
                                 <input
                                     type="range"
-                                    min="0.1"
-                                    max="5.0"
-                                    step="0.1"
-                                    value={densityTarget}
-                                    onChange={(e) => setDensityTarget(parseFloat(e.target.value))}
+                                    min={sliderConfig.min}
+                                    max={sliderConfig.max}
+                                    step="1"
+                                    value={targetDeckSize}
+                                    disabled={sliderConfig.disabled || isEstimating}
+                                    onChange={(e) => setTargetDeckSize(parseInt(e.target.value, 10))}
                                     className="flex-1 h-1.5 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
-                                />
-                                <input
-                                    type="number"
-                                    min="0.1"
-                                    max="5.0"
-                                    step="0.1"
-                                    value={densityTarget}
-                                    onChange={(e) => {
-                                        const val = parseFloat(e.target.value);
-                                        if (!isNaN(val)) setDensityTarget(val);
-                                    }}
-                                    className="w-14 bg-surface/50 border border-border rounded-lg py-1 text-center text-sm outline-none focus:ring-1 focus:ring-primary/50"
                                 />
                             </div>
                             <div className="flex justify-between text-[10px] text-text-muted mt-2 px-1 font-medium">
-                                <span>CONCISE</span>
-                                <span>BALANCED</span>
-                                <span>COMPREHENSIVE</span>
+                                <span>{sliderConfig.disabled ? 'ANALYZING...' : sliderConfig.min}</span>
+                                <span>{sliderConfig.disabled ? 'WAITING FOR ESTIMATE' : estimation?.suggested_card_count}</span>
+                                <span>{sliderConfig.disabled ? '' : sliderConfig.max}</span>
                             </div>
 
                             <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-start gap-3">
                                 <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                                 <div className="text-xs text-text-muted leading-relaxed">
-                                    {densitySummary.mode === 'script' ? (
-                                        <>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="font-bold text-primary">
-                                                    Extraction Granularity: {densitySummary.ratio}x
-                                                </span>
-                                                {estimation?.estimated_card_count !== undefined && (
-                                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
-                                                        EST. {estimation.estimated_card_count} TOTAL CARDS
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <span>
-                                                Controls extraction depth. <b>1.0x</b> = core concepts, higher = more granular.{' '}
-                                                {estimation?.estimated_card_count !== undefined
-                                                    ? `Based on ${estimation.pages} pages.`
-                                                    : 'Upload a file to see an estimate.'}
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-bold text-primary">
+                                            {cardsPerUnit.label}: {cardsPerUnit.value}
+                                        </span>
+                                        {estimation?.suggested_card_count !== undefined && (
+                                            <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
+                                                SUGGESTED {estimation.suggested_card_count}
                                             </span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="font-bold text-primary">
-                                                    Target: ~{densitySummary.targetPerSlide} cards per active slide
-                                                </span>
-                                                {estimation?.estimated_card_count !== undefined && (
-                                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
-                                                        EST. {estimation.estimated_card_count} TOTAL CARDS
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <span>
-                                                Heuristic goal for the AI.{' '}
-                                                {estimation?.estimated_card_count !== undefined
-                                                    ? 'Final card estimate comes from backend content analysis.'
-                                                    : 'Run estimation to see a backend card count.'}
-                                            </span>
-                                        </>
-                                    )}
+                                        )}
+                                    </div>
+                                    <span>
+                                        {sliderConfig.disabled
+                                            ? 'Analyzing document to determine a recommended card target.'
+                                            : 'Backend derives the density target from this total card goal.'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -246,7 +210,7 @@ export function HomeView({
                             <div className="flex items-center gap-3 text-sm">
                                 <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
                                 <span className="text-text-muted">Settings:</span>
-                                <span className="font-medium capitalize">{sourceType} • {densityTarget >= 3.5 ? 'Comprehensive' : densityTarget <= 1.5 ? 'Concise' : 'Balanced'}</span>
+                                <span className="font-medium capitalize">{sourceType} • {targetDeckSize} cards</span>
                             </div>
                         </div>
 
@@ -319,7 +283,7 @@ export function HomeView({
                                 {isEstimating && (
                                     <div className="flex items-center justify-center gap-2 py-2 text-xs text-primary animate-pulse">
                                         <Loader2 className="w-3 h-3 animate-spin" />
-                                        <span>Analyzing content density...</span>
+                                        <span>Analyzing content...</span>
                                     </div>
                                 )}
                             </div>
@@ -327,7 +291,7 @@ export function HomeView({
 
                         <button
                             onClick={handleGenerate}
-                            disabled={!pdfFile || !deckName || !health?.anki_connected || isEstimating}
+                            disabled={!pdfFile || !deckName || !health?.anki_connected || isEstimating || sliderConfig.disabled}
                             className="w-full relative group px-8 py-5 bg-primary hover:bg-primary/90 text-background rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none overflow-hidden"
                         >
                             <span className="relative z-10 flex items-center justify-center gap-3">

@@ -42,11 +42,11 @@ describe('App', () => {
     });
 
     it('debounces estimate requests when density changes rapidly', async () => {
-        const { setPdfFile, setDensityTarget } = useLecternStore.getState();
+        const { setPdfFile, setTargetDeckSize } = useLecternStore.getState();
         const pdf = new File(['content'], 'test_slides.pdf', { type: 'application/pdf' });
 
         setPdfFile(pdf);
-        setDensityTarget(1.0);
+        setTargetDeckSize(20);
 
         render(<App />);
 
@@ -54,10 +54,10 @@ describe('App', () => {
             vi.advanceTimersByTime(50);
         });
 
-        // Simulate rapid slider drag: 1.0 -> 1.5 -> 2.0 -> 2.5
-        act(() => setDensityTarget(1.5));
-        act(() => setDensityTarget(2.0));
-        act(() => setDensityTarget(2.5));
+        // Simulate rapid slider drag: 20 -> 30 -> 40 -> 50
+        act(() => setTargetDeckSize(30));
+        act(() => setTargetDeckSize(40));
+        act(() => setTargetDeckSize(50));
 
         const callsBeforeDebounce = (api.estimateCost as ReturnType<typeof vi.fn>).mock.calls.length;
 
@@ -69,7 +69,7 @@ describe('App', () => {
         expect(callsAfterDebounce).toBeLessThanOrEqual(callsBeforeDebounce + 1);
         const lastCall = (api.estimateCost as ReturnType<typeof vi.fn>).mock.calls.at(-1);
         if (lastCall) {
-            expect(lastCall[3]).toBe(2.5);
+            expect(lastCall[3]).toBe(50);
         }
     });
 });

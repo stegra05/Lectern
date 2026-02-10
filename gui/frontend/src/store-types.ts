@@ -1,5 +1,6 @@
 import type { ProgressEvent, Card, Estimation } from './api';
 import type { Phase } from './components/PhaseIndicator';
+export type { Phase };
 import type { SortOption } from './hooks/types';
 
 export type Step = 'dashboard' | 'config' | 'generating' | 'done';
@@ -18,7 +19,7 @@ export type StoreState = {
     deckName: string;
     focusPrompt: string;
     sourceType: 'auto' | 'slides' | 'script';
-    densityTarget: number;
+    targetDeckSize: number;
     logs: ProgressEvent[];
     cards: Card[];
     progress: { current: number; total: number };
@@ -51,7 +52,7 @@ export type GenerationActions = {
     setDeckName: (name: string) => void;
     setFocusPrompt: (prompt: string) => void;
     setSourceType: (type: 'auto' | 'slides' | 'script') => void;
-    setDensityTarget: (target: number) => void;
+    setTargetDeckSize: (target: number) => void;
     setEstimation: (est: Estimation | null) => void;
     setIsEstimating: (value: boolean) => void;
     setIsError: (value: boolean) => void;

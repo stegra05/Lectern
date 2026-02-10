@@ -51,7 +51,7 @@ app = FastAPI(title='Lectern API', version='1.3.0')
 session_manager.sweep_orphan_temp_files()
 
 # NOTE(Estimate): Session-level cache for estimate base data. Key = (content_sha256, model).
-# Reuse token count across density/source changes for same PDF. TTL ~1h covers typical session.
+# Reuse token count across target/source changes for same PDF. TTL ~1h covers typical session.
 _estimate_base_cache: TTLCache = TTLCache(maxsize=50, ttl=3600)
 
 app.add_middleware(
@@ -90,6 +90,19 @@ async def stream_sync_cards(
 
     yield event_json("progress_start", "Syncing to Anki...", {"total": len(cards)})
 
+    def _export_new_note(card: dict) -> tuple[bool, int | None, str | None]:
+        result = export_card_to_anki(
+            card=card,
+            deck_name=deck_name,
+            slide_set_name=slide_set_name,
+            fallback_model=config.DEFAULT_BASIC_MODEL,
+            additional_tags=additional_tags,
+        )
+        if result.success:
+            card["anki_note_id"] = result.note_id
+            return True, result.note_id, None
+        return False, None, result.error
+
     for idx, card in enumerate(cards, start=1):
         note_id = card.get("anki_note_id")
         try:
@@ -100,37 +113,21 @@ async def stream_sync_cards(
                     updated += 1
                     yield event_json("note_updated", f"Updated note {note_id}", {"id": note_id})
                 else:
-                    result = export_card_to_anki(
-                        card=card,
-                        card_index=idx,
-                        deck_name=deck_name,
-                        slide_set_name=slide_set_name,
-                        fallback_model=config.DEFAULT_BASIC_MODEL,
-                        additional_tags=additional_tags,
-                    )
-                    if result.success:
-                        card["anki_note_id"] = result.note_id
+                    success, created_id, error = _export_new_note(card)
+                    if success and created_id is not None:
                         created += 1
-                        yield event_json("note_recreated", f"Re-created note {result.note_id}", {"id": result.note_id})
+                        yield event_json("note_recreated", f"Re-created note {created_id}", {"id": created_id})
                     else:
                         failed += 1
-                        yield event_json("warning", f"Failed to create note: {result.error}")
+                        yield event_json("warning", f"Failed to create note: {error}")
             else:
-                result = export_card_to_anki(
-                    card=card,
-                    card_index=idx,
-                    deck_name=deck_name,
-                    slide_set_name=slide_set_name,
-                    fallback_model=config.DEFAULT_BASIC_MODEL,
-                    additional_tags=additional_tags,
-                )
-                if result.success:
-                    card["anki_note_id"] = result.note_id
+                success, created_id, error = _export_new_note(card)
+                if success and created_id is not None:
                     created += 1
-                    yield event_json("note_created", f"Created note {result.note_id}", {"id": result.note_id})
+                    yield event_json("note_created", f"Created note {created_id}", {"id": created_id})
                 else:
                     failed += 1
-                    yield event_json("warning", f"Failed to create note: {result.error}")
+                    yield event_json("warning", f"Failed to create note: {error}")
         except Exception as e:
             failed += 1
             yield event_json("warning", f"Sync failed for card {idx}: {str(e)}")
@@ -350,7 +347,7 @@ async def estimate_cost(
     pdf_file: UploadFile = File(...),
     model_name: Optional[str] = Form(None),
     source_type: str = Form("auto"),
-    density_target: Optional[float] = Form(None),
+    target_card_count: Optional[int] = Form(None),
 ):
     from starlette.concurrency import run_in_threadpool
 
@@ -381,7 +378,7 @@ async def estimate_cost(
                 image_count=base_data["image_count"],
                 model=base_data["model"],
                 source_type=source_type,
-                density_target=density_target,
+                target_card_count=target_card_count,
             )
             return data
 
@@ -391,7 +388,7 @@ async def estimate_cost(
             tmp_path,
             model_name=model_name,
             source_type=source_type,
-            density_target=density_target,
+            target_card_count=target_card_count,
         )
         _estimate_base_cache[cache_key] = base_data
         return data
@@ -411,7 +408,7 @@ async def generate_cards(
     context_deck: str = Form(""),
     focus_prompt: str = Form(""),  # Optional user focus
     source_type: str = Form("auto"),  # "auto", "slides", "script"
-    density_target: float = Form(config.CARDS_PER_SLIDE_TARGET),  # Detail level
+    target_card_count: Optional[int] = Form(None),
 ):
     draft_store = DraftStore()
     service = GenerationService(draft_store)
@@ -468,6 +465,12 @@ async def generate_cards(
         status="draft"
     )
 
+    status_handlers = {
+        "done": ("completed", True),
+        "cancelled": ("cancelled", False),
+        "error": ("error", False),
+    }
+
     async def event_generator():
         yield event_json(
             "session_start",
@@ -484,20 +487,18 @@ async def generate_cards(
                 entry_id=entry_id,
                 focus_prompt=focus_prompt,
                 source_type=source_type,
-                density_target=density_target,
+                target_card_count=target_card_count,
                 session_id=session.session_id,
             ):
                 yield f"{event_str}\n"
                 try:
                     parsed = json.loads(event_str)
                     event_type = parsed.get("type")
-                    if event_type in {"done"}:
-                        session_manager.mark_status(session.session_id, "completed")
-                        session_manager.cleanup_temp_file(session.session_id)
-                    elif event_type in {"cancelled"}:
-                        session_manager.mark_status(session.session_id, "cancelled")
-                    elif event_type in {"error"}:
-                        session_manager.mark_status(session.session_id, "error")
+                    if event_type in status_handlers:
+                        status, cleanup = status_handlers[event_type]
+                        session_manager.mark_status(session.session_id, status)
+                        if cleanup:
+                            session_manager.cleanup_temp_file(session.session_id)
                 except Exception:
                     pass
         except Exception as e:
@@ -748,4 +749,3 @@ else:
 @app.on_event("shutdown")
 async def shutdown_cleanup():
     session_manager.shutdown()
-

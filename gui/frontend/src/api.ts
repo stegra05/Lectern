@@ -20,7 +20,9 @@ export const getApiUrl = () => {
     return "http://localhost:4173";
 };
 
-const API_URL = getApiUrl();
+const ENV_API_URL =
+    typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_URL : undefined;
+const API_URL = ENV_API_URL || getApiUrl();
 
 const withSessionId = (url: string, sessionId?: string) => {
     if (!sessionId) return url;
@@ -36,7 +38,7 @@ export interface GenerateRequest {
     context_deck?: string;
     focus_prompt?: string;
     source_type?: string;  // "auto", "slides", "script"
-    density_target?: number;  // Detail level: 0.8 (concise) to 2.5 (comprehensive)
+    target_card_count?: number;
 }
 
 // ... (omitting ProgressEvent and others for brevity)
@@ -153,8 +155,10 @@ export interface Estimation {
     output_cost: number;
     cost: number;
     pages: number;
+    text_chars?: number;
     model: string;
     estimated_card_count?: number;
+    suggested_card_count?: number;
 }
 
 export interface HealthStatus {
@@ -265,15 +269,15 @@ export const api = {
         file: File,
         modelName?: string,
         sourceType: string = "auto",
-        densityTarget?: number,
+        targetCardCount?: number,
         signal?: AbortSignal
     ) => {
         const formData = new FormData();
         formData.append("pdf_file", file);
         if (modelName) formData.append("model_name", modelName);
         formData.append("source_type", sourceType);
-        if (densityTarget !== undefined) {
-            formData.append("density_target", String(densityTarget));
+        if (targetCardCount !== undefined) {
+            formData.append("target_card_count", String(targetCardCount));
         }
 
         try {
@@ -318,8 +322,8 @@ export const api = {
         if (req.context_deck) formData.append("context_deck", req.context_deck);
         formData.append("focus_prompt", req.focus_prompt || "");
         formData.append("source_type", req.source_type ?? "auto");
-        if (req.density_target !== undefined) {
-            formData.append("density_target", String(req.density_target));
+        if (req.target_card_count !== undefined) {
+            formData.append("target_card_count", String(req.target_card_count));
         }
 
         const res = await fetch(`${API_URL}/generate`, {

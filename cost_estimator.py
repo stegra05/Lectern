@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import config
 from ai_client import LecternAIClient
@@ -46,6 +46,86 @@ def _extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:
         }
 
 
+def detect_content_mode(*, source_type: str, chars_per_page: float) -> str:
+    normalized_source = source_type.lower()
+    if normalized_source == "script" or (
+        normalized_source == "auto" and chars_per_page > config.DENSE_THRESHOLD_CHARS_PER_PAGE
+    ):
+        return "script"
+    return "slides"
+
+
+def estimate_card_cap(
+    *,
+    page_count: int,
+    estimated_text_chars: int,
+    image_count: int,
+    source_type: str,
+    density_target: float | None,
+    target_card_count: int | None = None,
+    script_base_chars: int = 1000,
+) -> Tuple[int, bool]:
+    chars_per_page = estimated_text_chars / page_count if page_count > 0 else 0.0
+    mode = detect_content_mode(source_type=source_type, chars_per_page=chars_per_page)
+    is_script_mode = mode == "script"
+
+    if target_card_count is not None:
+        return max(1, int(target_card_count)), is_script_mode
+
+    effective_target = (
+        density_target
+        if density_target is not None
+        else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+    )
+    if is_script_mode:
+        text_cards = estimated_text_chars / script_base_chars * effective_target
+        image_cards = image_count * 0.5
+        return max(5, int(text_cards + image_cards)), True
+    return max(3, int(page_count * effective_target)), False
+
+
+def derive_effective_target(
+    *,
+    page_count: int,
+    estimated_text_chars: int,
+    source_type: str,
+    target_card_count: int | None,
+    density_target: float | None,
+    script_base_chars: int = 1000,
+) -> tuple[float, bool]:
+    chars_per_page = estimated_text_chars / page_count if page_count > 0 else 0.0
+    mode = detect_content_mode(source_type=source_type, chars_per_page=chars_per_page)
+    is_script_mode = mode == "script"
+
+    if target_card_count is not None:
+        target = float(max(1, int(target_card_count)))
+        if is_script_mode:
+            basis = max(estimated_text_chars / script_base_chars, 1e-6)
+        else:
+            basis = max(float(page_count), 1.0)
+        return target / basis, is_script_mode
+
+    effective_target = (
+        density_target
+        if density_target is not None
+        else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+    )
+    return float(effective_target), is_script_mode
+
+
+def compute_suggested_card_count(
+    *,
+    page_count: int,
+    text_chars: int,
+    source_type: str,
+) -> int:
+    chars_per_page = text_chars / page_count if page_count > 0 else 0.0
+    mode = detect_content_mode(source_type=source_type, chars_per_page=chars_per_page)
+    if mode == "script":
+        return max(1, round((text_chars / 1000) * 6.0))
+    return max(1, round(page_count * 1.0))
+
+
 def _estimate_card_count_from_metadata(
     *,
     page_count: int,
@@ -53,23 +133,17 @@ def _estimate_card_count_from_metadata(
     image_count: int,
     source_type: str,
     density_target: float | None,
+    target_card_count: int | None = None,
 ) -> int:
-    effective_target = (
-        density_target
-        if density_target is not None
-        else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+    card_cap, _ = estimate_card_cap(
+        page_count=page_count,
+        estimated_text_chars=estimated_text_chars,
+        image_count=image_count,
+        source_type=source_type,
+        density_target=density_target,
+        target_card_count=target_card_count,
     )
-    chars_per_page = estimated_text_chars / page_count if page_count > 0 else 0.0
-    normalized_source = source_type.lower()
-    is_script_mode = normalized_source == "script" or (
-        normalized_source == "auto" and chars_per_page > config.DENSE_THRESHOLD_CHARS_PER_PAGE
-    )
-
-    if is_script_mode:
-        text_cards = estimated_text_chars / 1000 * effective_target
-        image_cards = image_count * 0.5
-        return max(5, int(text_cards + image_cards))
-    return max(3, int(page_count * effective_target))
+    return card_cap
 
 
 def _compute_cost_and_output(
@@ -81,6 +155,7 @@ def _compute_cost_and_output(
     model: str,
     source_type: str,
     density_target: float | None,
+    target_card_count: int | None = None,
 ) -> Dict[str, Any]:
     """Cheap recompute: card count + cost from cached base data. No network/upload."""
     estimated_card_count = _estimate_card_count_from_metadata(
@@ -89,6 +164,12 @@ def _compute_cost_and_output(
         image_count=image_count,
         source_type=source_type,
         density_target=density_target,
+        target_card_count=target_card_count,
+    )
+    suggested_card_count = compute_suggested_card_count(
+        page_count=page_count,
+        text_chars=text_chars,
+        source_type=source_type,
     )
     input_tokens = token_count + config.ESTIMATION_PROMPT_OVERHEAD
     output_tokens = int(input_tokens * config.ESTIMATION_OUTPUT_RATIO)
@@ -107,8 +188,10 @@ def _compute_cost_and_output(
         "output_cost": output_cost,
         "cost": input_cost + output_cost,
         "pages": page_count,
+        "text_chars": text_chars,
         "model": model,
         "estimated_card_count": estimated_card_count,
+        "suggested_card_count": suggested_card_count,
         "image_count": image_count,
         "image_token_cost": 0,
         "image_token_source": "native_embedded",
@@ -120,6 +203,7 @@ async def estimate_cost(
     model_name: str | None = None,
     source_type: str = "auto",
     density_target: float | None = None,
+    target_card_count: int | None = None,
 ) -> Dict[str, Any]:
     """Estimate token count and cost for processing a PDF (full path: metadata + upload + token count)."""
     result, _ = await estimate_cost_with_base(
@@ -127,6 +211,7 @@ async def estimate_cost(
         model_name=model_name,
         source_type=source_type,
         density_target=density_target,
+        target_card_count=target_card_count,
     )
     return result
 
@@ -136,6 +221,7 @@ async def estimate_cost_with_base(
     model_name: str | None = None,
     source_type: str = "auto",
     density_target: float | None = None,
+    target_card_count: int | None = None,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     """Full estimate + base data for cache. Returns (response, base_data)."""
     metadata = await asyncio.to_thread(_extract_pdf_metadata, pdf_path)
@@ -160,6 +246,7 @@ async def estimate_cost_with_base(
         model=model,
         source_type=source_type,
         density_target=density_target,
+        target_card_count=target_card_count,
     )
     base_data = {
         "token_count": token_count,
@@ -180,6 +267,7 @@ def recompute_estimate(
     model: str,
     source_type: str = "auto",
     density_target: float | None = None,
+    target_card_count: int | None = None,
 ) -> Dict[str, Any]:
     """Cheap recompute: card count + cost from cached base data. No network/upload."""
     return _compute_cost_and_output(
@@ -190,6 +278,7 @@ def recompute_estimate(
         model=model,
         source_type=source_type,
         density_target=density_target,
+        target_card_count=target_card_count,
     )
 
 

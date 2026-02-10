@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, BookOpen, Settings, Sun, Moon } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -74,7 +74,7 @@ function App() {
     deckName,
     focusPrompt,
     sourceType,
-    densityTarget,
+    targetDeckSize,
     estimation,
     isEstimating,
     sessionId,
@@ -82,7 +82,7 @@ function App() {
     setDeckName,
     setFocusPrompt,
     setSourceType,
-    setDensityTarget,
+    setTargetDeckSize,
     setEstimation,
     setIsEstimating,
     handleGenerate,
@@ -98,8 +98,9 @@ function App() {
     deleteHistoryEntry
   } = useHistory(step);
 
-  // NOTE(Estimation): Debounce densityTarget to avoid many requests during slider drag.
-  const debouncedDensityTarget = useDebounce(densityTarget, 400);
+  // NOTE(Estimation): Debounce target card count to avoid many requests during slider drag.
+  const debouncedTargetDeckSize = useDebounce(targetDeckSize, 400);
+  const previousEstimateContextRef = useRef<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -115,7 +116,7 @@ function App() {
           pdfFile,
           health?.gemini_model,
           sourceType,
-          debouncedDensityTarget,
+          debouncedTargetDeckSize,
           controller.signal
         );
         if (!controller.signal.aborted && est) setEstimation(est);
@@ -132,7 +133,21 @@ function App() {
     };
     fetchEstimate();
     return () => controller.abort();
-  }, [pdfFile, health?.gemini_model, sourceType, debouncedDensityTarget, setEstimation, setIsEstimating]);
+  }, [pdfFile, health?.gemini_model, sourceType, debouncedTargetDeckSize, setEstimation, setIsEstimating]);
+
+  useEffect(() => {
+    if (!pdfFile) {
+      previousEstimateContextRef.current = null;
+      return;
+    }
+    if (estimation?.suggested_card_count === undefined) return;
+
+    const contextKey = `${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}:${sourceType}`;
+    if (previousEstimateContextRef.current !== contextKey) {
+      setTargetDeckSize(estimation.suggested_card_count);
+      previousEstimateContextRef.current = contextKey;
+    }
+  }, [pdfFile, sourceType, estimation?.suggested_card_count, setTargetDeckSize]);
 
   useEffect(() => {
     recoverSessionOnRefresh();
@@ -244,8 +259,8 @@ function App() {
                       setDeckName={setDeckName}
                       sourceType={sourceType}
                       setSourceType={setSourceType}
-                      densityTarget={densityTarget}
-                      setDensityTarget={setDensityTarget}
+                      targetDeckSize={targetDeckSize}
+                      setTargetDeckSize={setTargetDeckSize}
                       focusPrompt={focusPrompt}
                       setFocusPrompt={setFocusPrompt}
                       estimation={estimation}

@@ -1,35 +1,55 @@
 
 import { describe, it, expect } from 'vitest';
-import { computeDensitySummary } from '../utils/density';
+import { computeCardsPerUnit, computeTargetSliderConfig } from '../utils/density';
 
-describe('computeDensitySummary', () => {
-    it('does not clamp density for small PDFs', () => {
-        const result = computeDensitySummary(1.0, 'slides', 10);
-        if (result.mode === 'slides') {
-            expect(result.targetPerSlide).toBe('1.0');
-        }
+describe('computeTargetSliderConfig', () => {
+    it('disables slider without suggested count', () => {
+        expect(computeTargetSliderConfig(undefined)).toEqual({
+            min: 1,
+            max: 1,
+            disabled: true,
+        });
     });
 
-    it('does NOT clamp density for large PDFs (fix confirmed)', () => {
-        // User sets 1.0, page count 72 (>= 50).
-        // Previous logic clamped to 1.8. Now should be 1.0.
-        const result = computeDensitySummary(1.0, 'slides', 72);
+    it('builds range around suggested count', () => {
+        expect(computeTargetSliderConfig(50)).toEqual({
+            min: 25,
+            max: 100,
+            disabled: false,
+        });
+    });
+});
 
-        if (result.mode === 'slides') {
-            expect(result.targetPerSlide).toBe('1.0');
-            expect(result.totalEst).toBe(Math.round(72 * 1.0));
-        } else {
-            throw new Error('Expected slides mode');
-        }
+describe('computeCardsPerUnit', () => {
+    it('computes cards per slide in slides mode', () => {
+        const result = computeCardsPerUnit(30, 'slides', {
+            pages: 10,
+            text_chars: 6000,
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            cost: 0,
+            tokens: 0,
+            model: 'gemini',
+        });
+        expect(result.label).toBe('Cards per slide');
+        expect(result.value).toBe('3.0');
     });
 
-    it('does NOT clamp density for very large PDFs', () => {
-        // User sets 1.0, page count 120 (>= 100).
-        // Previous logic clamped to 2.0. Now should be 1.0.
-        const result = computeDensitySummary(1.0, 'slides', 120);
-
-        if (result.mode === 'slides') {
-            expect(result.targetPerSlide).toBe('1.0');
-        }
+    it('computes cards per 1k chars in script mode', () => {
+        const result = computeCardsPerUnit(60, 'script', {
+            pages: 5,
+            text_chars: 10000,
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            cost: 0,
+            tokens: 0,
+            model: 'gemini',
+        });
+        expect(result.label).toBe('Cards per 1k chars');
+        expect(result.value).toBe('6.0');
     });
 });
