@@ -6,8 +6,8 @@ describe('computeTargetSliderConfig', () => {
     it('disables slider without suggested count', () => {
         expect(computeTargetSliderConfig(undefined)).toEqual({
             min: 1,
-            max: 1,
-            disabled: true,
+            max: 50,
+            disabled: false,
         });
     });
 

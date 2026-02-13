@@ -153,14 +153,14 @@ export function HomeView({
                                     max={sliderConfig.max}
                                     step="1"
                                     value={targetDeckSize}
-                                    disabled={sliderConfig.disabled || isEstimating}
+                                    disabled={sliderConfig.disabled}
                                     onChange={(e) => setTargetDeckSize(parseInt(e.target.value, 10))}
                                     className="flex-1 h-1.5 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
                                 />
                             </div>
                             <div className="flex justify-between text-[10px] text-text-muted mt-2 px-1 font-medium">
-                                <span>{isEstimating ? 'ANALYZING...' : sliderConfig.disabled ? '' : sliderConfig.min}</span>
-                                <span>{isEstimating ? 'WAITING FOR ESTIMATE' : sliderConfig.disabled ? '' : estimation?.suggested_card_count}</span>
+                                <span>{sliderConfig.disabled ? '' : sliderConfig.min}</span>
+                                <span>{isEstimating ? 'ESTIMATING...' : sliderConfig.disabled ? '' : estimation?.suggested_card_count}</span>
                                 <span>{sliderConfig.disabled ? '' : sliderConfig.max}</span>
                             </div>
 

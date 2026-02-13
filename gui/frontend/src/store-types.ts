@@ -38,6 +38,7 @@ export type StoreState = {
     estimation: Estimation | null;
     isEstimating: boolean;
     estimationError: string | null;
+    totalPages: number;
 
     // Review / Sync
     isHistorical: boolean;
@@ -71,6 +72,7 @@ export type GenerationActions = {
     setEstimation: (est: Estimation | null) => void;
     setIsEstimating: (value: boolean) => void;
     setEstimationError: (error: string | null) => void;
+    setTotalPages: (n: number) => void;
     setIsError: (value: boolean) => void;
     setIsCancelling: (value: boolean) => void;
     setSessionId: (id: string | null) => void;

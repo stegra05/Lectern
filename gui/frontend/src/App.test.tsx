@@ -41,7 +41,7 @@ describe('App', () => {
         vi.restoreAllMocks();
     });
 
-    it('debounces estimate requests when density changes rapidly', async () => {
+    it('does not trigger API on slider change (client-side recompute)', async () => {
         const { setPdfFile, setTargetDeckSize } = useLecternStore.getState();
         const pdf = new File(['content'], 'test_slides.pdf', { type: 'application/pdf' });
 
@@ -50,26 +50,25 @@ describe('App', () => {
 
         render(<App />);
 
+        // Wait for initial estimate
         await act(async () => {
             vi.advanceTimersByTime(50);
         });
 
-        // Simulate rapid slider drag: 20 -> 30 -> 40 -> 50
+        const callsBefore = (api.estimateCost as ReturnType<typeof vi.fn>).mock.calls.length;
+
+        // Simulate rapid slider drag
         act(() => setTargetDeckSize(30));
         act(() => setTargetDeckSize(40));
         act(() => setTargetDeckSize(50));
-
-        const callsBeforeDebounce = (api.estimateCost as ReturnType<typeof vi.fn>).mock.calls.length;
 
         await act(async () => {
             vi.advanceTimersByTime(450);
         });
 
-        const callsAfterDebounce = (api.estimateCost as ReturnType<typeof vi.fn>).mock.calls.length;
-        expect(callsAfterDebounce).toBeLessThanOrEqual(callsBeforeDebounce + 1);
-        const lastCall = (api.estimateCost as ReturnType<typeof vi.fn>).mock.calls.at(-1);
-        if (lastCall) {
-            expect(lastCall[3]).toBe(50);
-        }
+        const callsAfter = (api.estimateCost as ReturnType<typeof vi.fn>).mock.calls.length;
+
+        // Should not trigger new API calls, as recomputation is client-side
+        expect(callsAfter).toBe(callsBefore);
     });
 });

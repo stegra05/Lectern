@@ -1,39 +1,42 @@
 import { render, screen, cleanup } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import React from 'react';
 import { ProgressView } from '../views/ProgressView';
 import type { Phase } from '../components/PhaseIndicator';
+import type { Step } from '../store-types';
+import type { SortOption } from '../hooks/types';
 
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 const buildDefaultState = () => ({
-    step: 'generating' as const,
+    step: 'generating' as Step,
     setStep: vi.fn(),
     currentPhase: 'generating' as Phase,
-    logs: [],
+    logs: [] as any[],
     handleCopyLogs: vi.fn(),
     copied: false,
     isCancelling: false,
     handleCancel: vi.fn(),
     progress: { current: 5, total: 10 },
-    cards: [],
+    cards: [] as any[],
     handleReset: vi.fn(),
     sessionId: null,
-    sortBy: 'creation' as const,
+    sortBy: 'creation' as SortOption,
     setSortBy: vi.fn(),
     searchQuery: '',
     setSearchQuery: vi.fn(),
     isHistorical: false,
     isError: false,
+    totalPages: 0,
 
     // Edit & Sync Props
-    editingIndex: null,
-    editForm: null,
+    editingIndex: null as number | null,
+    editForm: null as any | null,
     isSyncing: false,
     syncSuccess: false,
     syncProgress: { current: 0, total: 0 },
-    syncLogs: [],
+    syncLogs: [] as any[],
     handleDelete: vi.fn(),
     handleAnkiDelete: vi.fn(),
     startEdit: vi.fn(),
@@ -41,16 +44,18 @@ const buildDefaultState = () => ({
     saveEdit: vi.fn(),
     handleFieldChange: vi.fn(),
     handleSync: vi.fn(),
-    confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 },
+    confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 } as any,
     setConfirmModal: vi.fn(),
 });
 
 let storeState: ReturnType<typeof buildDefaultState>;
 
-const useLecternStore = vi.fn(() => storeState);
+const useLecternStore = vi.fn((selector) => {
+    return selector ? selector(storeState) : storeState;
+});
 
 vi.mock('../store', () => ({
-    useLecternStore: () => useLecternStore(),
+    useLecternStore: (selector: any) => useLecternStore(selector),
 }));
 
 vi.mock('framer-motion', () => {
