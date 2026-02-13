@@ -38,8 +38,19 @@ describe('CoverageGrid', () => {
     });
 
     it('does not render if totalPages is 0', () => {
-        const { container } = render(<CoverageGrid totalPages={0} cards={mockCards} />);
+        const { container } = render(<CoverageGrid totalPages={0} cards={[]} />);
         expect(container).toBeEmptyDOMElement();
+    });
+
+    it('derives total pages from strict slide_number metadata', () => {
+        const cards = [
+            { front: 'A', back: 'B', slide_number: 3, _uid: '1' } as Card,
+            { front: 'C', back: 'D', slide_number: 2, _uid: '2' } as Card,
+        ];
+
+        render(<CoverageGrid totalPages={0} cards={cards} />);
+        expect(screen.getByText(/2\/3 \(67%\)/)).toBeInTheDocument();
+        expect(screen.getByTitle('Page 3: 1 card')).toBeInTheDocument();
     });
 
     it('shows tooltip with correct count', () => {

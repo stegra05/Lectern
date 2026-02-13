@@ -67,14 +67,16 @@ def test_card_examples_are_valid_json():
     assert len(examples) >= 2
     for ex in examples:
         assert "model_name" in ex
-        # New schema uses 'fields' as native object, not 'fields_json' string
-        assert "fields" in ex, "Examples must use fields (list of dicts)"
-        assert isinstance(ex["fields"], list)
-        fields = ex["fields"]
-        
-        # Check that we can find expected values if present
-        for field in fields:
-            assert "name" in field
-            assert "value" in field
-            if field["name"] == "Front":
-                assert isinstance(field["value"], str)
+        assert "slide_number" in ex
+        assert isinstance(ex["slide_number"], int)
+        assert "slide_topic" in ex
+        if ex["model_name"] == "Cloze":
+            assert "text" in ex
+            assert isinstance(ex["text"], str)
+            assert "front" not in ex
+            assert "back" not in ex
+        else:
+            assert "front" in ex
+            assert "back" in ex
+            assert isinstance(ex["front"], str)
+            assert isinstance(ex["back"], str)

@@ -31,30 +31,30 @@ def _make_example_str(examples_data: List[Dict[str, Any]], title: str) -> str:
 _CARD_DATA = [
     {
         "model_name": "Basic", 
-        "fields": [
-            {"name": "Front", "value": "State the quadratic formula."}, 
-            {"name": "Back", "value": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\)."}
-        ]
+        "slide_number": 2,
+        "slide_topic": "Quadratic Equations",
+        "front": "State the quadratic formula.",
+        "back": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\).",
     },
     {
         "model_name": "Cloze",
-        "fields": [
-            {"name": "Text", "value": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}."}
-        ]
+        "slide_number": 3,
+        "slide_topic": "Differentiation Rules",
+        "text": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}.",
     },
     {
         "model_name": "Basic",
-        "fields": [
-            {"name": "Front", "value": "Loss oscillates wildly during training. What is the most likely cause?"}, 
-            {"name": "Back", "value": "<b>Learning rate is too high</b>. The steps overshoot the minimum."}
-        ]
+        "slide_number": 8,
+        "slide_topic": "Optimization Dynamics",
+        "front": "Loss oscillates wildly during training. What is the most likely cause?",
+        "back": "<b>Learning rate is too high</b>. The steps overshoot the minimum.",
     },
     {
         "model_name": "Basic",
-        "fields": [
-            {"name": "Front", "value": "Compare <b>L1</b> and <b>L2</b> regularization effects."}, 
-            {"name": "Back", "value": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."}
-        ]
+        "slide_number": 11,
+        "slide_topic": "Regularization",
+        "front": "Compare <b>L1</b> and <b>L2</b> regularization effects.",
+        "back": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting).",
     }
 ]
 CARD_EXAMPLES = _make_example_str(_CARD_DATA, "Examples:")
@@ -150,11 +150,20 @@ class PromptBuilder:
             "- Format:\n"
             "    - Prefer Cloze for definitions/lists. Basic for open-ended questions.\n"
             "    - STRICTLY AVOID Markdown. Use HTML for formatting.\n"
+            "    - Output shape is strict:\n"
+            "      * Basic card: `model_name='Basic'` with non-empty `front` and `back`.\n"
+            "      * Cloze card: `model_name='Cloze'` with non-empty `text`.\n"
+            "    - Do not emit `fields`, `Question`, `Answer`, or other custom keys.\n"
+            "    - Return ONLY a JSON object with keys `cards` and `done`.\n"
+            "    - `cards` must be an array of card objects only.\n"
+            "    - `done` must be a boolean.\n"
             f"{avoid_text}"
             f"{slide_coverage}"
-            "    - `slide_topic`: Specific section/topic (Title Case).\n"
+            "    - Every card MUST include `slide_number` and `slide_topic`.\n"
+            "    - `slide_topic`: Specific section/topic (Title Case), <= 8 words, <= 120 chars.\n"
             "    - `slide_number`: Integer page number.\n"
-            "    - `rationale`: Brief (1 sentence) value proposition.\n"
+            "    - Do not include `rationale`.\n"
+            "    - Keep card text concise: `front` <= 280 chars, `back`/`text` <= 1400 chars.\n"
         )
 
     def reflection(self, limit: int) -> str:

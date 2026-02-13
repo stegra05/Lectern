@@ -3,15 +3,10 @@ import type { StoreState, LecternStore, Phase } from '../store-types';
 import { processStreamEvent } from './stream';
 import { stampUid, stampUids } from '../utils/uid';
 import { useLecternStore } from '../store';
+import { deriveMaxSlideNumber, normalizeCardMetadata, normalizeCardsMetadata } from '../utils/cardMetadata';
 
 const deriveTotalPages = (cards: Card[]): number => {
-    let max = 0;
-    for (const card of cards) {
-        if (typeof card.slide_number === 'number' && card.slide_number > max) {
-            max = card.slide_number;
-        }
-    }
-    return max;
+    return deriveMaxSlideNumber(cards);
 };
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
@@ -37,9 +32,14 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'card') {
-        set((prev) => ({
-            cards: [...prev.cards, stampUid((event.data as { card: Card }).card)],
-        }));
+        set((prev) => {
+            const normalizedCard = normalizeCardMetadata((event.data as { card: Card }).card);
+            const nextCards = [...prev.cards, stampUid(normalizedCard)];
+            return {
+                cards: nextCards,
+                totalPages: Math.max(prev.totalPages, deriveTotalPages(nextCards)),
+            };
+        });
         return;
     }
 
@@ -152,7 +152,7 @@ export const loadSession = async (
     try {
         set({ step: 'generating' });
         const session = await api.getSession(sessionId);
-        const cards = stampUids(session.cards || []);
+        const cards = stampUids(normalizeCardsMetadata(session.cards || []));
         set({
             cards,
             totalPages: deriveTotalPages(cards),
@@ -179,7 +179,7 @@ export const recoverSessionOnRefresh = async (
         const status = await api.getSessionStatus(sessionId);
         const snapshot = await api.getSession(sessionId);
         if (status.active) {
-            const cards = stampUids(snapshot.cards || []);
+            const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
             set({
                 sessionId,
                 cards,
@@ -191,7 +191,7 @@ export const recoverSessionOnRefresh = async (
             });
         } else {
             localStorage.removeItem(ACTIVE_SESSION_KEY);
-            const cards = stampUids(snapshot.cards || []);
+            const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
             set({
                 sessionId,
                 cards,
@@ -225,7 +225,7 @@ export const refreshRecoveredSession = async (
             return;
         }
         const snapshot = await api.getSession(sessionId);
-        const cards = stampUids(snapshot.cards || []);
+        const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
         set({
             cards,
             totalPages: deriveTotalPages(cards),

@@ -54,6 +54,7 @@ class TestPromptStructure:
         assert "Language" in prompt
         assert "de" in prompt
         assert "Global Concept Map" in prompt
+        assert "slide_number" in prompt
 
     def test_reflection_prompt(self):
         config = PromptConfig()

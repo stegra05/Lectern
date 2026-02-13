@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, Dict, List, Literal, Optional, Type
-from pydantic import BaseModel, Field
+from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union
+from pydantic import BaseModel, Field, field_validator
 
 
 class Concept(BaseModel):
@@ -31,28 +31,81 @@ class ConceptMapResponse(BaseModel):
     estimated_text_chars: Optional[int] = None
 
 
-class FieldPair(BaseModel):
-    name: str
-    value: Optional[str] = None
+class _CardBase(BaseModel):
+    slide_number: int = Field(ge=1)
+    slide_topic: str = Field(min_length=1, max_length=120)
+    rationale: Optional[str] = Field(
+        None,
+        max_length=320,
+        description="Optional one-sentence explanation of card value.",
+    )
+
+    @field_validator("slide_topic", "rationale", mode="before")
+    @classmethod
+    def _strip_text(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
-class AnkiCard(BaseModel):
-    """Anki card model. Receives fields as list of name/value pairs from AI."""
-    model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")
-    fields: List[FieldPair] = Field(default_factory=list)
-    slide_topic: Optional[str] = None
-    rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
+class BasicCard(_CardBase):
+    model_name: Literal["Basic"]
+    front: str = Field(min_length=1, max_length=280)
+    back: str = Field(min_length=1, max_length=1400)
+
+    @field_validator("front", "back", mode="before")
+    @classmethod
+    def _strip_front_back(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class ClozeCard(_CardBase):
+    model_name: Literal["Cloze"]
+    text: str = Field(min_length=1, max_length=1400)
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _strip_text_field(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+AnkiCard = Annotated[Union[BasicCard, ClozeCard], Field(discriminator="model_name")]
+
+
+class GeminiCard(BaseModel):
+    """Gemini-facing response schema (no oneOf/discriminator)."""
+    model_name: Literal["Basic", "Cloze"]
+    front: Optional[str] = Field(None, max_length=280)
+    back: Optional[str] = Field(None, max_length=1400)
+    text: Optional[str] = Field(None, max_length=1400)
+    slide_number: int = Field(ge=1)
+    slide_topic: str = Field(min_length=1, max_length=120)
 
 
 class CardGenerationResponse(BaseModel):
     cards: List[AnkiCard]
-    done: bool
+    done: bool = False
 
 
 class ReflectionResponse(BaseModel):
-    reflection: str
+    reflection: str = ""
     cards: List[AnkiCard]
-    done: bool
+    done: bool = False
+
+
+class GeminiCardGenerationResponse(BaseModel):
+    cards: List[GeminiCard]
+    done: bool = False
+
+
+class GeminiReflectionResponse(BaseModel):
+    reflection: str = ""
+    cards: List[GeminiCard]
+    done: bool = False
 
 
 def _schema_for(model: Type[BaseModel]) -> Dict[str, Any]:
@@ -66,9 +119,9 @@ def concept_map_schema() -> Dict[str, Any]:
 
 @lru_cache
 def card_generation_schema() -> Dict[str, Any]:
-    return _schema_for(CardGenerationResponse)
+    return _schema_for(GeminiCardGenerationResponse)
 
 
 @lru_cache
 def reflection_schema() -> Dict[str, Any]:
-    return _schema_for(ReflectionResponse)
+    return _schema_for(GeminiReflectionResponse)

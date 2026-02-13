@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import type { Card } from '../api';
+import { deriveMaxSlideNumber, getCardSlideNumber } from '../utils/cardMetadata';
 
 interface CoverageGridProps {
     totalPages: number;
@@ -9,12 +10,18 @@ interface CoverageGridProps {
 }
 
 export function CoverageGrid({ totalPages, cards }: CoverageGridProps) {
+    const effectiveTotalPages = useMemo(
+        () => Math.max(totalPages, deriveMaxSlideNumber(cards)),
+        [cards, totalPages]
+    );
+
     // 1. Map page -> count
     const coverageMap = useMemo(() => {
         const map = new Map<number, number>();
         cards.forEach(card => {
-            if (typeof card.slide_number === 'number') {
-                map.set(card.slide_number, (map.get(card.slide_number) || 0) + 1);
+            const slideNumber = getCardSlideNumber(card);
+            if (slideNumber !== null) {
+                map.set(slideNumber, (map.get(slideNumber) || 0) + 1);
             }
         });
         return map;
@@ -23,15 +30,15 @@ export function CoverageGrid({ totalPages, cards }: CoverageGridProps) {
     // 2. Stats
     const coveredCount = useMemo(() => {
         let count = 0;
-        for (let i = 1; i <= totalPages; i++) {
+        for (let i = 1; i <= effectiveTotalPages; i++) {
             if (coverageMap.has(i)) count++;
         }
         return count;
-    }, [coverageMap, totalPages]);
+    }, [coverageMap, effectiveTotalPages]);
 
-    const coveragePct = totalPages > 0 ? Math.round((coveredCount / totalPages) * 100) : 0;
+    const coveragePct = effectiveTotalPages > 0 ? Math.round((coveredCount / effectiveTotalPages) * 100) : 0;
 
-    if (totalPages === 0) return null;
+    if (effectiveTotalPages === 0) return null;
 
     return (
         <div className="flex flex-col gap-3">
@@ -41,16 +48,16 @@ export function CoverageGrid({ totalPages, cards }: CoverageGridProps) {
                 </h3>
                 <span className={clsx(
                     "text-[10px] font-mono px-1.5 py-0.5 rounded border",
-                    coveredCount === totalPages
+                    coveredCount === effectiveTotalPages
                         ? "bg-green-500/10 text-green-400 border-green-500/20"
                         : "bg-surface text-text-muted border-border"
                 )}>
-                    {coveredCount}/{totalPages} ({coveragePct}%)
+                    {coveredCount}/{effectiveTotalPages} ({coveragePct}%)
                 </span>
             </div>
 
             <div className="grid grid-cols-10 gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page, i) => {
+                {Array.from({ length: effectiveTotalPages }, (_, i) => i + 1).map((page, i) => {
                     const count = coverageMap.get(page) || 0;
                     const isCovered = count > 0;
 

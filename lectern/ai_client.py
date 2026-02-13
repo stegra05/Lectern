@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import time
+import json
 from typing import Any, Dict, List, Optional
 
 from google import genai  # type: ignore
@@ -19,7 +19,6 @@ from lectern.ai_schemas import (
     CardGenerationResponse,
     ConceptMapResponse,
     ReflectionResponse,
-    AnkiCard,
     card_generation_schema,
     concept_map_schema,
     reflection_schema,
@@ -116,6 +115,7 @@ class LecternAIClient:
         )
         self._thinking_supported: bool = _model_supports_thinking(self._model_name)
         self._warnings: list[str] = []
+        self._last_parse_error: str = ""
         
         self._log_path = _start_session_log()
         logger.info(
@@ -358,9 +358,7 @@ class LecternAIClient:
             "response_schema": _CARD_GENERATION_SCHEMA,
             "temperature": config.GEMINI_TEMPERATURE,
         }
-        thinking = self._thinking_config_for("generation")
-        if thinking is not None:
-            update["thinking_config"] = thinking
+        # Keep generation deterministic and short to reduce malformed/truncated JSON.
         call_config = self._generation_config.model_copy(update=update)
 
         response = self._send_with_thinking_fallback(prompt, call_config)
@@ -375,7 +373,12 @@ class LecternAIClient:
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", len(cards) == 0))
             return {"cards": cards, "done": done}
-        return {"cards": [], "done": True}
+        parse_detail = f" Parse error: {self._last_parse_error}" if self._last_parse_error else ""
+        raise RuntimeError(
+            "AI response could not be parsed into canonical card schema. "
+            "Ensure the model outputs Basic(front/back) or Cloze(text) with slide metadata."
+            f"{parse_detail}"
+        )
 
     def reflect(
         self,
@@ -405,30 +408,50 @@ class LecternAIClient:
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", False)) or (len(cards) == 0)
             return {"reflection": str(data.get("reflection", "")), "cards": cards, "done": done}
-        return {"reflection": "", "cards": [], "done": True}
+        parse_detail = f" Parse error: {self._last_parse_error}" if self._last_parse_error else ""
+        raise RuntimeError(
+            "AI reflection response could not be parsed into canonical card schema."
+            f"{parse_detail}"
+        )
 
     def _safe_parse_json(self, text: str, model_class: Any) -> Dict[str, Any] | None:
-        """Parse JSON response from AI."""
+        """Parse JSON response from AI using strict canonical schema."""
+        self._last_parse_error = ""
         try:
-            data_obj = model_class.model_validate_json(text)
-            data_dict = data_obj.model_dump()
-            
-            # Post-processing: Convert list of fields back to dict for compatibility
-            # This handles AnkiCard inside CardGenerationResponse or ReflectionResponse
-            if "cards" in data_dict:
-                for card in data_dict["cards"]:
-                    if isinstance(card.get("fields"), list):
-                        new_fields = {}
-                        for field_item in card["fields"]:
-                            if isinstance(field_item, dict) and "name" in field_item and "value" in field_item:
-                                if field_item["value"] is not None:
-                                    new_fields[field_item["name"]] = field_item["value"]
-                        card["fields"] = new_fields
-                        
-            return data_dict
+            raw = json.loads(text)
+            normalized = self._normalize_card_payload(raw)
+            data_obj = model_class.model_validate(normalized)
+            return data_obj.model_dump()
         except Exception as e:
+            self._last_parse_error = str(e)
             logger.warning("[AI] JSON parsing failed: %s", e)
             return None
+
+    def _normalize_card_payload(self, payload: Any) -> Any:
+        """Normalize small casing/type drifts before strict schema validation."""
+        if not isinstance(payload, dict):
+            return payload
+        cards = payload.get("cards")
+        if not isinstance(cards, list):
+            return payload
+        normalized_cards: List[Any] = []
+        for card in cards:
+            if not isinstance(card, dict):
+                normalized_cards.append(card)
+                continue
+            normalized = dict(card)
+            model_name = str(normalized.get("model_name", "")).strip().lower()
+            if model_name == "basic":
+                normalized["model_name"] = "Basic"
+            elif model_name == "cloze":
+                normalized["model_name"] = "Cloze"
+            slide_number = normalized.get("slide_number")
+            if isinstance(slide_number, str) and slide_number.strip().isdigit():
+                normalized["slide_number"] = int(slide_number.strip())
+            normalized_cards.append(normalized)
+        merged = dict(payload)
+        merged["cards"] = normalized_cards
+        return merged
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""

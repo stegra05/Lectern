@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from lectern.ai_client import LecternAIClient
-from lectern.ai_schemas import AnkiCard, CardGenerationResponse
+from lectern.ai_schemas import CardGenerationResponse, card_generation_schema
 
 @pytest.fixture
 def mock_genai_client():
@@ -38,32 +38,61 @@ def test_update_language(ai_client):
     assert "de" in sent_prompt
 
 def test_safe_parse_json_valid(ai_client):
-    json_str = '{"cards": [{"model_name": "basic", "fields": [{"name": "Front", "value": "A"}]}], "done": false}'
+    json_str = '{"cards":[{"model_name":"Basic","front":"What is ML?","back":"Study of learning systems","slide_number":7,"slide_topic":"Intro"}],"done":false}'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
     
     assert result is not None
     assert len(result["cards"]) == 1
-    # Check if field list to dict conversion happened
     card = result["cards"][0]
-    assert isinstance(card["fields"], dict)
-    assert card["fields"]["Front"] == "A"
+    assert card["front"] == "What is ML?"
+    assert card["back"] == "Study of learning systems"
+    assert card["slide_number"] == 7
 
 def test_safe_parse_json_invalid(ai_client):
     json_str = '{"cards": ... invalid json ...'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
     assert result is None
 
-def test_safe_parse_json_malformed_fields(ai_client):
-    # Field without name/value
-    json_str = '{"cards": [{"model_name": "basic", "fields": [{"name": "Front"}]}], "done": false}'
+def test_safe_parse_json_rejects_non_canonical_shape(ai_client):
+    json_str = '{"cards":[{"model_name":"basic","fields":{"Front":"A"}}],"done":false}'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
-    
-    # The current implementation filters out malformed fields during post-processing
-    # instead of failing the whole parse if the structure is technically valid JSON.
+    assert result is None
+
+
+def test_safe_parse_json_preserves_slide_number(ai_client):
+    json_str = '{"cards":[{"model_name":"Cloze","text":"A {{c1::B}}","slide_number":7,"slide_topic":"Topic"}],"done":false}'
+    result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
+
     assert result is not None
-    assert len(result["cards"]) == 1
-    # The malformed field should be dropped
-    assert result["cards"][0]["fields"] == {}
+    assert result["cards"][0]["slide_number"] == 7
+    assert result["cards"][0]["text"] == "A {{c1::B}}"
+
+
+def test_safe_parse_json_normalizes_model_name_case(ai_client):
+    json_str = '{"cards":[{"model_name":"basic","front":"Q","back":"A","slide_number":4,"slide_topic":"Topic"}],"done":false}'
+    result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
+    assert result is not None
+    assert result["cards"][0]["model_name"] == "Basic"
+
+
+def test_safe_parse_json_normalizes_string_slide_number(ai_client):
+    json_str = '{"cards":[{"model_name":"Basic","front":"Q","back":"A","slide_number":"4","slide_topic":"Topic"}],"done":false}'
+    result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
+    assert result is not None
+    assert result["cards"][0]["slide_number"] == 4
+
+
+def test_safe_parse_json_rejects_fenced_json(ai_client):
+    json_str = '```json\n{"cards":[{"model_name":"Basic","front":"Q","back":"A","slide_number":2,"slide_topic":"Topic"}],"done":false}\n```'
+    result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
+    assert result is None
+
+
+def test_gemini_generation_schema_avoids_union_keywords():
+    schema = card_generation_schema()
+    items = schema["properties"]["cards"]["items"]
+    assert "oneOf" not in items
+    assert "discriminator" not in items
 
 def test_history_pruning(ai_client):
     # Mock chat history
@@ -86,14 +115,23 @@ def test_history_pruning(ai_client):
 def test_generate_more_cards_flow(ai_client):
     # Mock send_message response
     mock_response = MagicMock()
-    mock_response.text = '{"cards": [], "done": true}'
+    mock_response.text = '{"cards":[{"model_name":"Basic","front":"Q","back":"A","slide_number":1,"slide_topic":"Topic"}], "done": false}'
     ai_client._chat.send_message.return_value = mock_response
     
     result = ai_client.generate_more_cards(limit=5)
     
     ai_client._chat.send_message.assert_called_once()
-    assert result["done"] is True
-    assert result["cards"] == []
+    assert result["done"] is False
+    assert len(result["cards"]) == 1
+
+
+def test_generate_more_cards_parse_failure_raises(ai_client):
+    mock_response = MagicMock()
+    mock_response.text = "not-json"
+    ai_client._chat.send_message.return_value = mock_response
+
+    with pytest.raises(RuntimeError, match="canonical card schema"):
+        ai_client.generate_more_cards(limit=5)
 
 def test_restore_history(ai_client, mock_genai_client):
     history = [{"role": "user", "parts": [{"text": "Hello"}]}]

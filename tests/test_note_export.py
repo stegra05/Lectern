@@ -114,7 +114,8 @@ def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
 
     card = {
         "model_name": "Basic",
-        "fields": {"Front": "Q", "Back": "A"},
+        "front": "Q",
+        "back": "A",
         "tags": ["tag1"],
     }
     
@@ -145,7 +146,8 @@ def test_export_card_to_anki_no_media(mock_build_tags, mock_add_note):
     
     card = {
         "model_name": "Basic",
-        "fields": {"Front": "Q", "Back": "A"},
+        "front": "Q",
+        "back": "A",
     }
     
     result = export_card_to_anki(
@@ -163,7 +165,7 @@ def test_export_card_to_anki_failure(mock_add_note):
     """Test handling of AnkiConnect errors."""
     mock_add_note.side_effect = RuntimeError("Anki Error")
     
-    card = {"fields": {}}
+    card = {"model_name": "Basic", "front": "", "back": ""}
     result = export_card_to_anki(
         card=card,
         deck_name="Deck",
