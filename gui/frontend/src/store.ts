@@ -40,6 +40,7 @@ const getGenerationState = () => ({
   estimation: null,
   isEstimating: false,
   estimationError: null as string | null,
+  totalPages: 0,
   setupStepsCompleted: 0,
 });
 
@@ -152,7 +153,14 @@ const createGenerationActions = (
   },
   setEstimation: (est) => set({ estimation: est, estimationError: null }),
   setEstimationError: (error) => set({ estimationError: error }),
+  setTotalPages: (n) => set({ totalPages: n }),
   recommendTargetDeckSize: (est) => {
+    // Auto-set target based on content type
+    // Script (>1500 chars/page) -> lower density (0.75 cards/1000 chars)
+    // Slides (<400 chars/page) -> higher density (1.5 cards/slide)
+    set({ totalPages: est.pages });
+
+    // Only update if not manually set yet (or strictly 'auto')
     if (typeof window !== 'undefined') {
       const pageCount = est.pages || 1;
       const textChars = est.text_chars || 0;
@@ -431,6 +439,10 @@ const createProgressTrackingActions = (
       setupStepsCompleted: Math.min(state.setupStepsCompleted + 1, 4),
     })),
 });
+
+
+
+
 
 export const useLecternStore = create<LecternStore>((set, get) => ({
   ...getInitialState(),

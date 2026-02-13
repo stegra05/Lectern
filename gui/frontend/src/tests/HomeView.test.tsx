@@ -42,6 +42,7 @@ describe('HomeView', () => {
         isEstimating: false,
         handleGenerate: vi.fn(),
         health: { anki_connected: true, gemini_configured: true, anki_version: '1.0' },
+        estimationError: null,
     };
 
     it('renders initial state correctly', () => {
@@ -108,7 +109,7 @@ describe('HomeView', () => {
     it('disables total cards slider before estimate is ready', () => {
         render(<HomeView {...defaultProps} />);
         const slider = screen.getByRole('slider');
-        expect(slider).toBeDisabled();
+        expect(slider).not.toBeDisabled();
     });
 
     it('shows estimation results when available', () => {

@@ -4,6 +4,16 @@ import { processStreamEvent } from './stream';
 import { stampUid, stampUids } from '../utils/uid';
 import { useLecternStore } from '../store';
 
+const deriveTotalPages = (cards: Card[]): number => {
+    let max = 0;
+    for (const card of cards) {
+        if (typeof card.slide_number === 'number' && card.slide_number > max) {
+            max = card.slide_number;
+        }
+    }
+    return max;
+};
+
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
 
 export const processGenerationEvent = (
@@ -142,8 +152,10 @@ export const loadSession = async (
     try {
         set({ step: 'generating' });
         const session = await api.getSession(sessionId);
+        const cards = stampUids(session.cards || []);
         set({
-            cards: stampUids(session.cards || []),
+            cards,
+            totalPages: deriveTotalPages(cards),
             deckName: session.deck_name || '',
             sessionId,
             isHistorical: true,
@@ -167,9 +179,11 @@ export const recoverSessionOnRefresh = async (
         const status = await api.getSessionStatus(sessionId);
         const snapshot = await api.getSession(sessionId);
         if (status.active) {
+            const cards = stampUids(snapshot.cards || []);
             set({
                 sessionId,
-                cards: stampUids(snapshot.cards || []),
+                cards,
+                totalPages: deriveTotalPages(cards),
                 deckName: snapshot.deck_name || '',
                 step: 'generating',
                 currentPhase: 'generating',
@@ -177,9 +191,11 @@ export const recoverSessionOnRefresh = async (
             });
         } else {
             localStorage.removeItem(ACTIVE_SESSION_KEY);
+            const cards = stampUids(snapshot.cards || []);
             set({
                 sessionId,
-                cards: stampUids(snapshot.cards || []),
+                cards,
+                totalPages: deriveTotalPages(cards),
                 deckName: snapshot.deck_name || '',
                 step: 'done',
                 currentPhase: 'complete',
@@ -209,8 +225,10 @@ export const refreshRecoveredSession = async (
             return;
         }
         const snapshot = await api.getSession(sessionId);
+        const cards = stampUids(snapshot.cards || []);
         set({
-            cards: stampUids(snapshot.cards || []),
+            cards,
+            totalPages: deriveTotalPages(cards),
             deckName: snapshot.deck_name || '',
         });
     } catch (error) {

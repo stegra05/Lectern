@@ -10,7 +10,8 @@ export type TargetSliderConfig = {
 
 export function computeTargetSliderConfig(suggestedCardCount?: number): TargetSliderConfig {
     if (suggestedCardCount === undefined || suggestedCardCount <= 0) {
-        return { min: 1, max: 1, disabled: true };
+        // Fallback range so slider is interactive during initial load/estimation
+        return { min: 1, max: 50, disabled: false };
     }
     return {
         min: Math.max(1, Math.floor(suggestedCardCount * 0.5)),

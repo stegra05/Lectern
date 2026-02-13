@@ -1,0 +1,83 @@
+import { useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { clsx } from 'clsx';
+import type { Card } from '../api';
+
+interface CoverageGridProps {
+    totalPages: number;
+    cards: Card[];
+}
+
+export function CoverageGrid({ totalPages, cards }: CoverageGridProps) {
+    // 1. Map page -> count
+    const coverageMap = useMemo(() => {
+        const map = new Map<number, number>();
+        cards.forEach(card => {
+            if (typeof card.slide_number === 'number') {
+                map.set(card.slide_number, (map.get(card.slide_number) || 0) + 1);
+            }
+        });
+        return map;
+    }, [cards]);
+
+    // 2. Stats
+    const coveredCount = useMemo(() => {
+        let count = 0;
+        for (let i = 1; i <= totalPages; i++) {
+            if (coverageMap.has(i)) count++;
+        }
+        return count;
+    }, [coverageMap, totalPages]);
+
+    const coveragePct = totalPages > 0 ? Math.round((coveredCount / totalPages) * 100) : 0;
+
+    if (totalPages === 0) return null;
+
+    return (
+        <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
+                    Page Coverage
+                </h3>
+                <span className={clsx(
+                    "text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                    coveredCount === totalPages
+                        ? "bg-green-500/10 text-green-400 border-green-500/20"
+                        : "bg-surface text-text-muted border-border"
+                )}>
+                    {coveredCount}/{totalPages} ({coveragePct}%)
+                </span>
+            </div>
+
+            <div className="grid grid-cols-10 gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page, i) => {
+                    const count = coverageMap.get(page) || 0;
+                    const isCovered = count > 0;
+
+                    return (
+                        <motion.div
+                            key={page}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: i * 0.005 }} // Stagger effect
+                            className={clsx(
+                                "aspect-square rounded flex items-center justify-center text-[10px] font-medium cursor-default transition-colors group relative",
+                                isCovered
+                                    ? "bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30"
+                                    : "bg-surface text-text-muted/30 border border-transparent hover:border-border hover:text-text-muted"
+                            )}
+                            title={`Page ${page}: ${count} card${count !== 1 ? 's' : ''}`}
+                        >
+                            {page}
+
+                            {/* Tooltip on hover */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10 whitespace-nowrap bg-gray-900/90 text-white text-[10px] px-2 py-1 rounded pointer-events-none">
+                                Page {page}: {count} cards
+                            </div>
+                        </motion.div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
