@@ -1384,7 +1384,7 @@ class TestLoopInternals:
         ))
         
         assert any(
-            e.type == "error" and "Generation failed: API rate limit" in e.message
+            e.type == "error" and "Generation error: API rate limit" in e.message
             for e in events
         )
 

@@ -67,16 +67,12 @@ def test_card_examples_are_valid_json():
     assert len(examples) >= 2
     for ex in examples:
         assert "model_name" in ex
-        assert "slide_number" in ex
-        assert isinstance(ex["slide_number"], int)
+        assert "fields" in ex
+        assert isinstance(ex["fields"], list)
         assert "slide_topic" in ex
         if ex["model_name"] == "Cloze":
-            assert "text" in ex
-            assert isinstance(ex["text"], str)
-            assert "front" not in ex
-            assert "back" not in ex
+            assert any(f.get("name") == "Text" for f in ex["fields"])
         else:
-            assert "front" in ex
-            assert "back" in ex
-            assert isinstance(ex["front"], str)
-            assert isinstance(ex["back"], str)
+            field_names = {f.get("name") for f in ex["fields"]}
+            assert "Front" in field_names
+            assert "Back" in field_names
