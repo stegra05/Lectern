@@ -42,7 +42,7 @@ describe('generation logic', () => {
         it('derives totalPages from cards', async () => {
             const mockCards = [
                 { slide_number: 1, front: 'A', back: 'B' },
-                { slide_number: 5, front: 'C', back: 'D' },
+                { slide_number: 5, front: 'C', back: 'D' } as any,
                 { slide_number: 3, front: 'E', back: 'F' }, // Max is 5
             ];
             (api.getSession as any).mockResolvedValue({

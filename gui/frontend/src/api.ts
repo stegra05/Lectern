@@ -45,8 +45,9 @@ export interface GenerateRequest {
 
 
 export interface Card {
-    front: string;
-    back: string;
+    front?: string;
+    back?: string;
+    text?: string;
     anki_note_id?: number;
     fields?: Record<string, string>;
     model_name?: string;

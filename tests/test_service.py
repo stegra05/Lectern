@@ -224,7 +224,8 @@ class TestCardDeduplication:
         """Test card key extraction for Basic cards."""
         card = {
             "model_name": "Basic",
-            "fields": {"Front": "What is gradient descent?", "Back": "An optimization algorithm."}
+            "front": "What is gradient descent?",
+            "back": "An optimization algorithm.",
         }
         key = service._get_card_key(card)
         assert key == "what is gradient descent?"
@@ -233,7 +234,7 @@ class TestCardDeduplication:
         """Test card key extraction for Cloze cards."""
         card = {
             "model_name": "Cloze",
-            "fields": {"Text": "The derivative of {{c1::x^n}} is {{c2::nx^(n-1)}}."}
+            "text": "The derivative of {{c1::x^n}} is {{c2::nx^(n-1)}}."
         }
         key = service._get_card_key(card)
         assert "derivative" in key
@@ -241,14 +242,14 @@ class TestCardDeduplication:
     
     def test_get_card_key_normalizes_whitespace(self, service):
         """Test that card keys normalize whitespace."""
-        card1 = {"fields": {"Front": "What   is   ML?"}}
-        card2 = {"fields": {"Front": "What is ML?"}}
+        card1 = {"front": "What   is   ML?"}
+        card2 = {"front": "What is ML?"}
         
         assert service._get_card_key(card1) == service._get_card_key(card2)
     
     def test_get_card_key_empty_fields(self, service):
-        """Test card key with empty fields."""
-        card = {"fields": {}}
+        """Test card key with empty values."""
+        card = {"front": "", "text": ""}
         key = service._get_card_key(card)
         assert key == ""
 
@@ -261,7 +262,13 @@ class TestServiceIntegration:
         env = generation_env
         env["ai"].generate_more_cards.return_value = {
             "cards": [
-                {"model_name": "Basic", "fields": {"Front": "Q1", "Back": "A1"}},
+                {
+                    "model_name": "Basic",
+                    "front": "Q1",
+                    "back": "A1",
+                    "slide_number": 1,
+                    "slide_topic": "Topic",
+                },
             ],
             "done": True
         }
@@ -301,6 +308,22 @@ class TestServiceIntegration:
         env["ai_class"].assert_called()
         _, kwargs = env["ai_class"].call_args
         assert kwargs.get("focus_prompt") == "Focus on key terms"
+
+    def test_generation_requires_canonical_card_shape(self, service, generation_env):
+        """Generation fails fast when AI does not return canonical keys."""
+        env = generation_env
+        env["ai"].generate_more_cards.side_effect = [
+            RuntimeError("AI response could not be parsed into canonical card schema."),
+        ]
+
+        events = list(service.run(
+            pdf_path="/fake/path.pdf",
+            deck_name="Test Deck",
+            model_name="gemini-3-flash-preview",
+            tags=[],
+            skip_export=True,
+        ))
+        assert any(e.type == "error" and "canonical card schema" in e.message.lower() for e in events)
 
 
 class TestServiceAdvanced:
@@ -1360,7 +1383,10 @@ class TestLoopInternals:
             pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], skip_export=True
         ))
         
-        assert any(e.type == "error" and "Generation error" in e.message for e in events)
+        assert any(
+            e.type == "error" and "Generation failed: API rate limit" in e.message
+            for e in events
+        )
 
     @patch('lectern.lectern_service.check_connection')
     @patch('lectern.lectern_service.LecternAIClient')

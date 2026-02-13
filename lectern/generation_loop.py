@@ -8,6 +8,8 @@ from lectern.ai_pacing import PacingState
 _RECENT_CARD_WINDOW = 30
 _REFLECTION_HARD_CAP_MULTIPLIER = 1.2
 _REFLECTION_HARD_CAP_PADDING = 5
+_GENERATION_BATCH_HARD_CAP = 6
+_REFLECTION_BATCH_HARD_CAP = 8
 
 
 @dataclass(frozen=True)
@@ -50,7 +52,13 @@ class ReflectionLoopConfig:
 
 def get_card_key(card: Dict[str, Any]) -> str:
     fields = card.get("fields") or {}
-    val = str(fields.get("Text") or fields.get("Front") or "")
+    val = str(
+        card.get("text")
+        or card.get("front")
+        or fields.get("Text")
+        or fields.get("Front")
+        or ""
+    )
     return " ".join(val.lower().split())
 
 
@@ -93,7 +101,7 @@ def run_generation_loop(
 ) -> Generator[Any, None, None]:
     while len(state.all_cards) < config.total_cards_cap:
         remaining = config.total_cards_cap - len(state.all_cards)
-        limit = min(config.actual_batch_size, remaining)
+        limit = min(config.actual_batch_size, remaining, _GENERATION_BATCH_HARD_CAP)
 
         yield event_factory("status", f"Generating batch (limit={limit})...")
 
@@ -148,6 +156,11 @@ def run_generation_loop(
             yield event_factory("progress_update", "", {"current": len(state.all_cards)})
 
             if added_count == 0:
+                if new_cards:
+                    yield event_factory(
+                        "warning",
+                        "Batch returned cards, but all were duplicates.",
+                    )
                 break
 
             checkpoint_fn(
@@ -163,8 +176,7 @@ def run_generation_loop(
                 history_id=context.history_id,
             )
         except Exception as e:
-            yield event_factory("error", f"Generation error: {e}")
-            break
+            raise RuntimeError(f"Generation failed: {e}") from e
 
 
 def run_reflection_loop(
@@ -196,7 +208,7 @@ def run_reflection_loop(
 
         try:
             # Limit reflection batch to avoid overwhelming, but at least do 5 if space allows.
-            batch_limit = min(config.actual_batch_size, remaining)
+            batch_limit = min(config.actual_batch_size, remaining, _REFLECTION_BATCH_HARD_CAP)
             out = context.ai.reflect(
                 limit=batch_limit,
                 all_card_fronts=collect_card_fronts(state.all_cards),

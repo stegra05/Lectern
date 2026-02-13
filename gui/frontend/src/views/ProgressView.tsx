@@ -8,6 +8,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { CoverageGrid } from '../components/CoverageGrid';
 import { useLecternStore } from '../store';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
+import { getCardSlideNumber } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
 
 import type { Phase } from '../components/PhaseIndicator';
@@ -258,30 +259,8 @@ function isCloze(card: { model_name?: string }): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Animation Variants
+// Animation Variants (used only for overlays / non-card elements)
 // ---------------------------------------------------------------------------
-
-const listVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.05,
-            delayChildren: 0.1
-        }
-    }
-};
-
-const itemVariants = {
-    hidden: { opacity: 0, y: 10, scale: 0.98 },
-    visible: {
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        transition: { type: "spring" as const, stiffness: 300, damping: 24 }
-    },
-    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.1 } }
-};
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -330,15 +309,6 @@ export function ProgressView() {
 
     const logsEndRef = useRef<HTMLDivElement>(null);
     const [activeTopic, setActiveTopic] = useState<string | null>(null);
-    const [isSorting, setIsSorting] = useState(false);
-
-    // Wrapper for sort change to trigger "sort mode" animation
-    const handleSortChange = (opt: typeof sortBy) => {
-        setIsSorting(true);
-        setSortBy(opt);
-        // Turn off sort animation mode after settlement
-        setTimeout(() => setIsSorting(false), 500);
-    };
 
     // Auto-scroll logs
     useEffect(() => {
@@ -677,7 +647,7 @@ export function ProgressView() {
                             {(['creation', 'topic', 'slide', 'type'] as const).map((opt) => (
                                 <button
                                     key={opt}
-                                    onClick={() => handleSortChange(opt)}
+                                    onClick={() => setSortBy(opt)}
                                     className={clsx(
                                         "px-3 py-1 uppercase tracking-wider rounded-md transition-all",
                                         sortBy === opt
@@ -710,35 +680,27 @@ export function ProgressView() {
 
                 {/* Cards List */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-border min-h-0">
-                    <motion.div
-                        key={activeTopic || 'all'}
-                        variants={listVariants}
-                        initial="hidden"
-                        animate="visible"
-                        className="space-y-4"
-                    >
-                        <AnimatePresence initial={false} mode="popLayout">
-                            {sortedCards.map((card) => {
-                                const originalIndex = card._uid ? (uidToIndex.get(card._uid) ?? -1) : -1;
-                                const isEditing = editingIndex === originalIndex;
-                                const cloze = isCloze(card);
+                    <div className="space-y-4">
+                        {sortedCards.map((card, i) => {
+                            const stableKey = card._uid || `card-fallback-${i}`;
+                            const originalIndex = card._uid ? (uidToIndex.get(card._uid) ?? -1) : -1;
+                            const isEditing = editingIndex === originalIndex;
+                            const cloze = isCloze(card);
+                            const slideNumber = getCardSlideNumber(card);
 
-                                return (
-                                    <motion.div
-                                        layout={isSorting}
-                                        key={card._uid || crypto.randomUUID()}
-                                        variants={itemVariants}
-                                        exit="exit"
-                                        className={clsx(
-                                            "bg-surface rounded-xl shadow-sm relative overflow-hidden group transition-all",
-                                            isEditing
-                                                ? "border-2 border-primary/50 bg-primary/5"
-                                                : clsx(
-                                                    "border border-border hover:border-border/80 hover:shadow-md",
-                                                    cloze ? "border-l-4 border-l-blue-500/50" : "border-l-4 border-l-primary/50"
-                                                )
-                                        )}
-                                    >
+                            return (
+                                <div
+                                    key={stableKey}
+                                    className={clsx(
+                                        "bg-surface rounded-xl shadow-sm relative overflow-hidden group transition-colors duration-200",
+                                        isEditing
+                                            ? "border-2 border-primary/50 bg-primary/5"
+                                            : clsx(
+                                                "border border-border hover:border-border/80 hover:shadow-md",
+                                                cloze ? "border-l-4 border-l-blue-500/50" : "border-l-4 border-l-primary/50"
+                                            )
+                                    )}
+                                >
                                         {isEditing ? (
                                             /* Edit Mode */
                                             <div className="p-5 space-y-4">
@@ -780,12 +742,10 @@ export function ProgressView() {
                                                         )}>
                                                             {card.model_name || 'Basic'}
                                                         </span>
-                                                        {card.slide_number != null && (
-                                                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] font-medium text-text-muted">
-                                                                <Layers className="w-3 h-3" />
-                                                                SLIDE {card.slide_number}
-                                                            </span>
-                                                        )}
+                                                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] font-medium text-text-muted">
+                                                            <Layers className="w-3 h-3" />
+                                                            SLIDE {slideNumber ?? '?'}
+                                                        </span>
                                                         {card.slide_topic && (
                                                             <span className="text-[10px] text-text-muted truncate max-w-[200px]" title={card.slide_topic}>
                                                                 {card.slide_topic}
@@ -836,11 +796,10 @@ export function ProgressView() {
                                                 {/* Card footer */}
                                             </>
                                         )}
-                                    </motion.div>
-                                );
-                            })}
-                        </AnimatePresence>
-                    </motion.div>
+                                </div>
+                            );
+                        })}
+                    </div>
                     {/* Empty State */}
                     {cards.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-text-muted border-2 border-dashed border-border rounded-xl bg-surface/20 min-h-[300px]">

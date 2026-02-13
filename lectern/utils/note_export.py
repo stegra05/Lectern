@@ -146,6 +146,27 @@ def export_card_to_anki(
         ExportResult with success status, note_id, and any errors
     """
     try:
+        def to_note_fields(payload: Dict[str, Any]) -> Dict[str, str]:
+            explicit_fields = {
+                str(k): str(v)
+                for k, v in (payload.get("fields") or {}).items()
+                if v is not None
+            }
+            if explicit_fields:
+                return explicit_fields
+
+            model = str(payload.get("model_name") or "").lower()
+            if model == "cloze":
+                text = str(payload.get("text") or "").strip()
+                if text:
+                    return {"Text": text}
+            else:
+                front = str(payload.get("front") or "").strip()
+                back = str(payload.get("back") or "").strip()
+                if front or back:
+                    return {k: v for k, v in {"Front": front, "Back": back}.items() if v}
+            return {}
+
         # 1. Resolve model
         card_model = resolve_model_name(
             card.get("model_name", ""),
@@ -153,10 +174,7 @@ def export_card_to_anki(
         )
         
         # 2. Extract fields
-        note_fields = {
-            str(k): str(v) 
-            for k, v in (card.get("fields") or {}).items()
-        }
+        note_fields = to_note_fields(card)
         
         # 3. Build tags
         final_tags = build_card_tags(
