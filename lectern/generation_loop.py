@@ -8,8 +8,6 @@ from lectern.ai_pacing import PacingState
 _RECENT_CARD_WINDOW = 30
 _REFLECTION_HARD_CAP_MULTIPLIER = 1.2
 _REFLECTION_HARD_CAP_PADDING = 5
-_GENERATION_BATCH_HARD_CAP = 6
-_REFLECTION_BATCH_HARD_CAP = 8
 
 
 @dataclass(frozen=True)
@@ -101,7 +99,7 @@ def run_generation_loop(
 ) -> Generator[Any, None, None]:
     while len(state.all_cards) < config.total_cards_cap:
         remaining = config.total_cards_cap - len(state.all_cards)
-        limit = min(config.actual_batch_size, remaining, _GENERATION_BATCH_HARD_CAP)
+        limit = min(config.actual_batch_size, remaining)
 
         yield event_factory("status", f"Generating batch (limit={limit})...")
 
@@ -176,7 +174,8 @@ def run_generation_loop(
                 history_id=context.history_id,
             )
         except Exception as e:
-            raise RuntimeError(f"Generation failed: {e}") from e
+            yield event_factory("error", f"Generation error: {e}")
+            break
 
 
 def run_reflection_loop(
@@ -208,7 +207,7 @@ def run_reflection_loop(
 
         try:
             # Limit reflection batch to avoid overwhelming, but at least do 5 if space allows.
-            batch_limit = min(config.actual_batch_size, remaining, _REFLECTION_BATCH_HARD_CAP)
+            batch_limit = min(config.actual_batch_size, remaining)
             out = context.ai.reflect(
                 limit=batch_limit,
                 all_card_fronts=collect_card_fronts(state.all_cards),

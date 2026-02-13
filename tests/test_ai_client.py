@@ -53,10 +53,12 @@ def test_safe_parse_json_invalid(ai_client):
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
     assert result is None
 
-def test_safe_parse_json_rejects_non_canonical_shape(ai_client):
+def test_safe_parse_json_accepts_fields_dict_shape(ai_client):
     json_str = '{"cards":[{"model_name":"basic","fields":{"Front":"A"}}],"done":false}'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
-    assert result is None
+    assert result is not None
+    assert result["cards"][0]["model_name"] == "Basic"
+    assert result["cards"][0]["fields"]["Front"] == "A"
 
 
 def test_safe_parse_json_preserves_slide_number(ai_client):
@@ -125,13 +127,14 @@ def test_generate_more_cards_flow(ai_client):
     assert len(result["cards"]) == 1
 
 
-def test_generate_more_cards_parse_failure_raises(ai_client):
+def test_generate_more_cards_parse_failure_returns_empty(ai_client):
     mock_response = MagicMock()
     mock_response.text = "not-json"
     ai_client._chat.send_message.return_value = mock_response
 
-    with pytest.raises(RuntimeError, match="canonical card schema"):
-        ai_client.generate_more_cards(limit=5)
+    result = ai_client.generate_more_cards(limit=5)
+    assert result["cards"] == []
+    assert result["done"] is True
 
 def test_restore_history(ai_client, mock_genai_client):
     history = [{"role": "user", "parts": [{"text": "Hello"}]}]

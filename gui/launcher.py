@@ -1,5 +1,11 @@
 import os
 import sys
+
+# Safety net: Gemini may occasionally output very large integer literals in JSON.
+# The SDK parses responses with json.loads, which on Python 3.12+ has a default
+# 4300-digit conversion limit.  Raise it to avoid crashes.
+sys.set_int_max_str_digits(20_000)
+
 import threading
 import time
 import uvicorn

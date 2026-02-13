@@ -358,7 +358,9 @@ class LecternAIClient:
             "response_schema": _CARD_GENERATION_SCHEMA,
             "temperature": config.GEMINI_TEMPERATURE,
         }
-        # Keep generation deterministic and short to reduce malformed/truncated JSON.
+        thinking = self._thinking_config_for("generation")
+        if thinking is not None:
+            update["thinking_config"] = thinking
         call_config = self._generation_config.model_copy(update=update)
 
         response = self._send_with_thinking_fallback(prompt, call_config)
@@ -373,12 +375,7 @@ class LecternAIClient:
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", len(cards) == 0))
             return {"cards": cards, "done": done}
-        parse_detail = f" Parse error: {self._last_parse_error}" if self._last_parse_error else ""
-        raise RuntimeError(
-            "AI response could not be parsed into canonical card schema. "
-            "Ensure the model outputs Basic(front/back) or Cloze(text) with slide metadata."
-            f"{parse_detail}"
-        )
+        return {"cards": [], "done": True}
 
     def reflect(
         self,
@@ -408,24 +405,55 @@ class LecternAIClient:
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", False)) or (len(cards) == 0)
             return {"reflection": str(data.get("reflection", "")), "cards": cards, "done": done}
-        parse_detail = f" Parse error: {self._last_parse_error}" if self._last_parse_error else ""
-        raise RuntimeError(
-            "AI reflection response could not be parsed into canonical card schema."
-            f"{parse_detail}"
-        )
+        return {"reflection": "", "cards": [], "done": True}
 
     def _safe_parse_json(self, text: str, model_class: Any) -> Dict[str, Any] | None:
         """Parse JSON response from AI using strict canonical schema."""
         self._last_parse_error = ""
         try:
-            raw = json.loads(text)
+            raw = json.loads(text, parse_int=self._safe_parse_int)
             normalized = self._normalize_card_payload(raw)
             data_obj = model_class.model_validate(normalized)
-            return data_obj.model_dump()
+            result = data_obj.model_dump()
+            if "cards" in result:
+                for card in result["cards"]:
+                    fields = card.get("fields")
+                    if isinstance(fields, list):
+                        mapped: Dict[str, str] = {}
+                        for item in fields:
+                            if not isinstance(item, dict):
+                                continue
+                            name = str(item.get("name") or "").strip()
+                            value = item.get("value")
+                            if name and value is not None:
+                                mapped[name] = str(value)
+                        card["fields"] = mapped
+                    slide_number = card.get("slide_number")
+                    if (
+                        isinstance(slide_number, str)
+                        and slide_number.strip().isdigit()
+                        and len(slide_number.strip()) <= 5
+                    ):
+                        card["slide_number"] = int(slide_number.strip())
+            # Preserve extra fields that are not in the Gemini-facing schema.
+            if "cards" in result and "cards" in normalized:
+                for res_card, raw_card in zip(result["cards"], normalized["cards"]):
+                    if isinstance(raw_card, dict):
+                        for k, v in raw_card.items():
+                            if k not in res_card:
+                                res_card[k] = v
+            return result
         except Exception as e:
             self._last_parse_error = str(e)
             logger.warning("[AI] JSON parsing failed: %s", e)
             return None
+
+    @staticmethod
+    def _safe_parse_int(s: str) -> int | None:
+        """Guard against Gemini outputting absurdly large integer literals."""
+        if len(s) > 10:
+            return None
+        return int(s)
 
     def _normalize_card_payload(self, payload: Any) -> Any:
         """Normalize small casing/type drifts before strict schema validation."""
@@ -445,9 +473,34 @@ class LecternAIClient:
                 normalized["model_name"] = "Basic"
             elif model_name == "cloze":
                 normalized["model_name"] = "Cloze"
+            if isinstance(normalized.get("fields"), dict):
+                normalized["fields"] = [
+                    {"name": str(k), "value": (None if v is None else str(v))}
+                    for k, v in normalized["fields"].items()
+                ]
+            elif not isinstance(normalized.get("fields"), list):
+                model_name = str(normalized.get("model_name", "")).lower()
+                if model_name == "cloze":
+                    text = str(normalized.get("text") or "").strip()
+                    if text:
+                        normalized["fields"] = [{"name": "Text", "value": text}]
+                else:
+                    front = str(normalized.get("front") or "").strip()
+                    back = str(normalized.get("back") or "").strip()
+                    fields: List[Dict[str, str]] = []
+                    if front:
+                        fields.append({"name": "Front", "value": front})
+                    if back:
+                        fields.append({"name": "Back", "value": back})
+                    if fields:
+                        normalized["fields"] = fields
             slide_number = normalized.get("slide_number")
-            if isinstance(slide_number, str) and slide_number.strip().isdigit():
-                normalized["slide_number"] = int(slide_number.strip())
+            if isinstance(slide_number, str) and slide_number.strip().isdigit() and len(slide_number.strip()) <= 5:
+                normalized["slide_number"] = slide_number.strip()
+            elif isinstance(slide_number, (int, float)) and (slide_number < 1 or slide_number > 99999):
+                normalized.pop("slide_number", None)
+            elif isinstance(slide_number, int):
+                normalized["slide_number"] = str(slide_number)
             normalized_cards.append(normalized)
         merged = dict(payload)
         merged["cards"] = normalized_cards
