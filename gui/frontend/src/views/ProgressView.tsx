@@ -6,6 +6,7 @@ import { GlassCard } from '../components/GlassCard';
 import { PhaseIndicator } from '../components/PhaseIndicator';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { CoverageGrid } from '../components/CoverageGrid';
+import { SidebarPane } from '../components/SidebarPane';
 import { useLecternStore } from '../store';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
 import { getCardSlideNumber } from '../utils/cardMetadata';
@@ -309,15 +310,17 @@ export function ProgressView() {
 
     const logsEndRef = useRef<HTMLDivElement>(null);
     const [activeTopic, setActiveTopic] = useState<string | null>(null);
+    const [activePage, setActivePage] = useState<number | null>(null);
 
     // Auto-scroll logs
     useEffect(() => {
         logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [logs.length]);
 
-    // Reset topic filter when cards change significantly
+    // Reset filters when cards change significantly
     useEffect(() => {
         setActiveTopic(null);
+        setActivePage(null);
     }, [step]);
 
     const lastError = useMemo(() => findLastError(logs, isError), [isError, logs]);
@@ -327,8 +330,11 @@ export function ProgressView() {
         if (activeTopic) {
             result = result.filter(c => (c.slide_topic || 'Uncategorized') === activeTopic);
         }
+        if (activePage !== null) {
+            result = result.filter(c => getCardSlideNumber(c) === activePage);
+        }
         return result;
-    }, [cards, searchQuery, activeTopic]);
+    }, [cards, searchQuery, activeTopic, activePage]);
 
     const sortedCards = useMemo(() => sortCards(filteredCards, sortBy), [filteredCards, sortBy]);
 
@@ -487,111 +493,154 @@ export function ProgressView() {
     // -----------------------------------------------------------------------
     // Sidebar: Done / Review state
     // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Sidebar: Done / Review state
+    // -----------------------------------------------------------------------
     const doneSidebar = (
         <div className="flex flex-col h-full">
-            {/* Generation Insights */}
-            <div className="p-5 border-b border-border">
-                <div className="flex items-center gap-2 mb-4">
-                    <Layers className="w-4 h-4 text-primary" />
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-text-muted">Generation Insights</h2>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-background p-3 rounded-lg border border-border">
-                        <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Cards</div>
-                        <div className="text-xl font-bold text-text-main mt-1">{cards.length}</div>
+            <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-border">
+                {/* Generation Insights */}
+                <SidebarPane title="Generation Insights" icon={Layers} defaultOpen={true}>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-background p-3 rounded-lg border border-border">
+                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Cards</div>
+                            <div className="text-xl font-bold text-text-main mt-1">{cards.length}</div>
+                        </div>
+                        <div className="bg-background p-3 rounded-lg border border-border">
+                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Topics</div>
+                            <div className="text-xl font-bold text-primary mt-1">{topics.length}</div>
+                        </div>
+                        <div className="bg-background p-3 rounded-lg border border-border">
+                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Basic</div>
+                            <div className="text-xl font-bold text-text-main mt-1">{typeCounts.basic}</div>
+                        </div>
+                        <div className="bg-background p-3 rounded-lg border border-border">
+                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Cloze</div>
+                            <div className="text-xl font-bold text-blue-400 mt-1">{typeCounts.cloze}</div>
+                        </div>
                     </div>
-                    <div className="bg-background p-3 rounded-lg border border-border">
-                        <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Topics</div>
-                        <div className="text-xl font-bold text-primary mt-1">{topics.length}</div>
-                    </div>
-                    <div className="bg-background p-3 rounded-lg border border-border">
-                        <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Basic</div>
-                        <div className="text-xl font-bold text-text-main mt-1">{typeCounts.basic}</div>
-                    </div>
-                    <div className="bg-background p-3 rounded-lg border border-border">
-                        <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Cloze</div>
-                        <div className="text-xl font-bold text-blue-400 mt-1">{typeCounts.cloze}</div>
-                    </div>
-                </div>
-            </div>
+                </SidebarPane>
 
-            {/* Coverage Grid */}
-            <div className="p-5 border-b border-border">
-                <CoverageGrid totalPages={totalPages} cards={cards} />
-            </div>
+                {/* Page Coverage */}
+                <SidebarPane title="Page Coverage" icon={Layers} defaultOpen={false}>
+                    <CoverageGrid
+                        totalPages={totalPages}
+                        cards={cards}
+                        activePage={activePage}
+                        onPageClick={(page) => {
+                            setActivePage(prev => prev === page ? null : page);
+                            if (activeTopic) setActiveTopic(null);
+                        }}
+                    />
+                </SidebarPane>
 
-            {/* Activity Log (compact) */}
-            <div className="px-4 py-3 border-b border-border">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                        <Terminal className="w-3.5 h-3.5 text-text-muted" />
-                        <h2 className="text-xs font-bold uppercase tracking-wider text-text-muted">
-                            Activity Log
-                            {isHistorical && sessionId && (
-                                <span className="ml-1 font-mono opacity-60">#{sessionId.slice(0, 8)}</span>
+                {/* Activity Log */}
+                <SidebarPane
+                    title="Activity Log"
+                    icon={Terminal}
+                    defaultOpen={false}
+                    rightElement={
+                        <div className="flex items-center gap-2">
+                            {logs.length > 0 && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopyLogs();
+                                    }}
+                                    className="p-1 text-text-muted hover:text-primary transition-colors rounded"
+                                    title="Copy logs"
+                                >
+                                    {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
                             )}
-                        </h2>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {logs.length > 0 && (
-                            <button onClick={handleCopyLogs} className="p-1 text-text-muted hover:text-primary transition-colors rounded" title="Copy logs">
-                                {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                        )}
-                        <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span className="font-bold text-[10px] tracking-wide">COMPLETE</span>
+                            <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span className="font-bold text-[10px] tracking-wide">COMPLETE</span>
+                            </div>
+                        </div>
+                    }
+                >
+                    <div className="bg-background rounded-lg p-3 font-mono text-[11px] h-40 overflow-y-auto border border-border scrollbar-thin scrollbar-thumb-border">
+                        <div className="space-y-1.5">
+                            {logs.map((log, i) => (
+                                <div
+                                    key={i}
+                                    className={clsx("flex gap-2", {
+                                        "text-blue-400": log.type === 'info',
+                                        "text-yellow-400": log.type === 'warning',
+                                        "text-red-400": log.type === 'error',
+                                        "text-primary": log.type === 'note_created',
+                                        "text-text-muted": log.type === 'status',
+                                        "text-primary font-bold": log.type === 'step_start',
+                                    })}
+                                >
+                                    <span className="opacity-30 shrink-0 text-text-muted">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
+                                    <span className="break-words">{log.message}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                </div>
-            </div>
+                </SidebarPane>
 
-            {/* Topics Filter */}
-            <div className="px-4 py-3 flex items-center justify-between">
-                <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider">Topics</h3>
-                {activeTopic && (
-                    <button
-                        onClick={() => setActiveTopic(null)}
-                        className="text-[10px] text-primary hover:text-primary/80 font-bold"
-                    >
-                        Show All
-                    </button>
-                )}
-            </div>
-            <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-border">
-                {topics.map(({ topic, count }) => (
-                    <button
-                        key={topic}
-                        onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
-                        className={clsx(
-                            "w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
-                            activeTopic === topic
-                                ? "bg-primary/10 border border-primary/30 shadow-sm"
-                                : "hover:bg-surface border border-transparent hover:border-border"
-                        )}
-                    >
-                        <div className="flex-1 min-w-0">
-                            <h4 className={clsx(
-                                "text-sm font-medium truncate",
-                                activeTopic === topic ? "text-text-main" : "text-text-muted"
-                            )}>
-                                {topic}
-                            </h4>
-                        </div>
-                        <span className={clsx(
-                            "text-[10px] font-mono px-1.5 py-0.5 rounded",
-                            activeTopic === topic
-                                ? "bg-primary/10 text-primary"
-                                : "bg-surface text-text-muted border border-border"
-                        )}>
-                            {count}
-                        </span>
-                    </button>
-                ))}
+                {/* Topics Filter */}
+                <SidebarPane
+                    title="Topics"
+                    icon={Layers}
+                    defaultOpen={true}
+                    className="border-b-0" // Last item, no border needed
+                    rightElement={
+                        activeTopic && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveTopic(null);
+                                }}
+                                className="text-[10px] text-primary hover:text-primary/80 font-bold px-2 py-1 bg-primary/10 rounded transition-colors"
+                            >
+                                SHOW ALL
+                            </button>
+                        )
+                    }
+                >
+                    <div className="space-y-1.5 max-h-[40vh] overflow-y-auto scrollbar-thin scrollbar-thumb-border pr-1">
+                        {topics.map(({ topic, count }) => (
+                            <button
+                                key={topic}
+                                onClick={() => {
+                                    setActiveTopic(activeTopic === topic ? null : topic);
+                                    if (activePage) setActivePage(null); // Clear page filter
+                                }}
+                                className={clsx(
+                                    "w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
+                                    activeTopic === topic
+                                        ? "bg-primary/10 border border-primary/30 shadow-sm"
+                                        : "hover:bg-surface border border-transparent hover:border-border"
+                                )}
+                            >
+                                <div className="flex-1 min-w-0">
+                                    <h4 className={clsx(
+                                        "text-sm font-medium truncate",
+                                        activeTopic === topic ? "text-text-main" : "text-text-muted"
+                                    )}>
+                                        {topic}
+                                    </h4>
+                                </div>
+                                <span className={clsx(
+                                    "text-[10px] font-mono px-1.5 py-0.5 rounded",
+                                    activeTopic === topic
+                                        ? "bg-primary/10 text-primary"
+                                        : "bg-surface text-text-muted border border-border"
+                                )}>
+                                    {count}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </SidebarPane>
             </div>
 
             {/* New Session + Sync CTA */}
-            <div className="p-4 border-t border-border space-y-2">
+            <div className="p-4 border-t border-border space-y-2 mt-auto">
                 <button
                     onClick={() => handleSync()}
                     disabled={cards.length === 0}
@@ -701,101 +750,101 @@ export function ProgressView() {
                                             )
                                     )}
                                 >
-                                        {isEditing ? (
-                                            /* Edit Mode */
-                                            <div className="p-5 space-y-4">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-xs font-bold text-primary uppercase tracking-wider">Editing Card</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <button onClick={cancelEdit} className="p-1.5 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors">
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                        <button onClick={() => saveEdit(originalIndex)} className="p-1.5 bg-primary hover:bg-primary/90 text-background rounded-lg transition-colors">
-                                                            <Save className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="grid gap-4">
-                                                    {Object.entries(editForm?.fields || {}).map(([key, value]) => (
-                                                        <div key={key}>
-                                                            <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5">{key}</label>
-                                                            <textarea
-                                                                value={value as string}
-                                                                onChange={(e) => handleFieldChange(key, e.target.value)}
-                                                                className="w-full bg-background border border-border rounded-lg p-3 text-sm text-text-main focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none min-h-[100px] font-mono"
-                                                            />
-                                                        </div>
-                                                    ))}
+                                    {isEditing ? (
+                                        /* Edit Mode */
+                                        <div className="p-5 space-y-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-xs font-bold text-primary uppercase tracking-wider">Editing Card</span>
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={cancelEdit} className="p-1.5 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors">
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => saveEdit(originalIndex)} className="p-1.5 bg-primary hover:bg-primary/90 text-background rounded-lg transition-colors">
+                                                        <Save className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </div>
-                                        ) : (
-                                            /* View Mode */
-                                            <>
-                                                {/* Card header */}
-                                                <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={clsx(
-                                                            "text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border",
-                                                            cloze
-                                                                ? "text-blue-400 bg-blue-500/10 border-blue-500/20"
-                                                                : "text-text-muted bg-surface border-border"
-                                                        )}>
-                                                            {card.model_name || 'Basic'}
-                                                        </span>
-                                                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] font-medium text-text-muted">
-                                                            <Layers className="w-3 h-3" />
-                                                            SLIDE {slideNumber ?? '?'}
-                                                        </span>
-                                                        {card.slide_topic && (
-                                                            <span className="text-[10px] text-text-muted truncate max-w-[200px]" title={card.slide_topic}>
-                                                                {card.slide_topic}
-                                                            </span>
-                                                        )}
+                                            <div className="grid gap-4">
+                                                {Object.entries(editForm?.fields || {}).map(([key, value]) => (
+                                                    <div key={key}>
+                                                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5">{key}</label>
+                                                        <textarea
+                                                            value={value as string}
+                                                            onChange={(e) => handleFieldChange(key, e.target.value)}
+                                                            className="w-full bg-background border border-border rounded-lg p-3 text-sm text-text-main focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none min-h-[100px] font-mono"
+                                                        />
                                                     </div>
-
-                                                    {/* Actions (only when done) */}
-                                                    {step === 'done' && (
-                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button
-                                                                onClick={() => startEdit(originalIndex)}
-                                                                className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-primary transition-colors"
-                                                                title="Edit"
-                                                            >
-                                                                <Edit2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setConfirmModal({ isOpen: true, type: 'lectern', index: originalIndex })}
-                                                                className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text-main transition-colors"
-                                                                title="Remove"
-                                                            >
-                                                                <Archive className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            {card.anki_note_id && (
-                                                                <button
-                                                                    onClick={() => setConfirmModal({ isOpen: true, type: 'anki', index: originalIndex, noteId: card.anki_note_id })}
-                                                                    className="p-1.5 hover:bg-red-500/10 rounded text-red-300 hover:text-red-400 transition-colors"
-                                                                    title="Delete from Anki"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* View Mode */
+                                        <>
+                                            {/* Card header */}
+                                            <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={clsx(
+                                                        "text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border",
+                                                        cloze
+                                                            ? "text-blue-400 bg-blue-500/10 border-blue-500/20"
+                                                            : "text-text-muted bg-surface border-border"
+                                                    )}>
+                                                        {card.model_name || 'Basic'}
+                                                    </span>
+                                                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] font-medium text-text-muted">
+                                                        <Layers className="w-3 h-3" />
+                                                        SLIDE {slideNumber ?? '?'}
+                                                    </span>
+                                                    {card.slide_topic && (
+                                                        <span className="text-[10px] text-text-muted truncate max-w-[200px]" title={card.slide_topic}>
+                                                            {card.slide_topic}
+                                                        </span>
                                                     )}
                                                 </div>
 
-                                                {/* Card body */}
-                                                <div className="p-5 space-y-5">
-                                                    {Object.entries(card.fields || {}).map(([key, value]) => (
-                                                        <div key={key}>
-                                                            <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">{key}</div>
-                                                            <div className="text-sm text-text-main leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: highlightCloze(String(value)) }} />
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                {/* Actions (only when done) */}
+                                                {step === 'done' && (
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => startEdit(originalIndex)}
+                                                            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-primary transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setConfirmModal({ isOpen: true, type: 'lectern', index: originalIndex })}
+                                                            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text-main transition-colors"
+                                                            title="Remove"
+                                                        >
+                                                            <Archive className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        {card.anki_note_id && (
+                                                            <button
+                                                                onClick={() => setConfirmModal({ isOpen: true, type: 'anki', index: originalIndex, noteId: card.anki_note_id })}
+                                                                className="p-1.5 hover:bg-red-500/10 rounded text-red-300 hover:text-red-400 transition-colors"
+                                                                title="Delete from Anki"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                                {/* Card footer */}
-                                            </>
-                                        )}
+                                            {/* Card body */}
+                                            <div className="p-5 space-y-5">
+                                                {Object.entries(card.fields || {}).map(([key, value]) => (
+                                                    <div key={key}>
+                                                        <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">{key}</div>
+                                                        <div className="text-sm text-text-main leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: highlightCloze(String(value)) }} />
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Card footer */}
+                                        </>
+                                    )}
                                 </div>
                             );
                         })}

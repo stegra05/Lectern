@@ -7,9 +7,11 @@ import { deriveMaxSlideNumber, getCardSlideNumber } from '../utils/cardMetadata'
 interface CoverageGridProps {
     totalPages: number;
     cards: Card[];
+    activePage?: number | null;
+    onPageClick?: (page: number) => void;
 }
 
-export function CoverageGrid({ totalPages, cards }: CoverageGridProps) {
+export function CoverageGrid({ totalPages, cards, activePage, onPageClick }: CoverageGridProps) {
     const effectiveTotalPages = useMemo(
         () => Math.max(totalPages, deriveMaxSlideNumber(cards)),
         [cards, totalPages]
@@ -46,42 +48,57 @@ export function CoverageGrid({ totalPages, cards }: CoverageGridProps) {
                 <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
                     Page Coverage
                 </h3>
-                <span className={clsx(
-                    "text-[10px] font-mono px-1.5 py-0.5 rounded border",
-                    coveredCount === effectiveTotalPages
-                        ? "bg-green-500/10 text-green-400 border-green-500/20"
-                        : "bg-surface text-text-muted border-border"
-                )}>
-                    {coveredCount}/{effectiveTotalPages} ({coveragePct}%)
-                </span>
+                <div className="flex items-center gap-2">
+                    {activePage && onPageClick && (
+                        <button
+                            onClick={() => onPageClick(activePage)} // Click again to clear
+                            className="text-[10px] text-primary hover:text-primary/80 font-bold"
+                        >
+                            Clear Filter
+                        </button>
+                    )}
+                    <span className={clsx(
+                        "text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                        coveredCount === effectiveTotalPages
+                            ? "bg-green-500/10 text-green-400 border-green-500/20"
+                            : "bg-surface text-text-muted border-border"
+                    )}>
+                        {coveredCount}/{effectiveTotalPages} ({coveragePct}%)
+                    </span>
+                </div>
             </div>
 
             <div className="grid grid-cols-10 gap-1">
                 {Array.from({ length: effectiveTotalPages }, (_, i) => i + 1).map((page, i) => {
                     const count = coverageMap.get(page) || 0;
                     const isCovered = count > 0;
+                    const isActive = activePage === page;
 
                     return (
-                        <motion.div
+                        <motion.button
                             key={page}
                             initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
+                            animate={{ opacity: 1, scale: isActive ? 1.05 : 1 }}
                             transition={{ delay: i * 0.005 }} // Stagger effect
+                            onClick={() => onPageClick && onPageClick(page)}
                             className={clsx(
-                                "aspect-square rounded flex items-center justify-center text-[10px] font-medium cursor-default transition-colors group relative",
-                                isCovered
-                                    ? "bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30"
-                                    : "bg-surface text-text-muted/30 border border-transparent hover:border-border hover:text-text-muted"
+                                "aspect-square rounded flex items-center justify-center text-[10px] font-medium transition-all group relative border w-full",
+                                isActive
+                                    ? "bg-primary text-background border-primary hover:bg-primary/90 shadow-[0_0_10px_rgba(163,230,53,0.3)] z-10" // Active state
+                                    : isCovered
+                                        ? "bg-primary/20 text-primary border-primary/30 hover:bg-primary/30 hover:border-primary/50"
+                                        : "bg-surface text-text-muted/30 border-transparent hover:border-border hover:text-text-muted hover:bg-surface/80"
                             )}
                             title={`Page ${page}: ${count} card${count !== 1 ? 's' : ''}`}
+                            disabled={!onPageClick}
                         >
                             {page}
 
                             {/* Tooltip on hover */}
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10 whitespace-nowrap bg-gray-900/90 text-white text-[10px] px-2 py-1 rounded pointer-events-none">
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-20 whitespace-nowrap bg-gray-900/90 text-white text-[10px] px-2 py-1 rounded pointer-events-none border border-gray-700">
                                 Page {page}: {count} cards
                             </div>
-                        </motion.div>
+                        </motion.button>
                     );
                 })}
             </div>
