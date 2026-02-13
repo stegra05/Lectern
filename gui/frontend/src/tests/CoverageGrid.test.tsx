@@ -1,8 +1,25 @@
-import { render, screen, cleanup } from '@testing-library/react';
-import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import React from 'react';
 import { CoverageGrid } from '../components/CoverageGrid';
 import type { Card } from '../api';
+
+// Mock framer-motion
+vi.mock('framer-motion', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MockComponent = ({ children, onClick, className, title, disabled }: any) => {
+        return React.createElement('button', { onClick, className, title, disabled }, children);
+    };
+
+    return {
+        motion: {
+            div: MockComponent,
+            button: MockComponent,
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
+    };
+});
 
 describe('CoverageGrid', () => {
     afterEach(cleanup);
@@ -21,7 +38,7 @@ describe('CoverageGrid', () => {
             // We look for text content matching the number exactly
             const badges = screen.getAllByText(String(num));
             // Filter out the summary "2/5" text if it matches single digit
-            const badge = badges.find(el => el.className.includes('aspect-square'));
+            const badge = badges.find(el => el.tagName === 'BUTTON');
             expect(badge).toBeInTheDocument();
         });
     });
@@ -61,5 +78,36 @@ describe('CoverageGrid', () => {
         expect(screen.getByTitle('Page 3: 1 card')).toBeInTheDocument();
         // Page 2 has 0 cards
         expect(screen.getByTitle('Page 2: 0 cards')).toBeInTheDocument();
+    });
+
+    it('calls onPageClick when a page is clicked', () => {
+        const onPageClick = vi.fn();
+        render(<CoverageGrid totalPages={3} cards={mockCards} onPageClick={onPageClick} />);
+
+        const page1 = screen.getByTitle(/Page 1:/i);
+        fireEvent.click(page1);
+
+        expect(onPageClick).toHaveBeenCalledWith(1);
+    });
+
+    it('highlights active page', () => {
+        render(<CoverageGrid totalPages={3} cards={mockCards} activePage={1} onPageClick={() => { }} />);
+
+        const page1 = screen.getByTitle(/Page 1:/i);
+        // Since we check for class names in tests usually by regex or indirectly, 
+        // checking if it has the active class `bg-primary` and `text-background`
+        expect(page1.className).toContain('bg-primary');
+        expect(page1.className).toContain('text-background');
+    });
+
+    it('shows Clear Filter button when activePage is set', () => {
+        const onPageClick = vi.fn();
+        render(<CoverageGrid totalPages={3} cards={mockCards} activePage={1} onPageClick={onPageClick} />);
+
+        const clearBtn = screen.getByText('Clear Filter');
+        expect(clearBtn).toBeInTheDocument();
+
+        fireEvent.click(clearBtn);
+        expect(onPageClick).toHaveBeenCalledWith(1); // Clicking clear calls with current page (toggle logic in parent)
     });
 });
