@@ -53,26 +53,28 @@ export interface Card {
     slide_number?: number;
     slide_topic?: string;
     tag?: string;
+    /** Client-only stable identity — stamped on ingestion, never sent to backend */
+    _uid?: string;
     [key: string]: unknown;
 }
 
 export interface ProgressEvent {
     type:
-        | "session_start"
-        | "status"
-        | "info"
-        | "warning"
-        | "error"
-        | "progress_start"
-        | "progress_update"
-        | "card"
-        | "note_created"
-        | "note_updated"
-        | "note_recreated"
-        | "done"
-        | "cancelled"
-        | "step_start"
-        | "step_end";
+    | "session_start"
+    | "status"
+    | "info"
+    | "warning"
+    | "error"
+    | "progress_start"
+    | "progress_update"
+    | "card"
+    | "note_created"
+    | "note_updated"
+    | "note_recreated"
+    | "done"
+    | "cancelled"
+    | "step_start"
+    | "step_end";
     message: string;
     data?: unknown;
     timestamp: number;
@@ -158,6 +160,7 @@ export interface Estimation {
     model: string;
     estimated_card_count?: number;
     suggested_card_count?: number;
+    image_count?: number;
 }
 
 export interface HealthStatus {

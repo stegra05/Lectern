@@ -1,6 +1,7 @@
 import { api, type ProgressEvent, type Card } from '../api';
 import type { StoreState, LecternStore, Phase } from '../store-types';
 import { processStreamEvent } from './stream';
+import { stampUid, stampUids } from '../utils/uid';
 import { useLecternStore } from '../store';
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
@@ -27,7 +28,7 @@ export const processGenerationEvent = (
 
     if (event.type === 'card') {
         set((prev) => ({
-            cards: [...prev.cards, (event.data as { card: Card }).card],
+            cards: [...prev.cards, stampUid((event.data as { card: Card }).card)],
         }));
         return;
     }
@@ -142,7 +143,7 @@ export const loadSession = async (
         set({ step: 'generating' });
         const session = await api.getSession(sessionId);
         set({
-            cards: session.cards || [],
+            cards: stampUids(session.cards || []),
             deckName: session.deck_name || '',
             sessionId,
             isHistorical: true,
@@ -168,7 +169,7 @@ export const recoverSessionOnRefresh = async (
         if (status.active) {
             set({
                 sessionId,
-                cards: snapshot.cards || [],
+                cards: stampUids(snapshot.cards || []),
                 deckName: snapshot.deck_name || '',
                 step: 'generating',
                 currentPhase: 'generating',
@@ -178,7 +179,7 @@ export const recoverSessionOnRefresh = async (
             localStorage.removeItem(ACTIVE_SESSION_KEY);
             set({
                 sessionId,
-                cards: snapshot.cards || [],
+                cards: stampUids(snapshot.cards || []),
                 deckName: snapshot.deck_name || '',
                 step: 'done',
                 currentPhase: 'complete',
@@ -209,7 +210,7 @@ export const refreshRecoveredSession = async (
         }
         const snapshot = await api.getSession(sessionId);
         set({
-            cards: snapshot.cards || [],
+            cards: stampUids(snapshot.cards || []),
             deckName: snapshot.deck_name || '',
         });
     } catch (error) {

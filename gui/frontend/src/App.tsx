@@ -8,9 +8,9 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { Toast, ToastContainer } from './components/Toast';
 
 import { useAppState } from './hooks/useAppState';
-import { useDebounce } from './hooks/useDebounce';
 import { useLecternStore } from './store';
 import { useHistory } from './hooks/useHistory';
+import { extractBase, recomputeCost, type EstimationBase } from './utils/recompute';
 
 import { HomeView } from './views/HomeView';
 import { ProgressView } from './views/ProgressView';
@@ -102,12 +102,15 @@ function App() {
     batchDeleteHistory
   } = useHistory(step);
 
-  // NOTE(Estimation): Debounce target card count to avoid many requests during slider drag.
-  const debouncedTargetDeckSize = useDebounce(targetDeckSize, 400);
+  // NOTE(Estimation): Cache base data from initial estimate for instant slider recompute.
+  const estimationBaseRef = useRef<EstimationBase | null>(null);
   const previousEstimateContextRef = useRef<string | null>(null);
 
+  // Effect 1: Initial estimate — fires on PDF or source type change only.
   useEffect(() => {
     const controller = new AbortController();
+    estimationBaseRef.current = null;
+
     const fetchEstimate = async () => {
       if (!pdfFile) {
         setEstimation(null);
@@ -121,10 +124,13 @@ function App() {
           pdfFile,
           health?.gemini_model,
           sourceType,
-          debouncedTargetDeckSize,
+          undefined, // No target_card_count — use backend default for initial estimate
           controller.signal
         );
-        if (!controller.signal.aborted && est) setEstimation(est);
+        if (!controller.signal.aborted && est) {
+          estimationBaseRef.current = extractBase(est);
+          setEstimation(est);
+        }
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           console.error(e);
@@ -144,7 +150,17 @@ function App() {
     };
     fetchEstimate();
     return () => controller.abort();
-  }, [pdfFile, health?.gemini_model, sourceType, debouncedTargetDeckSize, setEstimation, setIsEstimating, setEstimationError]);
+  }, [pdfFile, health?.gemini_model, sourceType, setEstimation, setIsEstimating, setEstimationError]);
+
+  // Effect 2: Slider recompute — instant client-side math, no network, no loading state.
+  useEffect(() => {
+    const base = estimationBaseRef.current;
+    if (!base) return;
+
+    const updated = recomputeCost(base, targetDeckSize);
+    setEstimation(updated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetDeckSize]);
 
   useEffect(() => {
     if (!pdfFile) {
