@@ -172,7 +172,9 @@ def _compute_cost_and_output(
         source_type=source_type,
     )
     input_tokens = token_count + config.ESTIMATION_PROMPT_OVERHEAD
-    output_tokens = int(input_tokens * config.ESTIMATION_OUTPUT_RATIO)
+    base_output = int(input_tokens * config.ESTIMATION_BASE_OUTPUT_RATIO)
+    card_output = estimated_card_count * config.ESTIMATION_TOKENS_PER_CARD
+    output_tokens = base_output + card_output
     pricing = config.GEMINI_PRICING.get("default")
     for pattern, rates in config.GEMINI_PRICING.items():
         if pattern in model.lower():

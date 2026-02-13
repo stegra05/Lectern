@@ -15,6 +15,7 @@ import type {
 import type { SortOption } from './hooks/types';
 import * as generationLogic from './logic/generation';
 import { processStreamEvent } from './logic/stream';
+import { stampUid, stampUids } from './utils/uid';
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
 
@@ -86,10 +87,10 @@ const processSyncEvent = async (
     try {
       if (isHistorical && sessionId) {
         const session = await api.getSession(sessionId);
-        set(() => ({ cards: session.cards || [] }));
+        set(() => ({ cards: stampUids(session.cards || []) }));
       } else if (sessionId) {
         const drafts = await api.getDrafts(sessionId);
-        set(() => ({ cards: drafts.cards || [] }));
+        set(() => ({ cards: stampUids(drafts.cards || []) }));
       }
     } catch (refreshErr) {
       console.error('Failed to refresh cards after sync:', refreshErr);
@@ -220,7 +221,7 @@ const createGenerationActions = (
     })),
   appendCard: (card) =>
     set((state) => ({
-      cards: [...state.cards, card],
+      cards: [...state.cards, stampUid(card)],
     })),
   reset: () => {
     if (typeof window !== 'undefined') {

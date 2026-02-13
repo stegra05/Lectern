@@ -107,8 +107,8 @@ describe('ProgressView', () => {
 
     it('reorders cards when sortBy changes', () => {
         const cards = [
-            { front: 'A', back: 'A', slide_number: 2, slide_topic: 'Z', model_name: 'Cloze', fields: { Front: 'A' } },
-            { front: 'B', back: 'B', slide_number: 1, slide_topic: 'A', model_name: 'Basic', fields: { Front: 'B' } },
+            { front: 'A', back: 'A', slide_number: 2, slide_topic: 'Z', model_name: 'Cloze', fields: { Front: 'A' }, _uid: 'uid-a' },
+            { front: 'B', back: 'B', slide_number: 1, slide_topic: 'A', model_name: 'Basic', fields: { Front: 'B' }, _uid: 'uid-b' },
         ];
 
         // Test slide sorting
@@ -146,9 +146,9 @@ describe('ProgressView', () => {
 
     it('filters cards based on search query', () => {
         const cards = [
-            { front: 'Apple', back: 'Fruit', model_name: 'Basic', fields: { Front: 'Apple', Back: 'Fruit' } },
-            { front: 'Banana', back: 'Fruit', model_name: 'Basic', fields: { Front: 'Banana', Back: 'Fruit' } },
-            { front: 'Carrot', back: 'Vegetable', model_name: 'Basic', fields: { Front: 'Carrot', Back: 'Vegetable' } },
+            { front: 'Apple', back: 'Fruit', model_name: 'Basic', fields: { Front: 'Apple', Back: 'Fruit' }, _uid: 'uid-apple' },
+            { front: 'Banana', back: 'Fruit', model_name: 'Basic', fields: { Front: 'Banana', Back: 'Fruit' }, _uid: 'uid-banana' },
+            { front: 'Carrot', back: 'Vegetable', model_name: 'Basic', fields: { Front: 'Carrot', Back: 'Vegetable' }, _uid: 'uid-carrot' },
         ];
 
         // Match "Apple"
@@ -168,9 +168,9 @@ describe('ProgressView', () => {
 
     it('supports regex search', () => {
         const cards = [
-            { front: 'Cat', back: 'Animal', fields: { Front: 'Cat', Back: 'Animal' }, model_name: 'Basic' },
-            { front: 'Bat', back: 'Animal', fields: { Front: 'Bat', Back: 'Animal' }, model_name: 'Basic' },
-            { front: 'Rat', back: 'Animal', fields: { Front: 'Rat', Back: 'Animal' }, model_name: 'Basic' },
+            { front: 'Cat', back: 'Animal', fields: { Front: 'Cat', Back: 'Animal' }, model_name: 'Basic', _uid: 'uid-cat' },
+            { front: 'Bat', back: 'Animal', fields: { Front: 'Bat', Back: 'Animal' }, model_name: 'Basic', _uid: 'uid-bat' },
+            { front: 'Rat', back: 'Animal', fields: { Front: 'Rat', Back: 'Animal' }, model_name: 'Basic', _uid: 'uid-rat' },
         ];
 
         // Regex /^[CB]at/ -> Cat, Bat
@@ -216,7 +216,7 @@ describe('ProgressView', () => {
     it('renders slide numbers and topics', () => {
         const cards = [{
             front: 'A', back: 'B', tag: 't1',
-            slide_number: 42, slide_topic: 'Neural Networks', model_name: 'Basic'
+            slide_number: 42, slide_topic: 'Neural Networks', model_name: 'Basic', _uid: 'uid-nn'
         }];
         storeState = { ...storeState, cards };
         render(<ProgressView />);
@@ -226,7 +226,7 @@ describe('ProgressView', () => {
 
     it('handles card actions: edit, archive, delete', () => {
         const cards = [{
-            front: 'A', back: 'B', model_name: 'Basic', anki_note_id: 101
+            front: 'A', back: 'B', model_name: 'Basic', anki_note_id: 101, _uid: 'uid-action'
         }];
         storeState = { ...storeState, cards, step: 'done' as const };
         render(<ProgressView />);
@@ -248,7 +248,7 @@ describe('ProgressView', () => {
     });
 
     it('renders Edit mode correctly', () => {
-        const cards = [{ front: 'A', back: 'B', model_name: 'Basic', fields: { Front: 'A', Back: 'B' } }];
+        const cards = [{ front: 'A', back: 'B', model_name: 'Basic', fields: { Front: 'A', Back: 'B' }, _uid: 'uid-edit' }];
         storeState = {
             ...storeState,
             cards,

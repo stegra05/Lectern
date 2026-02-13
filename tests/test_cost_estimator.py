@@ -60,3 +60,27 @@ def test_estimate_card_cap_fallback():
     )
     # Default 1.2 * 10 = 12
     assert cap == 12
+
+
+def test_cost_scales_with_card_count():
+    """Cost should increase when target_card_count increases (the user's core complaint)."""
+    from lectern.cost_estimator import _compute_cost_and_output
+
+    base_kwargs = dict(
+        token_count=10000,
+        page_count=10,
+        text_chars=5000,
+        image_count=0,
+        model="gemini-3-flash-preview",
+        source_type="slides",
+        density_target=None,
+    )
+
+    result_10 = _compute_cost_and_output(**base_kwargs, target_card_count=10)
+    result_50 = _compute_cost_and_output(**base_kwargs, target_card_count=50)
+
+    assert result_50["cost"] > result_10["cost"], (
+        f"Cost for 50 cards (${result_50['cost']:.4f}) should be > cost for 10 cards (${result_10['cost']:.4f})"
+    )
+    assert result_50["output_tokens"] > result_10["output_tokens"]
+

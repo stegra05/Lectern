@@ -220,8 +220,9 @@ GEMINI_PRICING = {
 }
 
 # Heuristics for cost estimation
-ESTIMATION_OUTPUT_RATIO = 0.35      # Output tokens are roughly 35% of input for card generation
-ESTIMATION_PROMPT_OVERHEAD = 3000   # System instruction + overhead for concept map & first batch
+ESTIMATION_BASE_OUTPUT_RATIO = 0.20  # Base output ratio for overhead (concept map, reflection, system prompts)
+ESTIMATION_TOKENS_PER_CARD = 100     # ~100 output tokens per generated card (median of 50-150 range)
+ESTIMATION_PROMPT_OVERHEAD = 3000    # System instruction + overhead for concept map & first batch
 # For Gemini multimodal tokenization docs (2025-12-18):
 # - <=384px image: 258 tokens
 # - larger images: tiled to 768x768 and charged 258 tokens per tile

@@ -323,6 +323,13 @@ export function ProgressView() {
 
     const sortedCards = useMemo(() => sortCards(filteredCards, sortBy), [filteredCards, sortBy]);
 
+    // O(1) lookup: card._uid → original index in cards[]
+    const uidToIndex = useMemo(() => {
+        const map = new Map<string, number>();
+        cards.forEach((c, i) => { if (c._uid) map.set(c._uid, i); });
+        return map;
+    }, [cards]);
+
     const topics = useMemo(() => extractTopics(cards), [cards]);
     const typeCounts = useMemo(() => countByType(cards), [cards]);
 
@@ -660,17 +667,19 @@ export function ProgressView() {
                 {/* Cards List */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-border min-h-0">
                     <AnimatePresence initial={false} mode="popLayout">
-                        {sortedCards.map((card, i) => {
-                            const originalIndex = cards.indexOf(card);
+                        {sortedCards.map((card) => {
+                            const originalIndex = card._uid ? (uidToIndex.get(card._uid) ?? -1) : -1;
                             const isEditing = editingIndex === originalIndex;
                             const cloze = isCloze(card);
 
                             return (
                                 <motion.div
                                     layout
-                                    key={i}
+                                    key={card._uid || crypto.randomUUID()}
                                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                    transition={{ duration: 0.2 }}
                                     className={clsx(
                                         "bg-surface rounded-xl shadow-sm relative overflow-hidden group transition-all",
                                         isEditing
