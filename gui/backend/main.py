@@ -367,25 +367,36 @@ class BatchDeleteRequest(BaseModel):
     ids: Optional[List[str]] = None
     status: Optional[str] = None
 
+# Lock to ensure thread safety for concurrent history modifications
+_history_lock = threading.Lock()
+
+def _batch_delete_impl(req_status: Optional[str], req_ids: Optional[List[str]]) -> int:
+    with _history_lock:
+        mgr = HistoryManager()
+
+        if req_status:
+            entries = mgr.get_entries_by_status(req_status)
+        elif req_ids:
+            entries = [e for e in mgr.get_all() if e["id"] in set(req_ids)]
+        else:
+            return 0
+
+        # Clean up state files
+        for entry in entries:
+            sid = entry.get("session_id")
+            if sid:
+                clear_state(sid)
+
+        entry_ids = [e["id"] for e in entries]
+        deleted = mgr.delete_entries(entry_ids)
+        return deleted
+
 @app.post("/history/batch-delete")
 async def batch_delete_history(req: BatchDeleteRequest):
-    mgr = HistoryManager()
-
-    if req.status:
-        entries = mgr.get_entries_by_status(req.status)
-    elif req.ids:
-        entries = [e for e in mgr.get_all() if e["id"] in set(req.ids)]
-    else:
+    if not req.status and not req.ids:
         raise HTTPException(status_code=400, detail="Provide 'ids' or 'status'")
 
-    # Clean up state files
-    for entry in entries:
-        sid = entry.get("session_id")
-        if sid:
-            clear_state(sid)
-
-    entry_ids = [e["id"] for e in entries]
-    deleted = mgr.delete_entries(entry_ids)
+    deleted = await run_in_threadpool(_batch_delete_impl, req.status, req.ids)
     return {"status": "deleted", "count": deleted}
 
 def _estimate_cache_key(tmp_path: str, model: str) -> tuple:
