@@ -5,7 +5,6 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-import sys
 from pathlib import Path
 
 from lectern.utils.path_utils import get_app_data_dir
@@ -14,20 +13,18 @@ logger = logging.getLogger(__name__)
 
 def get_history_file_path() -> str:
     """
-    Determine the appropriate path for history.json.
-    - If Frozen (App Bundle): Platform-specific app data dir/history.json
-    - If Dev: Project Root/history.json
+    Return the platform-specific path for history.json.
+
+    Always uses get_app_data_dir() — the canonical Lectern data directory —
+    in both frozen and dev modes. This avoids the previous bug where the
+    dev-mode fallback resolved to lectern/ instead of the project root.
+
+    NOTE(Migration): If upgrading from a dev build that wrote history.json
+    to lectern/history.json, move that file to get_app_data_dir() manually.
     """
-    if getattr(sys, 'frozen', False):
-        # We are running in a bundle
-        app_support = get_app_data_dir()
-        app_support.mkdir(parents=True, exist_ok=True)
-        return str(app_support / "history.json")
-    else:
-        # We are running in a normal Python environment
-        # Project root is parent of utils
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        return os.path.join(project_root, "history.json")
+    app_data = get_app_data_dir()
+    app_data.mkdir(parents=True, exist_ok=True)
+    return str(app_data / "history.json")
 
 HISTORY_FILE = get_history_file_path()
 

@@ -23,6 +23,11 @@ a = Analysis(
         # path is bundled and the winforms fallback doesn't silently fail.
         'webview.platforms.edgechromium', 'webview.platforms.winforms',
         'clr', 'pythonnet',
+        # NOTE(keyring): keyring uses win32ctypes to access Windows Credential Manager.
+        # Without these hidden imports it falls back to plaintext storage.
+        'win32ctypes', 'win32ctypes.core', 'win32ctypes.core._common',
+        'win32ctypes.core.ctypes', 'win32ctypes.core.ctypes._util',
+        'keyrings.alt',
         'lectern', 'lectern.lectern_service', 'lectern.config',
     ] + hiddenimports,
     hookspath=[],

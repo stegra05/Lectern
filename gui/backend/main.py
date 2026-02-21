@@ -1,5 +1,6 @@
 import sys
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # NOTE(Paths): Use Path.resolve() to handle frozen PyInstaller envs correctly.
@@ -49,7 +50,15 @@ from session import (
     _get_runtime_or_404,
 )
 
-app = FastAPI(title='Lectern API', version='1.6.1')
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application startup/shutdown lifecycle."""
+    yield
+    session_manager.shutdown()
+
+
+app = FastAPI(title='Lectern API', version='1.6.1', lifespan=lifespan)
 session_manager.sweep_orphan_temp_files()
 sweep_orphan_state_temps()
 
@@ -238,8 +247,12 @@ async def update_config(cfg: ConfigUpdate):
             from lectern.utils.keychain_manager import set_gemini_key
             set_gemini_key(cfg.gemini_api_key)
             
-            # Remove from .env if present to avoid confusion/leaks
+            # Remove from .env if present to avoid confusion/leaks (dev mode only)
             def update_env():
+                # NOTE(Frozen): .env files are a dev concept — skip in bundled app to
+                # avoid accidentally modifying files outside the bundle directory.
+                if getattr(sys, 'frozen', False):
+                    return
                 env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
                 if os.path.exists(env_path):
                     with open(env_path, "r") as f:
@@ -792,27 +805,34 @@ async def sync_session_to_anki(session_id: str):
 
 
 # Mount static files (Frontend Build)
-# Mount static files (Frontend Build)
 # In Dev: ../frontend/dist (relative to backend/main.py)
 # In Frozen: frontend/dist (relative to sys._MEIPASS root)
 if hasattr(sys, '_MEIPASS'):
-    frontend_dist = os.path.join(sys._MEIPASS, "frontend/dist")
+    # NOTE(Paths): Use explicit components — os.path.join treats "frontend/dist"
+    # as a single opaque string, which is fragile on Windows path normalisers.
+    frontend_dist = os.path.join(sys._MEIPASS, "frontend", "dist")
 else:
-    frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
+    frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
 if os.path.exists(frontend_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
-    
+
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
-        # Serve index.html for any non-api route (SPA routing)
-        if full_path.startswith("api") or full_path.startswith("assets") or full_path == "health" or full_path == "generate" or full_path == "config" or full_path == "history":
+        # Serve index.html for all non-API routes (SPA routing).
+        # NOTE(Routing): Dynamically derive API roots from registered routes so we
+        # don't have to maintain a manual allowlist whenever a new endpoint is added.
+        # NOTE(Typing): Use getattr so static analysers (Pyre2) can resolve .path
+        # on BaseRoute without needing a type narrowing guard they can't follow.
+        api_roots = {
+            getattr(r, "path", "").lstrip("/").split("/")[0]
+            for r in app.routes
+            if hasattr(r, "methods")
+            and getattr(r, "path", None) not in (None, "/", "/{full_path:path}")
+        }
+        first_segment = full_path.split("/")[0]
+        if first_segment in api_roots or full_path.startswith("assets"):
             raise HTTPException(status_code=404)
         return FileResponse(os.path.join(frontend_dist, "index.html"))
 else:
     print(f"Warning: Frontend build not found at {frontend_dist}")
-
-
-@app.on_event("shutdown")
-async def shutdown_cleanup():
-    session_manager.shutdown()
