@@ -16,7 +16,6 @@ from lectern.cost_estimator import (
     estimate_card_cap,
     estimate_cost as estimate_cost_impl,
     estimate_cost_with_base as estimate_cost_with_base_impl,
-    recompute_estimate as recompute_estimate_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
 )
 from lectern.generation_loop import (

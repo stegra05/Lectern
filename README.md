@@ -27,7 +27,7 @@ It parses your slides, composes a multimodal prompt for Google's Gemini, and cre
 
 ### 1. Download
 
-**[Download Lectern (macOS / Windows / Linux)](https://github.com/stegra05/lectern/releases/latest)**
+**[Download Lectern (macOS / Windows / Linux)](https://lectern.steffengrabert.com)**
 
 ### 2. Install
 
