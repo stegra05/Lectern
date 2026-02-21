@@ -1,10 +1,12 @@
 import sys
 import os
+from pathlib import Path
 
-# Add parent directory to path to import ankiparse modules and version
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-# Add current directory to path to import local modules (service.py)
-sys.path.append(os.path.dirname(__file__))
+# NOTE(Paths): Use Path.resolve() to handle frozen PyInstaller envs correctly.
+_here = Path(__file__).resolve().parent          # gui/backend/
+_project_root = _here.parent.parent              # project root
+sys.path.insert(0, str(_project_root))
+sys.path.insert(0, str(_here))
 
 from lectern.version import __version__
 

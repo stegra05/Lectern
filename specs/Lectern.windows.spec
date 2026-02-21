@@ -16,8 +16,15 @@ a = Analysis(
         (os.path.join(PROJECT_ROOT, 'gui', 'backend'), 'backend'),
         (os.path.join(PROJECT_ROOT, 'lectern'), 'lectern'),
     ] + datas,
-    hiddenimports=['webview', 'uvicorn', 'PIL', 'PIL.Image',
-                   'lectern', 'lectern.lectern_service', 'lectern.config'] + hiddenimports,
+    hiddenimports=[
+        'webview', 'uvicorn', 'PIL', 'PIL.Image',
+        # NOTE(Windows): pywebview loads platform backends dynamically; PyInstaller
+        # won't find them via static analysis. Include both so the edgechromium
+        # path is bundled and the winforms fallback doesn't silently fail.
+        'webview.platforms.edgechromium', 'webview.platforms.winforms',
+        'clr', 'pythonnet',
+        'lectern', 'lectern.lectern_service', 'lectern.config',
+    ] + hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -41,7 +48,7 @@ exe = EXE(
     name='Lectern',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True, 
+    strip=False,  # strip is a Unix ELF flag — must be False on Windows
     upx=True,
     console=False,
     disable_windowed_traceback=False,
