@@ -348,16 +348,16 @@ async def clear_history():
 @app.delete("/history/{entry_id}")
 async def delete_history_entry(entry_id: str):
     mgr = HistoryManager()
-    entry = mgr.get_entry(entry_id)
+    entry = await run_in_threadpool(mgr.get_entry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     
     # Clean up persistent session state
     session_id = entry.get("session_id")
     if session_id:
-        clear_state(session_id)
+        await run_in_threadpool(clear_state, session_id)
         
-    success = mgr.delete_entry(entry_id)
+    success = await run_in_threadpool(mgr.delete_entry, entry_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete history entry")
     return {"status": "deleted"}
