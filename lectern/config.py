@@ -120,7 +120,8 @@ FRONTEND_ORIGINS: list[str] = [
     origin.strip()
     for origin in os.getenv(
         "LECTERN_FRONTEND_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000",
+        # NOTE(Ports): 5173 = Vite dev, 4173 = bundled app (launcher.py), 8000 = legacy dev
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,http://localhost:8000,http://127.0.0.1:8000",
     ).split(",")
     if origin.strip()
 ]

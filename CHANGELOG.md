@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-02-21
+
+### Fixed
+- Windows crash on launch: force `edgechromium` (WebView2) backend in `webview.start()` to bypass broken WinForms/pythonnet CLR path in PyInstaller bundles
+- Windows spec: add `webview.platforms.edgechromium`, `clr`, and `pythonnet` as hidden imports so PyInstaller bundles the correct backends; fix `strip=False` on EXE (Unix-only flag, was risking PE corruption)
+- CORS: add ports `4173` and `localhost` variants to `FRONTEND_ORIGINS` — production server port was missing, blocking all API calls in bundled app on every platform
+- `sys.path` setup in `main.py` now uses `Path(__file__).resolve()` for reliable path resolution in frozen environments
+- Pin `pythonnet>=3.0.3` on Windows for robust `clr_loader` support in PyInstaller `_internal/` layout
+
 ## [1.6.0] - 2026-02-13
 
 ### Added

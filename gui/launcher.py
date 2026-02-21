@@ -21,9 +21,14 @@ def main():
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
-    # Create a native window
+    # Create a native window.
+    # NOTE(Windows): Force edgechromium (WebView2) backend explicitly.
+    # Without this, pywebview auto-detects and may fall back to mshtml/WinForms,
+    # which requires pythonnet/CLR — that fails in a PyInstaller frozen bundle.
+    import platform
+    gui_backend = "edgechromium" if platform.system() == "Windows" else None
     webview.create_window("Lectern", "http://127.0.0.1:4173", width=1024, height=768, resizable=True, fullscreen=False)
-    webview.start()
+    webview.start(gui=gui_backend)
 
 if __name__ == "__main__":
     main()

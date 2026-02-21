@@ -17,6 +17,10 @@ python-multipart>=0.0.9
 # GUI
 pywebview>=5.0
 pyobjc-framework-Cocoa>=10.0; platform_system=="Darwin"
+# NOTE(Windows): pythonnet 3.0.3+ has better clr_loader support for PyInstaller's
+# _internal/ layout. Ensures Python.Runtime.dll is resolvable as a safety net
+# even if pywebview falls back to the WinForms/mshtml backend.
+pythonnet>=3.0.3; platform_system=="Windows"
 
 # Environment file support (optional)
 python-dotenv>=1.0.1
