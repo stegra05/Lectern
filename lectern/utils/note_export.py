@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from lectern import config
-from lectern.anki_connector import add_note, get_model_names
+from lectern.anki_connector import add_note, get_model_names, detect_builtin_models
 from lectern.utils.tags import build_hierarchical_tags
 
 import logging
@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 # Cache of validated Anki model names (populated once per session).
 _anki_models_cache: list[str] | None = None
+# Cache of detected built-in model names (e.g. {"basic": "Einfach"})
+_detected_builtins_cache: Dict[str, str] | None = None
 
 
 @dataclass
@@ -37,8 +39,8 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     Maps generic names like "Basic" or "Cloze" to the user's configured
     note types (e.g., "Basic").
     
-    If the resolved name does not exist in Anki, falls back to the
-    built-in "Basic" / "Cloze" names.
+    If Anki uses localized names (e.g. "Einfach"), this function auto-detects
+    them matching the field signature.
     
     Parameters:
         card_model: Model name from AI or card data
@@ -50,6 +52,7 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     model = str(card_model or "").strip() or str(fallback_model).strip()
     lower_model = model.lower()
     
+    # 1. Direct match with configured defaults
     if lower_model in ("basic", config.DEFAULT_BASIC_MODEL.lower()):
         resolved = config.DEFAULT_BASIC_MODEL
     elif lower_model in ("cloze", config.DEFAULT_CLOZE_MODEL.lower()):
@@ -57,17 +60,42 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     else:
         resolved = model
     
-    # Safety check: verify the resolved name actually exists in Anki.
+    # 2. Validation and localized auto-detection
     if not _model_exists_in_anki(resolved):
-        builtin = "Cloze" if "cloze" in lower_model else "Basic"
-        if resolved != builtin:
-            logger.warning(
-                "Anki note type '%s' not found; falling back to '%s'",
-                resolved, builtin,
+        # Localized fallback logic:
+        # If Anki doesn't have "Basic" but has "Einfach", we want to find it.
+        builtins = _get_detected_builtins()
+        
+        # Determine if we are looking for a Basic or Cloze variant
+        is_cloze = "cloze" in lower_model
+        builtin_key = "cloze" if is_cloze else "basic"
+        localized_name = builtins.get(builtin_key)
+        
+        if localized_name and localized_name != resolved and _model_exists_in_anki(localized_name):
+            logger.info(
+                "Auto-resolved '%s' to localized Anki model '%s'",
+                resolved, localized_name
             )
-        resolved = builtin
+            resolved = localized_name
+        else:
+            # Absolute fallback if detection also fails
+            fallback = "Cloze" if is_cloze else "Basic"
+            if resolved != fallback:
+                logger.warning(
+                    "Anki note type '%s' not found; falling back to '%s'",
+                    resolved, fallback,
+                )
+            resolved = fallback
     
     return resolved
+
+
+def _get_detected_builtins() -> Dict[str, str]:
+    """Get or populate the cache of detected built-in model names."""
+    global _detected_builtins_cache
+    if _detected_builtins_cache is None:
+        _detected_builtins_cache = detect_builtin_models()
+    return _detected_builtins_cache
 
 
 def _model_exists_in_anki(name: str) -> bool:

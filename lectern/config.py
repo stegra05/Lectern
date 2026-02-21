@@ -9,16 +9,22 @@ them in the repository.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+# Prefer python-dotenv if available to load .env automatically
 try:
-    # Prefer python-dotenv if available to load .env automatically
     from dotenv import load_dotenv  # type: ignore
 except Exception:  # pragma: no cover - optional dependency at runtime
     load_dotenv = None  # type: ignore[assignment]
+
+from lectern.utils.path_utils import get_app_data_dir
+from lectern.utils.keychain_manager import get_gemini_key
+
+logger = logging.getLogger(__name__)
 
 def _load_environment_files() -> None:
     """Load environment variables from project .env and fallback to home .env.
@@ -42,7 +48,6 @@ def _load_environment_files() -> None:
 _load_environment_files()
 
 # --- User Config (JSON) Loading ---
-from lectern.utils.path_utils import get_app_data_dir
 
 _CONFIG_DIR = Path(__file__).resolve().parent
 _LEGACY_USER_CONFIG_PATH = _CONFIG_DIR / "user_config.json"
@@ -57,7 +62,7 @@ def _prepare_user_config_path() -> None:
         if _LEGACY_USER_CONFIG_PATH.exists() and not _USER_CONFIG_PATH.exists():
             shutil.copy2(_LEGACY_USER_CONFIG_PATH, _USER_CONFIG_PATH)
     except Exception as e:
-        print(f"Warning: Failed to prepare user_config.json path: {e}")
+        logger.warning(f"Warning: Failed to prepare user_config.json path: {e}")
 
 def _load_user_config() -> Dict[str, Any]:
     """Load user configuration from JSON file if it exists."""
@@ -68,7 +73,7 @@ def _load_user_config() -> Dict[str, Any]:
             with open(_USER_CONFIG_PATH, "r", encoding="utf-8") as f:
                 _USER_CONFIG = json.load(f)
         except Exception as e:
-            print(f"Warning: Failed to load user_config.json: {e}")
+            logger.warning(f"Warning: Failed to load user_config.json: {e}")
             _USER_CONFIG = {}
     return _USER_CONFIG
 
@@ -127,8 +132,11 @@ FRONTEND_ORIGINS: list[str] = [
 ]
 
 
-# Default Anki note models to use. These can be overridden via environment.
-# Intended to steer AI output and to map generic model names returned by the AI.
+# Default Anki note models to use (English). These are overridden via
+# user_config.json or environment variables.
+# NOTE: In localized Anki installs (e.g. German), these names are auto-resolved
+# via field fingerprints (see note_export.py). These English names serve as 
+# canonical IDs and offline fallbacks.
 DEFAULT_BASIC_MODEL: str = _get_config("basic_model", "Basic", "BASIC_MODEL_NAME")
 DEFAULT_CLOZE_MODEL: str = _get_config("cloze_model", "Cloze", "CLOZE_MODEL_NAME")
 

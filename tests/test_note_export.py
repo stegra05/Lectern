@@ -3,58 +3,63 @@ from unittest.mock import MagicMock, patch
 from lectern.utils.note_export import resolve_model_name, build_card_tags, export_card_to_anki
 from lectern import config
 
+@pytest.fixture(autouse=True)
+def reset_caches():
+    """Reset global caches in note_export to ensure test isolation."""
+    import lectern.utils.note_export as _ne
+    _ne._anki_models_cache = None
+    _ne._detected_builtins_cache = None
+    yield
+    _ne._anki_models_cache = None
+    _ne._detected_builtins_cache = None
+
 # Test resolve_model_name
 @patch("lectern.utils.note_export.get_model_names", return_value=[])
 def test_resolve_model_name_basic(_mock_models):
     """Test resolution of 'Basic' model variants (no Anki connection)."""
-    import lectern.utils.note_export as _ne
-    _ne._anki_models_cache = None
     assert resolve_model_name("Basic", "fallback") == config.DEFAULT_BASIC_MODEL
-    _ne._anki_models_cache = None
     assert resolve_model_name("basic", "fallback") == config.DEFAULT_BASIC_MODEL
-    _ne._anki_models_cache = None
     assert resolve_model_name(config.DEFAULT_BASIC_MODEL, "fallback") == config.DEFAULT_BASIC_MODEL
 
 @patch("lectern.utils.note_export.get_model_names", return_value=[])
 def test_resolve_model_name_cloze(_mock_models):
     """Test resolution of 'Cloze' model variants (no Anki connection)."""
-    import lectern.utils.note_export as _ne
-    _ne._anki_models_cache = None
     assert resolve_model_name("Cloze", "fallback") == config.DEFAULT_CLOZE_MODEL
-    _ne._anki_models_cache = None
     assert resolve_model_name("cloze", "fallback") == config.DEFAULT_CLOZE_MODEL
-    _ne._anki_models_cache = None
     assert resolve_model_name(config.DEFAULT_CLOZE_MODEL, "fallback") == config.DEFAULT_CLOZE_MODEL
 
 @patch("lectern.utils.note_export.get_model_names", return_value=[])
 def test_resolve_model_name_fallback(_mock_models):
     """Test fallback when model is empty or None (no Anki connection)."""
-    # Clear cache so the mock is used
-    import lectern.utils.note_export as _ne
-    _ne._anki_models_cache = None
     assert resolve_model_name("", "MyFallback") == "MyFallback"
-    _ne._anki_models_cache = None
     assert resolve_model_name(None, "MyFallback") == "MyFallback"
-    _ne._anki_models_cache = None
     assert resolve_model_name("   ", "MyFallback") == "MyFallback"
 
 @patch("lectern.utils.note_export.get_model_names", return_value=[])
 def test_resolve_model_name_custom(_mock_models):
     """Test that unknown models are passed through (no Anki connection)."""
-    import lectern.utils.note_export as _ne
-    _ne._anki_models_cache = None
     assert resolve_model_name("CustomModel", "fallback") == "CustomModel"
 
 @patch("lectern.utils.note_export.get_model_names", return_value=["Basic", "Cloze", "MyCustom"])
 def test_resolve_model_name_anki_validation(_mock_models):
     """Test that configured model names are validated against Anki."""
-    import lectern.utils.note_export as _ne
-    _ne._anki_models_cache = None
     # A model that exists in Anki passes through
     assert resolve_model_name("MyCustom", "fallback") == "MyCustom"
     # A model that does NOT exist falls back to "Basic"
-    _ne._anki_models_cache = None
     assert resolve_model_name("NonExistent", "fallback") == "Basic"
+
+@patch("lectern.utils.note_export.get_model_names", return_value=["Einfach", "Lückentext"])
+@patch("lectern.utils.note_export.detect_builtin_models", return_value={"basic": "Einfach", "cloze": "Lückentext"})
+def test_resolve_model_name_localized(mock_detect, mock_get_names):
+    """Test that generic names resolve to localized Anki names via detection."""
+    # "Basic" (English) should resolve to "Einfach" (German)
+    assert resolve_model_name("Basic", "fallback") == "Einfach"
+    
+    # "Cloze" (English) should resolve to "Lückentext" (German)
+    assert resolve_model_name("Cloze", "fallback") == "Lückentext"
+    
+    # Case-insensitive resolution
+    assert resolve_model_name("basic", "fallback") == "Einfach"
 
 # Test build_card_tags
 @patch("lectern.utils.note_export.build_hierarchical_tags")

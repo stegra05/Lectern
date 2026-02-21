@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -23,15 +24,11 @@ import shutil
 import tempfile
 import json
 import time
-import threading
 import requests
-from uuid import uuid4
 
 from cachetools import TTLCache
 
 from lectern.cost_estimator import recompute_estimate
-from pypdf import PdfReader
-import io
 from starlette.concurrency import run_in_threadpool
 
 from lectern.anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes
@@ -49,6 +46,11 @@ from session import (
     _get_session_or_404,
     _get_runtime_or_404,
 )
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("lectern.backend")
+
 
 
 @asynccontextmanager
@@ -187,7 +189,7 @@ async def get_version():
 
             return result
     except Exception as e:
-        print(f"Update check failed: {e}")
+        logger.warning(f"Update check failed: {e}")
     
     # Fallback to current only if check fails
     return {
@@ -210,14 +212,14 @@ async def health_check():
     try:
         anki_status = await run_in_threadpool(check_connection)
     except Exception as e:
-        print(f"Anki connection check failed: {e}")
+        logger.warning(f"Anki connection check failed: {e}")
         anki_status = False
     
     # Safely check Gemini config without reloading the entire module (which is expensive)
     try:
         gemini_configured = bool(config.GEMINI_API_KEY)
     except Exception as e:
-        print(f"Gemini config check failed: {e}")
+        logger.warning(f"Gemini config check failed: {e}")
         gemini_configured = False
         
     return {
@@ -264,7 +266,7 @@ async def update_config(cfg: ConfigUpdate):
             await run_in_threadpool(update_env)
             updated_fields.append("gemini_api_key")
         except Exception as e:
-            print(f"Failed to update API key: {e}")
+            logger.error(f"Failed to update API key: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
     # Handle other settings (JSON storage)
@@ -301,7 +303,7 @@ async def update_config(cfg: ConfigUpdate):
         try:
             config.save_user_config(json_updates)
         except Exception as e:
-            print(f"Failed to save user config: {e}")
+            logger.error(f"Failed to save user config: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
     # Reload config module to reflect changes immediately
@@ -329,7 +331,7 @@ async def get_decks():
         decks = await run_in_threadpool(get_deck_names)
         return {"decks": decks}
     except Exception as e:
-        print(f"Deck list fetch failed: {e}")
+        logger.warning(f"Deck list fetch failed: {e}")
         return {"decks": []}
 
 class DeckCreate(BaseModel):
@@ -344,7 +346,7 @@ async def create_deck_endpoint(req: DeckCreate):
             raise HTTPException(status_code=500, detail="Failed to create deck in Anki")
         return {"status": "created", "deck": req.name}
     except Exception as e:
-        print(f"Deck creation failed: {e}")
+        logger.error(f"Deck creation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/history")
@@ -428,7 +430,6 @@ async def estimate_cost(
     source_type: str = Form("auto"),
     target_card_count: Optional[int] = Form(None),
 ):
-    from starlette.concurrency import run_in_threadpool
 
     model = model_name or config.DEFAULT_GEMINI_MODEL
 
@@ -472,7 +473,7 @@ async def estimate_cost(
         _estimate_base_cache[cache_key] = base_data
         return data
     except Exception as e:
-        print(f"Estimation failed: {e}")
+        logger.error(f"Estimation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(tmp_path):
@@ -494,10 +495,10 @@ async def generate_cards(
     
     # NOTE(Exam-Mode): exam_mode is removed in favor of focus_prompt.
     if focus_prompt:
-        print(f"Info: User focus: '{focus_prompt}'")
+        logger.info(f"User focus: '{focus_prompt}'")
     
     if source_type != "auto":
-        print(f"Info: Source type override: {source_type}")
+        logger.info(f"Source type override: {source_type}")
     
     # Parse tags from JSON string
     try:
@@ -508,7 +509,6 @@ async def generate_cards(
     # Save uploaded file to temp
     # We use delete=False so it persists for thumbnail generation
     # Run in threadpool to avoid blocking
-    from starlette.concurrency import run_in_threadpool
     def save_generate_temp():
         with tempfile.NamedTemporaryFile(
             delete=False,
@@ -527,7 +527,7 @@ async def generate_cards(
         uploaded_size = -1 # Cannot determine
         
     temp_size = os.path.getsize(tmp_path)
-    print(f"Info: Uploaded file size: {uploaded_size} bytes. Temp file size: {temp_size} bytes. Path: {tmp_path}")
+    logger.info(f"Uploaded file size: {uploaded_size} bytes. Temp file size: {temp_size} bytes. Path: {tmp_path}")
         
     session = session_manager.create_session(
         pdf_path=tmp_path,
@@ -741,7 +741,7 @@ async def delete_session_card(session_id: str, card_index: int):
         if entry:
             mgr.update_entry(entry["id"], card_count=len(cards))
     except Exception as e:
-        print(f"Warning: Failed to update history card count: {e}")
+        logger.warning(f"Failed to update history card count: {e}")
 
     return {"status": "ok", "remaining": len(cards)}
 
@@ -754,7 +754,7 @@ async def delete_anki_notes(req: AnkiDeleteRequest):
         delete_notes(req.note_ids)
         return {"status": "deleted", "count": len(req.note_ids)}
     except Exception as e:
-        print(f"Failed to delete Anki notes: {e}")
+        logger.error(f"Failed to delete Anki notes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class AnkiUpdateRequest(BaseModel):
@@ -768,7 +768,7 @@ async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
         update_note_fields(note_id, req.fields)
         return {"status": "updated", "note_id": note_id}
     except Exception as e:
-        print(f"Failed to update Anki note: {e}")
+        logger.error(f"Failed to update Anki note: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -835,4 +835,4 @@ if os.path.exists(frontend_dist):
             raise HTTPException(status_code=404)
         return FileResponse(os.path.join(frontend_dist, "index.html"))
 else:
-    print(f"Warning: Frontend build not found at {frontend_dist}")
+    logger.warning(f"Frontend build not found at {frontend_dist}")

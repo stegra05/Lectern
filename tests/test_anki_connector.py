@@ -117,3 +117,30 @@ def test_update_note_fields(mock_requests_post):
     
     anki_connector.update_note_fields(123, {"Front": "New Q"})
     mock_requests_post.assert_called_once()
+
+def test_get_model_field_names(mock_requests_post):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"result": ["Front", "Back"], "error": None}
+    mock_requests_post.return_value = mock_response
+    
+    fields = anki_connector.get_model_field_names("Basic")
+    assert fields == ["Front", "Back"]
+
+@patch("lectern.anki_connector.get_model_names")
+@patch("lectern.anki_connector.get_model_field_names")
+def test_detect_builtin_models_localized(mock_get_fields, mock_get_names):
+    # Mock German locale: "Einfach" (Basic) and "Lückentext" (Cloze)
+    mock_get_names.return_value = ["Einfach", "Lückentext", "Other"]
+    
+    def side_effect(name):
+        if name == "Einfach":
+            return ["Front", "Back"]
+        if name == "Lückentext":
+            return ["Text"]
+        return ["Field1"]
+    
+    mock_get_fields.side_effect = side_effect
+    
+    detected = anki_connector.detect_builtin_models()
+    assert detected["basic"] == "Einfach"
+    assert detected["cloze"] == "Lückentext"

@@ -173,6 +173,53 @@ def get_model_names() -> List[str]:
         return []
 
 
+def get_model_field_names(model_name: str) -> List[str]:
+    """Fetch field names for a specific Anki note type/model."""
+    try:
+        result = _invoke("modelFieldNames", {"modelName": model_name})
+        if isinstance(result, list):
+            return [str(name) for name in result]
+        return []
+    except Exception as exc:
+        logger.warning("Failed to fetch fields for model '%s': %s", model_name, exc)
+        return []
+
+
+def detect_builtin_models() -> Dict[str, str]:
+    """Auto-detect localized names for Anki's built-in 'Basic' and 'Cloze' models.
+
+    Uses field signatures (e.g. 'Front'/'Back' or 'Text') to identify the models
+    even if their names are localized (e.g. 'Einfach' or 'Texte à trous').
+
+    Returns:
+        Mapping from canonical name ('basic', 'cloze') to actual localized name.
+        Defaults to English names if detection fails or Anki is unreachable.
+    """
+    detected = {"basic": "Basic", "cloze": "Cloze"}
+
+    models = get_model_names()
+    if not models:
+        return detected
+
+    for name in models:
+        fields = get_model_field_names(name)
+        field_set = {f.strip() for f in fields}
+
+        # Handle potential case-insensitivity or extra fields in user templates
+        # Basic signature: precisely contains Front and Back
+        if "Front" in field_set and "Back" in field_set:
+            # If we see multiple matches, prefer the one exactly named "Basic"
+            if name == "Basic" or detected["basic"] == "Basic":
+                detected["basic"] = name
+
+        # Cloze signature: precisely contains Text (and usually no Front/Back)
+        if "Text" in field_set and "Front" not in field_set:
+            if name == "Cloze" or detected["cloze"] == "Cloze":
+                detected["cloze"] = name
+
+    return detected
+
+
 def create_deck(deck_name: str) -> bool:
     """Create a new deck in Anki via AnkiConnect.
     
