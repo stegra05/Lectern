@@ -86,7 +86,7 @@ def save_user_config(config: Dict[str, Any]) -> None:
         with open(_USER_CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(_USER_CONFIG, f, indent=2)
     except Exception as e:
-        print(f"Warning: Failed to save user_config.json: {e}")
+        logger.warning(f"Warning: Failed to save user_config.json: {e}")
 
 def _get_config(key: str, default: Any, env_key: Optional[str] = None) -> Any:
     """Get config value with priority: Env Var > User Config > Default."""
@@ -104,7 +104,6 @@ def _get_config(key: str, default: Any, env_key: Optional[str] = None) -> Any:
 # Load user config at module init
 _load_user_config()
 
-from lectern.utils.keychain_manager import get_gemini_key
 
 # Google Gemini API key. Must be provided via environment variable or keychain for security.
 GEMINI_API_KEY: str = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
