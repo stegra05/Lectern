@@ -8,6 +8,7 @@ and reduces maintenance burden.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -15,7 +16,6 @@ from lectern import config
 from lectern.anki_connector import add_note, get_model_names, detect_builtin_models
 from lectern.utils.tags import build_hierarchical_tags
 
-import logging
 
 logger = logging.getLogger(__name__)
 
