@@ -1,0 +1,17 @@
+{
+  "source_directories": [
+    {"root": ".", "subdirectory": "lectern"},
+    {"root": ".", "subdirectory": "gui/backend"},
+    {"root": ".", "subdirectory": "gui"},
+    {"root": ".", "subdirectory": "tests"}
+  ],
+  "search_path": [
+    ".venv/lib/python3.14/site-packages"
+  ],
+  "exclude": [
+    ".venv",
+    "dist",
+    "build",
+    "__pycache__"
+  ]
+}

@@ -126,6 +126,9 @@ def _append_session_log(
         return
     if not getattr(config, "LOG_SESSION_CONTENT", True):
         return
+    # NOTE(Thread-Safety): Safe because each session creates a unique log file via
+    # _start_session_log(). If concurrent sessions ever share a log path, add a
+    # filelock here to prevent read-modify-write corruption.
     try:
         max_response_chars = getattr(config, "LOG_MAX_RESPONSE_CHARS", 20000)
         truncated_response = response_text[:max_response_chars] if response_text else ""

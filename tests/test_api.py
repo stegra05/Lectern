@@ -659,11 +659,11 @@ def test_spa_routing():
             response = client.get("/random-path")
             # If FileResponse is returned it might not be a standard status
             # But we hit the branch.
-            
-    # Test API 404
-    with patch('gui.backend.main.os.path.exists', return_value=True):
-        response = client.get("/api/v1/ghost")
-        assert response.status_code == 404
+
+    # Test that a real registered route root returns 404 (not served as SPA)
+    # /health is a registered GET endpoint — its root segment is "health"
+    response = client.get("/health/ghost-subpath")
+    assert response.status_code == 404
 
 def test_session_latest_fallback():
     """Test _get_session_or_404 uses latest session when ID is missing."""
