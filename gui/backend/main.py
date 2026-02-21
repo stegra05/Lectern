@@ -152,7 +152,8 @@ async def get_version():
     # Check GitHub
     try:
         # We use a timeout to avoid hanging the UI
-        response = requests.get(
+        response = await run_in_threadpool(
+            requests.get,
             "https://api.github.com/repos/stegra05/Lectern/releases/latest",
             headers={"Accept": "application/vnd.github.v3+json"},
             timeout=5
