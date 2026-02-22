@@ -145,13 +145,22 @@ describe('HomeView', () => {
         expect(phaseElements.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('shows Anki disconnection warning', () => {
+    it('shows Anki disconnection warning', async () => {
         const props = {
             ...defaultProps,
-            health: { anki_connected: false, gemini_configured: true, anki_version: '' }
+            health: {
+                ...defaultProps.health,
+                anki_connected: false,
+            },
         };
         render(<HomeView {...props} />);
-        expect(screen.getByText(/Anki is not connected/i)).toBeInTheDocument();
+        
+        // Use a custom matcher to handle icon + text wrapping
+        const warning = await screen.findByText((content, element) => {
+            return content.includes('Anki disconnected');
+        });
+        expect(warning).toBeInTheDocument();
+        
         expect(screen.getByRole('button', { name: /Start Generation/i })).toBeDisabled();
     });
 
