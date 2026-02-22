@@ -125,5 +125,46 @@ class TestStatePersistence(unittest.TestCase):
         clear_state(self.test_session_id)
         self.assertFalse(os.path.exists(state_path))
 
+    def test_delete_cards_by_indices(self):
+        """Test batch deletion of cards from state."""
+        from lectern.utils.state import StateFile
+        
+        cards = [{"front": f"Card {i}", "back": f"Back {i}"} for i in range(5)]
+        # Indices: 0, 1, 2, 3, 4
+        
+        save_state(
+            pdf_path="/tmp/test.pdf",
+            deck_name="Test Deck",
+            cards=cards,
+            concept_map={},
+            history=[],
+            log_path="",
+            session_id=self.test_session_id
+        )
+        
+        sf = StateFile(self.test_session_id)
+        
+        # Delete indices 1 and 3 (Card 1 and Card 3)
+        # Expected remaining: Card 0, Card 2, Card 4
+        deleted = sf.delete_cards_by_indices([1, 3])
+        self.assertEqual(deleted, 2)
+        
+        loaded = load_state(self.test_session_id)
+        self.assertEqual(len(loaded["cards"]), 3)
+        self.assertEqual(loaded["cards"][0]["front"], "Card 0")
+        self.assertEqual(loaded["cards"][1]["front"], "Card 2")
+        self.assertEqual(loaded["cards"][2]["front"], "Card 4")
+        
+        # Test out of bounds - should ignore invalid index 10
+        deleted = sf.delete_cards_by_indices([10, 0])
+        # Should delete index 0 (Card 0)
+        # Remaining: Card 2, Card 4
+        self.assertEqual(deleted, 1)
+        
+        loaded = load_state(self.test_session_id)
+        self.assertEqual(len(loaded["cards"]), 2)
+        self.assertEqual(loaded["cards"][0]["front"], "Card 2")
+        self.assertEqual(loaded["cards"][1]["front"], "Card 4")
+
 if __name__ == "__main__":
     unittest.main()

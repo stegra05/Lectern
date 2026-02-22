@@ -161,6 +161,8 @@ class LecternGenerationService:
             if not check_connection():
                 yield ServiceEvent("step_end", "AnkiConnect unreachable", {"success": False})
                 if cfg.skip_export:
+                    # Fix Bug 3: Ensure step is marked as technically "done" (success) for offline mode to prevent UI hang
+                    yield ServiceEvent("step_end", "Offline Mode Enabled", {"success": True})
                     yield ServiceEvent("warning", f"Could not connect to AnkiConnect. Proceeding in offline mode (examples and export will be skipped).")
                 else:
                     yield ServiceEvent("error", f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}", {"recoverable": False})

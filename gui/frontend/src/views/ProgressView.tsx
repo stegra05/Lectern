@@ -15,6 +15,7 @@ import { filterCards, findLastError, sortCards } from '../utils/cards';
 import { getCardSlideNumber } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
 import { type FriendlyError, translateError } from '../utils/errorMessages';
+import { highlightCloze } from '../utils/cloze';
 
 import type { Phase } from '../components/PhaseIndicator';
 import type { ProgressEvent } from '../api';
@@ -345,16 +346,6 @@ function countByType(cards: { model_name?: string }[]): { basic: number; cloze: 
     return { basic, cloze };
 }
 
-/** Highlight {{c1::answer::hint}} cloze patterns with a styled span */
-function highlightCloze(html: string): string {
-    return html.replace(
-        /\{\{c(\d+)::(.+?)(?:::(.+?))?\}\}/g,
-        (_match, num, answer, hint) => {
-            const label = hint ? `${answer} (${hint})` : answer;
-            return `<span class="cloze-hl" data-cloze="${num}">${label}</span>`;
-        }
-    );
-}
 
 function isCloze(card: { model_name?: string }): boolean {
     return (card.model_name || '').toLowerCase().includes('cloze');

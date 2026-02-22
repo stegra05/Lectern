@@ -1,8 +1,9 @@
-import React, { useState, useRef, useCallback, KeyboardEvent } from 'react';
+import React, { useState, useRef, useCallback, type KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Save, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { Card } from '../api';
+import { renderClozeFront, renderClozeBack } from '../utils/cloze';
 
 // Field limits for character count warnings
 const FIELD_LIMITS: Record<string, number> = {
@@ -64,7 +65,6 @@ const CardPreview: React.FC<{
                 className="relative w-full preserve-3d"
                 animate={{ rotateY: isFlipped ? 180 : 0 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                style={{ transformStyle: "preserve-3d" }}
             >
                 {/* Front of card */}
                 <div
@@ -125,12 +125,20 @@ export const CardEditor: React.FC<CardEditorProps> = ({
     const fieldEntries = Object.entries(fields);
 
     // Get front/back for preview - try common field names
+    const isCloze = (card.model_name || '').toLowerCase().includes('cloze');
+
     const getFrontContent = () => {
-        return fields['Front'] || fields['Question'] || fields['Text'] || '';
+        const raw = fields['Front'] || fields['Question'] || fields['Text'] || '';
+        return isCloze ? renderClozeFront(raw) : raw;
     };
 
     const getBackContent = () => {
-        return fields['Back'] || fields['Answer'] || '';
+        const raw = fields['Back'] || fields['Answer'] || '';
+        if (isCloze) {
+            const rawText = fields['Text'] || '';
+            return renderClozeBack(rawText);
+        }
+        return raw;
     };
 
     // Handle Tab key to move between fields instead of inserting tab

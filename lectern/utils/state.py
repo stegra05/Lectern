@@ -113,6 +113,28 @@ class StateFile:
         state["version"] = STATE_VERSION
         return _save_state_dict(state, self.session_id)
 
+    def delete_cards_by_indices(self, indices: List[int]) -> int:
+        state = self.load()
+        if not state:
+            return 0
+        cards = state.get("cards", [])
+        if not cards:
+            return 0
+            
+        # Sort descending to delete without shifting issues
+        indices_to_delete = sorted(set(indices), reverse=True)
+        deleted_count = 0
+        
+        for idx in indices_to_delete:
+            if 0 <= idx < len(cards):
+                cards.pop(idx)
+                deleted_count += 1
+                
+        state["cards"] = cards
+        state["version"] = STATE_VERSION
+        _save_state_dict(state, self.session_id)
+        return deleted_count
+
 def resolve_state(
     session_id: Optional[str],
     *,

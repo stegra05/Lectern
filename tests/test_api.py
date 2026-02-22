@@ -651,6 +651,30 @@ def test_session_card_management_success():
                 mock_update.assert_called()
                 mock_hist.return_value.update_entry.assert_called()
 
+def test_batch_delete_session_cards():
+    """Test batch deletion of session cards."""
+    mock_state = {"cards": [{"id": 0}, {"id": 1}, {"id": 2}], "pdf_path": "P", "deck_name": "D", "history": []}
+    
+    # We need to mock StateFile completely or patch its methods
+    with patch('gui.backend.main.StateFile') as mock_sf_class:
+        mock_sf = MagicMock()
+        mock_sf.load.return_value = {"cards": [{"id": 1}]} # After deletion (mocked)
+        mock_sf.delete_cards_by_indices.return_value = 2
+        mock_sf_class.return_value = mock_sf
+        
+        with patch('gui.backend.main.HistoryManager') as mock_hist_class:
+            mock_hist = MagicMock()
+            mock_hist.get_entry_by_session_id.return_value = {"id": "entry1"}
+            mock_hist_class.return_value = mock_hist
+            
+            response = client.post("/session/s1/cards/batch-delete", json={"indices": [0, 2]})
+            
+            assert response.status_code == 200
+            assert response.json()["deleted"] == 2
+            mock_sf.delete_cards_by_indices.assert_called_with([0, 2])
+            # Check history update
+            mock_hist.update_entry.assert_called_with("entry1", card_count=1)
+
 def test_spa_routing():
     """Test serving index.html for non-existent but non-API paths."""
     # We need to simulate a dist folder for this to work
