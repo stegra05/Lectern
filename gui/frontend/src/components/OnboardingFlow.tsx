@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Lock, Unlock, ArrowRight, Terminal, Server, BrainCircuit, RefreshCw, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../api';
 import { GlassCard } from './GlassCard';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -17,6 +18,16 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
   const [apiKey, setApiKey] = useState('');
   const [isExiting, setIsExiting] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap for accessibility - only active when not exiting
+  useFocusTrap(containerRef, {
+      isActive: !isExiting,
+      onEscape: undefined, // No escape during onboarding
+      autoFocus: true,
+      restoreFocus: false,
+  });
 
   // "Spotlight" effect handler
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -117,10 +128,14 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-title"
     >
       <AnimatePresence>
         {!isExiting && (
           <motion.div
+            ref={containerRef}
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.5, opacity: 0, y: -200, x: 200 }}
@@ -134,6 +149,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
               style={{
                 background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(163, 230, 53, 0.06), transparent 40%)`
               }}
+              aria-hidden="true"
             />
 
             <GlassCard className="relative overflow-hidden border-zinc-700/50 shadow-2xl bg-zinc-900/90">
@@ -141,14 +157,14 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
               <div className="mb-8 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-zinc-800 rounded-lg border border-zinc-700">
-                    <Terminal className="w-5 h-5 text-primary" />
+                    <Terminal className="w-5 h-5 text-primary" aria-hidden="true" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-zinc-100">System Check</h2>
+                    <h2 id="onboarding-title" className="text-lg font-bold text-zinc-100">System Check</h2>
                     <p className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Pre-Flight Sequence</p>
                   </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1" aria-hidden="true">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500/20" />
                   <div className="w-1.5 h-1.5 rounded-full bg-yellow-500/20" />
                   <div className="w-1.5 h-1.5 rounded-full bg-green-500/20" />
@@ -188,9 +204,10 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         className="mt-3 bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm"
+                        role="alert"
                       >
                         <div className="flex items-start gap-2 text-red-200">
-                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
                           <div className="space-y-2">
                             <p>Connection failed. Is Anki running with AnkiConnect?</p>
                             <div className="text-xs text-red-300">
@@ -210,9 +227,10 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         </div>
                         <button
                           onClick={retryAnki}
+                          aria-label="Retry Anki connection"
                           className="mt-3 w-full py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded text-xs font-medium transition-colors flex items-center justify-center gap-2"
                         >
-                          <RefreshCw className="w-3 h-3" /> Retry Connection
+                          <RefreshCw className="w-3 h-3" aria-hidden="true" /> Retry Connection
                         </button>
                       </motion.div>
                     )}
@@ -238,7 +256,7 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         className="mt-4"
                       >
                         <div className="flex justify-between items-center mb-1.5">
-                          <label className="block text-xs text-zinc-500">GEMINI API KEY</label>
+                          <label htmlFor="gemini-api-key" className="block text-xs text-zinc-500">GEMINI API KEY</label>
                           <a
                             href="https://aistudio.google.com/app/apikey"
                             target="_blank"
@@ -250,30 +268,36 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         </div>
                         <div className="relative group/input">
                           <input
+                            id="gemini-api-key"
                             type="password"
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             placeholder="sk-..."
+                            aria-label="Gemini API Key"
+                            aria-describedby="api-key-help"
                             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-4 pr-10 text-sm text-zinc-200 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all font-mono"
                           />
-                          <div className="absolute right-3 top-3 text-zinc-600 transition-colors duration-300">
+                          <div className="absolute right-3 top-3 text-zinc-600 transition-colors duration-300" aria-hidden="true">
                             {apiKey.length > 10 ? <Unlock className="w-4 h-4 text-primary" /> : <Lock className="w-4 h-4" />}
                           </div>
 
                           {/* Progress Bar Border Effect */}
                           <div className="absolute bottom-0 left-0 h-[1px] bg-primary transition-all duration-300"
-                            style={{ width: apiKey.length > 0 ? '100%' : '0%', opacity: apiKey.length > 0 ? 1 : 0 }} />
+                            style={{ width: apiKey.length > 0 ? '100%' : '0%', opacity: apiKey.length > 0 ? 1 : 0 }}
+                            aria-hidden="true"
+                          />
                         </div>
 
                         <button
                           onClick={submitApiKey}
                           disabled={apiKey.length < 10}
+                          aria-label="Initialize with API key"
                           className="mt-4 w-full py-2.5 bg-zinc-100 hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-900 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2"
                         >
-                          Initialize <ArrowRight className="w-4 h-4" />
+                          Initialize <ArrowRight className="w-4 h-4" aria-hidden="true" />
                         </button>
 
-                        <p className="mt-3 text-[10px] text-zinc-600 text-center">
+                        <p id="api-key-help" className="mt-3 text-[10px] text-zinc-600 text-center">
                           Your key is securely stored in the system keychain.
                         </p>
                       </motion.div>

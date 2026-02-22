@@ -1,13 +1,28 @@
-import { motion } from 'framer-motion';
-import { Play, Loader2, AlertCircle, Sparkles, Monitor, FileText, Info } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Play, AlertCircle, Sparkles, Monitor, FileText, Info, Upload, FileSearch, Calculator, AlertTriangle, X, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { FilePicker } from '../components/FilePicker';
 import { DeckSelector } from '../components/DeckSelector';
 import { computeCardsPerUnit, computeTargetSliderConfig } from '../utils/density';
+import { type FriendlyError, translateError } from '../utils/errorMessages';
 
 import type { HealthStatus } from '../hooks/useAppState';
 import type { Estimation } from '../api';
+
+const COST_WARNING_THRESHOLD = 0.50;
+
+type EstimationPhase = 'idle' | 'uploading' | 'analyzing' | 'calculating' | 'done';
+
+const PHASE_CONFIG: Record<EstimationPhase, { label: string; icon: LucideIcon }> = {
+    idle: { label: '', icon: Upload },
+    uploading: { label: 'Uploading PDF...', icon: Upload },
+    analyzing: { label: 'Analyzing document...', icon: FileSearch },
+    calculating: { label: 'Calculating costs...', icon: Calculator },
+    done: { label: '', icon: Upload },
+};
 
 interface HomeViewProps {
     pdfFile: File | null;
@@ -25,6 +40,10 @@ interface HomeViewProps {
     estimationError: string | null;
     handleGenerate: () => void;
     health: HealthStatus | null;
+    // Budget tracking props
+    totalSessionSpend: number;
+    budgetLimit: number | null;
+    wouldExceedBudget: (amount: number) => boolean;
 }
 
 export function HomeView({
@@ -43,7 +62,53 @@ export function HomeView({
     estimationError,
     handleGenerate,
     health,
+    totalSessionSpend,
+    budgetLimit,
+    wouldExceedBudget,
 }: HomeViewProps) {
+    // Estimation phase state for sub-status feedback
+    const [estimationPhase, setEstimationPhase] = useState<EstimationPhase>('idle');
+
+    // Reset phase when estimation stops
+    const [prevIsEstimating, setPrevIsEstimating] = useState(isEstimating);
+    if (isEstimating !== prevIsEstimating) {
+        setPrevIsEstimating(isEstimating);
+        if (!isEstimating) {
+            setEstimationPhase('idle');
+        }
+    }
+
+    // Cost warning state
+    const [showCostWarning, setShowCostWarning] = useState(false);
+    const [costWarningDismissed, setCostWarningDismissed] = useState(false);
+    const [showDetailedCost, setShowDetailedCost] = useState(false);
+
+    // Manage estimation phase transitions based on isEstimating
+    useEffect(() => {
+        if (!isEstimating) return;
+
+        // Immediately show uploading phase (deferred to next tick to avoid ESLint error)
+        const uploadTimer = setTimeout(() => {
+            setEstimationPhase('uploading');
+        }, 0);
+
+        // After 500ms, transition to analyzing
+        const analyzeTimer = setTimeout(() => {
+            setEstimationPhase('analyzing');
+        }, 500);
+
+        // After 2s, show calculating (if still estimating, likely processing response)
+        const calculateTimer = setTimeout(() => {
+            setEstimationPhase('calculating');
+        }, 2000);
+
+        return () => {
+            clearTimeout(uploadTimer);
+            clearTimeout(analyzeTimer);
+            clearTimeout(calculateTimer);
+        };
+    }, [isEstimating]);
+
     const containerVariants = {
         hidden: { opacity: 0 },
         show: {
@@ -70,6 +135,37 @@ export function HomeView({
     }
 
     const cardsPerUnit = computeCardsPerUnit(targetDeckSize, sourceType, estimation);
+
+    // Cost and budget logic
+    const estimatedCost = estimation?.cost ?? 0;
+    const shouldShowCostWarning = !isEstimating && estimatedCost > COST_WARNING_THRESHOLD && !costWarningDismissed;
+    const wouldHitBudget = wouldExceedBudget(estimatedCost);
+    const isBudgetExceeded = budgetLimit !== null && wouldHitBudget;
+
+    const handleGenerateClick = () => {
+        if (shouldShowCostWarning) {
+            setShowCostWarning(true);
+            return;
+        }
+        if (isBudgetExceeded) {
+            return;
+        }
+        handleGenerate();
+    };
+
+    const handleProceedWithCost = () => {
+        setShowCostWarning(false);
+        setCostWarningDismissed(true);
+        handleGenerate();
+    };
+
+    const handleDismissWarning = () => {
+        setShowCostWarning(false);
+        setCostWarningDismissed(true);
+    };
+
+    // Check if budget would be exceeded for button disable
+    const isButtonDisabled = !pdfFile || !deckName || isEstimating || sliderConfig.disabled || isBudgetExceeded;
 
     return (
         <motion.div
@@ -140,9 +236,19 @@ export function HomeView({
 
                         <div className="pt-4 border-t border-border/30">
                             <div className="flex justify-between items-end mb-4">
-                                <label className="text-sm font-medium text-text-muted uppercase tracking-wider">Total Cards</label>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm font-medium text-text-muted uppercase tracking-wider">Total Cards</label>
+                                    {sliderConfig.disabled && (
+                                        <div className="flex items-center gap-1 text-[10px] text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                            <Lock className="w-3 h-3" />
+                                            <span>Limited by length</span>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="text-right">
-                                    <span className="text-xl font-bold text-primary">{targetDeckSize}</span>
+                                    <span className={clsx("text-xl font-bold", sliderConfig.disabled ? "text-text-muted" : "text-primary")}>
+                                        {targetDeckSize}
+                                    </span>
                                 </div>
                             </div>
 
@@ -160,16 +266,49 @@ export function HomeView({
                             </div>
                             <div className="flex justify-between text-[10px] text-text-muted mt-2 px-1 font-medium">
                                 <span>{sliderConfig.disabled ? '' : sliderConfig.min}</span>
-                                <span>{isEstimating ? 'ESTIMATING...' : sliderConfig.disabled ? '' : estimation?.suggested_card_count}</span>
+                                <div className="flex flex-col items-center">
+                                    {isEstimating ? (
+                                        <motion.span
+                                            className="text-primary font-bold flex items-center gap-1"
+                                            initial={{ opacity: 0.5 }}
+                                            animate={{ opacity: [0.5, 1, 0.5] }}
+                                            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                                        >
+                                            {estimationPhase === 'uploading' && <Upload className="w-2.5 h-2.5" />}
+                                            {estimationPhase === 'analyzing' && <FileSearch className="w-2.5 h-2.5" />}
+                                            {estimationPhase === 'calculating' && <Calculator className="w-2.5 h-2.5" />}
+                                            {(estimationPhase === 'idle' || estimationPhase === 'done') && <Upload className="w-2.5 h-2.5" />}
+                                            {PHASE_CONFIG[estimationPhase].label || 'ESTIMATING...'}
+                                        </motion.span>
+                                    ) : (
+                                        <span>{sliderConfig.disabled ? '' : estimation?.suggested_card_count}</span>
+                                    )}
+                                </div>
                                 <span>{sliderConfig.disabled ? '' : sliderConfig.max}</span>
                             </div>
 
-                            {estimationError && !isEstimating && (
-                                <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                                    <span className="text-xs text-red-300">{estimationError}</span>
-                                </div>
-                            )}
+                            {estimationError && !isEstimating && (() => {
+                                const friendlyError: FriendlyError = translateError(estimationError, 'estimation');
+                                return (
+                                    <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                                        <div className="flex items-start gap-2">
+                                            <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-red-300">{friendlyError.title}</p>
+                                                <p className="text-xs text-red-200/80 mt-0.5">{friendlyError.message}</p>
+                                                {friendlyError.action && (
+                                                    <p className="text-xs text-primary mt-1">{friendlyError.action}</p>
+                                                )}
+                                                {friendlyError.errorCode && (
+                                                    <p className="text-[10px] text-red-300/50 font-mono mt-2">
+                                                        Error: {friendlyError.errorCode}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-start gap-3">
                                 <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
@@ -237,74 +376,174 @@ export function HomeView({
                         {(estimation || isEstimating) && (
                             <div className="mb-8 space-y-3">
                                 <div className="p-4 rounded-xl bg-surface/30 border border-border/50">
-                                    <div className="flex items-center justify-between mb-3 border-b border-border/30 pb-2">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Estimated Cost</span>
+                                    <button
+                                        onClick={() => setShowDetailedCost(!showDetailedCost)}
+                                        className="w-full flex items-center justify-between mb-3 border-b border-border/30 pb-2 group/cost"
+                                    >
+                                        <div className="flex flex-col text-left">
+                                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider group-hover/cost:text-primary transition-colors">Estimated Cost</span>
                                             {isEstimating ? (
                                                 <div className="h-7 w-20 bg-surface animate-pulse rounded mt-1" />
                                             ) : (
                                                 <span className="text-2xl font-bold text-primary">${estimation?.cost.toFixed(3)}</span>
                                             )}
                                         </div>
-                                        {!isEstimating && (
-                                            <div className="text-right">
-                                                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">Model</span>
-                                                <span className="text-xs font-mono text-text-main">{estimation?.model.split('/').pop()}</span>
+                                        <div className="flex flex-col items-end">
+                                            {!isEstimating && (
+                                                <div className="text-right mb-1">
+                                                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">Model</span>
+                                                    <span className="text-xs font-mono text-text-main">{estimation?.model.split('/').pop()}</span>
+                                                </div>
+                                            )}
+                                            <div className="text-text-muted group-hover/cost:text-primary transition-colors">
+                                                {showDetailedCost ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    </button>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <span className="text-[9px] font-bold text-text-muted uppercase">Input</span>
-                                            <div className="flex items-baseline gap-1">
-                                                {isEstimating ? (
-                                                    <div className="h-4 w-12 bg-surface animate-pulse rounded" />
-                                                ) : (
-                                                    <>
-                                                        <span className="text-sm font-semibold text-text-main">
-                                                            {((estimation?.input_tokens ?? 0) / 1000).toFixed(1)}k
-                                                        </span>
-                                                        <span className="text-[9px] text-text-muted">tokens</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                            {!isEstimating && (
-                                                <div className="text-[10px] text-text-muted font-mono">${estimation?.input_cost.toFixed(4)}</div>
-                                            )}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[9px] font-bold text-text-muted uppercase">Output (Est.)</span>
-                                            <div className="flex items-baseline gap-1">
-                                                {isEstimating ? (
-                                                    <div className="h-4 w-12 bg-surface animate-pulse rounded" />
-                                                ) : (
-                                                    <>
-                                                        <span className="text-sm font-semibold text-text-main">
-                                                            {((estimation?.output_tokens ?? 0) / 1000).toFixed(1)}k
-                                                        </span>
-                                                        <span className="text-[9px] text-text-muted">tokens</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                            {!isEstimating && (
-                                                <div className="text-[10px] text-text-muted font-mono">${estimation?.output_cost.toFixed(4)}</div>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <AnimatePresence>
+                                        {showDetailedCost && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="grid grid-cols-2 gap-4 pt-1">
+                                                    <div className="space-y-1">
+                                                        <span className="text-[9px] font-bold text-text-muted uppercase">Input</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            {isEstimating ? (
+                                                                <div className="h-4 w-12 bg-surface animate-pulse rounded" />
+                                                            ) : (
+                                                                <>
+                                                                    <span className="text-sm font-semibold text-text-main">
+                                                                        {((estimation?.input_tokens ?? 0) / 1000).toFixed(1)}k
+                                                                    </span>
+                                                                    <span className="text-[9px] text-text-muted">tokens</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        {!isEstimating && (
+                                                            <div className="text-[10px] text-text-muted font-mono">${estimation?.input_cost.toFixed(4)}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <span className="text-[9px] font-bold text-text-muted uppercase">Output (Est.)</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            {isEstimating ? (
+                                                                <div className="h-4 w-12 bg-surface animate-pulse rounded" />
+                                                            ) : (
+                                                                <>
+                                                                    <span className="text-sm font-semibold text-text-main">
+                                                                        {((estimation?.output_tokens ?? 0) / 1000).toFixed(1)}k
+                                                                    </span>
+                                                                    <span className="text-[9px] text-text-muted">tokens</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        {!isEstimating && (
+                                                            <div className="text-[10px] text-text-muted font-mono">${estimation?.output_cost.toFixed(4)}</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
-                                {isEstimating && (
-                                    <div className="flex items-center justify-center gap-2 py-2 text-xs text-primary animate-pulse">
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                        <span>Analyzing content...</span>
+                                {isEstimating && estimationPhase !== 'idle' && (
+                                    <div className="flex items-center justify-center gap-2 py-2 text-xs text-primary">
+                                        <motion.div
+                                            initial={{ opacity: 0.5 }}
+                                            animate={{ opacity: [0.5, 1, 0.5] }}
+                                            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                                            className="flex items-center gap-2"
+                                        >
+                                            {estimationPhase === 'uploading' && <Upload className="w-3 h-3" />}
+                                            {estimationPhase === 'analyzing' && <FileSearch className="w-3 h-3" />}
+                                            {estimationPhase === 'calculating' && <Calculator className="w-3 h-3" />}
+                                            <span>{PHASE_CONFIG[estimationPhase].label}</span>
+                                        </motion.div>
                                     </div>
                                 )}
                             </div>
                         )}
 
+                        {/* Budget Limit Exceeded Warning */}
+                        <AnimatePresence>
+                            {isBudgetExceeded && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                                        <div className="flex items-start gap-3">
+                                            <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-red-300">Budget Limit Reached</p>
+                                                <p className="text-xs text-red-200/80 mt-1">
+                                                    You've spent ${totalSessionSpend.toFixed(2)} of your ${budgetLimit!.toFixed(2)} limit.
+                                                </p>
+                                                <p className="text-xs text-red-200/60 mt-1">
+                                                    This operation would cost ${estimatedCost.toFixed(3)}. Reset your session spend or increase your budget to continue.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Cost Warning Modal/Banner */}
+                        <AnimatePresence>
+                            {showCostWarning && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-amber-300">High Cost Operation</p>
+                                                <p className="text-xs text-amber-200/80 mt-1">
+                                                    This operation may cost approximately <span className="font-bold">${estimatedCost.toFixed(3)}</span>. Proceed?
+                                                </p>
+                                                <div className="flex gap-2 mt-3">
+                                                    <button
+                                                        onClick={handleProceedWithCost}
+                                                        className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg text-xs font-medium transition-colors border border-amber-500/30"
+                                                    >
+                                                        Proceed
+                                                    </button>
+                                                    <button
+                                                        onClick={handleDismissWarning}
+                                                        className="px-3 py-1.5 bg-surface/50 hover:bg-surface text-text-muted rounded-lg text-xs font-medium transition-colors border border-border/50"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={handleDismissWarning}
+                                                className="p-1 hover:bg-amber-500/20 rounded-lg transition-colors"
+                                                aria-label="Dismiss warning"
+                                            >
+                                                <X className="w-4 h-4 text-amber-400" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         <button
-                            onClick={handleGenerate}
-                            disabled={!pdfFile || !deckName || !health?.anki_connected || isEstimating || sliderConfig.disabled}
+                            onClick={handleGenerateClick}
+                            disabled={isButtonDisabled}
                             className="w-full relative group px-8 py-5 bg-primary hover:bg-primary/90 text-background rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none overflow-hidden"
                         >
                             <span className="relative z-10 flex items-center justify-center gap-3">
@@ -314,9 +553,9 @@ export function HomeView({
                         </button>
 
                         {!health?.anki_connected && (
-                            <div className="mt-4 flex items-center gap-2 text-red-400 text-xs bg-red-500/5 p-3 rounded-lg border border-red-500/10">
-                                <AlertCircle className="w-4 h-4" />
-                                <span>Anki is not connected. Please start Anki.</span>
+                            <div className="mt-4 flex items-center gap-2 text-text-muted text-xs bg-surface/50 p-3 rounded-lg border border-border/50">
+                                <Info className="w-4 h-4 text-text-muted" />
+                                <span>Anki disconnected. Cards will be saved as drafts for later export.</span>
                             </div>
                         )}
                     </GlassCard>

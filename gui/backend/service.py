@@ -90,6 +90,11 @@ class DraftStore:
             self._persist_state(cards)
             return True
         return False
+
+    def replace_drafts(self, cards: List[Dict[str, Any]]):
+        """Replaces the entire list of drafts while preserving metadata."""
+        self._persist_state(cards)
+        return True
         
     def clear(self):
         self.deck_name = ""

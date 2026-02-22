@@ -18,19 +18,40 @@ export const processStreamEvent = (
   }) as Partial<StoreState>);
 
   if (event.type === 'progress_start') {
+    const data = event.data as { total: number; phase?: string };
     set(() => ({
-      [keys.progressKey]: { current: 0, total: (event.data as { total: number }).total },
+      [keys.progressKey]: { current: 0, total: data.total },
     }) as Partial<StoreState>);
+
+    // Handle concept phase progress
+    if (data.phase === 'concept') {
+      set(() => ({
+        conceptProgress: { current: 0, total: data.total },
+      }) as Partial<StoreState>);
+    }
     return true;
   }
 
   if (event.type === 'progress_update') {
+    const data = event.data as { current: number; total?: number; phase?: string };
     set((state) => ({
       [keys.progressKey]: {
         ...state[keys.progressKey],
-        current: (event.data as { current: number }).current,
+        current: data.current,
+        total: data.total !== undefined ? data.total : state[keys.progressKey].total,
       },
     }) as Partial<StoreState>);
+
+    // Handle concept phase progress
+    if (data.phase === 'concept') {
+      set((state) => ({
+        conceptProgress: {
+          ...state.conceptProgress,
+          current: data.current,
+          total: data.total !== undefined ? data.total : state.conceptProgress.total,
+        },
+      }) as Partial<StoreState>);
+    }
     return true;
   }
 

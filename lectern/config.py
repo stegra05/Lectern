@@ -154,6 +154,11 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
 # Example: "Introduction to Machine Learning::Lecture 1 Supervised Learning::Image Classification::preprocessing"
 
 
+# Hierarchical tag assembly template
+# Placeholders: {{deck}}, {{slide_set}}, {{topic}}
+TAG_TEMPLATE: str = _get_config("tag_template", "{{deck}}::{{slide_set}}::{{topic}}", "TAG_TEMPLATE")
+
+
 def assert_required_config() -> None:
     """Raise a ValueError if critical configuration is missing.
 

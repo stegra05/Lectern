@@ -1,0 +1,4 @@
+Resolved 6 packages in 486ms
+Prepared 1 package in 43ms
+Installed 1 package in 3ms
+ + pytest-asyncio==1.3.0

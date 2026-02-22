@@ -602,6 +602,16 @@ async def get_drafts(session_id: Optional[str] = None):
     runtime = _get_runtime_or_404(session.session_id, session=session)
     return {"cards": runtime.draft_store.get_drafts(), "session_id": session.session_id}
 
+class DraftsUpdate(BaseModel):
+    cards: List[dict]
+
+@app.put("/drafts")
+async def update_drafts(update: DraftsUpdate, session_id: Optional[str] = None):
+    session = _get_session_or_404(session_id, require_session_id=True)
+    runtime = _get_runtime_or_404(session.session_id, session=session)
+    runtime.draft_store.replace_drafts(update.cards)
+    return {"status": "updated", "session_id": session.session_id}
+
 class DraftUpdate(BaseModel):
     card: dict
 

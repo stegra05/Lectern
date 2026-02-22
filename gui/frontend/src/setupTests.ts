@@ -11,6 +11,12 @@ vi.mock('framer-motion', () => ({
             const { initial, animate, exit, variants, transition, layout, layoutId, ...validProps } = props;
             return React.createElement('div', validProps, children);
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        span: ({ children, ...props }: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { initial, animate, exit, variants, transition, layout, layoutId, ...validProps } = props;
+            return React.createElement('span', validProps, children);
+        },
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),

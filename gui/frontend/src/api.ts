@@ -233,6 +233,7 @@ export const api = {
         basic_model?: string;
         cloze_model?: string;
         gemini_model?: string;
+        tag_template?: string;
     }) => {
         const res = await fetch(`${API_URL}/config`, {
             method: "POST",

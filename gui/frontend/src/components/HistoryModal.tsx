@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Trash2, Check, X, ChevronRight } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import type { HistoryEntry } from '../api';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface HistoryModalProps {
     isOpen: boolean;
@@ -40,6 +41,26 @@ export function HistoryModal({
 
     const [confirmAction, setConfirmAction] = useState<null | { label: string; action: () => void }>(null);
 
+    const modalRef = useRef<HTMLDivElement>(null);
+    const previousActiveElement = useRef<HTMLElement | null>(null);
+
+    // Focus trap for accessibility
+    useFocusTrap(modalRef, {
+        isActive: isOpen,
+        onEscape: onClose,
+        autoFocus: true,
+        restoreFocus: false,
+    });
+
+    // Store the element that opened the modal
+    useEffect(() => {
+        if (isOpen) {
+            previousActiveElement.current = document.activeElement as HTMLElement;
+        } else {
+            previousActiveElement.current?.focus();
+        }
+    }, [isOpen]);
+
     useEffect(() => {
         localStorage.setItem('lectern-history-filter', historyFilter);
     }, [historyFilter]);
@@ -74,6 +95,7 @@ export function HistoryModal({
                         exit={{ opacity: 0 }}
                         onClick={onClose}
                         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        aria-hidden="true"
                     />
 
                     {/* Modal Content */}
@@ -83,12 +105,18 @@ export function HistoryModal({
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         className="relative w-full max-w-2xl max-h-[80vh] flex flex-col"
                     >
-                        <GlassCard className="flex-1 flex flex-col p-0 overflow-hidden border-primary/20 bg-surface/90 shadow-2xl">
+                        <GlassCard
+                            ref={modalRef}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="history-title"
+                            className="flex-1 flex flex-col p-0 overflow-hidden border-primary/20 bg-surface/90 shadow-2xl"
+                        >
                             {/* Header */}
                             <div className="flex items-center justify-between p-6 border-b border-border/50">
                                 <div className="flex items-center gap-3">
-                                    <Clock className="w-5 h-5 text-primary" />
-                                    <h2 className="text-xl font-bold text-text-main">Recent Sessions</h2>
+                                    <Clock className="w-5 h-5 text-primary" aria-hidden="true" />
+                                    <h2 id="history-title" className="text-xl font-bold text-text-main">Recent Sessions</h2>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     {history.length > 0 && (
@@ -100,29 +128,34 @@ export function HistoryModal({
                                                     action: clearAllHistory,
                                                 });
                                             }}
+                                            aria-label="Clear all history"
                                             className="text-xs text-text-muted hover:text-red-400 transition-colors flex items-center gap-1 px-2 py-1"
                                         >
-                                            <Trash2 className="w-3.5 h-3.5" />
+                                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                             Clear All
                                         </button>
                                     )}
                                     <button
                                         onClick={onClose}
+                                        aria-label="Close history modal"
                                         className="p-2 hover:bg-surface/50 rounded-lg text-text-muted hover:text-text-main transition-colors"
                                     >
-                                        <X className="w-5 h-5" />
+                                        <X className="w-5 h-5" aria-hidden="true" />
                                     </button>
                                 </div>
                             </div>
 
                             {/* Filters */}
-                            <div className="px-6 py-4 bg-surface/30 border-b border-border/30 flex flex-wrap items-center gap-2">
+                            <div className="px-6 py-4 bg-surface/30 border-b border-border/30 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filter sessions">
                                 {visibleFilters.map((filterId) => {
                                     const isActive = historyFilter === filterId;
                                     return (
                                         <button
                                             key={filterId}
                                             onClick={() => setHistoryFilter(filterId)}
+                                            role="tab"
+                                            aria-selected={isActive}
+                                            aria-label={`Filter by ${FILTER_LABELS[filterId]}`}
                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${isActive
                                                 ? 'bg-primary/20 border-primary/50 text-primary'
                                                 : 'bg-surface/50 border-border/50 text-text-muted hover:border-primary/30'
@@ -133,7 +166,7 @@ export function HistoryModal({
                                                 }`}>
                                                 {counts[filterId]}
                                             </span>
-                                            {isActive && <Check className="w-3 h-3" />}
+                                            {isActive && <Check className="w-3 h-3" aria-hidden="true" />}
                                         </button>
                                     );
                                 })}
@@ -144,9 +177,10 @@ export function HistoryModal({
                                             label: `Delete all ${filteredHistory.length} ${FILTER_LABELS[historyFilter].toLowerCase()} sessions?`,
                                             action: () => batchDeleteHistory({ status: historyFilter }),
                                         })}
+                                        aria-label={`Delete all ${FILTER_LABELS[historyFilter].toLowerCase()} sessions`}
                                         className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium text-red-400 hover:bg-red-400/10 border border-red-400/30 hover:border-red-400/50 transition-all"
                                     >
-                                        <Trash2 className="w-3 h-3" />
+                                        <Trash2 className="w-3 h-3" aria-hidden="true" />
                                         Delete {FILTER_LABELS[historyFilter]}
                                     </button>
                                 )}
@@ -186,10 +220,10 @@ export function HistoryModal({
                             </AnimatePresence>
 
                             {/* History List */}
-                            <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar" role="list" aria-label="Session history">
                                 {filteredHistory.length === 0 ? (
                                     <div className="text-text-muted text-sm italic py-20 flex flex-col items-center gap-4">
-                                        <Clock className="w-12 h-12 opacity-10" />
+                                        <Clock className="w-12 h-12 opacity-10" aria-hidden="true" />
                                         <span>
                                             {history.length === 0
                                                 ? "No sessions found."
@@ -209,22 +243,24 @@ export function HistoryModal({
                                         <div
                                             key={entry.id}
                                             className="relative group"
+                                            role="listitem"
                                         >
                                             <button
                                                 onClick={() => {
                                                     loadSession(entry.session_id);
                                                     onClose();
                                                 }}
+                                                aria-label={`Load session: ${entry.filename}, ${entry.card_count} cards, ${new Date(entry.date).toLocaleDateString()}`}
                                                 className="w-full text-left p-4 rounded-xl bg-surface/50 border border-border hover:border-primary/50 hover:bg-surface/80 transition-all flex items-center justify-between group/item"
                                             >
                                                 <div className="flex-1 min-w-0 pr-4">
                                                     <div className="flex justify-between items-start mb-1">
                                                         <span className="font-medium text-text-main truncate pr-2">{entry.filename}</span>
                                                         <div className="flex items-center gap-2 shrink-0">
-                                                            {entry.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500" title="Completed" />}
-                                                            {entry.status === 'draft' && <div className="w-2 h-2 rounded-full bg-yellow-500" title="In Progress" />}
-                                                            {entry.status === 'error' && <div className="w-2 h-2 rounded-full bg-red-500" title="Error" />}
-                                                            {entry.status === 'cancelled' && <div className="w-2 h-2 rounded-full bg-orange-400" title="Cancelled" />}
+                                                            {entry.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500" aria-label="Completed" title="Completed" />}
+                                                            {entry.status === 'draft' && <div className="w-2 h-2 rounded-full bg-yellow-500" aria-label="In Progress" title="In Progress" />}
+                                                            {entry.status === 'error' && <div className="w-2 h-2 rounded-full bg-red-500" aria-label="Error" title="Error" />}
+                                                            {entry.status === 'cancelled' && <div className="w-2 h-2 rounded-full bg-orange-400" aria-label="Cancelled" title="Cancelled" />}
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center justify-between text-xs text-text-muted">
@@ -232,7 +268,7 @@ export function HistoryModal({
                                                         <span>{entry.card_count} cards • {new Date(entry.date).toLocaleDateString()}</span>
                                                     </div>
                                                 </div>
-                                                <ChevronRight className="w-5 h-5 text-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                <ChevronRight className="w-5 h-5 text-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity" aria-hidden="true" />
                                             </button>
                                             <button
                                                 onClick={(e) => {
@@ -242,10 +278,11 @@ export function HistoryModal({
                                                         action: () => deleteHistoryEntry(entry.id),
                                                     });
                                                 }}
-                                                className="absolute top-2 right-2 p-1.5 text-text-muted hover:text-red-400 hover:bg-surface rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                                                aria-label={`Delete session: ${entry.filename}`}
                                                 title="Delete Session"
+                                                className="absolute top-2 right-2 p-1.5 text-text-muted hover:text-red-400 hover:bg-surface rounded-md opacity-0 group-hover:opacity-100 transition-all"
                                             >
-                                                <Trash2 className="w-3.5 h-3.5" />
+                                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                             </button>
                                         </div>
                                     ))

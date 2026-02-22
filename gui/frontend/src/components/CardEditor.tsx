@@ -1,0 +1,337 @@
+import React, { useState, useRef, useCallback, KeyboardEvent } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, EyeOff, Save, X, RotateCcw, AlertTriangle } from 'lucide-react';
+import { clsx } from 'clsx';
+import type { Card } from '../api';
+
+// Field limits for character count warnings
+const FIELD_LIMITS: Record<string, number> = {
+    Front: 500,
+    Back: 1000,
+    Text: 2000,
+    Question: 500,
+    Answer: 1000,
+    Topic: 100,
+};
+
+interface CardEditorProps {
+    card: Card;
+    onSave: () => void;
+    onCancel: () => void;
+    onChange: (field: string, value: string) => void;
+    isSaving?: boolean;
+}
+
+/** Character count display with warning states */
+const CharCount: React.FC<{ field: string; count: number }> = ({ field, count }) => {
+    const limit = FIELD_LIMITS[field] || 500;
+    const percentage = (count / limit) * 100;
+    const isNearLimit = percentage >= 80;
+    const isOverLimit = percentage >= 100;
+
+    return (
+        <span
+            className={clsx(
+                "text-[10px] font-mono transition-colors",
+                isOverLimit
+                    ? "text-red-400"
+                    : isNearLimit
+                        ? "text-yellow-400"
+                        : "text-text-muted/60"
+            )}
+        >
+            {count} / {limit}
+            {isOverLimit && (
+                <AlertTriangle className="inline-block w-3 h-3 ml-1 text-red-400" />
+            )}
+        </span>
+    );
+};
+
+/** Anki-style card preview with flip animation */
+const CardPreview: React.FC<{
+    front: string;
+    back: string;
+    onFlip: () => void;
+    isFlipped: boolean;
+}> = ({ front, back, onFlip, isFlipped }) => {
+    return (
+        <div
+            onClick={onFlip}
+            className="cursor-pointer perspective-1000"
+        >
+            <motion.div
+                className="relative w-full preserve-3d"
+                animate={{ rotateY: isFlipped ? 180 : 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                style={{ transformStyle: "preserve-3d" }}
+            >
+                {/* Front of card */}
+                <div
+                    className={clsx(
+                        "min-h-[200px] p-6 rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10",
+                        "flex flex-col items-center justify-center text-center",
+                        "backface-hidden",
+                        isFlipped && "invisible"
+                    )}
+                >
+                    <div className="text-[10px] font-bold text-primary/50 uppercase tracking-widest mb-3">
+                        Question
+                    </div>
+                    <div
+                        className="text-lg text-text-main leading-relaxed prose prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ __html: front }}
+                    />
+                    <div className="mt-4 text-[10px] text-text-muted/50">
+                        Click to reveal answer
+                    </div>
+                </div>
+
+                {/* Back of card */}
+                <div
+                    className={clsx(
+                        "absolute inset-0 min-h-[200px] p-6 rounded-xl border-2 border-blue-500/30 bg-gradient-to-br from-blue-500/5 to-blue-500/10",
+                        "flex flex-col items-center justify-center text-center",
+                        "backface-hidden rotate-y-180",
+                        !isFlipped && "invisible"
+                    )}
+                >
+                    <div className="text-[10px] font-bold text-blue-400/50 uppercase tracking-widest mb-3">
+                        Answer
+                    </div>
+                    <div
+                        className="text-base text-text-main leading-relaxed prose prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ __html: back }}
+                    />
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
+export const CardEditor: React.FC<CardEditorProps> = ({
+    card,
+    onSave,
+    onCancel,
+    onChange,
+    isSaving = false,
+}) => {
+    const [isPreviewMode, setIsPreviewMode] = useState(false);
+    const [isFlipped, setIsFlipped] = useState(false);
+    const textareaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
+
+    // Get fields from card, handling both direct and nested field structures
+    const fields = card.fields || {};
+    const fieldEntries = Object.entries(fields);
+
+    // Get front/back for preview - try common field names
+    const getFrontContent = () => {
+        return fields['Front'] || fields['Question'] || fields['Text'] || '';
+    };
+
+    const getBackContent = () => {
+        return fields['Back'] || fields['Answer'] || '';
+    };
+
+    // Handle Tab key to move between fields instead of inserting tab
+    const handleKeyDown = useCallback(
+        (e: KeyboardEvent<HTMLTextAreaElement>, currentField: string) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+
+                const currentIndex = fieldEntries.findIndex(([key]) => key === currentField);
+                const direction = e.shiftKey ? -1 : 1;
+                const nextIndex = (currentIndex + direction + fieldEntries.length) % fieldEntries.length;
+
+                if (nextIndex !== currentIndex) {
+                    const nextField = fieldEntries[nextIndex][0];
+                    const nextTextarea = textareaRefs.current.get(nextField);
+                    nextTextarea?.focus();
+                }
+            }
+
+            // Cmd/Ctrl + Enter to save
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                onSave();
+            }
+
+            // Escape to cancel
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancel();
+            }
+        },
+        [fieldEntries, onSave, onCancel]
+    );
+
+    const setTextareaRef = (field: string) => (el: HTMLTextAreaElement | null) => {
+        if (el) {
+            textareaRefs.current.set(field, el);
+        } else {
+            textareaRefs.current.delete(field);
+        }
+    };
+
+    const togglePreview = () => {
+        setIsPreviewMode(!isPreviewMode);
+        setIsFlipped(false);
+    };
+
+    return (
+        <div className="p-5 space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                        Editing Card
+                    </span>
+                    <span className="text-[10px] text-text-muted/50 font-mono">
+                        Tab to navigate | Cmd+Enter to save
+                    </span>
+                </div>
+                <div className="flex items-center gap-2">
+                    {/* Preview Toggle */}
+                    <button
+                        onClick={togglePreview}
+                        className={clsx(
+                            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                            isPreviewMode
+                                ? "bg-primary/20 text-primary border border-primary/30"
+                                : "bg-surface text-text-muted hover:text-text-main border border-border hover:border-border/80"
+                        )}
+                        title={isPreviewMode ? "Switch to edit mode" : "Preview card"}
+                    >
+                        {isPreviewMode ? (
+                            <>
+                                <EyeOff className="w-3.5 h-3.5" />
+                                Edit
+                            </>
+                        ) : (
+                            <>
+                                <Eye className="w-3.5 h-3.5" />
+                                Preview
+                            </>
+                        )}
+                    </button>
+
+                    <div className="w-px h-5 bg-border" />
+
+                    {/* Cancel button */}
+                    <button
+                        onClick={onCancel}
+                        disabled={isSaving}
+                        className="p-1.5 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors disabled:opacity-50"
+                        title="Cancel (Esc)"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+
+                    {/* Save button */}
+                    <button
+                        onClick={onSave}
+                        disabled={isSaving}
+                        className={clsx(
+                            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all",
+                            isSaving
+                                ? "bg-primary/50 text-background/70 cursor-wait"
+                                : "bg-primary hover:bg-primary/90 text-background"
+                        )}
+                        title="Save (Cmd+Enter)"
+                    >
+                        {isSaving ? (
+                            <>
+                                <RotateCcw className="w-4 h-4 animate-spin" />
+                                Saving
+                            </>
+                        ) : (
+                            <>
+                                <Save className="w-4 h-4" />
+                                Save
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            {/* Content: Preview or Edit */}
+            <AnimatePresence mode="wait">
+                {isPreviewMode ? (
+                    <motion.div
+                        key="preview"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        <CardPreview
+                            front={getFrontContent()}
+                            back={getBackContent()}
+                            onFlip={() => setIsFlipped(!isFlipped)}
+                            isFlipped={isFlipped}
+                        />
+                    </motion.div>
+                ) : (
+                    <motion.div
+                        key="edit"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-4"
+                    >
+                        {/* Field editors */}
+                        {fieldEntries.map(([key, value]) => (
+                            <div key={key}>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                                        {key}
+                                    </label>
+                                    <CharCount field={key} count={String(value).length} />
+                                </div>
+                                <textarea
+                                    ref={setTextareaRef(key)}
+                                    value={String(value)}
+                                    onChange={(e) => onChange(key, e.target.value)}
+                                    onKeyDown={(e) => handleKeyDown(e, key)}
+                                    disabled={isSaving}
+                                    className={clsx(
+                                        "w-full bg-background border border-border rounded-lg p-3",
+                                        "text-sm text-text-main leading-relaxed",
+                                        "focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none",
+                                        "min-h-[100px] resize-y font-mono",
+                                        "placeholder:text-text-muted/30",
+                                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                                    )}
+                                    placeholder={`Enter ${key.toLowerCase()}...`}
+                                    rows={4}
+                                />
+                            </div>
+                        ))}
+
+                        {/* Topic field if it exists on the card (not in fields) */}
+                        {card.slide_topic !== undefined && (
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                                        Topic
+                                    </label>
+                                    <CharCount field="Topic" count={String(card.slide_topic).length} />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={card.slide_topic || ''}
+                                    disabled
+                                    className="w-full bg-background/50 border border-border/50 rounded-lg px-3 py-2 text-sm text-text-muted cursor-not-allowed"
+                                    title="Topic is set automatically from slide content"
+                                />
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+export default CardEditor;

@@ -48,20 +48,23 @@ def build_hierarchical_tag(
     slide_set_name: str,
     topic: str,
 ) -> str:
-    """Build a single hierarchical tag: Deck::SlideSet::Topic."""
-    parts = []
+    """Build a single hierarchical tag based on the TAG_TEMPLATE."""
+    template = config.TAG_TEMPLATE
     
-    # Deck: may already contain ::, split and clean each part
-    if deck_name:
-        parts.extend(_clean_tag_part(p) for p in deck_name.split("::") if p.strip())
+    # Pre-clean parts
+    c_deck = "::".join(_clean_tag_part(p) for p in deck_name.split("::") if p.strip()) if deck_name else ""
+    c_slide_set = _clean_tag_part(slide_set_name, title_case=True) if slide_set_name else ""
+    c_topic = _clean_tag_part(topic, title_case=True) if topic else ""
     
-    # Slide set and topic: Title Case
-    if slide_set_name:
-        parts.append(_clean_tag_part(slide_set_name, title_case=True))
-    if topic:
-        parts.append(_clean_tag_part(topic, title_case=True))
+    tag = template.replace("{{deck}}", c_deck)
+    tag = tag.replace("{{slide_set}}", c_slide_set)
+    tag = tag.replace("{{topic}}", c_topic)
     
-    return "::".join(parts)
+    # Clean up any empty separators resulting from missing placeholders
+    tag = re.sub(r":{3,}", "::", tag)
+    tag = tag.strip(":")
+    
+    return tag
 
 
 def build_hierarchical_tags(
