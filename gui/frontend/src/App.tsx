@@ -6,6 +6,7 @@ import { api } from './api';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { Toast, ToastContainer } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { useAppState } from './hooks/useAppState';
 import { useLecternStore } from './store';
@@ -200,6 +201,7 @@ function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="min-h-screen bg-background text-text-main font-sans selection:bg-primary/20 selection:text-primary transition-colors duration-300">
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden text-primary/5">
@@ -329,6 +331,7 @@ function App() {
 
 
     </div>
+    </ErrorBoundary>
   );
 }
 

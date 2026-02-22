@@ -55,6 +55,7 @@ const getReviewState = () => ({
   editForm: null,
   isSyncing: false,
   syncSuccess: false,
+  syncPartialFailure: null as { failed: number; created: number } | null,
   syncProgress: { current: 0, total: 0 },
   syncLogs: [],
 });
@@ -85,6 +86,9 @@ const processSyncEvent = async (
 
   if (event.type === 'done') {
     const { isHistorical, sessionId } = get();
+    const failed = event.data?.failed || 0;
+    const created = event.data?.created || 0;
+
     try {
       if (isHistorical && sessionId) {
         const session = await api.getSession(sessionId);
@@ -96,9 +100,17 @@ const processSyncEvent = async (
     } catch (refreshErr) {
       console.error('Failed to refresh cards after sync:', refreshErr);
     }
-    set(() => ({ syncSuccess: true }));
-    get().addToast('success', 'Sync complete!');
-    setTimeout(() => set(() => ({ syncSuccess: false })), 3000);
+
+    if (failed > 0) {
+      // Partial failure: show warning, no success animation
+      set(() => ({ syncSuccess: false, syncPartialFailure: { failed, created } }));
+      get().addToast('warning', `Sync completed with ${failed} failure(s). Check logs.`, 8000);
+    } else {
+      // Full success
+      set(() => ({ syncSuccess: true, syncPartialFailure: null }));
+      get().addToast('success', `Synced ${created} cards to Anki!`);
+      setTimeout(() => set(() => ({ syncSuccess: false })), 3000);
+    }
   }
 };
 

@@ -155,6 +155,84 @@ function SyncSuccessOverlay({ syncSuccess }: SyncSuccessOverlayProps) {
     );
 }
 
+interface SyncPartialFailureOverlayProps {
+    failedCount: number;
+    createdCount: number;
+    syncLogs: ProgressEvent[];
+    onDismiss: () => void;
+    onCopyLogs: () => void;
+    copied: boolean;
+}
+
+function SyncPartialFailureOverlay({
+    failedCount,
+    createdCount,
+    syncLogs,
+    onDismiss,
+    onCopyLogs,
+    copied
+}: SyncPartialFailureOverlayProps) {
+    // Filter logs for warnings/errors to show failure details
+    const failureLogs = syncLogs.filter(
+        (log) => log.type === 'warning' || log.type === 'error'
+    );
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md"
+        >
+            <GlassCard className="max-w-md w-full border-yellow-500/30 bg-yellow-950/10 shadow-[0_0_40px_rgba(234,179,8,0.15)]">
+                <div className="flex flex-col items-center text-center p-4">
+                    <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4 border border-yellow-500/20">
+                        <AlertCircle className="w-8 h-8 text-yellow-500" />
+                    </div>
+
+                    <h2 className="text-xl font-bold text-yellow-200 mb-2">Sync Completed with Errors</h2>
+
+                    <p className="text-sm text-text-muted mb-4">
+                        {createdCount} card{createdCount !== 1 ? 's' : ''} synced, {failedCount} failed
+                    </p>
+
+                    {failureLogs.length > 0 && (
+                        <div className="bg-yellow-950/40 p-3 rounded-lg border border-yellow-500/10 w-full mb-4 max-h-32 overflow-y-auto">
+                            <div className="space-y-1 text-left">
+                                {failureLogs.slice(0, 5).map((log, i) => (
+                                    <p key={i} className="text-xs font-mono text-yellow-300/80 break-words">
+                                        {log.message}
+                                    </p>
+                                ))}
+                                {failureLogs.length > 5 && (
+                                    <p className="text-xs text-text-muted italic">
+                                        ...and {failureLogs.length - 5} more
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex gap-3 w-full">
+                        <button
+                            onClick={onCopyLogs}
+                            className="flex-1 py-2 px-4 rounded-lg border border-border bg-surface hover:bg-surface/80 text-text-muted hover:text-text-main transition-colors text-sm font-medium"
+                        >
+                            {copied ? "Copied Logs" : "Copy Logs"}
+                        </button>
+                        <button
+                            onClick={onDismiss}
+                            className="flex-1 py-2 px-4 rounded-lg bg-yellow-500/80 hover:bg-yellow-500 text-background font-bold shadow-lg shadow-yellow-500/20 transition-all active:scale-95 text-sm"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            </GlassCard>
+        </motion.div>
+    );
+}
+
 interface ErrorOverlayProps {
     isError: boolean;
     lastError: string | null;
@@ -186,18 +264,17 @@ function ErrorOverlay({ isError, lastError, handleCopyLogs, copied, handleReset,
                             <span className="text-3xl">⚠️</span>
                         </div>
 
-                        <h2 className="text-xl font-bold text-red-200 mb-2">Process Interrupted</h2>
+                        <h2 className="text-xl font-bold text-red-200 mb-2">Something went wrong</h2>
+
+                        <p className="text-sm text-text-muted mb-4">
+                            An error occurred during generation.
+                        </p>
 
                         <div className="bg-red-950/40 p-3 rounded-lg border border-red-500/10 w-full mb-6 max-h-40 overflow-y-auto">
                             <p className="text-sm font-mono text-red-300 break-words text-left">
                                 {lastError}
                             </p>
                         </div>
-
-                        <p className="text-sm text-text-muted mb-6">
-                            The generation process was stopped due to a critical error.
-                            Please check the logs or try again.
-                        </p>
 
                         <div className="flex gap-3 w-full">
                             <button
@@ -290,6 +367,7 @@ export function ProgressView() {
         editForm,
         isSyncing,
         syncSuccess,
+        syncPartialFailure,
         syncProgress,
         syncLogs,
         handleDelete,
@@ -883,6 +961,10 @@ export function ProgressView() {
         </motion.div>
     );
 
+    const dismissSyncPartialFailure = () => {
+        useLecternStore.setState({ syncPartialFailure: null });
+    };
+
     return (
         <ErrorOverlay
             isError={isError}
@@ -893,6 +975,18 @@ export function ProgressView() {
         >
             <div className="relative">
                 <SyncSuccessOverlay syncSuccess={syncSuccess} />
+                <AnimatePresence>
+                    {syncPartialFailure && (
+                        <SyncPartialFailureOverlay
+                            failedCount={syncPartialFailure.failed}
+                            createdCount={syncPartialFailure.created}
+                            syncLogs={syncLogs}
+                            onDismiss={dismissSyncPartialFailure}
+                            onCopyLogs={handleCopyLogs}
+                            copied={copied}
+                        />
+                    )}
+                </AnimatePresence>
                 <AnimatePresence mode="wait">
                     {isSyncing ? (
                         <motion.div
