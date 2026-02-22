@@ -23,5 +23,22 @@ module.exports = {
   },
   plugins: [
     require('@tailwindcss/typography'),
+    function ({ addUtilities }) {
+      addUtilities({
+        '.preserve-3d': {
+          'transform-style': 'preserve-3d',
+        },
+        '.perspective-1000': {
+          'perspective': '1000px',
+        },
+        '.backface-hidden': {
+          'backface-visibility': 'hidden',
+          '-webkit-backface-visibility': 'hidden',
+        },
+        '.rotate-y-180': {
+          'transform': 'rotateY(180deg)',
+        },
+      });
+    },
   ],
 }

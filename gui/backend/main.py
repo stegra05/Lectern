@@ -773,6 +773,28 @@ async def delete_anki_notes(req: AnkiDeleteRequest):
 class AnkiUpdateRequest(BaseModel):
     fields: Dict[str, str]
 
+class SessionBatchDeleteRequest(BaseModel):
+    indices: List[int]
+
+@app.post("/session/{session_id}/cards/batch-delete")
+async def batch_delete_session_cards(session_id: str, req: SessionBatchDeleteRequest):
+    state_file = StateFile(session_id)
+    deleted_count = state_file.delete_cards_by_indices(req.indices)
+
+    # Try to update history card count
+    try:
+        history_mgr = HistoryManager()
+        entry = history_mgr.get_entry_by_session_id(session_id)
+        if entry:
+            # We need to reload state to get correct remaining count
+            new_state = state_file.load()
+            remaining = len(new_state.get("cards", [])) if new_state else 0
+            history_mgr.update_entry(entry["id"], card_count=remaining)
+    except Exception as e:
+        logger.warning(f"Failed to update history card count: {e}")
+
+    return {"status": "ok", "deleted": deleted_count}
+
 @app.put("/anki/notes/{note_id}")
 async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
     """Update fields on an existing Anki note."""

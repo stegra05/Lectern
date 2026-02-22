@@ -77,7 +77,7 @@ function App() {
 
   // Unsynced cards confirmation state
   const [isUnsyncedConfirmOpen, setIsUnsyncedConfirmOpen] = useState(false);
-  const [pendingGenerateCallback, setPendingGenerateCallback] = useState<(() => void) | null>(null);
+  const pendingGenerateCallbackRef = useRef<(() => void) | null>(null);
 
   // Get cards and sync state for unsynced check
   const cards = useLecternStore((s) => s.cards);
@@ -211,7 +211,7 @@ function App() {
     return () => controller.abort();
   }, [pdfFile, health?.gemini_model, sourceType, setEstimation, setIsEstimating, setEstimationError]);
 
-  // Effect 2: Slider recompute — instant client-side math, no network, no loading state.
+  // Effect 2: Slider recompute — instant client-side math, no loading state.
   useEffect(() => {
     const base = estimationBaseRef.current;
     if (!base) return;
@@ -270,7 +270,7 @@ function App() {
   const handleGenerateWithConfirm = useCallback(() => {
     if (hasUnsyncedCards) {
       // Show confirmation dialog
-      setPendingGenerateCallback(() => handleGenerate);
+      pendingGenerateCallbackRef.current = handleGenerate;
       setIsUnsyncedConfirmOpen(true);
     } else {
       handleGenerate();
@@ -279,15 +279,15 @@ function App() {
 
   const handleConfirmGenerate = useCallback(() => {
     setIsUnsyncedConfirmOpen(false);
-    if (pendingGenerateCallback) {
-      pendingGenerateCallback();
-      setPendingGenerateCallback(null);
+    if (pendingGenerateCallbackRef.current) {
+      pendingGenerateCallbackRef.current();
+      pendingGenerateCallbackRef.current = null;
     }
-  }, [pendingGenerateCallback]);
+  }, []);
 
   const handleCancelGenerate = useCallback(() => {
     setIsUnsyncedConfirmOpen(false);
-    setPendingGenerateCallback(null);
+    pendingGenerateCallbackRef.current = null;
   }, []);
 
   if (isCheckingHealth) {

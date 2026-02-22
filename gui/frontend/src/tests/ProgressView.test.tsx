@@ -1,10 +1,21 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import React from 'react';
 import { ProgressView } from '../views/ProgressView';
+import { useLecternStore } from '../store';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from '../store-types';
 import type { SortOption } from '../hooks/types';
+
+// Mock useTrickleProgress to skip animation
+vi.mock('../hooks/useTrickleProgress', () => ({
+    useTrickleProgress: (val: number) => val
+}));
+
+// Mock the store explicitly
+vi.mock('../store', () => ({
+    useLecternStore: vi.fn()
+}));
 
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -161,10 +172,17 @@ describe('ProgressView', () => {
     });
 
     it('calls setSortBy when a pill is clicked', () => {
+        const mockState: any = {
+            ...defaultState,
+            setSortBy: vi.fn(), // Ensure setSortBy is mocked
+        };
+        
+        vi.mocked(useLecternStore).mockReturnValue(mockState);
+
         render(<ProgressView />);
         const topicPill = screen.getByText('topic');
         topicPill.click();
-        expect(storeState.setSortBy).toHaveBeenCalledWith('topic');
+        expect(mockState.setSortBy).toHaveBeenCalledWith('topic');
     });
 
     it('shows cancel button when generating', () => {
@@ -322,7 +340,8 @@ describe('ProgressView', () => {
 
         render(<ProgressView />);
         expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
-        expect(screen.getByText('Deep Learning')).toBeInTheDocument(); // Expect topic too
+        // Use getAllByText and check length or specific one if needed, or refine query
+        expect(screen.getAllByText('Deep Learning').length).toBeGreaterThan(0);
     });
 
     it('handles card actions: edit, archive, delete', () => {
@@ -353,9 +372,9 @@ describe('ProgressView', () => {
         const mockState: any = {
             ...defaultState,
             step: 'done',
-            cards: [{ Front: 'A', Back: 'B', _uid: '123' }],
+            cards: [{ fields: { Front: 'A', Back: 'B' }, _uid: '123' }],
             editingIndex: 0,
-            editForm: { Front: 'A', Back: 'B', _uid: '123' },
+            editForm: { fields: { Front: 'A', Back: 'B' }, _uid: '123' },
             saveEdit: vi.fn(),
             cancelEdit: vi.fn(),
             handleFieldChange: vi.fn()
@@ -368,7 +387,7 @@ describe('ProgressView', () => {
         expect(screen.getByDisplayValue('A')).toBeInTheDocument();
         
         // Save
-        const saveBtn = screen.getByTitle('Save Changes');
+        const saveBtn = screen.getByText('Save');
         saveBtn.click();
         expect(mockState.saveEdit).toHaveBeenCalledWith(0); // Using the original index from uidToIndex map
     });

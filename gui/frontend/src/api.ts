@@ -360,6 +360,16 @@ export const api = {
         return res.json();
     },
 
+    updateDrafts: async (cards: Card[], sessionId?: string) => {
+        const res = await fetch(withSessionId(`${API_URL}/drafts`, sessionId), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cards }),
+        });
+        if (!res.ok) throw new Error("Failed to update drafts");
+        return res.json();
+    },
+
     updateDraft: async (index: number, card: Card, sessionId?: string) => {
         const res = await fetch(withSessionId(`${API_URL}/drafts/${index}`, sessionId), {
             method: "PUT",
@@ -421,6 +431,16 @@ export const api = {
             method: 'DELETE',
         });
         if (!res.ok) throw new Error('Failed to delete card from session');
+        return res.json();
+    },
+
+    batchDeleteSessionCards: async (sessionId: string, indices: number[]) => {
+        const res = await fetchWithTimeout(`${API_URL}/session/${sessionId}/cards/batch-delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ indices }),
+        });
+        if (!res.ok) throw new Error('Failed to batch delete cards');
         return res.json();
     },
 

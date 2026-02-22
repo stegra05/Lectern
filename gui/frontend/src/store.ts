@@ -414,7 +414,7 @@ const createReviewActions = (
       get().addToast('error', 'Failed to delete card');
     }
   },
-  undoDelete: (cardUid: string) => {
+  undoDelete: async (cardUid: string) => {
     const { deletedCards } = get();
     const entry = deletedCards.find((e) => e.card._uid === cardUid);
     if (!entry) return;
@@ -440,7 +440,20 @@ const createReviewActions = (
       deletedCards: state.deletedCards.filter((e) => e.card._uid !== cardUid),
     }));
 
-    get().addToast('success', 'Card restored');
+    // Sync to backend
+    const sessionId = resolveSessionId(get);
+    const { isHistorical } = get();
+    try {
+      if (isHistorical && sessionId) {
+        await api.updateSessionCards(sessionId, newCards);
+      } else {
+        await api.updateDrafts(newCards, sessionId);
+      }
+      get().addToast('success', 'Card restored');
+    } catch (e) {
+      console.error('Failed to restore card on backend', e);
+      get().addToast('error', 'Failed to restore card on server');
+    }
   },
   clearDeletedCard: (cardUid: string) => {
     const { deletedCards } = get();
@@ -584,7 +597,7 @@ const createBatchActions = (
     set({ selectedCards: new Set() });
   },
   batchDeleteSelected: async () => {
-    const { cards, selectedCards, isHistorical } = get();
+    const { cards, selectedCards } = get();
     const sessionId = resolveSessionId(get);
 
     if (selectedCards.size === 0) return;
@@ -602,12 +615,15 @@ const createBatchActions = (
       .sort((a, b) => b - a);
 
     try {
-      // Delete from backend (in reverse order to maintain index validity)
-      for (const index of indicesToDelete) {
-        if (isHistorical && sessionId) {
-          await api.deleteSessionCard(sessionId, index);
-        } else {
-          await api.deleteDraft(index, sessionId);
+      if (sessionId) {
+        // Use batch delete endpoint for efficiency and atomic operation
+        await api.batchDeleteSessionCards(sessionId, indicesToDelete);
+      } else {
+        // Fallback for no session ID (shouldn't happen in valid state)
+        for (const index of indicesToDelete) {
+           // This path is likely unreachable if sessionId is required for API
+           console.warn('No session ID for batch delete, falling back to sequential draft delete');
+           await api.deleteDraft(index);
         }
       }
 

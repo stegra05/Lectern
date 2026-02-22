@@ -1,6 +1,7 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { SettingsModal } from '../components/SettingsModal';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { api } from '../api';
 
 // Proven mocking pattern
@@ -89,34 +90,20 @@ describe('SettingsModal', () => {
     });
 
     it('updates Gemini API key', async () => {
-        await act(async () => {
-            render(
-                <SettingsModal
-                    isOpen={true}
-                    onClose={mockOnClose}
-                    theme="light"
-                    toggleTheme={mockToggleTheme}
-                />
-            );
-        });
+        const user = userEvent.setup();
+        render(<SettingsModal {...defaultProps} />);
 
         const input = await screen.findByPlaceholderText('Enter new Gemini API Key');
         
-        // Debug finding the button
-        const buttons = await screen.findAllByRole('button');
-        const updateButton = buttons.find(b => b.textContent === 'Update');
-        if (!updateButton) {
-             throw new Error('Update button not found. Found buttons: ' + buttons.map(b => b.textContent).join(', '));
-        }
+        // Wait for the button to appear - use a flexible finder
+        const updateButton = await screen.findByRole('button', { name: /Save API key/i });
 
-        fireEvent.change(input, { target: { value: 'new-api-key' } });
-        await act(async () => {
-            fireEvent.click(updateButton);
-        });
+        await user.type(input, 'new-api-key');
+        await user.click(updateButton);
 
-        await waitFor(() => {
-            expect(api.saveConfig).toHaveBeenCalledWith({ gemini_api_key: 'new-api-key' });
-        });
+        expect(api.saveConfig).toHaveBeenCalledWith({ gemini_api_key: 'new-api-key' });
+        // Should clear input after save
+        await waitFor(() => expect(input).toHaveValue(''));
     });
 
     it('saves changed settings', async () => {

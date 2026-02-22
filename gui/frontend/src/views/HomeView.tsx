@@ -164,6 +164,14 @@ export function HomeView({
         setCostWarningDismissed(true);
     };
 
+    // Reset warning dismissal when estimation changes (new PDF or settings)
+    useEffect(() => {
+        if (costWarningDismissed) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setCostWarningDismissed(false);
+        }
+    }, [estimation, costWarningDismissed]);
+
     // Check if budget would be exceeded for button disable
     const isButtonDisabled = !pdfFile || !deckName || isEstimating || sliderConfig.disabled || isBudgetExceeded;
 
