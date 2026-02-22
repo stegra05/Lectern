@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/stef/Dev/Product/apps/Lectern/LecternApp/.venv/bin/python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python3:*)",
+      "Bash(xxd:*)"
+    ]
+  }
+}

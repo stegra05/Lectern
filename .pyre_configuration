@@ -4,10 +4,12 @@
   ],
   "search_path": [
     ".venv/lib/python3.14/site-packages",
-    "gui/backend"
+    "gui/backend",
+    "."
   ],
-  "python_version": "3.14.0",
+  "python_version": "3.13",
   "python_interpreter": ".venv/bin/python",
+  "typeshed": ".venv/lib/pyre_check/typeshed",
   "exclude": [
     ".*/\\.venv/.*",
     ".*/dist/.*",

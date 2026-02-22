@@ -18,13 +18,14 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Set
 import hashlib
 import shutil
 import tempfile
 import json
 import time
 import requests
+import threading
 
 from cachetools import TTLCache
 
@@ -148,7 +149,7 @@ async def stream_sync_cards(
 
         yield event_json("progress_update", "", {"current": created + updated + failed})
 
-    if on_complete:
+    if callable(on_complete):
         on_complete(cards, created, updated, failed)
 
     yield event_json(
@@ -716,7 +717,8 @@ async def update_session_cards(session_id: str, update: SessionCardsUpdate):
         raise HTTPException(status_code=404, detail="Session not found")
     
     # Save the updated cards back to the session state
-    StateFile(session_id).update_cards(update.cards)
+    state_file = StateFile(session_id)
+    state_file.update_cards(update.cards)
     return {"status": "ok", "session_id": session_id}
 
 @app.delete("/session/{session_id}/cards/{card_index}")
@@ -732,14 +734,15 @@ async def delete_session_card(session_id: str, card_index: int):
     cards.pop(card_index)
     
     # Save the updated cards back to the session state
-    StateFile(session_id).update_cards(cards)
+    state_file = StateFile(session_id)
+    state_file.update_cards(cards)
 
     # Try to update history card count via session_id lookup
     try:
-        mgr = HistoryManager()
-        entry = mgr.get_entry_by_session_id(session_id)
+        history_mgr = HistoryManager()
+        entry = history_mgr.get_entry_by_session_id(session_id)
         if entry:
-            mgr.update_entry(entry["id"], card_count=len(cards))
+            history_mgr.update_entry(entry["id"], card_count=len(cards))
     except Exception as e:
         logger.warning(f"Failed to update history card count: {e}")
 
@@ -808,9 +811,7 @@ async def sync_session_to_anki(session_id: str):
 # In Dev: ../frontend/dist (relative to backend/main.py)
 # In Frozen: frontend/dist (relative to sys._MEIPASS root)
 if hasattr(sys, '_MEIPASS'):
-    # NOTE(Paths): Use explicit components — os.path.join treats "frontend/dist"
-    # as a single opaque string, which is fragile on Windows path normalisers.
-    frontend_dist = os.path.join(sys._MEIPASS, "frontend", "dist")
+    frontend_dist = os.path.join(getattr(sys, "_MEIPASS"), "frontend", "dist")
 else:
     frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
@@ -824,11 +825,11 @@ if os.path.exists(frontend_dist):
         # don't have to maintain a manual allowlist whenever a new endpoint is added.
         # NOTE(Typing): Use getattr so static analysers (Pyre2) can resolve .path
         # on BaseRoute without needing a type narrowing guard they can't follow.
-        api_roots = {
+        api_roots: Set[str] = {
             getattr(r, "path", "").lstrip("/").split("/")[0]
             for r in app.routes
             if hasattr(r, "methods")
-            and getattr(r, "path", None) not in (None, "/", "/{full_path:path}")
+            and getattr(r, "path", None) not in {None, "/", "/{full_path:path}"}
         }
         first_segment = full_path.split("/")[0]
         if first_segment in api_roots or full_path.startswith("assets"):
