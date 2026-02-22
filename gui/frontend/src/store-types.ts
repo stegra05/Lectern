@@ -9,6 +9,17 @@ export interface StoreToast {
     type: ToastType;
     message: string;
     duration?: number;
+    /** Optional undo action callback */
+    onUndo?: () => void;
+    undoLabel?: string;
+}
+
+/** Buffer entry for deleted cards that can be undone */
+export interface DeletedCardBuffer {
+    card: Card;
+    originalIndex: number;
+    deletedAt: number;
+    timeoutId: ReturnType<typeof setTimeout> | null;
 }
 
 export type Step = 'dashboard' | 'config' | 'generating' | 'done';
@@ -53,6 +64,10 @@ export type StoreState = {
     searchQuery: string;
     sortBy: SortOption;
 
+    // Batch operations
+    isMultiSelectMode: boolean;
+    selectedCards: Set<string>;
+
     // UI bits
     copied: boolean;
 
@@ -61,6 +76,16 @@ export type StoreState = {
 
     // Progress tracking
     setupStepsCompleted: number;
+
+    // Concept phase progress (slide-by-slide analysis)
+    conceptProgress: { current: number; total: number };
+
+    // Undo buffer for deleted cards
+    deletedCards: DeletedCardBuffer[];
+
+    // Budget tracking
+    totalSessionSpend: number;
+    budgetLimit: number | null;
 };
 
 export type GenerationActions = {
@@ -106,6 +131,10 @@ export type ReviewActions = {
     handleDelete: (index: number) => Promise<void>;
     handleAnkiDelete: (noteId: number, index: number) => Promise<void>;
     handleSync: () => Promise<void>;
+    /** Restore a deleted card from the buffer */
+    undoDelete: (cardUid: string) => void;
+    /** Clear a deleted card from the buffer (called after timeout) */
+    clearDeletedCard: (cardUid: string) => void;
 };
 
 export type UiActions = {
@@ -113,14 +142,34 @@ export type UiActions = {
     setSortBy: (option: SortOption) => void;
 };
 
+export type BatchActions = {
+    toggleMultiSelectMode: () => void;
+    toggleCardSelection: (cardUid: string) => void;
+    selectAllCards: () => void;
+    clearSelection: () => void;
+    batchDeleteSelected: () => Promise<void>;
+};
+
 export type ToastActions = {
-    addToast: (type: ToastType, message: string, duration?: number) => void;
+    addToast: (type: ToastType, message: string, duration?: number, onUndo?: () => void, undoLabel?: string) => void;
     dismissToast: (id: string) => void;
 };
 
 export type ProgressTrackingActions = {
     incrementSetupStep: () => void;
+    setConceptProgress: (progress: { current: number; total: number }) => void;
 };
 
-export type StoreActions = GenerationActions & ReviewActions & UiActions & ToastActions & ProgressTrackingActions;
+export type BudgetActions = {
+    /** Add spent amount to session total */
+    addToSessionSpend: (amount: number) => void;
+    /** Reset session spend to zero */
+    resetSessionSpend: () => void;
+    /** Set budget limit (null to disable) */
+    setBudgetLimit: (limit: number | null) => void;
+    /** Check if spending would exceed budget */
+    wouldExceedBudget: (amount: number) => boolean;
+};
+
+export type StoreActions = GenerationActions & ReviewActions & UiActions & ToastActions & ProgressTrackingActions & BatchActions & BudgetActions;
 export type LecternStore = StoreState & StoreActions;

@@ -1,16 +1,20 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Terminal, Copy, Check, Loader2, CheckCircle2, RotateCcw, Search, Trash2, Edit2, Save, X, UploadCloud, Archive, AlertCircle } from 'lucide-react';
+import { Layers, Terminal, Copy, Check, Loader2, CheckCircle2, RotateCcw, Search, Trash2, Edit2, UploadCloud, Archive, AlertCircle, CheckSquare, Square, Maximize2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
 import { PhaseIndicator } from '../components/PhaseIndicator';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { CoverageGrid } from '../components/CoverageGrid';
 import { SidebarPane } from '../components/SidebarPane';
+import { CardEditor } from '../components/CardEditor';
+import { BatchActionBar } from '../components/BatchActionBar';
+import { FocusMode } from '../components/FocusMode';
 import { useLecternStore } from '../store';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
 import { getCardSlideNumber } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
+import { type FriendlyError, translateError } from '../utils/errorMessages';
 
 import type { Phase } from '../components/PhaseIndicator';
 import type { ProgressEvent } from '../api';
@@ -160,8 +164,6 @@ interface SyncPartialFailureOverlayProps {
     createdCount: number;
     syncLogs: ProgressEvent[];
     onDismiss: () => void;
-    onCopyLogs: () => void;
-    copied: boolean;
 }
 
 function SyncPartialFailureOverlay({
@@ -169,13 +171,25 @@ function SyncPartialFailureOverlay({
     createdCount,
     syncLogs,
     onDismiss,
-    onCopyLogs,
-    copied
 }: SyncPartialFailureOverlayProps) {
+    const [copied, setCopied] = useState(false);
+
     // Filter logs for warnings/errors to show failure details
     const failureLogs = syncLogs.filter(
         (log) => log.type === 'warning' || log.type === 'error'
     );
+
+    const handleCopyLogs = useCallback(() => {
+        const text = syncLogs
+            .map(
+                (log) =>
+                    `[${new Date(log.timestamp * 1000).toLocaleTimeString()}] ${log.type.toUpperCase()}: ${log.message}`
+            )
+            .join('\n');
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }, [syncLogs]);
 
     return (
         <motion.div
@@ -215,7 +229,7 @@ function SyncPartialFailureOverlay({
 
                     <div className="flex gap-3 w-full">
                         <button
-                            onClick={onCopyLogs}
+                            onClick={handleCopyLogs}
                             className="flex-1 py-2 px-4 rounded-lg border border-border bg-surface hover:bg-surface/80 text-text-muted hover:text-text-main transition-colors text-sm font-medium"
                         >
                             {copied ? "Copied Logs" : "Copy Logs"}
@@ -247,6 +261,8 @@ function ErrorOverlay({ isError, lastError, handleCopyLogs, copied, handleReset,
         return <>{children}</>;
     }
 
+    const friendlyError: FriendlyError = translateError(lastError, 'generation');
+
     return (
         <div className="relative">
             <div className="filter blur-sm pointer-events-none opacity-50">
@@ -261,20 +277,28 @@ function ErrorOverlay({ isError, lastError, handleCopyLogs, copied, handleReset,
                 <GlassCard className="max-w-md w-full border-red-500/30 bg-red-950/20 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
                     <div className="flex flex-col items-center text-center p-4">
                         <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
-                            <span className="text-3xl">⚠️</span>
+                            <AlertCircle className="w-8 h-8 text-red-400" />
                         </div>
 
-                        <h2 className="text-xl font-bold text-red-200 mb-2">Something went wrong</h2>
+                        <h2 className="text-xl font-bold text-red-200 mb-2">{friendlyError.title}</h2>
 
                         <p className="text-sm text-text-muted mb-4">
-                            An error occurred during generation.
+                            {friendlyError.message}
                         </p>
 
-                        <div className="bg-red-950/40 p-3 rounded-lg border border-red-500/10 w-full mb-6 max-h-40 overflow-y-auto">
-                            <p className="text-sm font-mono text-red-300 break-words text-left">
-                                {lastError}
+                        {friendlyError.action && (
+                            <p className="text-sm text-primary mb-4">
+                                {friendlyError.action}
                             </p>
-                        </div>
+                        )}
+
+                        {friendlyError.errorCode && (
+                            <div className="bg-red-950/40 p-2 rounded-lg border border-red-500/10 w-full mb-4">
+                                <p className="text-[10px] font-mono text-red-300/60 break-words text-center">
+                                    Error code: {friendlyError.errorCode}
+                                </p>
+                            </div>
+                        )}
 
                         <div className="flex gap-3 w-full">
                             <button
@@ -378,7 +402,15 @@ export function ProgressView() {
         handleFieldChange,
         handleSync,
         confirmModal,
-        setConfirmModal
+        setConfirmModal,
+        // Multi-select
+        isMultiSelectMode,
+        selectedCards,
+        toggleMultiSelectMode,
+        toggleCardSelection,
+        selectAllCards,
+        clearSelection,
+        batchDeleteSelected
     } = useLecternStore();
 
     // Pull from store state via selector to ensure reactivity
@@ -386,20 +418,26 @@ export function ProgressView() {
 
     const setupStepsCompleted = useLecternStore((s) => s.setupStepsCompleted);
 
+    const conceptProgress = useLecternStore((s) => s.conceptProgress);
+
     const logsEndRef = useRef<HTMLDivElement>(null);
     const [activeTopic, setActiveTopic] = useState<string | null>(null);
     const [activePage, setActivePage] = useState<number | null>(null);
+    const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+    const [isFocusMode, setIsFocusMode] = useState(false);
+
+    // Reset filters when step changes (e.g. from generating to done)
+    const [prevStep, setPrevStep] = useState(step);
+    if (prevStep !== step) {
+        setPrevStep(step);
+        setActiveTopic(null);
+        setActivePage(null);
+    }
 
     // Auto-scroll logs
     useEffect(() => {
         logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [logs.length]);
-
-    // Reset filters when cards change significantly
-    useEffect(() => {
-        setActiveTopic(null);
-        setActivePage(null);
-    }, [step]);
 
     const lastError = useMemo(() => findLastError(logs, isError), [isError, logs]);
 
@@ -428,7 +466,7 @@ export function ProgressView() {
 
     // Synthesize progress percentage from phase + batch progress:
     //   idle:        0% →  5%   (setup steps: AnkiConnect, examples, session, PDF upload)
-    //   concept:     5%         (static while concept map builds)
+    //   concept:     0% →  5%   (slide analysis progress via conceptProgress)
     //   generating:  5% → 90%   (per-card progress, driven by cards.length / progress.total)
     //   reflecting: 90% → 98%   (quality pass, driven by reflection rounds)
     //   complete:   100%
@@ -447,13 +485,19 @@ export function ProgressView() {
             const batchPct = Math.min(1, Math.max(cardBased, batchBased));
             return Math.round(5 + batchPct * 85);
         }
-        if (currentPhase === 'concept') return 5;
+        if (currentPhase === 'concept') {
+            // Dynamic progress during concept phase based on slide analysis
+            const conceptPct = conceptProgress.total > 0
+                ? (conceptProgress.current / conceptProgress.total)
+                : 0;
+            return Math.round(conceptPct * 5);
+        }
         // idle: trickle based on setup steps (0 → ~5%)
         if (setupStepsCompleted > 0) {
             return Math.round(setupStepsCompleted * 1.25);
         }
         return 0;
-    }, [currentPhase, progress, step, cards.length, setupStepsCompleted]);
+    }, [currentPhase, progress, step, cards.length, setupStepsCompleted, conceptProgress]);
 
     const progressPct = useTrickleProgress(rawProgressPct);
 
@@ -549,7 +593,19 @@ export function ProgressView() {
                     <div>
                         <h3 className="text-xs font-medium text-text-main">Progress</h3>
                         <p className="text-[10px] text-text-muted mt-0.5 font-mono">
-                            {currentPhase === 'concept' && 'ANALYZING SLIDES...'}
+                            {currentPhase === 'concept' && (
+                                conceptProgress.total > 0 ? (
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                        ANALYZING SLIDE {conceptProgress.current}/{conceptProgress.total}...
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                        ANALYZING SLIDES...
+                                    </span>
+                                )
+                            )}
                             {currentPhase === 'generating' && `GENERATED: ${cards.length}`}
                             {currentPhase === 'reflecting' && 'REFINING QUALITY...'}
                             {currentPhase === 'complete' && `DONE — ${cards.length} CARDS`}
@@ -560,7 +616,10 @@ export function ProgressView() {
                 </div>
                 <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden">
                     <div
-                        className="h-full bg-primary rounded-full shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out"
+                        className={clsx(
+                            "h-full bg-primary rounded-full shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out",
+                            currentPhase === 'concept' && "animate-pulse"
+                        )}
                         style={{ width: `${Math.min(100, progressPct)}%` }}
                     />
                 </div>
@@ -600,7 +659,7 @@ export function ProgressView() {
                 </SidebarPane>
 
                 {/* Page Coverage */}
-                <SidebarPane title="Page Coverage" icon={Layers} defaultOpen={false}>
+                <SidebarPane title="Page Coverage" icon={Layers} defaultOpen={step === 'done'}>
                     <CoverageGrid
                         totalPages={totalPages}
                         cards={cards}
@@ -664,7 +723,7 @@ export function ProgressView() {
                 <SidebarPane
                     title="Topics"
                     icon={Layers}
-                    defaultOpen={true}
+                    defaultOpen={step === 'done'}
                     className="border-b-0" // Last item, no border needed
                     rightElement={
                         activeTopic && (
@@ -789,6 +848,33 @@ export function ProgressView() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {/* Focus Mode Toggle */}
+                        {step === 'done' && (
+                            <button
+                                onClick={() => setIsFocusMode(true)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 border border-primary/20 text-primary rounded-lg text-xs font-medium hover:bg-primary/20 transition-all shadow-sm"
+                                title="Enter Focus Mode"
+                            >
+                                <Maximize2 className="w-3.5 h-3.5" />
+                                Focus Mode
+                            </button>
+                        )}
+                        {/* Multi-select toggle (only in done step) */}
+                        {step === 'done' && (
+                            <button
+                                onClick={toggleMultiSelectMode}
+                                className={clsx(
+                                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+                                    isMultiSelectMode
+                                        ? "bg-primary text-background shadow-sm"
+                                        : "bg-surface/50 border border-border/50 text-text-muted hover:text-text-main hover:border-border"
+                                )}
+                                title={isMultiSelectMode ? "Exit multi-select" : "Multi-select mode"}
+                            >
+                                <CheckSquare className="w-3.5 h-3.5" />
+                                {isMultiSelectMode ? "Done" : "Select"}
+                            </button>
+                        )}
                         <div className="relative group">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted group-focus-within:text-primary transition-colors" />
                             <input
@@ -807,6 +893,25 @@ export function ProgressView() {
 
                 {/* Cards List */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-border min-h-0">
+                    {/* Select All button (only in multi-select mode with cards) */}
+                    {isMultiSelectMode && sortedCards.length > 0 && (
+                        <div className="flex items-center justify-between px-2 py-2 mb-2">
+                            <button
+                                onClick={selectAllCards}
+                                className="text-xs text-primary hover:text-primary/80 font-medium"
+                            >
+                                Select All ({sortedCards.length})
+                            </button>
+                            {selectedCards.size > 0 && (
+                                <button
+                                    onClick={clearSelection}
+                                    className="text-xs text-text-muted hover:text-text-main"
+                                >
+                                    Clear Selection
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <div className="space-y-4">
                         {sortedCards.map((card, i) => {
                             const stableKey = card._uid || `card-fallback-${i}`;
@@ -814,6 +919,7 @@ export function ProgressView() {
                             const isEditing = editingIndex === originalIndex;
                             const cloze = isCloze(card);
                             const slideNumber = getCardSlideNumber(card);
+                            const isSelected = card._uid ? selectedCards.has(card._uid) : false;
 
                             return (
                                 <div
@@ -823,44 +929,50 @@ export function ProgressView() {
                                         isEditing
                                             ? "border-2 border-primary/50 bg-primary/5"
                                             : clsx(
-                                                "border border-border hover:border-border/80 hover:shadow-md",
+                                                "border hover:border-border/80 hover:shadow-md",
+                                                isSelected
+                                                    ? "border-primary/50 ring-2 ring-primary/20"
+                                                    : "border-border",
                                                 cloze ? "border-l-4 border-l-blue-500/50" : "border-l-4 border-l-primary/50"
                                             )
                                     )}
                                 >
-                                    {isEditing ? (
-                                        /* Edit Mode */
-                                        <div className="p-5 space-y-4">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-xs font-bold text-primary uppercase tracking-wider">Editing Card</span>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={cancelEdit} className="p-1.5 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors">
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={() => saveEdit(originalIndex)} className="p-1.5 bg-primary hover:bg-primary/90 text-background rounded-lg transition-colors">
-                                                        <Save className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="grid gap-4">
-                                                {Object.entries(editForm?.fields || {}).map(([key, value]) => (
-                                                    <div key={key}>
-                                                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5">{key}</label>
-                                                        <textarea
-                                                            value={value as string}
-                                                            onChange={(e) => handleFieldChange(key, e.target.value)}
-                                                            className="w-full bg-background border border-border rounded-lg p-3 text-sm text-text-main focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none min-h-[100px] font-mono"
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
+                                    {isEditing && editForm ? (
+                                        /* Edit Mode - Using CardEditor Component */
+                                        <CardEditor
+                                            card={editForm}
+                                            onSave={() => saveEdit(originalIndex)}
+                                            onCancel={cancelEdit}
+                                            onChange={handleFieldChange}
+                                            isSaving={false}
+                                        />
                                     ) : (
                                         /* View Mode */
                                         <>
                                             {/* Card header */}
                                             <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
                                                 <div className="flex items-center gap-2">
+                                                    {/* Multi-select checkbox */}
+                                                    {isMultiSelectMode && card._uid && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleCardSelection(card._uid!);
+                                                            }}
+                                                            className={clsx(
+                                                                "p-0.5 rounded transition-colors",
+                                                                isSelected
+                                                                    ? "text-primary"
+                                                                    : "text-text-muted hover:text-text-main"
+                                                            )}
+                                                        >
+                                                            {isSelected ? (
+                                                                <CheckSquare className="w-4 h-4" />
+                                                            ) : (
+                                                                <Square className="w-4 h-4" />
+                                                            )}
+                                                        </button>
+                                                    )}
                                                     <span className={clsx(
                                                         "text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border",
                                                         cloze
@@ -961,9 +1073,9 @@ export function ProgressView() {
         </motion.div>
     );
 
-    const dismissSyncPartialFailure = () => {
+    const dismissSyncPartialFailure = useCallback(() => {
         useLecternStore.setState({ syncPartialFailure: null });
-    };
+    }, []);
 
     return (
         <ErrorOverlay
@@ -976,14 +1088,40 @@ export function ProgressView() {
             <div className="relative">
                 <SyncSuccessOverlay syncSuccess={syncSuccess} />
                 <AnimatePresence>
+                    {isFocusMode && (
+                        <FocusMode
+                            cards={sortedCards}
+                            onClose={() => setIsFocusMode(false)}
+                            onDelete={(idx) => {
+                                // Maps sorted index back to original store index
+                                const card = sortedCards[idx];
+                                const originalIdx = card?._uid ? uidToIndex.get(card._uid) : -1;
+                                if (originalIdx !== undefined && originalIdx !== -1) {
+                                    handleDelete(originalIdx);
+                                }
+                            }}
+                            onEdit={(idx) => {
+                                const card = sortedCards[idx];
+                                const originalIdx = card?._uid ? uidToIndex.get(card._uid) : -1;
+                                if (originalIdx !== undefined && originalIdx !== -1) {
+                                    startEdit(originalIdx);
+                                    setIsFocusMode(false); // Close focus mode to show editor in the list
+                                }
+                            }}
+                            onSync={() => {
+                                setIsFocusMode(false);
+                                handleSync();
+                            }}
+                        />
+                    )}
+                </AnimatePresence>
+                <AnimatePresence>
                     {syncPartialFailure && (
                         <SyncPartialFailureOverlay
                             failedCount={syncPartialFailure.failed}
                             createdCount={syncPartialFailure.created}
                             syncLogs={syncLogs}
                             onDismiss={dismissSyncPartialFailure}
-                            onCopyLogs={handleCopyLogs}
-                            copied={copied}
                         />
                     )}
                 </AnimatePresence>
@@ -1009,6 +1147,28 @@ export function ProgressView() {
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                {/* Batch Action Bar */}
+                <BatchActionBar
+                    selectedCount={selectedCards.size}
+                    onDelete={() => setShowBatchDeleteConfirm(true)}
+                    onClear={clearSelection}
+                    onExit={toggleMultiSelectMode}
+                />
+
+                {/* Batch Delete Confirmation Modal */}
+                <ConfirmModal
+                    isOpen={showBatchDeleteConfirm}
+                    onClose={() => setShowBatchDeleteConfirm(false)}
+                    onConfirm={() => {
+                        batchDeleteSelected();
+                        setShowBatchDeleteConfirm(false);
+                    }}
+                    title={`Delete ${selectedCards.size} Card${selectedCards.size !== 1 ? 's' : ''}?`}
+                    description="This will remove the selected cards from your current session. This action cannot be undone."
+                    confirmText="Delete"
+                    variant="destructive"
+                />
             </div>
         </ErrorOverlay>
     );

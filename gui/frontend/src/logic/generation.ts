@@ -58,8 +58,16 @@ export const processGenerationEvent = (
         if (typeof window !== 'undefined') {
             localStorage.removeItem(ACTIVE_SESSION_KEY);
         }
-        const cardCount = useLecternStore.getState().cards.length;
-        useLecternStore.getState().addToast('success', `Generation complete — ${cardCount} cards`);
+        const store = useLecternStore.getState();
+        const cardCount = store.cards.length;
+
+        // Add the estimated cost to session spend if available
+        const estimation = store.estimation;
+        if (estimation && estimation.cost > 0) {
+            store.addToSessionSpend(estimation.cost);
+        }
+
+        store.addToast('success', `Generation complete — ${cardCount} cards`);
         set((prev) => ({
             step: 'done',
             currentPhase: 'complete',

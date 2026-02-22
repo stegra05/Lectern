@@ -160,10 +160,14 @@ class LecternGenerationService:
             yield ServiceEvent("step_start", "Check AnkiConnect")
             if not check_connection():
                 yield ServiceEvent("step_end", "AnkiConnect unreachable", {"success": False})
-                yield ServiceEvent("error", f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}", {"recoverable": False})
-                history_mgr.update_entry(history_id, status="error")
-                return
-            yield ServiceEvent("step_end", "AnkiConnect Connected", {"success": True})
+                if cfg.skip_export:
+                    yield ServiceEvent("warning", f"Could not connect to AnkiConnect. Proceeding in offline mode (examples and export will be skipped).")
+                else:
+                    yield ServiceEvent("error", f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}", {"recoverable": False})
+                    history_mgr.update_entry(history_id, status="error")
+                    return
+            else:
+                yield ServiceEvent("step_end", "AnkiConnect Connected", {"success": True})
 
             # 2. PDF metadata placeholders (filled after native concept map call)
             pages = []
@@ -225,7 +229,15 @@ class LecternGenerationService:
             if self._should_stop(cfg.stop_check):
                 return
 
+            # Estimate page count from file size for initial progress display
+            estimated_pages = max(1, int(file_size / 80000))
+
             yield ServiceEvent("step_start", "Build global concept map", {"phase": "concept"})
+            yield ServiceEvent("progress_start", "Analyzing slides", {"total": estimated_pages, "phase": "concept"})
+
+            # Emit initial progress to show activity
+            yield ServiceEvent("progress_update", "", {"current": 0, "total": estimated_pages, "phase": "concept"})
+
             try:
                 raw_concept_map = ai.concept_map_from_file(
                     file_uri=uploaded_pdf["uri"],
@@ -247,7 +259,11 @@ class LecternGenerationService:
                     metadata_chars = metadata_pages * 800
                 pages = [{} for _ in range(metadata_pages)]
                 total_text_chars = metadata_chars
-                yield ServiceEvent("step_end", "Concept Map Built", {"success": True})
+
+                # Emit final progress to indicate concept phase completion
+                yield ServiceEvent("progress_update", "", {"current": metadata_pages, "total": metadata_pages, "phase": "concept"})
+
+                yield ServiceEvent("step_end", "Concept Map Built", {"success": True, "page_count": metadata_pages})
                 yield ServiceEvent("info", "Concept Map built", {"map": concept_map})
                 for w in ai.drain_warnings():
                     yield ServiceEvent("warning", w)

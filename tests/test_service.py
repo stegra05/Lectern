@@ -695,7 +695,7 @@ class TestServiceAdvanced:
                 skip_export=True
             ))
         
-        assert any(e.type == "warning" and "sample examples" in e.message for e in events)
+        assert any(e.type == "error" and "sample examples" in e.message and e.data.get("recoverable") is True for e in events)
         assert any(e.type == "done" for e in events)
 
     @patch('lectern.lectern_service.check_connection')
@@ -1227,7 +1227,7 @@ class TestLoopInternals:
             pdf_path="/fake/path.pdf", deck_name="T", model_name="M", tags=[], skip_export=True
         ))
         
-        assert any(e.type == "warning" and "Concept map failed" in e.message for e in events)
+        assert any(e.type == "error" and "Concept map failed" in e.message and e.data.get("recoverable") is True for e in events)
         # Fallback name should be derived from filename "path" -> "Path"
         assert any("Slide Set Name: 'Path'" in e.message for e in events if e.type == "info")
 

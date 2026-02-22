@@ -43,6 +43,11 @@ describe('HomeView', () => {
         handleGenerate: vi.fn(),
         health: { anki_connected: true, gemini_configured: true, anki_version: '1.0' },
         estimationError: null,
+        // Budget tracking props
+        totalSessionSpend: 0,
+        budgetLimit: null,
+        wouldExceedBudget: vi.fn(() => false),
+        addToSessionSpend: vi.fn(),
     };
 
     it('renders initial state correctly', () => {
@@ -112,30 +117,32 @@ describe('HomeView', () => {
         expect(slider).not.toBeDisabled();
     });
 
-    it('shows estimation results when available', () => {
+    it('shows estimation results when available', async () => {
         const estimation = {
-            pages: 10,
+            cost: 0.03,
             input_tokens: 1000,
             output_tokens: 500,
             input_cost: 0.01,
             output_cost: 0.02,
-            cost: 0.03,
-            tokens: 1500,
-            model: 'gemini-3-flash',
-            estimated_card_count: 45,
-            suggested_card_count: 50,
+            pages: 10,
+            model: 'gemini-pro'
         };
         render(<HomeView {...defaultProps} estimation={estimation} />);
         expect(screen.getByText('$0.030')).toBeInTheDocument();
+        
+        // Click to expand detailed cost
+        fireEvent.click(screen.getByText('Estimated Cost'));
+        
         expect(screen.getByText('1.0k')).toBeInTheDocument();
         expect(screen.getByText('0.5k')).toBeInTheDocument();
         expect(screen.getByText(/Estimated Cost/i)).toBeInTheDocument();
-        expect(screen.queryByText('~45 cards')).not.toBeInTheDocument();
     });
 
     it('shows estimating state', () => {
         render(<HomeView {...defaultProps} isEstimating={true} />);
-        expect(screen.getByText('Analyzing content...')).toBeInTheDocument();
+        // Shows one of the estimation phase messages (may appear multiple times)
+        const phaseElements = screen.getAllByText(/Uploading PDF|Analyzing document|Calculating costs/);
+        expect(phaseElements.length).toBeGreaterThanOrEqual(1);
     });
 
     it('shows Anki disconnection warning', () => {

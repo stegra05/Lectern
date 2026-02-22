@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, BookOpen, Settings, Sun, Moon } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -7,10 +7,13 @@ import { SettingsModal } from './components/SettingsModal';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { Toast, ToastContainer } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { ConfirmDialog } from './components/ConfirmDialog';
 
 import { useAppState } from './hooks/useAppState';
 import { useLecternStore } from './store';
 import { useHistory } from './hooks/useHistory';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { extractBase, recomputeCost, type EstimationBase } from './utils/recompute';
 
 import { HomeView } from './views/HomeView';
@@ -69,6 +72,17 @@ function App() {
     isRefreshingStatus, refreshHealth
   } = useAppState();
 
+  // Keyboard shortcuts modal state
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+
+  // Unsynced cards confirmation state
+  const [isUnsyncedConfirmOpen, setIsUnsyncedConfirmOpen] = useState(false);
+  const [pendingGenerateCallback, setPendingGenerateCallback] = useState<(() => void) | null>(null);
+
+  // Get cards and sync state for unsynced check
+  const cards = useLecternStore((s) => s.cards);
+  const syncSuccess = useLecternStore((s) => s.syncSuccess);
+
   const {
     step,
     pdfFile,
@@ -94,6 +108,12 @@ function App() {
     recoverSessionOnRefresh,
     refreshRecoveredSession,
     recommendTargetDeckSize,
+    // Budget actions and state
+    totalSessionSpend,
+    budgetLimit,
+    resetSessionSpend,
+    setBudgetLimit,
+    wouldExceedBudget,
   } = useLecternStore();
 
   const {
@@ -102,6 +122,44 @@ function App() {
     deleteHistoryEntry,
     batchDeleteHistory
   } = useHistory(step);
+
+  // Keyboard shortcuts - get edit state and actions from store
+  const editingIndex = useLecternStore((s) => s.editingIndex);
+  const saveEdit = useLecternStore((s) => s.saveEdit);
+  const cancelEdit = useLecternStore((s) => s.cancelEdit);
+  const handleDelete = useLecternStore((s) => s.handleDelete);
+
+  // Focus callbacks for keyboard shortcuts - use DOM queries since inputs are in child components
+  const focusSearch = useCallback(() => {
+    const searchInput = document.querySelector('input[placeholder="Search..."]') as HTMLInputElement | null;
+    searchInput?.focus();
+  }, []);
+
+  const focusDeckSelector = useCallback(() => {
+    const deckInput = document.querySelector('input[placeholder="University::Subject::Topic"]') as HTMLInputElement | null;
+    deckInput?.focus();
+  }, []);
+
+  // Wire up keyboard shortcuts
+  const shortcuts = useKeyboardShortcuts({
+    isSettingsOpen,
+    setIsSettingsOpen,
+    isHistoryOpen,
+    setIsHistoryOpen,
+    isShortcutsModalOpen,
+    setIsShortcutsModalOpen,
+    focusSearch,
+    focusDeckSelector,
+    isEditing: editingIndex !== null,
+    saveEdit: () => {
+      if (editingIndex !== null) {
+        saveEdit(editingIndex);
+      }
+    },
+    cancelEdit,
+    selectedCardIndex: null, // Card selection not yet implemented
+    deleteCard: handleDelete,
+  });
 
   // NOTE(Estimation): Cache base data from initial estimate for instant slider recompute.
   const estimationBaseRef = useRef<EstimationBase | null>(null);
@@ -189,14 +247,59 @@ function App() {
     return () => window.clearInterval(interval);
   }, [refreshRecoveredSession, sessionId, step]);
 
+  // Check if there are unsynced cards (cards exist but haven't been synced)
+  const hasUnsyncedCards = cards.length > 0 && !syncSuccess;
+
+  // beforeunload handler for browser close/refresh when there are unsynced cards
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsyncedCards) {
+        // Standard way to trigger browser's native confirmation dialog
+        e.preventDefault();
+        // Chrome requires returnValue to be set
+        e.returnValue = 'You have unsaved cards. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsyncedCards]);
+
+  // Wrapped generate handler that checks for unsynced cards
+  const handleGenerateWithConfirm = useCallback(() => {
+    if (hasUnsyncedCards) {
+      // Show confirmation dialog
+      setPendingGenerateCallback(() => handleGenerate);
+      setIsUnsyncedConfirmOpen(true);
+    } else {
+      handleGenerate();
+    }
+  }, [hasUnsyncedCards, handleGenerate]);
+
+  const handleConfirmGenerate = useCallback(() => {
+    setIsUnsyncedConfirmOpen(false);
+    if (pendingGenerateCallback) {
+      pendingGenerateCallback();
+      setPendingGenerateCallback(null);
+    }
+  }, [pendingGenerateCallback]);
+
+  const handleCancelGenerate = useCallback(() => {
+    setIsUnsyncedConfirmOpen(false);
+    setPendingGenerateCallback(null);
+  }, []);
+
   if (isCheckingHealth) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-text-muted text-sm font-mono tracking-wider animate-pulse">INITIALIZING LECTERN...</p>
+      <ErrorBoundary>
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-text-muted text-sm font-mono tracking-wider animate-pulse">INITIALIZING LECTERN...</p>
+          </div>
         </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
@@ -295,8 +398,11 @@ function App() {
                       estimation={estimation}
                       isEstimating={isEstimating}
                       estimationError={estimationError}
-                      handleGenerate={handleGenerate}
+                      handleGenerate={handleGenerateWithConfirm}
                       health={health}
+                      totalSessionSpend={totalSessionSpend}
+                      budgetLimit={budgetLimit}
+                      wouldExceedBudget={wouldExceedBudget}
                     />
                   )}
 
@@ -325,6 +431,27 @@ function App() {
         onClose={() => setIsSettingsOpen(false)}
         theme={theme}
         toggleTheme={toggleTheme}
+        totalSessionSpend={totalSessionSpend}
+        budgetLimit={budgetLimit}
+        onResetSessionSpend={resetSessionSpend}
+        onSetBudgetLimit={setBudgetLimit}
+      />
+
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsModalOpen}
+        onClose={() => setIsShortcutsModalOpen(false)}
+        shortcuts={shortcuts}
+      />
+
+      <ConfirmDialog
+        isOpen={isUnsyncedConfirmOpen}
+        title="Unsynced Cards"
+        message={`You have ${cards.length} card${cards.length !== 1 ? 's' : ''} that haven't been synced to Anki. Starting a new session will discard these cards. Continue anyway?`}
+        confirmLabel="Start New Session"
+        cancelLabel="Cancel"
+        variant="warning"
+        onConfirm={handleConfirmGenerate}
+        onCancel={handleCancelGenerate}
       />
 
       <StoreToasts />

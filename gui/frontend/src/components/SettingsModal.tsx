@@ -1,13 +1,19 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Settings, AlertCircle, Save, HelpCircle, ChevronDown, ChevronUp, ExternalLink, Download, RefreshCw } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { X, Settings, AlertCircle, Save, HelpCircle, ChevronDown, ChevronUp, ExternalLink, Download, RefreshCw, DollarSign, RotateCcw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     theme: 'light' | 'dark';
     toggleTheme: () => void;
+    // Budget tracking props
+    totalSessionSpend: number;
+    budgetLimit: number | null;
+    onResetSessionSpend: () => void;
+    onSetBudgetLimit: (limit: number | null) => void;
 }
 
 interface ConfigState {
@@ -15,9 +21,10 @@ interface ConfigState {
     anki_url: string;
     basic_model: string;
     cloze_model: string;
+    tag_template: string;
 }
 
-export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, theme, toggleTheme, totalSessionSpend, budgetLimit, onResetSessionSpend, onSetBudgetLimit }: SettingsModalProps) {
     const [config, setConfig] = useState<ConfigState | null>(null);
     const [editedConfig, setEditedConfig] = useState<ConfigState | null>(null);
     const [loading, setLoading] = useState(true);
@@ -27,8 +34,31 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
 
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [showBudget, setShowBudget] = useState(false);
+    const [budgetInput, setBudgetInput] = useState<string>(budgetLimit?.toString() ?? '');
     const [versionInfo, setVersionInfo] = useState<{ current: string; latest: string | null; update_available: boolean; release_url: string } | null>(null);
     const [checkLoading, setCheckLoading] = useState(false);
+
+    const modalRef = useRef<HTMLDivElement>(null);
+    const previousActiveElement = useRef<HTMLElement | null>(null);
+
+    // Focus trap for accessibility
+    useFocusTrap(modalRef, {
+        isActive: isOpen,
+        onEscape: onClose,
+        autoFocus: true,
+        restoreFocus: false, // We handle this manually for better control
+    });
+
+    // Store the element that opened the modal
+    useEffect(() => {
+        if (isOpen) {
+            previousActiveElement.current = document.activeElement as HTMLElement;
+        } else {
+            // Restore focus when modal closes
+            previousActiveElement.current?.focus();
+        }
+    }, [isOpen]);
 
     const Tooltip = ({ text }: { text: string }) => (
         <div className="group relative inline-block ml-2">
@@ -53,12 +83,13 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
         ? 'Must be a valid URL (e.g. http://localhost:8765)'
         : null;
 
-    const hasChanges = config && editedConfig && (
+    const hasChanges = (config && editedConfig && (
         config.gemini_model !== editedConfig.gemini_model ||
         config.anki_url !== editedConfig.anki_url ||
         config.basic_model !== editedConfig.basic_model ||
-        config.cloze_model !== editedConfig.cloze_model
-    );
+        config.cloze_model !== editedConfig.cloze_model ||
+        config.tag_template !== editedConfig.tag_template
+    )) || newKey.length > 0;
 
     const loadConfig = async () => {
         setLoading(true);
@@ -77,33 +108,26 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
         }
     };
 
-    const handleSaveKey = async () => {
-        if (!newKey.trim()) return;
-        setIsSaving(true);
-        try {
-            await api.saveConfig({ gemini_api_key: newKey });
-            await loadConfig();
-            setNewKey('');
-        } catch (err) {
-            console.error(err);
-            setError('Failed to save key');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
     const handleSaveSettings = async () => {
         if (!editedConfig || !hasChanges || ankiUrlError) return;
         setIsSaving(true);
         setSaveSuccess(false);
         try {
-            await api.saveConfig({
+            const payload: any = {
                 gemini_model: editedConfig.gemini_model,
                 anki_url: editedConfig.anki_url,
                 basic_model: editedConfig.basic_model,
                 cloze_model: editedConfig.cloze_model,
-            });
+                tag_template: editedConfig.tag_template,
+            };
+
+            if (newKey.trim()) {
+                payload.gemini_api_key = newKey.trim();
+            }
+
+            await api.saveConfig(payload);
             setConfig(editedConfig);
+            setNewKey(''); // Clear the key field after save
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 2000);
         } catch (err) {
@@ -148,6 +172,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                         exit={{ opacity: 0 }}
                         onClick={onClose}
                         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                        aria-hidden="true"
                     />
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -155,9 +180,15 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
                     >
-                        <div className="bg-surface border border-border w-full max-w-lg rounded-2xl shadow-2xl pointer-events-auto overflow-hidden max-h-[90vh] flex flex-col">
+                        <div
+                            ref={modalRef}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="settings-title"
+                            className="bg-surface border border-border w-full max-w-lg rounded-2xl shadow-2xl pointer-events-auto overflow-hidden max-h-[90vh] flex flex-col"
+                        >
                             <div className="p-6 border-b border-border flex items-center justify-between shrink-0">
-                                <h2 className="text-xl font-semibold text-text-main flex items-center gap-2">
+                                <h2 id="settings-title" className="text-xl font-semibold text-text-main flex items-center gap-2">
                                     <Settings className="w-5 h-5 text-primary" />
                                     Settings
                                 </h2>
@@ -201,6 +232,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                         <p className="text-text-muted">{error}</p>
                                         <button
                                             onClick={loadConfig}
+                                            aria-label="Retry loading settings"
                                             className="px-4 py-2 bg-primary hover:bg-primary/90 text-background rounded-lg font-medium transition-colors"
                                         >
                                             Retry
@@ -218,6 +250,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                 <select
                                                     value={editedConfig.gemini_model}
                                                     onChange={(e) => updateField('gemini_model', e.target.value)}
+                                                    aria-label="AI Model selection"
                                                     className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none appearance-none cursor-pointer"
                                                 >
                                                     <option value="gemini-3-flash">Gemini 3 Flash (Fast)</option>
@@ -236,16 +269,11 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                         value={newKey}
                                                         onChange={(e) => setNewKey(e.target.value)}
                                                         placeholder="Enter new Gemini API Key"
+                                                        aria-label="Gemini API Key"
                                                         className="flex-1 bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-text-muted"
                                                     />
-                                                    <button
-                                                        onClick={handleSaveKey}
-                                                        disabled={!newKey.trim() || isSaving}
-                                                        className="px-4 py-2 bg-surface hover:bg-surface/80 disabled:opacity-50 disabled:cursor-not-allowed text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
-                                                    >
-                                                        {isSaving ? 'Saving...' : 'Update'}
-                                                    </button>
                                                 </div>
+                                                <p className="text-[10px] text-text-muted">Leave blank to keep current key.</p>
                                             </div>
 
                                             {/* Advanced Toggle */}
@@ -281,11 +309,32 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                                 value={editedConfig.anki_url}
                                                                 onChange={(e) => updateField('anki_url', e.target.value)}
                                                                 placeholder="http://localhost:8765"
+                                                                aria-label="Anki Connect URL"
+                                                                aria-invalid={ankiUrlError ? 'true' : 'false'}
+                                                                aria-describedby={ankiUrlError ? 'anki-url-error' : undefined}
                                                                 className={`w-full bg-background border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none font-mono text-sm ${ankiUrlError ? 'border-red-500' : 'border-border'}`}
                                                             />
                                                             {ankiUrlError && (
-                                                                <p className="text-xs text-red-500 mt-1">{ankiUrlError}</p>
+                                                                <p id="anki-url-error" className="text-xs text-red-500 mt-1" role="alert">{ankiUrlError}</p>
                                                             )}
+                                                        </div>
+
+                                                        <div className="space-y-2">
+                                                            <label className="text-sm font-medium text-text-muted flex items-center">
+                                                                Tag Template
+                                                                <Tooltip text="Template for hierarchical tags. Use {{deck}}, {{slide_set}}, and {{topic}} as placeholders." />
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={editedConfig.tag_template}
+                                                                onChange={(e) => updateField('tag_template', e.target.value)}
+                                                                placeholder="{{deck}}::{{slide_set}}::{{topic}}"
+                                                                aria-label="Hierarchical Tag Template"
+                                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none font-mono text-sm"
+                                                            />
+                                                            <p className="text-[10px] text-text-muted mt-1 leading-tight">
+                                                                Example: <code className="text-primary">{'{{deck}}::Lectures::{{topic}}'}</code>
+                                                            </p>
                                                         </div>
 
                                                         <div className="grid grid-cols-2 gap-4">
@@ -298,6 +347,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                                     type="text"
                                                                     value={editedConfig.basic_model}
                                                                     onChange={(e) => updateField('basic_model', e.target.value)}
+                                                                    aria-label="Basic Note Type"
                                                                     className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
                                                                 />
                                                             </div>
@@ -310,9 +360,105 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                                     type="text"
                                                                     value={editedConfig.cloze_model}
                                                                     onChange={(e) => updateField('cloze_model', e.target.value)}
+                                                                    aria-label="Cloze Note Type"
                                                                     className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
                                                                 />
                                                             </div>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+
+                                        <div className="w-full h-px bg-border my-4" />
+
+                                        {/* Budget Section */}
+                                        <div className="space-y-4">
+                                            <button
+                                                onClick={() => setShowBudget(!showBudget)}
+                                                className="flex items-center gap-2 text-xs font-medium text-text-muted hover:text-primary transition-colors uppercase tracking-wider"
+                                            >
+                                                {showBudget ? (
+                                                    <>Hide Budget <ChevronUp className="w-3 h-3" /></>
+                                                ) : (
+                                                    <>Show Budget <ChevronDown className="w-3 h-3" /></>
+                                                )}
+                                            </button>
+
+                                            <AnimatePresence>
+                                                {showBudget && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="space-y-4 overflow-hidden"
+                                                    >
+                                                        {/* Session Spend */}
+                                                        <div className="p-4 rounded-xl border border-border bg-background space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <DollarSign className="w-4 h-4 text-primary" />
+                                                                    <span className="text-sm font-medium text-text-main">Session Spend</span>
+                                                                </div>
+                                                                <span className="text-lg font-bold text-primary">${totalSessionSpend.toFixed(2)}</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={onResetSessionSpend}
+                                                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-surface hover:bg-surface/80 text-text-muted hover:text-text-main rounded-lg text-xs font-medium transition-colors border border-border"
+                                                            >
+                                                                <RotateCcw className="w-3 h-3" />
+                                                                Reset Session Spend
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Budget Limit */}
+                                                        <div className="space-y-2">
+                                                            <label className="text-sm font-medium text-text-muted flex items-center">
+                                                                Budget Limit (Optional)
+                                                                <Tooltip text="Set a maximum spending limit for this session. Operations will be blocked when the limit is reached." />
+                                                            </label>
+                                                            <div className="flex gap-2">
+                                                                <div className="relative flex-1">
+                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">$</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.01"
+                                                                        min="0"
+                                                                        value={budgetInput}
+                                                                        onChange={(e) => setBudgetInput(e.target.value)}
+                                                                        placeholder="No limit"
+                                                                        aria-label="Budget limit in dollars"
+                                                                        className="w-full bg-background border border-border rounded-lg py-2.5 pl-7 pr-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-text-muted"
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const value = budgetInput.trim() === '' ? null : parseFloat(budgetInput);
+                                                                        onSetBudgetLimit(value && !isNaN(value) ? value : null);
+                                                                    }}
+                                                                    className="px-4 py-2 bg-surface hover:bg-surface/80 text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
+                                                                >
+                                                                    Set
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setBudgetInput('');
+                                                                        onSetBudgetLimit(null);
+                                                                    }}
+                                                                    className="px-3 py-2 bg-surface hover:bg-surface/80 text-text-muted rounded-lg transition-colors text-sm border border-border"
+                                                                    title="Clear budget limit"
+                                                                >
+                                                                    <X className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                            {budgetLimit !== null && (
+                                                                <p className="text-xs text-text-muted">
+                                                                    Current limit: <span className="font-medium text-primary">${budgetLimit.toFixed(2)}</span>
+                                                                    {totalSessionSpend >= budgetLimit && (
+                                                                        <span className="ml-2 text-amber-400">(Limit reached)</span>
+                                                                    )}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     </motion.div>
                                                 )}
@@ -339,6 +485,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme }: SettingsM
                                                             checkUpdates();
                                                         }}
                                                         disabled={checkLoading}
+                                                        aria-label="Check for updates"
                                                         className="p-2 hover:bg-surface rounded-lg text-text-muted hover:text-text-main transition-colors disabled:opacity-50"
                                                         title="Check for updates"
                                                     >

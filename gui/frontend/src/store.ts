@@ -10,6 +10,8 @@ import type {
   UiActions,
   ToastActions,
   ProgressTrackingActions,
+  BatchActions,
+  BudgetActions,
   Step,
 } from './store-types';
 import type { SortOption } from './hooks/types';
@@ -18,6 +20,16 @@ import { processStreamEvent } from './logic/stream';
 import { stampUid, stampUids } from './utils/uid';
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
+const SESSION_SPEND_KEY = 'lectern_session_spend';
+const BUDGET_LIMIT_KEY = 'lectern_budget_limit';
+
+const getStoredNumber = (key: string, fallback: number): number => {
+  if (typeof window === 'undefined') return fallback;
+  const stored = localStorage.getItem(key);
+  if (stored === null) return fallback;
+  const parsed = parseFloat(stored);
+  return isNaN(parsed) ? fallback : parsed;
+};
 
 const getStored = <T>(key: string, fallback: T): T => {
   if (typeof window === 'undefined') return fallback;
@@ -42,6 +54,7 @@ const getGenerationState = () => ({
   estimationError: null as string | null,
   totalPages: 0,
   setupStepsCompleted: 0,
+  conceptProgress: { current: 0, total: 0 },
 });
 
 const getSessionState = () => ({
@@ -58,6 +71,9 @@ const getReviewState = () => ({
   syncPartialFailure: null as { failed: number; created: number } | null,
   syncProgress: { current: 0, total: 0 },
   syncLogs: [],
+  deletedCards: [] as import('./store-types').DeletedCardBuffer[],
+  isMultiSelectMode: false,
+  selectedCards: new Set<string>(),
 });
 
 const getUiState = () => ({
@@ -68,11 +84,23 @@ const getUiState = () => ({
   toasts: [],
 });
 
+const getBudgetState = () => ({
+  totalSessionSpend: getStoredNumber(SESSION_SPEND_KEY, 0),
+  budgetLimit: (() => {
+    if (typeof window === 'undefined') return null;
+    const stored = localStorage.getItem(BUDGET_LIMIT_KEY);
+    if (stored === null || stored === 'null') return null;
+    const parsed = parseFloat(stored);
+    return isNaN(parsed) ? null : parsed;
+  })() as number | null,
+});
+
 const getInitialState = (): StoreState => ({
   ...getGenerationState(),
   ...getSessionState(),
   ...getReviewState(),
   ...getUiState(),
+  ...getBudgetState(),
 });
 
 const processSyncEvent = async (
@@ -340,8 +368,11 @@ const createReviewActions = (
     });
   },
   handleDelete: async (index) => {
-    const { cards, isHistorical } = get();
+    const { cards, isHistorical, deletedCards } = get();
     const sessionId = resolveSessionId(get);
+    const card = cards[index];
+    if (!card) return;
+
     try {
       const newCards = [...cards];
       newCards.splice(index, 1);
@@ -352,15 +383,79 @@ const createReviewActions = (
         await api.deleteDraft(index, sessionId);
       }
 
+      // Add to undo buffer with 30s timeout
+      const cardUid = card._uid || '';
+      const timeoutId = setTimeout(() => {
+        get().clearDeletedCard(cardUid);
+      }, 30000);
+
+      const bufferEntry: import('./store-types').DeletedCardBuffer = {
+        card,
+        originalIndex: index,
+        deletedAt: Date.now(),
+        timeoutId,
+      };
+
       set((state) => ({
         cards: newCards,
+        deletedCards: [...deletedCards, bufferEntry],
         confirmModal: { ...state.confirmModal, isOpen: false },
       }));
-      get().addToast('info', 'Card removed');
+
+      get().addToast(
+        'info',
+        'Card removed',
+        30000,
+        () => get().undoDelete(cardUid),
+        'Undo'
+      );
     } catch (e) {
       console.error('Failed to delete card', e);
       get().addToast('error', 'Failed to delete card');
     }
+  },
+  undoDelete: (cardUid: string) => {
+    const { deletedCards } = get();
+    const entry = deletedCards.find((e) => e.card._uid === cardUid);
+    if (!entry) return;
+
+    // Clear the timeout if it exists
+    if (entry.timeoutId) {
+      clearTimeout(entry.timeoutId);
+    }
+
+    const { cards } = get();
+    const newCards = [...cards];
+
+    // Restore at original index, or append if invalid
+    const insertIndex =
+      entry.originalIndex >= 0 && entry.originalIndex <= newCards.length
+        ? entry.originalIndex
+        : newCards.length;
+    newCards.splice(insertIndex, 0, entry.card);
+
+    // Remove from buffer
+    set((state) => ({
+      cards: newCards,
+      deletedCards: state.deletedCards.filter((e) => e.card._uid !== cardUid),
+    }));
+
+    get().addToast('success', 'Card restored');
+  },
+  clearDeletedCard: (cardUid: string) => {
+    const { deletedCards } = get();
+    const entry = deletedCards.find((e) => e.card._uid === cardUid);
+    if (!entry) return;
+
+    // Clear timeout if it still exists
+    if (entry.timeoutId) {
+      clearTimeout(entry.timeoutId);
+    }
+
+    // Remove from buffer
+    set((state) => ({
+      deletedCards: state.deletedCards.filter((e) => e.card._uid !== cardUid),
+    }));
   },
   handleAnkiDelete: async (noteId, index) => {
     const { cards, isHistorical } = get();
@@ -424,10 +519,10 @@ let toastIdCounter = 0;
 const createToastActions = (
   set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void
 ): ToastActions => ({
-  addToast: (type, message, duration = 5000) => {
+  addToast: (type, message, duration = 5000, onUndo, undoLabel) => {
     const id = `toast-${++toastIdCounter}-${Date.now()}`;
     set((state) => ({
-      toasts: [...state.toasts, { id, type, message, duration }],
+      toasts: [...state.toasts, { id, type, message, duration, onUndo, undoLabel }],
     }));
     if (duration > 0) {
       setTimeout(() => {
@@ -450,9 +545,123 @@ const createProgressTrackingActions = (
     set((state) => ({
       setupStepsCompleted: Math.min(state.setupStepsCompleted + 1, 4),
     })),
+  setConceptProgress: (progress) =>
+    set(() => ({
+      conceptProgress: progress,
+    })),
 });
 
+const createBatchActions = (
+  set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
+  get: () => LecternStore
+): BatchActions => ({
+  toggleMultiSelectMode: () => {
+    const { isMultiSelectMode } = get();
+    if (isMultiSelectMode) {
+      // Turning off: clear selection
+      set({ isMultiSelectMode: false, selectedCards: new Set() });
+    } else {
+      set({ isMultiSelectMode: true });
+    }
+  },
+  toggleCardSelection: (cardUid) => {
+    set((state) => {
+      const newSet = new Set(state.selectedCards);
+      if (newSet.has(cardUid)) {
+        newSet.delete(cardUid);
+      } else {
+        newSet.add(cardUid);
+      }
+      return { selectedCards: newSet };
+    });
+  },
+  selectAllCards: () => {
+    const { cards } = get();
+    const allUids = new Set(cards.filter(c => c._uid).map(c => c._uid!));
+    set({ selectedCards: allUids });
+  },
+  clearSelection: () => {
+    set({ selectedCards: new Set() });
+  },
+  batchDeleteSelected: async () => {
+    const { cards, selectedCards, isHistorical } = get();
+    const sessionId = resolveSessionId(get);
 
+    if (selectedCards.size === 0) return;
+
+    // Build a map of uid -> index for quick lookup
+    const uidToIndex = new Map<string, number>();
+    cards.forEach((c, i) => {
+      if (c._uid) uidToIndex.set(c._uid, i);
+    });
+
+    // Get indices to delete (sorted descending so we can splice safely)
+    const indicesToDelete = Array.from(selectedCards)
+      .map(uid => uidToIndex.get(uid))
+      .filter((idx): idx is number => idx !== undefined)
+      .sort((a, b) => b - a);
+
+    try {
+      // Delete from backend (in reverse order to maintain index validity)
+      for (const index of indicesToDelete) {
+        if (isHistorical && sessionId) {
+          await api.deleteSessionCard(sessionId, index);
+        } else {
+          await api.deleteDraft(index, sessionId);
+        }
+      }
+
+      // Update local state
+      const newCards = cards.filter((c) => !c._uid || !selectedCards.has(c._uid));
+
+      set((state) => ({
+        cards: newCards,
+        selectedCards: new Set(),
+        isMultiSelectMode: false,
+        confirmModal: { ...state.confirmModal, isOpen: false },
+      }));
+
+      get().addToast('info', `${indicesToDelete.length} card${indicesToDelete.length !== 1 ? 's' : ''} removed`);
+    } catch (e) {
+      console.error('Failed to batch delete cards', e);
+      get().addToast('error', 'Failed to delete selected cards');
+    }
+  },
+});
+
+const createBudgetActions = (
+  set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
+  get: () => LecternStore
+): BudgetActions => ({
+  addToSessionSpend: (amount) => {
+    const newTotal = get().totalSessionSpend + amount;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SESSION_SPEND_KEY, newTotal.toString());
+    }
+    set({ totalSessionSpend: newTotal });
+  },
+  resetSessionSpend: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SESSION_SPEND_KEY, '0');
+    }
+    set({ totalSessionSpend: 0 });
+  },
+  setBudgetLimit: (limit) => {
+    if (typeof window !== 'undefined') {
+      if (limit === null) {
+        localStorage.removeItem(BUDGET_LIMIT_KEY);
+      } else {
+        localStorage.setItem(BUDGET_LIMIT_KEY, limit.toString());
+      }
+    }
+    set({ budgetLimit: limit });
+  },
+  wouldExceedBudget: (amount) => {
+    const { budgetLimit, totalSessionSpend } = get();
+    if (budgetLimit === null) return false;
+    return totalSessionSpend + amount > budgetLimit;
+  },
+});
 
 
 
@@ -463,4 +672,6 @@ export const useLecternStore = create<LecternStore>((set, get) => ({
   ...createUiActions(set),
   ...createToastActions(set),
   ...createProgressTrackingActions(set),
+  ...createBatchActions(set, get),
+  ...createBudgetActions(set, get),
 }));

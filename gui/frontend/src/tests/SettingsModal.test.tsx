@@ -101,7 +101,13 @@ describe('SettingsModal', () => {
         });
 
         const input = await screen.findByPlaceholderText('Enter new Gemini API Key');
-        const updateButton = screen.getByText('Update');
+        
+        // Debug finding the button
+        const buttons = await screen.findAllByRole('button');
+        const updateButton = buttons.find(b => b.textContent === 'Update');
+        if (!updateButton) {
+             throw new Error('Update button not found. Found buttons: ' + buttons.map(b => b.textContent).join(', '));
+        }
 
         fireEvent.change(input, { target: { value: 'new-api-key' } });
         await act(async () => {

@@ -52,16 +52,22 @@ describe('DeckSelector', () => {
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);
-        await screen.findByText('Uni'); // Wait for initial load
+        await screen.findByPlaceholderText('Search decks...'); 
 
-        fireEvent.change(input, { target: { value: 'Mat' } });
+        const searchInput = screen.getByPlaceholderText('Search decks...');
+        fireEvent.change(searchInput, { target: { value: 'Mat' } });
 
         // Uni::Math should be visible
-        const mathOption = await screen.findByText('Uni::Math');
-        expect(mathOption).toBeInTheDocument();
+        // We look for 'Math' which is the leaf node name.
+        // Since 'Mat' is highlighted, it might be split into <span>Mat</span>h
+        // We use a custom matcher to find the element containing the full text
+        const mathOptions = await screen.findAllByText((_, element) => {
+            return element?.textContent === 'Math';
+        });
+        expect(mathOptions.length).toBeGreaterThan(0);
 
-        // Uni::CS should not be visible (queryByText returns null if not found)
-        expect(screen.queryByText('Uni::CS')).not.toBeInTheDocument();
+        // Uni::CS should not be visible
+        expect(screen.queryByText((_, element) => element?.textContent === 'CS')).not.toBeInTheDocument();
     });
 
     it('shows create option for new deck', async () => {
