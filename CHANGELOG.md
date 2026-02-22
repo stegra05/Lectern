@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-02-23
+
+### Added
+- Cloze card creation and enhanced backend card persistence/management
+- Keyboard shortcuts modal, card editor, batch action bar, and focus mode components
+- Global error boundary and granular sync failure reporting with dedicated UI
+
+### Fixed
+- Pyre configuration for proper module resolution and static analysis robustness
+
+### Changed
+- Refined `main.py` logic and updated Claude local settings
+- Improved UI component tests for reliability and async handling
+
 ## [1.6.1] - 2026-02-21
 
 ### Fixed
