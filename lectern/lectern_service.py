@@ -133,12 +133,12 @@ class LecternGenerationService:
 
         # 1. Validation & Setup
         if not os.path.exists(cfg.pdf_path):
-            yield ServiceEvent("error", f"PDF not found: {cfg.pdf_path}")
+            yield ServiceEvent("error", f"PDF not found: {cfg.pdf_path}", {"recoverable": False})
             return
-            
+
         file_size = os.path.getsize(cfg.pdf_path)
         if file_size == 0:
-            yield ServiceEvent("error", f"PDF file is empty (0 bytes): {os.path.basename(cfg.pdf_path)}")
+            yield ServiceEvent("error", f"PDF file is empty (0 bytes): {os.path.basename(cfg.pdf_path)}", {"recoverable": False})
             return
             
         yield ServiceEvent("info", f"Processing file: {os.path.basename(cfg.pdf_path)} ({file_size} bytes)")
@@ -160,7 +160,7 @@ class LecternGenerationService:
             yield ServiceEvent("step_start", "Check AnkiConnect")
             if not check_connection():
                 yield ServiceEvent("step_end", "AnkiConnect unreachable", {"success": False})
-                yield ServiceEvent("error", f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}")
+                yield ServiceEvent("error", f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}", {"recoverable": False})
                 history_mgr.update_entry(history_id, status="error")
                 return
             yield ServiceEvent("step_end", "AnkiConnect Connected", {"success": True})
@@ -186,7 +186,7 @@ class LecternGenerationService:
                     yield ServiceEvent("info", "Loaded style examples from Anki")
                 yield ServiceEvent("step_end", "Examples Loaded", {"success": True})
             except Exception as e:
-                 yield ServiceEvent("warning", f"Failed to sample examples: {e}")
+                 yield ServiceEvent("error", f"Failed to sample examples: {e}", {"recoverable": True})
                  yield ServiceEvent("step_end", "Examples Failed", {"success": False})
 
             # 3b. Native flow: PDF title resolved via concept map; fallback uses filename.
@@ -216,7 +216,7 @@ class LecternGenerationService:
                 yield ServiceEvent("step_end", "PDF Uploaded", {"success": True})
             except Exception as e:
                 yield ServiceEvent("step_end", "PDF Upload Failed", {"success": False})
-                yield ServiceEvent("error", f"Native PDF upload failed: {e}")
+                yield ServiceEvent("error", f"Native PDF upload failed: {e}", {"recoverable": False})
                 history_mgr.update_entry(history_id, status="error")
                 return
             
@@ -252,7 +252,7 @@ class LecternGenerationService:
                 for w in ai.drain_warnings():
                     yield ServiceEvent("warning", w)
             except Exception as e:
-                yield ServiceEvent("warning", f"Concept map failed: {e}")
+                yield ServiceEvent("error", f"Concept map failed: {e}", {"recoverable": True})
                 yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})
                 metadata_pages = max(1, int(file_size / 80000))
                 pages = [{} for _ in range(metadata_pages)]
@@ -450,7 +450,7 @@ class LecternGenerationService:
         except Exception as e:
             if history_id:
                 history_mgr.update_entry(history_id, status="error")
-            yield ServiceEvent("error", f"Critical error: {e}")
+            yield ServiceEvent("error", f"Critical error: {e}", {"recoverable": False})
             # Do not raise; let the generator exit gracefully so the frontend sees the error event
             return
 

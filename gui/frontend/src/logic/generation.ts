@@ -80,8 +80,15 @@ export const processGenerationEvent = (
 
     if (event.type === 'error') {
         const msg = event.message || 'An error occurred';
+        const isRecoverable = event.data?.recoverable === true;
+
         useLecternStore.getState().addToast('error', msg, 8000);
-        set(() => ({ isError: true }));
+
+        if (!isRecoverable) {
+            // Fatal error: show full-screen overlay
+            set(() => ({ isError: true }));
+        }
+        // Recoverable errors just show toast, generation continues
     }
 
     if (event.type === 'warning') {

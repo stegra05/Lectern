@@ -46,6 +46,7 @@ export type StoreState = {
     editForm: Card | null;
     isSyncing: boolean;
     syncSuccess: boolean;
+    syncPartialFailure: { failed: number; created: number } | null;
     syncProgress: { current: number; total: number };
     syncLogs: ProgressEvent[];
     confirmModal: ConfirmModalState;
