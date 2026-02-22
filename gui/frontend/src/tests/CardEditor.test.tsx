@@ -76,17 +76,19 @@ describe('CardEditor', () => {
 
         fireEvent.click(screen.getByText(/Preview/i));
 
-        // Front should have placeholder
+        // Front should have placeholder (check textContent to avoid matching class names)
+        // Use getAllByText because in preview mode there might be multiple elements (e.g. layers)
         const frontElements = screen.getAllByText(/This is a/i);
-        expect(frontElements[0].innerHTML).toContain('[...]');
-        expect(frontElements[0].innerHTML).not.toContain('cloze');
+        expect(frontElements.length).toBeGreaterThan(0);
+        expect(frontElements[0].textContent).toContain('[...]');
+        expect(frontElements[0].textContent).not.toContain('cloze');
 
         // Flip to back
         fireEvent.click(frontElements[0]);
 
         // Back should have answer highlighted (it's the second element in our structure)
         const backElements = screen.getAllByText(/This is a/i);
-        expect(backElements[1].innerHTML).toContain('cloze');
+        expect(backElements[1].textContent).toContain('cloze');
         expect(backElements[1].innerHTML).toContain('cloze-answer');
     });
 });

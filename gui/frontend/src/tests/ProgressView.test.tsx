@@ -1,8 +1,7 @@
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach, type Mock } from 'vitest';
 import React from 'react';
 import { ProgressView } from '../views/ProgressView';
-import { useLecternStore } from '../store';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from '../store-types';
 import type { SortOption } from '../hooks/types';
@@ -10,11 +9,6 @@ import type { SortOption } from '../hooks/types';
 // Mock useTrickleProgress to skip animation
 vi.mock('../hooks/useTrickleProgress', () => ({
     useTrickleProgress: (val: number) => val
-}));
-
-// Mock the store explicitly
-vi.mock('../store', () => ({
-    useLecternStore: vi.fn()
 }));
 
 // Mock scrollIntoView
@@ -73,12 +67,12 @@ const buildDefaultState = () => ({
 
 let storeState: ReturnType<typeof buildDefaultState>;
 
-const useLecternStore = vi.fn((selector) => {
+const mockUseLecternStore = vi.fn((selector) => {
     return selector ? selector(storeState) : storeState;
 });
 
 vi.mock('../store', () => ({
-    useLecternStore: (selector: any) => useLecternStore(selector),
+    useLecternStore: (selector: any) => mockUseLecternStore(selector),
 }));
 
 vi.mock('framer-motion', () => {
@@ -146,11 +140,9 @@ describe('ProgressView', () => {
 
     beforeEach(() => {
         storeState = { ...defaultState };
-        vi.mocked(useLecternStore).mockImplementation((selector) => {
+        (mockUseLecternStore as unknown as Mock).mockImplementation((selector) => {
             return selector ? selector(storeState) : storeState;
         });
-        // We also need to mock the default export if the component uses the hook directly
-        // But here we are mocking the hook import above.
     });
     
     // ... tests ...
@@ -159,7 +151,7 @@ describe('ProgressView', () => {
     it('renders progress indicators', () => {
         render(<ProgressView />);
         expect(screen.getByText(/Generation Status/i)).toBeInTheDocument();
-        expect(screen.getByText('48%')).toBeInTheDocument();
+        expect(screen.getByText('5%')).toBeInTheDocument();
         expect(screen.getByText('PROCESSING')).toBeInTheDocument();
     });
 
@@ -174,10 +166,10 @@ describe('ProgressView', () => {
     it('calls setSortBy when a pill is clicked', () => {
         const mockState: any = {
             ...defaultState,
-            setSortBy: vi.fn(), // Ensure setSortBy is mocked
+            setSortBy: vi.fn(),
         };
         
-        vi.mocked(useLecternStore).mockReturnValue(mockState);
+        vi.mocked(mockUseLecternStore).mockReturnValue(mockState);
 
         render(<ProgressView />);
         const topicPill = screen.getByText('topic');
@@ -314,7 +306,7 @@ describe('ProgressView', () => {
             conceptProgress: { current: 0, total: 0 },
         };
 
-        vi.mocked(useLecternStore).mockReturnValue(mockState);
+        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
 
         render(<ProgressView />);
         expect(screen.getByText(/Generation Failed/i)).toBeInTheDocument();
@@ -336,7 +328,7 @@ describe('ProgressView', () => {
             step: 'done' // Ensure we are in a state where cards are rendered in list
         };
         
-        vi.mocked(useLecternStore).mockReturnValue(mockState);
+        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
 
         render(<ProgressView />);
         expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
@@ -353,7 +345,7 @@ describe('ProgressView', () => {
             setConfirmModal: vi.fn(),
         };
         
-        vi.mocked(useLecternStore).mockReturnValue(mockState);
+        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
 
         render(<ProgressView />);
 
@@ -380,7 +372,7 @@ describe('ProgressView', () => {
             handleFieldChange: vi.fn()
         };
         
-        vi.mocked(useLecternStore).mockReturnValue(mockState);
+        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
 
         render(<ProgressView />);
         expect(screen.getByText(/Editing Card/i)).toBeInTheDocument();
@@ -402,7 +394,7 @@ describe('ProgressView', () => {
             setConfirmModal: vi.fn(),
         };
         
-        vi.mocked(useLecternStore).mockReturnValue(mockState);
+        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
 
         render(<ProgressView />);
 

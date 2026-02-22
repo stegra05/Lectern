@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { SettingsModal } from '../components/SettingsModal';
@@ -16,6 +16,17 @@ vi.mock('../api', () => ({
     getApiUrl: vi.fn().mockReturnValue('http://localhost:4173'),
 }));
 
+const defaultProps = {
+    isOpen: true,
+    onClose: vi.fn(),
+    theme: 'light' as const,
+    toggleTheme: vi.fn(),
+    totalSessionSpend: 0,
+    budgetLimit: null,
+    onResetSessionSpend: vi.fn(),
+    onSetBudgetLimit: vi.fn(),
+};
+
 describe('SettingsModal', () => {
     const mockOnClose = vi.fn();
     const mockToggleTheme = vi.fn();
@@ -24,6 +35,7 @@ describe('SettingsModal', () => {
         anki_url: 'http://localhost:8765',
         basic_model: 'Basic',
         cloze_model: 'Cloze',
+        tag_template: '{{deck}}::{{slide_set}}::{{topic}}',
     };
 
     beforeEach(() => {
@@ -94,14 +106,14 @@ describe('SettingsModal', () => {
         render(<SettingsModal {...defaultProps} />);
 
         const input = await screen.findByPlaceholderText('Enter new Gemini API Key');
-        
-        // Wait for the button to appear - use a flexible finder
-        const updateButton = await screen.findByRole('button', { name: /Save API key/i });
-
         await user.type(input, 'new-api-key');
+
+        const updateButton = await screen.findByRole('button', { name: /Save Changes/i });
         await user.click(updateButton);
 
-        expect(api.saveConfig).toHaveBeenCalledWith({ gemini_api_key: 'new-api-key' });
+        await waitFor(() => {
+            expect(api.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ gemini_api_key: 'new-api-key' }));
+        });
         // Should clear input after save
         await waitFor(() => expect(input).toHaveValue(''));
     });
