@@ -1,7 +1,9 @@
+import React, { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { DeckSelector } from '../components/DeckSelector';
 import { api } from '../api';
+import { useLecternStore } from '../store';
 
 // Mock API
 vi.mock('../api', () => ({
@@ -11,33 +13,42 @@ vi.mock('../api', () => ({
     }
 }));
 
-// Mock localStorage
-Object.defineProperty(window, 'localStorage', {
-    value: {
-        getItem: vi.fn(),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-    },
-    writable: true
-});
+// Mock Store
+vi.mock('../store', () => ({
+    useLecternStore: vi.fn()
+}));
 
 describe('DeckSelector', () => {
     const mockOnChange = vi.fn();
+    const mockSetAvailableDecks = vi.fn();
 
     beforeEach(() => {
         vi.clearAllMocks();
         // Default API response
         (api.getDecks as Mock).mockResolvedValue({ decks: ['Uni', 'Uni::Math', 'Uni::CS'] });
+
+        // Default Store response
+        vi.mocked(useLecternStore).mockImplementation((selector: any) => {
+            return selector({
+                availableDecks: [], // Changed to empty array
+                setAvailableDecks: mockSetAvailableDecks,
+            });
+        });
     });
 
+    // New ControlledDeckSelector component
+    const ControlledDeckSelector = ({ initialValue = "" }: { initialValue?: string }) => {
+        const [val, setVal] = useState(initialValue);
+        return <DeckSelector value={val} onChange={(v) => { setVal(v); mockOnChange(v); }} />;
+    };
+
     it('renders with initial value', () => {
-        render(<DeckSelector value="Uni::Math" onChange={mockOnChange} />);
+        render(<ControlledDeckSelector initialValue="Uni::Math" />);
         expect(screen.getByRole('textbox')).toHaveValue('Uni::Math');
     });
 
     it('fetches decks on focus', async () => {
-        render(<DeckSelector value="" onChange={mockOnChange} />);
+        render(<ControlledDeckSelector />);
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);
@@ -48,11 +59,16 @@ describe('DeckSelector', () => {
     });
 
     it('filters decks based on input', async () => {
-        render(<DeckSelector value="" onChange={mockOnChange} />);
+        // Redefine store mock for this test to have populated decks
+        vi.mocked(useLecternStore).mockImplementation((selector: any) => {
+            return selector({ availableDecks: ['Uni', 'Uni::Math', 'Uni::CS'], setAvailableDecks: mockSetAvailableDecks });
+        });
+
+        render(<ControlledDeckSelector />);
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);
-        await screen.findByPlaceholderText('Search decks...'); 
+        await screen.findByPlaceholderText('Search decks...');
 
         const searchInput = screen.getByPlaceholderText('Search decks...');
         fireEvent.change(searchInput, { target: { value: 'Mat' } });
@@ -71,7 +87,7 @@ describe('DeckSelector', () => {
     });
 
     it('shows create option for new deck', async () => {
-        render(<DeckSelector value="" onChange={mockOnChange} />);
+        render(<ControlledDeckSelector />);
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);
@@ -90,7 +106,7 @@ describe('DeckSelector', () => {
     it('creates deck on enter', async () => {
         (api.createDeck as Mock).mockResolvedValue({ status: 'created' });
 
-        render(<DeckSelector value="" onChange={mockOnChange} />);
+        render(<ControlledDeckSelector />);
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);
@@ -104,7 +120,7 @@ describe('DeckSelector', () => {
     });
 
     it('validates invalid deck names', async () => {
-        render(<DeckSelector value="" onChange={mockOnChange} />);
+        render(<ControlledDeckSelector />);
         const input = screen.getByRole('textbox');
 
         fireEvent.change(input, { target: { value: 'Invalid::' } });

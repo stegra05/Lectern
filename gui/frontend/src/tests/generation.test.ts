@@ -1,7 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { loadSession, recoverSessionOnRefresh, refreshRecoveredSession } from '../logic/generation';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { loadSession, recoverSessionOnRefresh } from '../logic/generation';
 import { api } from '../api';
-import { useLecternStore } from '../store';
 
 // Mock dependencies
 vi.mock('../api', () => ({
@@ -23,17 +22,16 @@ vi.mock('../store', () => ({
 }));
 
 vi.mock('../utils/uid', () => ({
-    stampUid: (card: any) => ({ ...card, _uid: 'mock-uid' }),
-    stampUids: (cards: any[]) => cards.map(c => ({ ...c, _uid: 'mock-uid' })),
+    stampUid: (card: Record<string, unknown>) => ({ ...card, _uid: 'mock-uid' }),
+    stampUids: (cards: Record<string, unknown>[]) => cards.map(c => ({ ...c, _uid: 'mock-uid' })),
 }));
 
 describe('generation logic', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let setMock: any;
-    let getMock: any;
 
     beforeEach(() => {
         setMock = vi.fn();
-        getMock = vi.fn();
         vi.clearAllMocks();
         localStorage.clear();
     });
@@ -42,10 +40,10 @@ describe('generation logic', () => {
         it('derives totalPages from cards', async () => {
             const mockCards = [
                 { slide_number: 1, front: 'A', back: 'B' },
-                { slide_number: 5, front: 'C', back: 'D' } as any,
+                { slide_number: 5, front: 'C', back: 'D' },
                 { slide_number: 3, front: 'E', back: 'F' }, // Max is 5
             ];
-            (api.getSession as any).mockResolvedValue({
+            vi.mocked(api.getSession).mockResolvedValue({
                 cards: mockCards,
                 deck_name: 'Test Deck',
             });
@@ -60,7 +58,7 @@ describe('generation logic', () => {
         });
 
         it('handles sessions with no cards', async () => {
-            (api.getSession as any).mockResolvedValue({
+            vi.mocked(api.getSession).mockResolvedValue({
                 cards: [],
                 deck_name: 'Empty Deck',
             });
@@ -77,8 +75,8 @@ describe('generation logic', () => {
     describe('recoverSessionOnRefresh', () => {
         it('derives totalPages for active session', async () => {
             localStorage.setItem('lectern_active_session_id', 'active-session');
-            (api.getSessionStatus as any).mockResolvedValue({ active: true });
-            (api.getSession as any).mockResolvedValue({
+            vi.mocked(api.getSessionStatus).mockResolvedValue({ active: true, status: 'generating' });
+            vi.mocked(api.getSession).mockResolvedValue({
                 cards: [{ slide_number: 10 }],
                 deck_name: 'Active Deck',
             });

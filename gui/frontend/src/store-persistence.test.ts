@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useLecternStore } from './store';
 import { act } from '@testing-library/react';
 
@@ -8,14 +8,12 @@ describe('Store Persistence', () => {
         act(() => {
             useLecternStore.getState().reset();
         });
-        // Mock localStorage
-        vi.stubGlobal('localStorage', {
-            getItem: vi.fn(),
-            setItem: vi.fn(),
-            removeItem: vi.fn(),
+
+        // Reset preferences specifically since it's part of initial state
+        act(() => {
+            useLecternStore.setState({ densityPreferences: { per1k: null, perSlide: null } });
         });
     });
-
     it('should persist card per slide preference in slides mode', () => {
         // Setup slides mode estimation (10 pages, 500 chars/page)
         const estimation = {
@@ -36,7 +34,7 @@ describe('Store Persistence', () => {
             useLecternStore.getState().setTargetDeckSize(20);
         });
 
-        expect(localStorage.setItem).toHaveBeenCalledWith('lectern_pref_cards_per_slide', '2.00');
+        expect(useLecternStore.getState().densityPreferences.perSlide).toBeCloseTo(2.0, 2);
     });
 
     it('should persist card per 1k chars preference in script mode', () => {
@@ -59,12 +57,13 @@ describe('Store Persistence', () => {
             useLecternStore.getState().setTargetDeckSize(90);
         });
 
-        expect(localStorage.setItem).toHaveBeenCalledWith('lectern_pref_cards_per_1k', '3.00');
+        expect(useLecternStore.getState().densityPreferences.per1k).toBeCloseTo(3.0, 2);
     });
 
     it('should apply persisted preference for slides mode', () => {
-        // Mock stored preference
-        vi.mocked(localStorage.getItem).mockReturnValue('2.50'); // 2.5 cards per slide
+        act(() => {
+            useLecternStore.setState({ densityPreferences: { per1k: null, perSlide: 2.5 } });
+        });
 
         const estimation = {
             pages: 20,
@@ -80,11 +79,6 @@ describe('Store Persistence', () => {
         };
 
         act(() => {
-            // Need to mock getItem implementation for the mode check in store
-            vi.mocked(localStorage.getItem).mockImplementation((key) => {
-                if (key === 'lectern_pref_cards_per_slide') return '2.50';
-                return null;
-            });
             useLecternStore.getState().setEstimation(estimation);
             useLecternStore.getState().recommendTargetDeckSize(estimation);
         });
@@ -94,11 +88,8 @@ describe('Store Persistence', () => {
     });
 
     it('should apply persisted preference for script mode', () => {
-        // Mock stored preference
-        // 4.0 cards per 1k chars
-        vi.mocked(localStorage.getItem).mockImplementation((key) => {
-            if (key === 'lectern_pref_cards_per_1k') return '4.00';
-            return null;
+        act(() => {
+            useLecternStore.setState({ densityPreferences: { per1k: 4.0, perSlide: null } });
         });
 
         const estimation = {

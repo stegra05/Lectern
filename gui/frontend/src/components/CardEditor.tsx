@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback, type KeyboardEvent } from 'react';
+import React, { useState, useCallback, type KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Save, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
+import DOMPurify from 'dompurify';
 import type { Card } from '../api';
 import { renderClozeFront, renderClozeBack } from '../utils/cloze';
 
@@ -80,7 +81,7 @@ const CardPreview: React.FC<{
                     </div>
                     <div
                         className="text-lg text-text-main leading-relaxed prose prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: front }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(front) }}
                     />
                     <div className="mt-4 text-[10px] text-text-muted/50">
                         Click to reveal answer
@@ -101,7 +102,7 @@ const CardPreview: React.FC<{
                     </div>
                     <div
                         className="text-base text-text-main leading-relaxed prose prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: back }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(back) }}
                     />
                 </div>
             </motion.div>

@@ -65,7 +65,6 @@ function extractErrorCode(error: unknown): string | undefined {
 export function translateError(error: unknown, context?: 'estimation' | 'generation' | 'sync' | 'general'): FriendlyError {
     const errorCode = extractErrorCode(error);
     const message = error instanceof Error ? error.message : String(error || 'Unknown error');
-    const lowerMessage = message.toLowerCase();
 
     // API Key / Authentication errors
     if (ERROR_PATTERNS.apiKey.test(message)) {

@@ -22,7 +22,7 @@ export function renderClozeFront(text: string): string {
 export function renderClozeBack(text: string): string {
     return text.replace(
         /\{\{c\d+::(.+?)(?:::(.+?))?\}\}/g,
-        (_match, answer, _hint) => {
+        (_match, answer) => {
             return `<span class="cloze-answer">${answer}</span>`;
         }
     );
