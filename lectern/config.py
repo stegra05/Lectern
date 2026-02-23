@@ -233,8 +233,10 @@ LOG_SESSION_CONTENT: bool = os.getenv("LOG_SESSION_CONTENT", "true").lower() not
 )
 LOG_MAX_RESPONSE_CHARS: int = int(os.getenv("LOG_MAX_RESPONSE_CHARS", "20000"))
 
-# Pricing dictionary
+# Pricing dictionary (per million tokens: input, output)
 GEMINI_PRICING: Dict[str, tuple[float, float]] = {
+    "gemini-3-pro-preview": (2.00, 12.00),
+    "gemini-3-flash-preview": (0.50, 3.00),
     "gemini-3-pro": (2.00, 12.00),
     "gemini-3-flash": (0.50, 3.00),
     "gemini-2.5-pro": (1.25, 10.00),

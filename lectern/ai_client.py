@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import re
 import time
 import json
 from typing import Any, Dict, List, Optional
@@ -25,6 +27,12 @@ from lectern.ai_schemas import (
 )
 import logging
 logger = logging.getLogger(__name__)
+
+# Rate limiting configuration
+RATE_LIMIT_MAX_RETRIES = 5
+RATE_LIMIT_BASE_DELAY = 2.0  # seconds
+RATE_LIMIT_MAX_DELAY = 60.0  # seconds
+RATE_LIMIT_JITTER_FACTOR = 0.1  # 10% jitter
 
 _THINKING_PROFILES = {
     "concept_map": "high",
@@ -249,26 +257,102 @@ class LecternAIClient:
         except Exception as e:
             logger.debug(f"[AI] History pruning failed: {e}")
 
-    def _with_retry(self, operation_name: str, fn: Any, retries: int = 3, base_delay_s: float = 1.0) -> Any:
-        """Execute a callable with exponential backoff."""
+    def _is_rate_limit_error(self, exc: Exception) -> bool:
+        """Check if an exception indicates a rate limit error."""
+        err_text = str(exc).lower()
+        # Check for common rate limit indicators
+        rate_limit_patterns = [
+            "429",
+            "rate limit",
+            "quota exceeded",
+            "resource_exhausted",
+            "too many requests",
+            "rate_limit",
+            "retry_after",
+        ]
+        return any(pattern in err_text for pattern in rate_limit_patterns)
+
+    def _extract_retry_after(self, exc: Exception) -> float | None:
+        """Extract Retry-After value from exception if available."""
+        err_text = str(exc)
+        # Try to find retry_after in the error message
+        match = re.search(r'retry_after["\'\s:=]+(\d+(?:\.\d+)?)', err_text, re.IGNORECASE)
+        if match:
+            return float(match.group(1))
+        # Try to find "retry in X seconds" pattern
+        match = re.search(r"retry\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*s", err_text, re.IGNORECASE)
+        if match:
+            return float(match.group(1))
+        return None
+
+    def _calculate_backoff_with_jitter(self, base_delay: float, attempt: int) -> float:
+        """Calculate backoff delay with exponential increase and jitter."""
+        # Exponential backoff
+        delay = base_delay * (2 ** (attempt - 1))
+        # Cap at max delay
+        delay = min(delay, RATE_LIMIT_MAX_DELAY)
+        # Add jitter (random +/- 10%)
+        jitter = delay * RATE_LIMIT_JITTER_FACTOR * random.uniform(-1, 1)
+        delay = max(0.1, delay + jitter)
+        return delay
+
+    def _with_retry(
+        self,
+        operation_name: str,
+        fn: Any,
+        retries: int = RATE_LIMIT_MAX_RETRIES,
+        base_delay_s: float = RATE_LIMIT_BASE_DELAY,
+    ) -> Any:
+        """Execute a callable with exponential backoff and rate limit handling."""
+        last_exception: Exception | None = None
+
         for attempt in range(1, retries + 1):
             try:
                 return fn()
             except Exception as exc:
+                last_exception = exc
+
+                # Check if it's a rate limit error
+                is_rate_limit = self._is_rate_limit_error(exc)
+
                 if attempt == retries:
+                    error_type = "Rate limit" if is_rate_limit else "Operation"
                     raise RuntimeError(
-                        f"{operation_name} failed after {retries} attempts: {exc}"
+                        f"{error_type} {operation_name} failed after {retries} attempts: {exc}"
                     ) from exc
-                sleep_seconds = base_delay_s * (2 ** (attempt - 1))
-                logger.warning(
-                    "[AI] %s attempt %s/%s failed: %s; retrying in %.1fs",
-                    operation_name,
-                    attempt,
-                    retries,
-                    exc,
-                    sleep_seconds,
-                )
+
+                # Calculate delay
+                if is_rate_limit:
+                    # Try to get Retry-After header value
+                    retry_after = self._extract_retry_after(exc)
+                    if retry_after:
+                        sleep_seconds = retry_after
+                    else:
+                        sleep_seconds = self._calculate_backoff_with_jitter(base_delay_s, attempt)
+                    logger.warning(
+                        "[AI] %s rate limited (attempt %d/%d); waiting %.1fs before retry: %s",
+                        operation_name,
+                        attempt,
+                        retries,
+                        sleep_seconds,
+                        str(exc)[:200],
+                    )
+                else:
+                    # Standard exponential backoff for other errors
+                    sleep_seconds = base_delay_s * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[AI] %s attempt %d/%d failed: %s; retrying in %.1fs",
+                        operation_name,
+                        attempt,
+                        retries,
+                        str(exc)[:200],
+                        sleep_seconds,
+                    )
+
                 time.sleep(sleep_seconds)
+
+        # Should not reach here, but satisfy type checker
+        raise RuntimeError(f"{operation_name} failed: {last_exception}")
 
     def upload_pdf(self, pdf_path: str, retries: int = 3) -> Dict[str, str]:
         """Upload a PDF to Gemini Files API and return metadata."""

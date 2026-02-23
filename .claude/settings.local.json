@@ -15,7 +15,8 @@
       "Bash(npm run build:*)",
       "Bash(node:*)",
       "Bash(npm run lint:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebSearch"
     ]
   }
 }

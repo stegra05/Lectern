@@ -32,7 +32,7 @@ from cachetools import TTLCache
 from lectern.cost_estimator import recompute_estimate
 from starlette.concurrency import run_in_threadpool
 
-from lectern.anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes
+from lectern.anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes, get_connection_info
 from lectern import config
 from lectern.config import ConfigManager
 from service import GenerationService, DraftStore
@@ -230,6 +230,27 @@ async def health_check():
         "gemini_configured": gemini_configured,
         "backend_ready": True
     }
+
+
+@app.get("/anki/status")
+async def anki_status():
+    """Detailed AnkiConnect status with diagnostics."""
+    try:
+        info = await run_in_threadpool(get_connection_info)
+        return {
+            "status": "ok",
+            **info
+        }
+    except Exception as e:
+        logger.warning(f"Anki status check failed: {e}")
+        return {
+            "status": "error",
+            "connected": False,
+            "version": None,
+            "version_ok": False,
+            "error": str(e)
+        }
+
 
 @app.get("/config")
 async def get_config():

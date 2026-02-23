@@ -195,6 +195,23 @@ export const api = {
         }
     },
 
+    getAnkiStatus: async () => {
+        try {
+            const res = await fetchWithTimeout(`${API_URL}/anki/status`, {}, 5000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (error) {
+            console.warn('Anki status check failed:', error);
+            return {
+                status: "error",
+                connected: false,
+                version: null,
+                version_ok: false,
+                error: 'Failed to check Anki status'
+            };
+        }
+    },
+
     getConfig: async () => {
         try {
             const res = await fetchWithTimeout(`${API_URL}/config`, {}, 3000);
