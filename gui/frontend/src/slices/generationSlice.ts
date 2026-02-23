@@ -1,0 +1,168 @@
+import type { StoreState, LecternStore, GenerationActions, ProgressTrackingActions, Step } from "../store-types";
+import type { Phase } from "../components/PhaseIndicator";
+import * as generationLogic from "../logic/generation";
+import { stampUid } from "../utils/uid";
+
+export const getGenerationState = () => ({
+  step: "dashboard" as Step,
+  pdfFile: null as File | null,
+  deckName: "",
+  availableDecks: [] as string[],
+  focusPrompt: "",
+  sourceType: "auto" as "auto" | "slides" | "script",
+  targetDeckSize: 1,
+  densityPreferences: { per1k: null as number | null, perSlide: null as number | null },
+  logs: [] as import("../api").ProgressEvent[],
+  progress: { current: 0, total: 0 },
+  currentPhase: "idle" as Phase,
+  isError: false,
+  isCancelling: false,
+  estimation: null as import("../api").Estimation | null,
+  isEstimating: false,
+  estimationError: null as string | null,
+  totalPages: 0,
+  setupStepsCompleted: 0,
+  conceptProgress: { current: 0, total: 0 },
+});
+
+export const getSessionState = () => ({
+  sessionId: null as string | null,
+  isHistorical: false,
+});
+
+export const createGenerationActions = (
+  getInitialState: () => StoreState,
+
+  set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
+  get: () => LecternStore
+): GenerationActions => ({
+  setStep: (step) => set({ step }),
+  setPdfFile: (file) => set({
+    pdfFile: file,
+    // Reset estimation state when file changes to prevent stale data
+    estimation: null,
+    estimationError: null,
+    isEstimating: false,
+  }),
+  setDeckName: (name) => set({ deckName: name }),
+  setAvailableDecks: (decks) => set({ availableDecks: decks }),
+  setFocusPrompt: (prompt) => set({ focusPrompt: prompt }),
+  setSourceType: (type) => set({ sourceType: type }),
+  setTargetDeckSize: (target) => {
+    const { estimation } = get();
+    set({ targetDeckSize: target });
+
+    // Persist preference if we have an estimation context
+    if (estimation) {
+      const pageCount = estimation.pages || 1;
+      const textChars = estimation.text_chars || 0;
+      const avgChars = textChars / pageCount;
+      const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
+
+      if (isScript) {
+        // Preference: cards per 1k chars
+        const per1k = (target / textChars) * 1000;
+        set((state) => ({ densityPreferences: { ...state.densityPreferences, per1k } }));
+      } else {
+        // Preference: cards per slide
+        const perSlide = target / pageCount;
+        set((state) => ({ densityPreferences: { ...state.densityPreferences, perSlide } }));
+      }
+    }
+  },
+  setEstimation: (est) => set({ estimation: est, estimationError: null }),
+  setEstimationError: (error) => set({ estimationError: error }),
+  setTotalPages: (n) => set({ totalPages: n }),
+  recommendTargetDeckSize: (est) => {
+    set({ totalPages: est.pages });
+
+    const pageCount = est.pages || 1;
+    const textChars = est.text_chars || 0;
+    const avgChars = textChars / pageCount;
+    const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
+
+    let preferredTarget: number | null = null;
+    const prefs = get().densityPreferences;
+
+    if (isScript) {
+      if (prefs.per1k !== null) {
+        preferredTarget = Math.round((prefs.per1k * textChars) / 1000);
+      }
+    } else {
+      if (prefs.perSlide !== null) {
+        preferredTarget = Math.round(prefs.perSlide * pageCount);
+      }
+    }
+
+    if (preferredTarget !== null) {
+      // Clamp to min 1
+      set({ targetDeckSize: Math.max(1, preferredTarget) });
+    } else if (est.suggested_card_count) {
+      // Fallback to backend suggestion if no preference
+      set({ targetDeckSize: est.suggested_card_count });
+    }
+  },
+  setIsEstimating: (value) => set({ isEstimating: value }),
+  setIsError: (value) => set({ isError: value }),
+  setIsCancelling: (value) => set({ isCancelling: value }),
+  setSessionId: (id) => set({ sessionId: id }),
+  setPhaseFromEvent: (event) =>
+    set((state) => {
+      if (event.type !== 'step_start') return state;
+      const data = event.data as { phase?: Phase } | undefined;
+      if (data?.phase) {
+        return { ...state, currentPhase: data.phase };
+      }
+      return state;
+    }),
+  setProgress: (update) =>
+    set((state) => ({
+      progress: {
+        current:
+          update.current !== undefined ? update.current : state.progress.current,
+        total: update.total !== undefined ? update.total : state.progress.total,
+      },
+    })),
+  appendLog: (event) =>
+    set((state) => ({
+      logs: [...state.logs, event],
+    })),
+  appendCard: (card) =>
+    set((state) => ({
+      cards: [...state.cards, stampUid(card)],
+    })),
+  reset: () => set(getInitialState()),
+  handleGenerate: () => generationLogic.handleGenerate(set, get),
+  handleCancel: () => generationLogic.handleCancel(set, get),
+  handleReset: () => set(getInitialState()),
+  handleCopyLogs: () => {
+    const { logs } = get();
+    const text = logs
+      .map(
+        (log) =>
+          `[${new Date(log.timestamp * 1000).toLocaleTimeString()}] ${log.type.toUpperCase()}: ${log.message}`
+      )
+      .join('\n');
+    navigator.clipboard.writeText(text);
+    set({ copied: true });
+    get().addToast('success', 'Logs copied to clipboard', 2500);
+    setTimeout(() => set({ copied: false }), 2000);
+  },
+  loadSession: (sessionId) => generationLogic.loadSession(sessionId, set),
+  recoverSessionOnRefresh: () => generationLogic.recoverSessionOnRefresh(set),
+  refreshRecoveredSession: () => generationLogic.refreshRecoveredSession(set, get),
+});
+
+export const createProgressTrackingActions = (
+  set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void
+): ProgressTrackingActions => ({
+  incrementSetupStep: () =>
+    set((state) => ({
+      setupStepsCompleted: Math.min(state.setupStepsCompleted + 1, 4),
+    })),
+  setConceptProgress: (progress) =>
+    set(() => ({
+      conceptProgress: progress,
+    })),
+});
+

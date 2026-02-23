@@ -64,16 +64,6 @@ class ServiceEvent:
     message: str = ""
     data: Dict[str, Any] = field(default_factory=dict)
 
-    def to_json(self) -> str:
-        return json.dumps(
-            {
-                "type": self.type,
-                "message": self.message,
-                "data": self.data,
-                "timestamp": time.time(),
-            }
-        )
-
 @dataclass(frozen=True)
 class GenerationConfig:
     pdf_path: str

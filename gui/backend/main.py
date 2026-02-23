@@ -48,6 +48,7 @@ from session import (
     _get_session_or_404,
     _get_runtime_or_404,
 )
+from streaming import ndjson_event
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -88,7 +89,7 @@ class ConfigUpdate(BaseModel):
 
 
 def event_json(event_type: str, message: str = "", data: Optional[Dict] = None) -> str:
-    return ServiceEvent(event_type, message, data or {}).to_json()
+    return ndjson_event(event_type, message, data or {})
 
 
 async def stream_sync_cards(
@@ -560,13 +561,13 @@ async def generate_cards(
 
     async def event_generator():
         card_count = 0  # Track number of cards generated
-        yield event_json(
+        yield ndjson_event(
             "session_start",
             "Session started",
             {"session_id": session.session_id},
-        ) + "\n"
+        )
         try:
-            async for event_str in service.run_generation(
+            async for event in service.run_generation(
                 pdf_path=tmp_path,
                 deck_name=deck_name,
                 model_name=model_name,
@@ -578,10 +579,9 @@ async def generate_cards(
                 target_card_count=target_card_count,
                 session_id=session.session_id,
             ):
-                yield f"{event_str}\n"
+                yield ndjson_event(event.type, event.message, event.data)
                 try:
-                    parsed = json.loads(event_str)
-                    event_type = parsed.get("type")
+                    event_type = event.type
                     # Track card count
                     if event_type == "card":
                         card_count += 1
@@ -601,7 +601,7 @@ async def generate_cards(
                     pass
         except Exception as e:
             session_manager.mark_status(session.session_id, "error")
-            yield f'{{"type": "error", "message": "Generation failed: {str(e)}", "timestamp": 0}}\n'
+            yield ndjson_event("error", f"Generation failed: {str(e)}")
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
@@ -714,7 +714,7 @@ async def sync_drafts(session_id: Optional[str] = None):
             allow_updates=False,
             on_complete=on_complete,
         ):
-            yield f"{payload}\n"
+            yield payload
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 

@@ -126,7 +126,7 @@ class GenerationService:
         source_type: str = "auto",  # "auto", "slides", "script"
         target_card_count: int | None = None,
         session_id: Optional[str] = None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[ServiceEvent, None]:
         
         # Clear previous drafts on new run
         self.draft_store.clear()
@@ -158,7 +158,7 @@ class GenerationService:
 
         while True:
             if self.stop_requested:
-                yield ServiceEvent("cancelled", "Generation cancelled by user", {}).to_json()
+                yield ServiceEvent("cancelled", "Generation cancelled by user", {})
                 break
 
             # Execute the blocking next() in a thread
@@ -183,4 +183,4 @@ class GenerationService:
                 if event.data.get("success"):
                     event.message = f"✔ {event.message}"
 
-            yield event.to_json()
+            yield event

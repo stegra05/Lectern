@@ -97,17 +97,17 @@ async def test_generation_service_run_flow(mock_core_service):
     events = []
     with patch("gui.backend.service.load_state", return_value=state):
         with patch.object(draft_store._state_file, "update_cards"):
-            async for event_json in service.run_generation(
+            async for event in service.run_generation(
                 pdf_path="test_slides.pdf",
                 deck_name="Deck",
                 model_name="Basic",
                 tags=["tag"],
             ):
-                events.append(json.loads(event_json))
+                events.append(event)
         
     # Validation
     assert len(events) > 0
-    assert events[0]["type"] == "progress_start"
+    assert events[0].type == "progress_start"
     
     # Check if done event updated the draft store
     assert draft_store.deck_name == "Deck"
@@ -141,11 +141,11 @@ async def test_generation_service_cancellation(mock_core_service):
     events = await gen_task
     
     # Should have a cancelled event
-    assert events[-1]["type"] == "cancelled"
+    assert events[-1].type == "cancelled"
     assert service.stop_requested is True
 
 async def _consume_generator(gen):
     events = []
     async for item in gen:
-        events.append(json.loads(item))
+        events.append(item)
     return events
