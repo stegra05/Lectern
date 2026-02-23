@@ -31,6 +31,7 @@ from lectern.generation_loop import (
 )
 from lectern.utils.tags import infer_slide_set_name
 from lectern.utils.note_export import export_card_to_anki
+from lectern.utils.error_handling import capture_exception
 
 from lectern.utils.history import HistoryManager
 
@@ -182,7 +183,8 @@ class LecternGenerationService:
                     yield ServiceEvent("info", "Loaded style examples from Anki")
                 yield ServiceEvent("step_end", "Examples Loaded", {"success": True})
             except Exception as e:
-                 yield ServiceEvent("error", f"Failed to sample examples: {e}", {"recoverable": True})
+                 user_msg, _ = capture_exception(e, "Sample examples")
+                 yield ServiceEvent("error", f"Failed to sample examples: {user_msg}", {"recoverable": True})
                  yield ServiceEvent("step_end", "Examples Failed", {"success": False})
 
             # 3b. Native flow: PDF title resolved via concept map; fallback uses filename.
@@ -211,8 +213,9 @@ class LecternGenerationService:
                 uploaded_pdf = ai.upload_pdf(cfg.pdf_path)
                 yield ServiceEvent("step_end", "PDF Uploaded", {"success": True})
             except Exception as e:
+                user_msg, _ = capture_exception(e, "PDF upload")
                 yield ServiceEvent("step_end", "PDF Upload Failed", {"success": False})
-                yield ServiceEvent("error", f"Native PDF upload failed: {e}", {"recoverable": False})
+                yield ServiceEvent("error", f"Native PDF upload failed: {user_msg}", {"recoverable": False})
                 history_mgr.update_entry(history_id, status="error")
                 return
             
@@ -260,7 +263,8 @@ class LecternGenerationService:
                 for w in ai.drain_warnings():
                     yield ServiceEvent("warning", w)
             except Exception as e:
-                yield ServiceEvent("error", f"Concept map failed: {e}", {"recoverable": True})
+                user_msg, _ = capture_exception(e, "Concept map")
+                yield ServiceEvent("error", f"Concept map failed: {user_msg}", {"recoverable": True})
                 yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})
                 metadata_pages = max(1, int(file_size / 80000))
                 pages = [{} for _ in range(metadata_pages)]
@@ -353,6 +357,7 @@ class LecternGenerationService:
                 focus_prompt=cfg.focus_prompt,
                 effective_target=effective_target,
                 stop_check=cfg.stop_check,
+                recent_card_window=config.REFLECTION_RECENT_CARD_WINDOW,
             )
 
             # Generation loop
@@ -384,6 +389,9 @@ class LecternGenerationService:
                     actual_batch_size=actual_batch_size,
                     rounds=rounds,
                     stop_check=cfg.stop_check,
+                    recent_card_window=config.REFLECTION_RECENT_CARD_WINDOW,
+                    hard_cap_multiplier=config.REFLECTION_HARD_CAP_MULTIPLIER,
+                    hard_cap_padding=config.REFLECTION_HARD_CAP_PADDING,
                 )
                 yield from self._run_reflection_loop(
                     context=loop_context,
@@ -456,9 +464,10 @@ class LecternGenerationService:
             })
 
         except Exception as e:
+            user_msg, _ = capture_exception(e, "Generation run")
             if history_id:
                 history_mgr.update_entry(history_id, status="error")
-            yield ServiceEvent("error", f"Critical error: {e}", {"recoverable": False})
+            yield ServiceEvent("error", f"Critical error: {user_msg}", {"recoverable": False})
             # Do not raise; let the generator exit gracefully so the frontend sees the error event
             return
 

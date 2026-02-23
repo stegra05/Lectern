@@ -225,6 +225,11 @@ SCRIPT_BASE_CHARS: int = int(os.getenv("SCRIPT_BASE_CHARS", "1000"))
 GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "1.0"))
 USE_NATIVE_PDF: bool = os.getenv("USE_NATIVE_PDF", "true").lower() in ("1", "true", "yes")
 
+# Reflection loop settings (env-only)
+REFLECTION_RECENT_CARD_WINDOW: int = int(os.getenv("REFLECTION_RECENT_CARD_WINDOW", "100"))
+REFLECTION_HARD_CAP_MULTIPLIER: float = float(os.getenv("REFLECTION_HARD_CAP_MULTIPLIER", "1.2"))
+REFLECTION_HARD_CAP_PADDING: int = int(os.getenv("REFLECTION_HARD_CAP_PADDING", "5"))
+
 # Session logging controls
 LOG_SESSION_CONTENT: bool = os.getenv("LOG_SESSION_CONTENT", "true").lower() not in (
     "0",

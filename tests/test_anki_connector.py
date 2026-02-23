@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from lectern import anki_connector
+from lectern.anki_connector import AnkiTransportError, AnkiApiError
 
 # --- Fixtures ---
 
@@ -8,6 +9,15 @@ from lectern import anki_connector
 def mock_requests_post():
     with patch("requests.post") as mock_post:
         yield mock_post
+
+
+@pytest.fixture(autouse=True)
+def clear_model_caches():
+    """Clear model field caches before each test to prevent test pollution."""
+    anki_connector.clear_model_caches()
+    yield
+    anki_connector.clear_model_caches()
+
 
 # --- Tests ---
 
@@ -46,8 +56,8 @@ def test_add_note_error(mock_requests_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": None, "error": "Deck not found"}
     mock_requests_post.return_value = mock_response
-    
-    with pytest.raises(RuntimeError, match="Deck not found"):
+
+    with pytest.raises(AnkiApiError, match="Deck not found"):
         anki_connector.add_note("Bad Deck", "Basic", {}, [])
 
 def test_store_media_file(mock_requests_post):
@@ -152,19 +162,19 @@ class TestNetworkTimeout:
     """Tests for network timeout handling."""
 
     def test_invoke_timeout_on_connect(self, mock_requests_post):
-        """Test that connection timeout raises RuntimeError."""
+        """Test that connection timeout raises AnkiTransportError."""
         import requests
         mock_requests_post.side_effect = requests.Timeout("Connection timed out")
 
-        with pytest.raises(RuntimeError, match="Failed to reach AnkiConnect"):
+        with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
             anki_connector._invoke("version")
 
     def test_invoke_timeout_on_read(self, mock_requests_post):
-        """Test that read timeout raises RuntimeError."""
+        """Test that read timeout raises AnkiTransportError."""
         import requests
         mock_requests_post.side_effect = requests.ReadTimeout("Read timed out")
 
-        with pytest.raises(RuntimeError, match="Failed to reach AnkiConnect"):
+        with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
             anki_connector._invoke("version")
 
     def test_check_connection_handles_timeout(self, mock_requests_post):
@@ -179,12 +189,12 @@ class TestPartialResponse:
     """Tests for partial or malformed response handling."""
 
     def test_non_json_response(self, mock_requests_post):
-        """Test that non-JSON response raises RuntimeError."""
+        """Test that non-JSON response raises AnkiTransportError."""
         mock_response = MagicMock()
         mock_response.json.side_effect = ValueError("Invalid JSON")
         mock_requests_post.return_value = mock_response
 
-        with pytest.raises(RuntimeError, match="non-JSON response"):
+        with pytest.raises(AnkiTransportError, match="non-JSON response"):
             anki_connector._invoke("version")
 
     def test_empty_response(self, mock_requests_post):
@@ -193,7 +203,7 @@ class TestPartialResponse:
         mock_response.json.side_effect = ValueError("Empty response")
         mock_requests_post.return_value = mock_response
 
-        with pytest.raises(RuntimeError, match="non-JSON response"):
+        with pytest.raises(AnkiTransportError, match="non-JSON response"):
             anki_connector._invoke("version")
 
     def test_partial_json_response(self, mock_requests_post):
@@ -255,7 +265,7 @@ class TestRetryLogic:
         import requests
         mock_requests_post.side_effect = requests.ConnectionError("Connection refused")
 
-        with pytest.raises(RuntimeError, match="Failed to reach AnkiConnect"):
+        with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
             anki_connector._invoke("version")
 
         # Should have tried MAX_RETRIES + 1 times (4 by default)
@@ -267,7 +277,7 @@ class TestRetryLogic:
         mock_response.json.return_value = {"result": None, "error": "Deck not found"}
         mock_requests_post.return_value = mock_response
 
-        with pytest.raises(RuntimeError, match="AnkiConnect error"):
+        with pytest.raises(AnkiApiError, match="AnkiConnect error"):
             anki_connector._invoke("addNote", {"note": {}})
 
         # Should only call once (no retry on API error)
@@ -405,3 +415,43 @@ class TestGracefulDegradation:
 
         result = anki_connector.detect_builtin_models()
         assert result == {"basic": "Basic", "cloze": "Cloze"}
+
+
+class TestExceptionHierarchy:
+    """Tests for the typed exception hierarchy."""
+
+    def test_anki_transport_error_is_retriable(self):
+        """Test that AnkiTransportError is marked as retriable."""
+        exc = AnkiTransportError("Connection failed")
+        assert exc.retriable is True
+        assert isinstance(exc, anki_connector.AnkiConnectError)
+        assert isinstance(exc, RuntimeError)
+
+    def test_anki_api_error_is_not_retriable(self):
+        """Test that AnkiApiError is marked as not retriable."""
+        exc = AnkiApiError("Deck not found")
+        assert exc.retriable is False
+        assert isinstance(exc, anki_connector.AnkiConnectError)
+        assert isinstance(exc, RuntimeError)
+
+    def test_anki_connect_error_base(self):
+        """Test that AnkiConnectError can be used directly."""
+        exc = anki_connector.AnkiConnectError("Generic error", retriable=False)
+        assert exc.retriable is False
+
+    def test_transport_error_inheritance_catch(self, mock_requests_post):
+        """Test that AnkiTransportError can be caught as AnkiConnectError."""
+        import requests
+        mock_requests_post.side_effect = requests.ConnectionError("Connection refused")
+
+        with pytest.raises(anki_connector.AnkiConnectError):
+            anki_connector._invoke("version")
+
+    def test_api_error_inheritance_catch(self, mock_requests_post):
+        """Test that AnkiApiError can be caught as AnkiConnectError."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": None, "error": "Invalid action"}
+        mock_requests_post.return_value = mock_response
+
+        with pytest.raises(anki_connector.AnkiConnectError):
+            anki_connector._invoke("invalidAction")

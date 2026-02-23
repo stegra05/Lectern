@@ -55,21 +55,19 @@ def test_database_manager_singleton():
 
     db = DatabaseManager()
     session_id = "test_json_session"
-    # Ensure entry exists in history first
-    with db.get_connection() as conn:
-        conn.execute("INSERT INTO history (session_id, filename, deck) VALUES (?, ?, ?)", (session_id, "test.pdf", "Deck"))
-    
+    # Create entry using the proper add_history method to ensure valid ID
+    entry_id = db.add_history("test.pdf", "Deck", session_id=session_id)
+
     cards = [{"front": "Q", "back": "A"}]
     tags = ["tag1", "tag2"]
-    
+
     db.update_session_cards(session_id, cards, tags=tags, model_name="M")
     entry = db.get_entry_by_session_id(session_id)
-    
+
     assert entry is not None
     assert entry["cards"] == cards
     assert entry["tags"] == tags
     assert entry["model_name"] == "M"
-    
+
     # Clean up
-    with db.get_connection() as conn:
-        conn.execute("DELETE FROM history WHERE session_id=?", (session_id,))
+    db.delete_entry(entry_id)

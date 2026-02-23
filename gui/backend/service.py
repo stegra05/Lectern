@@ -6,6 +6,7 @@ from typing import AsyncGenerator, Dict, List, Any, Optional
 
 from lectern import config
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
+from lectern.utils.error_handling import capture_exception
 
 class DraftStore:
     def __init__(self, session_id: Optional[str] = None):
@@ -116,7 +117,8 @@ class GenerationService:
                 return None
             except Exception as e:
                 # Wrap core errors into a special event if they bubble up
-                return ServiceEvent("error", f"Core error: {e}")
+                user_msg, _ = capture_exception(e, "Generation iterator")
+                return ServiceEvent("error", f"Core error: {user_msg}")
 
         while True:
             if self.stop_requested:

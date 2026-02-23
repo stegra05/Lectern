@@ -40,6 +40,7 @@ from lectern.lectern_service import LecternGenerationService, ServiceEvent
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.history import HistoryManager
 from lectern.utils.database import DatabaseManager
+from lectern.utils.error_handling import capture_exception
 from session import (
     SessionManager,
     SessionState,
@@ -145,8 +146,9 @@ async def stream_sync_cards(
                     failed += 1
                     yield event_json("warning", f"Failed to create note: {error}")
         except Exception as e:
+            user_msg, _ = capture_exception(e, f"Sync card {idx}")
             failed += 1
-            yield event_json("warning", f"Sync failed for card {idx}: {str(e)}")
+            yield event_json("warning", f"Sync failed for card {idx}: {user_msg}")
 
         yield event_json("progress_update", "", {"current": created + updated + failed})
 
@@ -191,7 +193,7 @@ async def get_version():
 
             return result
     except Exception as e:
-        logger.warning(f"Update check failed: {e}")
+        capture_exception(e, "Version check")
     
     # Fallback to current only if check fails
     return {
@@ -214,14 +216,14 @@ async def health_check():
     try:
         anki_status = await run_in_threadpool(check_connection)
     except Exception as e:
-        logger.warning(f"Anki connection check failed: {e}")
+        capture_exception(e, "Anki health check")
         anki_status = False
-    
+
     # Safely check Gemini config without reloading the entire module (which is expensive)
     try:
         gemini_configured = bool(config.GEMINI_API_KEY)
     except Exception as e:
-        logger.warning(f"Gemini config check failed: {e}")
+        capture_exception(e, "Gemini config check")
         gemini_configured = False
         
     return {
@@ -242,13 +244,13 @@ async def anki_status():
             **info
         }
     except Exception as e:
-        logger.warning(f"Anki status check failed: {e}")
+        user_msg, _ = capture_exception(e, "Anki status")
         return {
             "status": "error",
             "connected": False,
             "version": None,
             "version_ok": False,
-            "error": str(e)
+            "error": user_msg
         }
 
 
@@ -273,8 +275,8 @@ async def update_config(cfg: ConfigUpdate):
             set_gemini_key(cfg.gemini_api_key)
             updated_fields.append("gemini_api_key")
         except Exception as e:
-            logger.error(f"Failed to update API key: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            user_msg, _ = capture_exception(e, "API key update")
+            raise HTTPException(status_code=500, detail=user_msg)
     
     # Handle other settings (JSON storage)
     json_updates = {}
@@ -288,7 +290,8 @@ async def update_config(cfg: ConfigUpdate):
         try:
             from lectern.anki_connector import get_model_names
             anki_models = await run_in_threadpool(get_model_names)
-        except Exception:
+        except Exception as e:
+            capture_exception(e, "Model names fetch")
             anki_models = []
         if anki_models:
             if cfg.basic_model and cfg.basic_model not in anki_models:
@@ -313,8 +316,8 @@ async def update_config(cfg: ConfigUpdate):
             for key, value in json_updates.items():
                 mgr.set(key, value)
         except Exception as e:
-            logger.error(f"Failed to save user config: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            user_msg, _ = capture_exception(e, "Config save")
+            raise HTTPException(status_code=500, detail=user_msg)
 
     # Invalidate the note-export model cache so new values are picked up
     if updated_fields:

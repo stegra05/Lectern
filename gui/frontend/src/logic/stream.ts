@@ -1,5 +1,6 @@
 import type { ProgressEvent } from '../api';
 import type { StoreState } from '../store-types';
+import { validateProgressStartData, validateProgressUpdateData } from '../schemas/sse';
 
 type StoreSetter = (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void;
 
@@ -8,49 +9,115 @@ type StreamKeys = {
   progressKey: 'progress' | 'syncProgress';
 };
 
+type ProgressState = { current: number; total: number };
+
+/**
+ * Type-safe log append helper.
+ * Handles both 'logs' and 'syncLogs' keys without type coercion.
+ */
+function appendToLog(
+  set: StoreSetter,
+  key: 'logs' | 'syncLogs',
+  event: ProgressEvent
+): void {
+  if (key === 'logs') {
+    set((state) => ({ logs: [...state.logs, event] }));
+  } else {
+    set((state) => ({ syncLogs: [...state.syncLogs, event] }));
+  }
+}
+
+/**
+ * Type-safe progress setter for progress_start events.
+ * Returns a partial state update without type coercion.
+ */
+function setProgressStart(
+  key: 'progress' | 'syncProgress',
+  total: number
+): Partial<StoreState> {
+  if (key === 'progress') {
+    return { progress: { current: 0, total } };
+  }
+  return { syncProgress: { current: 0, total } };
+}
+
+/**
+ * Type-safe progress updater for progress_update events.
+ * Returns a partial state update without type coercion.
+ */
+function updateProgress(
+  state: StoreState,
+  key: 'progress' | 'syncProgress',
+  current: number,
+  total?: number
+): Partial<StoreState> {
+  if (key === 'progress') {
+    return {
+      progress: {
+        ...state.progress,
+        current,
+        total: total !== undefined ? total : state.progress.total,
+      },
+    };
+  }
+  return {
+    syncProgress: {
+      ...state.syncProgress,
+      current,
+      total: total !== undefined ? total : state.syncProgress.total,
+    },
+  };
+}
+
+/**
+ * Type-safe concept progress updater.
+ */
+function updateConceptProgress(
+  state: StoreState,
+  current: number,
+  total?: number
+): Partial<StoreState> {
+  return {
+    conceptProgress: {
+      ...state.conceptProgress,
+      current,
+      total: total !== undefined ? total : state.conceptProgress.total,
+    },
+  };
+}
+
 export const processStreamEvent = (
   event: ProgressEvent,
   set: StoreSetter,
   keys: StreamKeys
 ): boolean => {
-  set((state) => ({
-    [keys.logKey]: [...state[keys.logKey], event],
-  }) as Partial<StoreState>);
+  // Type-safe log append
+  appendToLog(set, keys.logKey, event);
 
   if (event.type === 'progress_start') {
-    const data = event.data as { total: number; phase?: string };
-    set(() => ({
-      [keys.progressKey]: { current: 0, total: data.total },
-    }) as Partial<StoreState>);
+    const data = validateProgressStartData(event.data);
+    if (!data) {
+      return false;
+    }
+    set(() => setProgressStart(keys.progressKey, data.total));
 
     // Handle concept phase progress
     if (data.phase === 'concept') {
-      set(() => ({
-        conceptProgress: { current: 0, total: data.total },
-      }) as Partial<StoreState>);
+      set(() => ({ conceptProgress: { current: 0, total: data.total } }));
     }
     return true;
   }
 
   if (event.type === 'progress_update') {
-    const data = event.data as { current: number; total?: number; phase?: string };
-    set((state) => ({
-      [keys.progressKey]: {
-        ...state[keys.progressKey],
-        current: data.current,
-        total: data.total !== undefined ? data.total : state[keys.progressKey].total,
-      },
-    }) as Partial<StoreState>);
+    const data = validateProgressUpdateData(event.data);
+    if (!data) {
+      return false;
+    }
+    set((state) => updateProgress(state, keys.progressKey, data.current, data.total));
 
     // Handle concept phase progress
     if (data.phase === 'concept') {
-      set((state) => ({
-        conceptProgress: {
-          ...state.conceptProgress,
-          current: data.current,
-          total: data.total !== undefined ? data.total : state.conceptProgress.total,
-        },
-      }) as Partial<StoreState>);
+      set((state) => updateConceptProgress(state, data.current, data.total));
     }
     return true;
   }

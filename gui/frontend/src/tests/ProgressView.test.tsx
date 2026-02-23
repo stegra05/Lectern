@@ -10,7 +10,7 @@ import type { SortOption } from '../hooks/types';
 
 // Mock useTrickleProgress to skip animation
 vi.mock('../hooks/useTrickleProgress', () => ({
-    useTrickleProgress: (val: number) => val
+    useTrickleProgress: (val: number) => ({ display: val, isStalled: false })
 }));
 
 // Mock scrollIntoView

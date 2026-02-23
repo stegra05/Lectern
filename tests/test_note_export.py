@@ -110,12 +110,17 @@ def test_build_card_tags_dedup(mock_build_hierarchical):
          assert config.DEFAULT_TAG in extra_arg
 
 # Test export_card_to_anki
+@patch("lectern.utils.note_export.detect_builtin_models")
+@patch("lectern.utils.note_export.get_model_names")
 @patch("lectern.utils.note_export.add_note")
 @patch("lectern.utils.note_export.build_hierarchical_tags")
-def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
+def test_export_card_to_anki_success(mock_build_tags, mock_add_note, mock_get_models, mock_detect_builtins):
     """Test successful card export."""
     mock_add_note.return_value = 12345
     mock_build_tags.return_value = ["Tag1"]
+    # Mock Anki models to return empty list (no Anki connection)
+    mock_get_models.return_value = []
+    mock_detect_builtins.return_value = {}
 
     card = {
         "model_name": "Basic",
@@ -123,7 +128,7 @@ def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
         "back": "A",
         "tags": ["tag1"],
     }
-    
+
     result = export_card_to_anki(
         card=card,
         deck_name="Deck",
@@ -131,11 +136,11 @@ def test_export_card_to_anki_success(mock_build_tags, mock_add_note):
         fallback_model="Basic",
         additional_tags=[]
     )
-    
+
     assert result.success is True
     assert result.note_id == 12345
     assert result.error is None
-    
+
     # Verify interactions
     # Check if add_note was called with correct model resolution
     mock_add_note.assert_called_once()

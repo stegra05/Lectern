@@ -492,7 +492,7 @@ export function ProgressView() {
         return 0;
     }, [currentPhase, progress, step, cards.length, setupStepsCompleted, conceptProgress]);
 
-    const progressPct = useTrickleProgress(rawProgressPct);
+    const { display: progressPct, isStalled } = useTrickleProgress(rawProgressPct);
 
     // -----------------------------------------------------------------------
     // Sidebar: Generating state
@@ -586,32 +586,45 @@ export function ProgressView() {
                     <div>
                         <h3 className="text-xs font-medium text-text-main">Progress</h3>
                         <p className="text-[10px] text-text-muted mt-0.5 font-mono">
-                            {currentPhase === 'concept' && (
-                                conceptProgress.total > 0 ? (
-                                    <span className="flex items-center gap-1.5">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                        ANALYZING SLIDE {conceptProgress.current}/{conceptProgress.total}...
-                                    </span>
-                                ) : (
-                                    <span className="flex items-center gap-1.5">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                        ANALYZING SLIDES...
-                                    </span>
-                                )
+                            {isStalled ? (
+                                <span className="flex items-center gap-1.5 text-yellow-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                                    WAITING FOR RESPONSE...
+                                </span>
+                            ) : (
+                                <>
+                                    {currentPhase === 'concept' && (
+                                        conceptProgress.total > 0 ? (
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                                ANALYZING SLIDE {conceptProgress.current}/{conceptProgress.total}...
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                                ANALYZING SLIDES...
+                                            </span>
+                                        )
+                                    )}
+                                    {currentPhase === 'generating' && `GENERATED: ${cards.length}`}
+                                    {currentPhase === 'reflecting' && 'REFINING QUALITY...'}
+                                    {currentPhase === 'complete' && `DONE — ${cards.length} CARDS`}
+                                    {(!currentPhase || currentPhase === 'idle') && 'STARTING...'}
+                                </>
                             )}
-                            {currentPhase === 'generating' && `GENERATED: ${cards.length}`}
-                            {currentPhase === 'reflecting' && 'REFINING QUALITY...'}
-                            {currentPhase === 'complete' && `DONE — ${cards.length} CARDS`}
-                            {(!currentPhase || currentPhase === 'idle') && 'STARTING...'}
                         </p>
                     </div>
-                    <span className="text-xl font-bold text-primary">{progressPct}%</span>
+                    <span className={clsx(
+                        "text-xl font-bold",
+                        isStalled ? "text-yellow-400" : "text-primary"
+                    )}>{progressPct}%</span>
                 </div>
                 <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden">
                     <div
                         className={clsx(
-                            "h-full bg-primary rounded-full shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out",
-                            currentPhase === 'concept' && "animate-pulse"
+                            "h-full rounded-full shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out",
+                            currentPhase === 'concept' && !isStalled && "animate-pulse",
+                            isStalled ? "bg-yellow-400" : "bg-primary"
                         )}
                         style={{ width: `${Math.min(100, progressPct)}%` }}
                     />

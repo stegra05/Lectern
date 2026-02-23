@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generator, Iterable, List, Optional
 
 from lectern.ai_pacing import PacingState
+from lectern.utils.error_handling import capture_exception
 
-_RECENT_CARD_WINDOW = 100
-_REFLECTION_HARD_CAP_MULTIPLIER = 1.2
-_REFLECTION_HARD_CAP_PADDING = 5
+logger = logging.getLogger(__name__)
+
+# Default values for reflection configuration
+DEFAULT_RECENT_CARD_WINDOW = 100
+DEFAULT_REFLECTION_HARD_CAP_MULTIPLIER = 1.2
+DEFAULT_REFLECTION_HARD_CAP_PADDING = 5
 
 
 @dataclass(frozen=True)
@@ -38,6 +43,8 @@ class GenerationLoopConfig:
     focus_prompt: Optional[str]
     effective_target: float
     stop_check: Optional[Callable[[], bool]]
+    # Configuration for recent card window
+    recent_card_window: int = DEFAULT_RECENT_CARD_WINDOW
 
 
 @dataclass(frozen=True)
@@ -46,6 +53,10 @@ class ReflectionLoopConfig:
     actual_batch_size: int
     rounds: int
     stop_check: Optional[Callable[[], bool]]
+    # Configuration for reflection limits
+    recent_card_window: int = DEFAULT_RECENT_CARD_WINDOW
+    hard_cap_multiplier: float = DEFAULT_REFLECTION_HARD_CAP_MULTIPLIER
+    hard_cap_padding: int = DEFAULT_REFLECTION_HARD_CAP_PADDING
 
 
 def get_card_key(card: Dict[str, Any]) -> str:
@@ -109,7 +120,7 @@ def run_generation_loop(
         try:
             current_examples = context.examples if len(state.all_cards) == 0 else ""
             recent_keys = []
-            for card in state.all_cards[-_RECENT_CARD_WINDOW:]:
+            for card in state.all_cards[-config.recent_card_window:]:
                 key = get_card_key(card)
                 if key:
                     recent_keys.append(key[:120])
@@ -163,7 +174,8 @@ def run_generation_loop(
             # Checkpoint was here, now handled by HistoryManager/DatabaseManager in service layer on completion or sync.
             pass
         except Exception as e:
-            yield event_factory("error", f"Generation error: {e}")
+            user_msg, _ = capture_exception(e, "Generation loop")
+            yield event_factory("error", f"Generation error: {user_msg}")
             break
 
 
@@ -175,10 +187,10 @@ def run_reflection_loop(
     event_factory: Callable[..., Any],
     should_stop: Callable[[Optional[Callable[[], bool]]], bool],
 ) -> Generator[Any, None, None]:
-    # NOTE(Reflection): Allow exceeding the initial cap by 20% to accommodate refinement.
+    # NOTE(Reflection): Allow exceeding the initial cap by configured multiplier to accommodate refinement.
     reflection_hard_cap = (
-        int(config.total_cards_cap * _REFLECTION_HARD_CAP_MULTIPLIER)
-        + _REFLECTION_HARD_CAP_PADDING
+        int(config.total_cards_cap * config.hard_cap_multiplier)
+        + config.hard_cap_padding
     )
 
     for round_idx in range(config.rounds):
@@ -222,6 +234,7 @@ def run_reflection_loop(
             if should_break:
                 break
         except Exception as e:
-            yield event_factory("warning", f"Reflection error: {e}")
+            user_msg, _ = capture_exception(e, "Reflection loop")
+            yield event_factory("warning", f"Reflection error: {user_msg}")
 
     yield event_factory("progress_update", "", {"current": config.rounds})

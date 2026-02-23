@@ -19,6 +19,53 @@ from lectern import config as _config
 
 logger = logging.getLogger(__name__)
 
+
+# --- Exception Hierarchy ---
+
+
+class AnkiConnectError(RuntimeError):
+    """Base exception for all AnkiConnect errors."""
+
+    def __init__(self, message: str, *, retriable: bool = False) -> None:
+        super().__init__(message)
+        self.retriable = retriable
+
+
+class AnkiTransportError(AnkiConnectError):
+    """Error occurred at the transport level (connection, network, timeout).
+
+    These errors are retriable - AnkiConnect may be temporarily unavailable.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, retriable=True)
+
+
+class AnkiApiError(AnkiConnectError):
+    """Error returned by AnkiConnect API (e.g., invalid action, deck not found).
+
+    These errors are not retriable - the request itself is invalid.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, retriable=False)
+
+# Caches for model field detection (lifecycle of the app)
+_MODEL_FIELD_CACHE: Dict[str, List[str]] = {}
+_MODEL_DETECTION_CACHE: Optional[Dict[str, str]] = None
+
+
+def clear_model_caches() -> None:
+    """Clear model field and detection caches.
+
+    Call this when Anki's model configuration may have changed (e.g., after
+    user modifies note types in Anki).
+    """
+    global _MODEL_DETECTION_CACHE
+    _MODEL_FIELD_CACHE.clear()
+    _MODEL_DETECTION_CACHE = None
+
+
 # Retry configuration
 MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 0.5  # seconds
@@ -30,32 +77,33 @@ F = TypeVar("F", bound=Callable[..., Any])
 def _with_retry(max_retries: int = MAX_RETRIES, initial_delay: float = INITIAL_RETRY_DELAY) -> Callable[[F], F]:
     """Decorator that adds exponential backoff retry logic for transport errors.
 
-    Only retries on connection-level errors (requests.RequestException).
-    API-level errors (e.g., invalid action) fail immediately.
+    Only retries on AnkiTransportError (connection-level errors).
+    AnkiApiError and other exceptions fail immediately.
     """
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception: Optional[Exception] = None
+            last_exception: Optional[AnkiTransportError] = None
             delay = initial_delay
 
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except RuntimeError as e:
-                    # Only retry on transport errors, not API errors
-                    error_msg = str(e)
-                    if "Failed to reach AnkiConnect" in error_msg or "non-JSON response" in error_msg:
-                        last_exception = e
-                        if attempt < max_retries:
-                            logger.warning(
-                                "AnkiConnect connection failed (attempt %d/%d), retrying in %.1fs: %s",
-                                attempt + 1, max_retries + 1, delay, e
-                            )
-                            time.sleep(delay)
-                            delay = min(delay * 2, MAX_RETRY_DELAY)
-                            continue
-                    # API-level error or final attempt - raise immediately
+                except AnkiTransportError as e:
+                    # Transport errors are retriable
+                    last_exception = e
+                    if attempt < max_retries:
+                        logger.warning(
+                            "AnkiConnect connection failed (attempt %d/%d), retrying in %.1fs: %s",
+                            attempt + 1, max_retries + 1, delay, e
+                        )
+                        time.sleep(delay)
+                        delay = min(delay * 2, MAX_RETRY_DELAY)
+                        continue
+                    # Final attempt exhausted - re-raise
+                    raise
+                except AnkiApiError:
+                    # API-level errors are not retriable - raise immediately
                     raise
 
             # All retries exhausted
@@ -69,8 +117,9 @@ def _with_retry(max_retries: int = MAX_RETRIES, initial_delay: float = INITIAL_R
 def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15) -> Any:
     """Invoke an AnkiConnect action with the given parameters.
 
-    Raises a RuntimeError with details if the call fails at the transport or
-    API level. Transport errors are retried with exponential backoff.
+    Raises:
+        AnkiTransportError: If the connection fails (retried with exponential backoff).
+        AnkiApiError: If AnkiConnect returns an API-level error.
     """
     payload = {"action": action, "version": 6}
     if params is not None:
@@ -80,15 +129,15 @@ def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int =
     try:
         response = requests.post(url, json=payload, timeout=timeout)
     except requests.RequestException as exc:
-        raise RuntimeError(f"Failed to reach AnkiConnect at {url}: {exc}") from exc
+        raise AnkiTransportError(f"Failed to reach AnkiConnect at {url}: {exc}") from exc
 
     try:
         data = response.json()
     except ValueError as exc:
-        raise RuntimeError(f"AnkiConnect returned non-JSON response: {exc}") from exc
+        raise AnkiTransportError(f"AnkiConnect returned non-JSON response: {exc}") from exc
 
     if data.get("error") is not None:
-        raise RuntimeError(f"AnkiConnect error for {action}: {data['error']}")
+        raise AnkiApiError(f"AnkiConnect error for {action}: {data['error']}")
 
     return data.get("result")
 
@@ -175,7 +224,7 @@ def add_note(deck_name: str, model_name: str, fields: Dict[str, str], tags: List
 
     result = _invoke("addNote", {"note": note})
     if not isinstance(result, int):
-        raise RuntimeError(f"Unexpected addNote result: {result}")
+        raise AnkiApiError(f"Unexpected addNote result: {result}")
     return result
 
 
@@ -203,7 +252,7 @@ def store_media_file(filename: str, data: bytes) -> str:
     b64 = base64.b64encode(data).decode("utf-8")
     result = _invoke("storeMediaFile", {"filename": filename, "data": b64})
     if not isinstance(result, str):
-        raise RuntimeError(f"Unexpected storeMediaFile result: {result}")
+        raise AnkiApiError(f"Unexpected storeMediaFile result: {result}")
     return result
 
 
@@ -270,11 +319,15 @@ def get_model_names() -> List[str]:
 
 
 def get_model_field_names(model_name: str) -> List[str]:
-    """Fetch field names for a specific Anki note type/model."""
+    """Fetch field names for a specific Anki note type/model (cached)."""
+    if model_name in _MODEL_FIELD_CACHE:
+        return _MODEL_FIELD_CACHE[model_name]
     try:
         result = _invoke("modelFieldNames", {"modelName": model_name})
         if isinstance(result, list):
-            return [str(name) for name in result]
+            fields = [str(name) for name in result]
+            _MODEL_FIELD_CACHE[model_name] = fields
+            return fields
         return []
     except Exception as exc:
         logger.warning("Failed to fetch fields for model '%s': %s", model_name, exc)
@@ -290,29 +343,49 @@ def detect_builtin_models() -> Dict[str, str]:
     Returns:
         Mapping from canonical name ('basic', 'cloze') to actual localized name.
         Defaults to English names if detection fails or Anki is unreachable.
+
+    Note:
+        Results are cached for the app lifecycle to avoid repeated AnkiConnect API calls.
     """
+    global _MODEL_DETECTION_CACHE
+    if _MODEL_DETECTION_CACHE is not None:
+        return _MODEL_DETECTION_CACHE
+
     detected = {"basic": "Basic", "cloze": "Cloze"}
+    # Track if we've found canonical matches to avoid overwriting with variants
+    found_canonical_basic = False
+    found_canonical_cloze = False
 
     models = get_model_names()
     if not models:
+        _MODEL_DETECTION_CACHE = detected
         return detected
 
     for name in models:
         fields = get_model_field_names(name)
         field_set = {f.strip() for f in fields}
 
-        # Handle potential case-insensitivity or extra fields in user templates
-        # Basic signature: precisely contains Front and Back
+        # Basic signature: contains Front and Back
         if "Front" in field_set and "Back" in field_set:
-            # If we see multiple matches, prefer the one exactly named "Basic"
-            if name == "Basic" or detected["basic"] == "Basic":
+            if name == "Basic":
+                # Canonical match - always prefer this
+                detected["basic"] = name
+                found_canonical_basic = True
+            elif not found_canonical_basic:
+                # Fallback for localized names (e.g., "Einfach")
                 detected["basic"] = name
 
-        # Cloze signature: precisely contains Text (and usually no Front/Back)
+        # Cloze signature: contains Text (and usually no Front/Back)
         if "Text" in field_set and "Front" not in field_set:
-            if name == "Cloze" or detected["cloze"] == "Cloze":
+            if name == "Cloze":
+                # Canonical match - always prefer this
+                detected["cloze"] = name
+                found_canonical_cloze = True
+            elif not found_canonical_cloze:
+                # Fallback for localized names
                 detected["cloze"] = name
 
+    _MODEL_DETECTION_CACHE = detected
     return detected
 
 
