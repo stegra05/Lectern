@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, AlertCircle, Sparkles, Monitor, FileText, Info, Upload, FileSearch, Calculator, AlertTriangle, X, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { Play, AlertCircle, Sparkles, Monitor, FileText, Info, Upload, FileSearch, Calculator, AlertTriangle, X, ChevronDown, ChevronUp, Lock, Folder } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlassCard } from '../components/GlassCard';
@@ -68,6 +68,9 @@ export function HomeView({
 }: HomeViewProps) {
     // Estimation phase state for sub-status feedback
     const [estimationPhase, setEstimationPhase] = useState<EstimationPhase>('idle');
+
+    // Track attempted submit for validation feedback
+    const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
     // Reset phase when estimation stops
     const [prevIsEstimating, setPrevIsEstimating] = useState(isEstimating);
@@ -142,7 +145,25 @@ export function HomeView({
     const wouldHitBudget = wouldExceedBudget(estimatedCost);
     const isBudgetExceeded = budgetLimit !== null && wouldHitBudget;
 
+    // Check if budget would be exceeded for button disable
+    const isButtonDisabled = !pdfFile || !deckName || isEstimating || sliderConfig.disabled || isBudgetExceeded;
+
+    // Compute tooltip message for disabled button
+    const getDisabledReason = () => {
+        if (!pdfFile) return 'Upload a PDF first';
+        if (!deckName) return 'Select a target deck above';
+        if (isBudgetExceeded) return 'Budget limit reached';
+        if (isEstimating) return 'Calculating cost estimate...';
+        if (sliderConfig.disabled) return 'Estimation in progress...';
+        return '';
+    };
+    const disabledReason = isButtonDisabled ? getDisabledReason() : '';
+
     const handleGenerateClick = () => {
+        if (isButtonDisabled) {
+            setAttemptedSubmit(true);
+            return;
+        }
         if (shouldShowCostWarning) {
             setShowCostWarning(true);
             return;
@@ -171,9 +192,6 @@ export function HomeView({
             setCostWarningDismissed(false);
         }
     }, [estimation, costWarningDismissed]);
-
-    // Check if budget would be exceeded for button disable
-    const isButtonDisabled = !pdfFile || !deckName || isEstimating || sliderConfig.disabled || isBudgetExceeded;
 
     return (
         <motion.div
@@ -233,15 +251,6 @@ export function HomeView({
                     </div>
 
                     <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">Target Deck</label>
-                            <DeckSelector
-                                value={deckName}
-                                onChange={setDeckName}
-                                disabled={!health?.anki_connected}
-                            />
-                        </div>
-
                         <div className="pt-4 border-t border-border/30">
                             <div className="flex justify-between items-end mb-4">
                                 <div className="flex items-center gap-2">
@@ -362,6 +371,32 @@ export function HomeView({
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
                         <h3 className="text-2xl font-bold mb-4 text-text-main">Generation Summary</h3>
+
+                        {/* Target Deck Selector - moved here for better Z-pattern flow */}
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">
+                                Target Deck
+                                {attemptedSubmit && !deckName && (
+                                    <span className="ml-2 text-red-400 text-xs">Required</span>
+                                )}
+                            </label>
+                            <div className={clsx(
+                                "relative rounded-xl transition-all",
+                                attemptedSubmit && !deckName && "ring-2 ring-red-500/50"
+                            )}>
+                                <DeckSelector
+                                    value={deckName}
+                                    onChange={setDeckName}
+                                    disabled={!health?.anki_connected}
+                                />
+                                {attemptedSubmit && !deckName && (
+                                    <div className="absolute -bottom-5 left-0 text-xs text-red-400 flex items-center gap-1">
+                                        <AlertCircle className="w-3 h-3" />
+                                        <span>Select a deck to continue</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
                         <div className="space-y-4 mb-8">
                             <div className="flex items-center gap-3 text-sm">
@@ -549,19 +584,36 @@ export function HomeView({
                             )}
                         </AnimatePresence>
 
-                        <button
-                            onClick={handleGenerateClick}
-                            disabled={isButtonDisabled}
-                            className="w-full relative group px-8 py-5 bg-primary hover:bg-primary/90 text-background rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none overflow-hidden"
-                        >
-                            <span className="relative z-10 flex items-center justify-center gap-3">
-                                <Play className="w-5 h-5 fill-current" />
-                                Start Generation
-                            </span>
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={handleGenerateClick}
+                                disabled={isButtonDisabled}
+                                title={isButtonDisabled ? disabledReason : undefined}
+                                className="w-full relative group px-8 py-5 bg-primary hover:bg-primary/90 text-background rounded-xl font-bold text-lg shadow-lg shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none overflow-hidden"
+                            >
+                                <span className="relative z-10 flex items-center justify-center gap-3">
+                                    <Play className="w-5 h-5 fill-current" />
+                                    Start Generation
+                                </span>
+                            </button>
+                            {/* Tooltip for disabled state */}
+                            <AnimatePresence>
+                                {isButtonDisabled && attemptedSubmit && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 5 }}
+                                        className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs text-red-400 whitespace-nowrap flex items-center gap-1"
+                                    >
+                                        <AlertCircle className="w-3 h-3" />
+                                        {disabledReason}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
 
                         {!health?.anki_connected && (
-                            <div className="mt-4 flex items-center gap-2 text-text-muted text-xs bg-surface/50 p-3 rounded-lg border border-border/50">
+                            <div className="mt-6 flex items-center gap-2 text-text-muted text-xs bg-surface/50 p-3 rounded-lg border border-border/50">
                                 <Info className="w-4 h-4 text-text-muted" />
                                 <span>Anki disconnected. Cards will be saved as drafts for later export.</span>
                             </div>

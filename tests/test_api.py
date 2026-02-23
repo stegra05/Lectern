@@ -445,9 +445,9 @@ def test_config_update_failures():
     with patch('lectern.utils.keychain_manager.set_gemini_key', side_effect=Exception("Keychain failed")):
         response = client.post("/config", json={"gemini_api_key": "k"})
         assert response.status_code == 500
-        
-    # JSON save failure
-    with patch('lectern.config.save_user_config', side_effect=Exception("IO Error")):
+
+    # JSON save failure - mock ConfigManager._save to raise
+    with patch('lectern.config.ConfigManager._save', side_effect=Exception("IO Error")):
         response = client.post("/config", json={"anki_url": "u"})
         assert response.status_code == 500
 
@@ -479,6 +479,7 @@ def test_history_deletion_failure():
 
 def test_estimate_cost_failure():
     """Test /estimate returns 500 when cost estimation crashes."""
+    _clear_estimate_cache()  # Ensure no cached results from previous tests
     with patch('gui.backend.main.LecternGenerationService') as mock_service:
         mock_service.return_value.estimate_cost_with_base = AsyncMock(side_effect=Exception("Parsing crash"))
         files = {"pdf_file": ("test_slides.pdf", b"p", "application/pdf")}
@@ -560,18 +561,18 @@ def test_no_active_session_404():
 
 def test_config_update_all_fields():
     """Test /config POST accepts and persists all supported fields."""
-    with patch('lectern.config.save_user_config') as mock_save:
-        with patch('importlib.reload'):
-            response = client.post("/config", json={
-                "anki_url": "http://new:8765",
-                "basic_model": "NewBasic",
-                "cloze_model": "NewCloze",
-                "gemini_model": "gemini-3-flash"
-            })
-            assert response.status_code == 200
-            assert "anki_url" in response.json()["fields"]
-            assert "basic_model" in response.json()["fields"]
-            mock_save.assert_called()
+    with patch('lectern.config.ConfigManager._save') as mock_save:
+        response = client.post("/config", json={
+            "anki_url": "http://new:8765",
+            "basic_model": "NewBasic",
+            "cloze_model": "NewCloze",
+            "gemini_model": "gemini-3-flash"
+        })
+        assert response.status_code == 200
+        assert "anki_url" in response.json()["fields"]
+        assert "basic_model" in response.json()["fields"]
+        # Verify ConfigManager._save was called for each field set
+        assert mock_save.call_count == 4
 
 def test_version_fetches_when_called():
     """Test version endpoint always checks network."""
@@ -755,11 +756,15 @@ def test_sync_failures_reporting():
                 assert any('"failed": 1' in str(l) for l in lines)
 
 def test_session_state_loading_failures():
-    """Test session endpoints return 404 for missing state and handle empty cards."""
+    """Test session endpoints return empty state for missing state and handle empty cards."""
     with patch('gui.backend.main.load_state', return_value=None):
         response = client.get("/session/ghost")
-        assert response.status_code == 404
-    
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cards"] == []
+        assert data["session_id"] == "ghost"
+        assert data["not_found"] is True
+
     # Sync session with no cards
     with patch('gui.backend.main.load_state', return_value={"cards": []}):
         response = client.post("/session/empty/sync")
