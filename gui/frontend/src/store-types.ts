@@ -146,6 +146,8 @@ export type UiActions = {
 export type BatchActions = {
     toggleMultiSelectMode: () => void;
     toggleCardSelection: (cardUid: string) => void;
+    /** Select a range of cards from lastSelectedUid to currentUid (for Shift+Click) */
+    selectCardRange: (currentUid: string) => void;
     selectAllCards: () => void;
     clearSelection: () => void;
     batchDeleteSelected: () => Promise<void>;

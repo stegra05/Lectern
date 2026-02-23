@@ -31,7 +31,7 @@ describe('SettingsModal', () => {
     const mockOnClose = vi.fn();
     const mockToggleTheme = vi.fn();
     const defaultConfig = {
-        gemini_model: 'gemini-3-flash',
+        gemini_model: 'gemini-3-flash-preview',
         anki_url: 'http://localhost:8765',
         basic_model: 'Basic',
         cloze_model: 'Cloze',
@@ -133,7 +133,7 @@ describe('SettingsModal', () => {
         await waitFor(() => screen.getByDisplayValue('Gemini 3 Flash (Fast)'));
         const select = screen.getByDisplayValue('Gemini 3 Flash (Fast)');
 
-        fireEvent.change(select, { target: { value: 'gemini-3-pro' } });
+        fireEvent.change(select, { target: { value: 'gemini-3-pro-preview' } });
 
         const saveButton = screen.getByText('Save Changes');
         await act(async () => {
@@ -142,7 +142,7 @@ describe('SettingsModal', () => {
 
         await waitFor(() => {
             expect(api.saveConfig).toHaveBeenCalledWith(expect.objectContaining({
-                gemini_model: 'gemini-3-pro'
+                gemini_model: 'gemini-3-pro-preview'
             }));
             expect(screen.getByText(/Settings saved/i)).toBeInTheDocument();
         });

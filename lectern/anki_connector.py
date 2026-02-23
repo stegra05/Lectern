@@ -8,8 +8,10 @@ add notes and store media files. It never manipulates the collection directly.
 from __future__ import annotations
 
 import base64
+import functools
 import logging
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 import requests
 
@@ -17,14 +19,59 @@ from lectern import config as _config
 
 logger = logging.getLogger(__name__)
 
+# Retry configuration
+MAX_RETRIES = 3
+INITIAL_RETRY_DELAY = 0.5  # seconds
+MAX_RETRY_DELAY = 4.0  # seconds
 
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _with_retry(max_retries: int = MAX_RETRIES, initial_delay: float = INITIAL_RETRY_DELAY) -> Callable[[F], F]:
+    """Decorator that adds exponential backoff retry logic for transport errors.
+
+    Only retries on connection-level errors (requests.RequestException).
+    API-level errors (e.g., invalid action) fail immediately.
+    """
+    def decorator(func: F) -> F:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exception: Optional[Exception] = None
+            delay = initial_delay
+
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except RuntimeError as e:
+                    # Only retry on transport errors, not API errors
+                    error_msg = str(e)
+                    if "Failed to reach AnkiConnect" in error_msg or "non-JSON response" in error_msg:
+                        last_exception = e
+                        if attempt < max_retries:
+                            logger.warning(
+                                "AnkiConnect connection failed (attempt %d/%d), retrying in %.1fs: %s",
+                                attempt + 1, max_retries + 1, delay, e
+                            )
+                            time.sleep(delay)
+                            delay = min(delay * 2, MAX_RETRY_DELAY)
+                            continue
+                    # API-level error or final attempt - raise immediately
+                    raise
+
+            # All retries exhausted
+            raise last_exception
+
+        return wrapper  # type: ignore
+    return decorator
+
+
+@_with_retry()
 def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15) -> Any:
     """Invoke an AnkiConnect action with the given parameters.
 
     Raises a RuntimeError with details if the call fails at the transport or
-    API level.
+    API level. Transport errors are retried with exponential backoff.
     """
-
     payload = {"action": action, "version": 6}
     if params is not None:
         payload["params"] = params
@@ -46,6 +93,10 @@ def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int =
     return data.get("result")
 
 
+# Minimum supported AnkiConnect version
+MIN_ANKICONNECT_VERSION = 6
+
+
 def check_connection() -> bool:
     """Return True if AnkiConnect is reachable and responding."""
 
@@ -54,6 +105,51 @@ def check_connection() -> bool:
         return True
     except Exception:
         return False
+
+
+def get_connection_info() -> Dict[str, Any]:
+    """Get detailed AnkiConnect connection information.
+
+    Returns a dict with:
+        - connected: bool
+        - version: int or None
+        - version_ok: bool (True if version >= MIN_ANKICONNECT_VERSION)
+        - error: str or None
+    """
+    result: Dict[str, Any] = {
+        "connected": False,
+        "version": None,
+        "version_ok": False,
+        "error": None,
+    }
+
+    try:
+        # Make a raw request to get version without retry decorator
+        payload = {"action": "version", "version": 6}
+        url = _config.ANKI_CONNECT_URL
+        response = requests.post(url, json=payload, timeout=3)
+        data = response.json()
+
+        if data.get("error") is not None:
+            result["error"] = f"AnkiConnect error: {data['error']}"
+            return result
+
+        version = data.get("result")
+        result["version"] = version
+        result["version_ok"] = isinstance(version, int) and version >= MIN_ANKICONNECT_VERSION
+        result["connected"] = True
+
+        if not result["version_ok"]:
+            result["error"] = f"AnkiConnect version {version} is too old. Minimum required: {MIN_ANKICONNECT_VERSION}"
+
+    except requests.RequestException as e:
+        result["error"] = f"Cannot reach AnkiConnect at {url}: {e}"
+    except ValueError as e:
+        result["error"] = f"Invalid response from AnkiConnect: {e}"
+    except Exception as e:
+        result["error"] = f"Unexpected error: {e}"
+
+    return result
 
 
 def add_note(deck_name: str, model_name: str, fields: Dict[str, str], tags: List[str]) -> int:

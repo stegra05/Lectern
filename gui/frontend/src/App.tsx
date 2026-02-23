@@ -9,6 +9,7 @@ import { Toast, ToastContainer } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { AnkiHealthPanel } from './components/AnkiHealthPanel';
 
 import { useAppState } from './hooks/useAppState';
 import { useLecternStore } from './store';
@@ -37,11 +38,18 @@ interface HealthStatusProps {
   health: import('./api').HealthStatus | null;
   isChecking: boolean;
   onRefresh: () => void;
+  onAnkiClick: () => void;
 }
 
-const HealthStatus = ({ health, isChecking, onRefresh }: HealthStatusProps) => (
+const HealthStatus = ({ health, isChecking, onRefresh, onAnkiClick }: HealthStatusProps) => (
   <div className="flex items-center gap-3 bg-surface/50 px-4 py-2 rounded-full border border-border backdrop-blur-sm">
-    <StatusDot label="Anki" active={health?.anki_connected ?? false} />
+    <button
+      onClick={onAnkiClick}
+      className="hover:opacity-80 transition-opacity"
+      title="View AnkiConnect status"
+    >
+      <StatusDot label="Anki" active={health?.anki_connected ?? false} />
+    </button>
     <div className="w-px h-4 bg-border" />
     <StatusDot label="Gemini" active={health?.gemini_configured ?? false} />
     <button
@@ -74,6 +82,9 @@ function App() {
 
   // Keyboard shortcuts modal state
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+
+  // Anki health panel state
+  const [isAnkiHealthOpen, setIsAnkiHealthOpen] = useState(false);
 
   // Unsynced cards confirmation state
   const [isUnsyncedConfirmOpen, setIsUnsyncedConfirmOpen] = useState(false);
@@ -344,7 +355,12 @@ function App() {
             className="flex items-center gap-6"
           >
             <div className="flex items-center gap-3">
-              <HealthStatus health={health} isChecking={isRefreshingStatus} onRefresh={refreshHealth} />
+              <HealthStatus
+                health={health}
+                isChecking={isRefreshingStatus}
+                onRefresh={refreshHealth}
+                onAnkiClick={() => setIsAnkiHealthOpen(true)}
+              />
               <button
                 onClick={() => setIsHistoryOpen(true)}
                 className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
@@ -439,6 +455,15 @@ function App() {
         variant="warning"
         onConfirm={handleConfirmGenerate}
         onCancel={handleCancelGenerate}
+      />
+
+      <AnkiHealthPanel
+        isOpen={isAnkiHealthOpen}
+        onClose={() => setIsAnkiHealthOpen(false)}
+        onOpenSettings={() => {
+          setIsAnkiHealthOpen(false);
+          setIsSettingsOpen(true);
+        }}
       />
 
       <StoreToasts />

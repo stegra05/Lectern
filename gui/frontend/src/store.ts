@@ -75,6 +75,7 @@ const getReviewState = () => ({
   batchDeletedCards: [] as import('./store-types').DeletedCardBuffer[],
   isMultiSelectMode: false,
   selectedCards: new Set<string>(),
+  lastSelectedUid: null as string | null,
 });
 
 const getUiState = () => ({
@@ -579,7 +580,7 @@ const createBatchActions = (
     const { isMultiSelectMode } = get();
     if (isMultiSelectMode) {
       // Turning off: clear selection
-      set({ isMultiSelectMode: false, selectedCards: new Set() });
+      set({ isMultiSelectMode: false, selectedCards: new Set(), lastSelectedUid: null });
     } else {
       set({ isMultiSelectMode: true });
     }
@@ -589,8 +590,48 @@ const createBatchActions = (
       const newSet = new Set(state.selectedCards);
       if (newSet.has(cardUid)) {
         newSet.delete(cardUid);
+        return { selectedCards: newSet, lastSelectedUid: cardUid };
       } else {
         newSet.add(cardUid);
+        return { selectedCards: newSet, lastSelectedUid: cardUid };
+      }
+    });
+  },
+  selectCardRange: (currentUid) => {
+    const { cards, lastSelectedUid } = get();
+    if (!lastSelectedUid) {
+      // No previous selection, just toggle
+      set((state) => {
+        const newSet = new Set(state.selectedCards);
+        newSet.add(currentUid);
+        return { selectedCards: newSet, lastSelectedUid: currentUid };
+      });
+      return;
+    }
+
+    // Find indices of last and current
+    const lastIndex = cards.findIndex(c => c._uid === lastSelectedUid);
+    const currentIndex = cards.findIndex(c => c._uid === currentUid);
+
+    if (lastIndex === -1 || currentIndex === -1) {
+      // Fallback: just toggle current
+      set((state) => {
+        const newSet = new Set(state.selectedCards);
+        newSet.add(currentUid);
+        return { selectedCards: newSet, lastSelectedUid: currentUid };
+      });
+      return;
+    }
+
+    // Select range
+    const start = Math.min(lastIndex, currentIndex);
+    const end = Math.max(lastIndex, currentIndex);
+
+    set((state) => {
+      const newSet = new Set(state.selectedCards);
+      for (let i = start; i <= end; i++) {
+        const uid = cards[i]._uid;
+        if (uid) newSet.add(uid);
       }
       return { selectedCards: newSet };
     });
@@ -601,7 +642,7 @@ const createBatchActions = (
     set({ selectedCards: allUids });
   },
   clearSelection: () => {
-    set({ selectedCards: new Set() });
+    set({ selectedCards: new Set(), lastSelectedUid: null });
   },
   batchDeleteSelected: async () => {
     const { cards, selectedCards, batchDeletedCards } = get();

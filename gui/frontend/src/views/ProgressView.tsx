@@ -400,6 +400,7 @@ export function ProgressView() {
         selectedCards,
         toggleMultiSelectMode,
         toggleCardSelection,
+        selectCardRange,
         selectAllCards,
         clearSelection,
         batchDeleteSelected
@@ -923,11 +924,29 @@ export function ProgressView() {
                             const slideNumber = getCardSlideNumber(card);
                             const isSelected = card._uid ? selectedCards.has(card._uid) : false;
 
+                            // Handle card click with keyboard modifiers
+                            const handleCardClick = (e: React.MouseEvent) => {
+                                if (!isMultiSelectMode || !card._uid || isEditing) return;
+
+                                // Shift+Click: range selection
+                                if (e.shiftKey) {
+                                    e.preventDefault();
+                                    selectCardRange(card._uid);
+                                }
+                                // Cmd/Ctrl+Click: toggle selection
+                                else if (e.metaKey || e.ctrlKey) {
+                                    e.preventDefault();
+                                    toggleCardSelection(card._uid);
+                                }
+                            };
+
                             return (
                                 <div
                                     key={stableKey}
+                                    onClick={handleCardClick}
                                     className={clsx(
                                         "bg-surface rounded-xl shadow-sm relative overflow-hidden group transition-colors duration-200",
+                                        isMultiSelectMode && !isEditing && "cursor-pointer",
                                         isEditing
                                             ? "border-2 border-primary/50 bg-primary/5"
                                             : clsx(
@@ -959,7 +978,12 @@ export function ProgressView() {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                toggleCardSelection(card._uid!);
+                                                                // Shift+Click: range selection
+                                                                if (e.shiftKey) {
+                                                                    selectCardRange(card._uid!);
+                                                                } else {
+                                                                    toggleCardSelection(card._uid!);
+                                                                }
                                                             }}
                                                             className={clsx(
                                                                 "p-0.5 rounded transition-colors",
