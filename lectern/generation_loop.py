@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, Generator, Iterable, List, Optional
 
 from lectern.ai_pacing import PacingState
 
-_RECENT_CARD_WINDOW = 30
+_RECENT_CARD_WINDOW = 100
 _REFLECTION_HARD_CAP_MULTIPLIER = 1.2
 _REFLECTION_HARD_CAP_PADDING = 5
 
@@ -95,7 +95,6 @@ def run_generation_loop(
     config: GenerationLoopConfig,
     event_factory: Callable[..., Any],
     should_stop: Callable[[Optional[Callable[[], bool]]], bool],
-    checkpoint_fn: Callable[..., None],
 ) -> Generator[Any, None, None]:
     while len(state.all_cards) < config.total_cards_cap:
         remaining = config.total_cards_cap - len(state.all_cards)
@@ -137,7 +136,7 @@ def run_generation_loop(
                 avoid_fronts=recent_keys,
                 covered_slides=covered_slides,
                 pacing_hint=pacing_hint,
-                all_card_fronts=collect_card_fronts(state.all_cards),
+                all_card_fronts=collect_card_fronts(state.all_cards)[-200:],
             )
             for w in context.ai.drain_warnings():
                 yield event_factory("warning", w)
@@ -161,18 +160,8 @@ def run_generation_loop(
                     )
                 break
 
-            checkpoint_fn(
-                pdf_path=context.pdf_path,
-                deck_name=context.deck_name,
-                cards=state.all_cards,
-                concept_map=context.concept_map,
-                ai=context.ai,
-                session_id=context.session_id,
-                slide_set_name=context.slide_set_name,
-                model_name=context.model_name,
-                tags=context.tags,
-                history_id=context.history_id,
-            )
+            # Checkpoint was here, now handled by HistoryManager/DatabaseManager in service layer on completion or sync.
+            pass
         except Exception as e:
             yield event_factory("error", f"Generation error: {e}")
             break
@@ -185,7 +174,6 @@ def run_reflection_loop(
     config: ReflectionLoopConfig,
     event_factory: Callable[..., Any],
     should_stop: Callable[[Optional[Callable[[], bool]]], bool],
-    checkpoint_fn: Callable[..., None],
 ) -> Generator[Any, None, None]:
     # NOTE(Reflection): Allow exceeding the initial cap by 20% to accommodate refinement.
     reflection_hard_cap = (
@@ -210,7 +198,7 @@ def run_reflection_loop(
             batch_limit = min(config.actual_batch_size, remaining)
             out = context.ai.reflect(
                 limit=batch_limit,
-                all_card_fronts=collect_card_fronts(state.all_cards),
+                all_card_fronts=collect_card_fronts(state.all_cards)[-200:],
             )
             for w in context.ai.drain_warnings():
                 yield event_factory("warning", w)
@@ -227,18 +215,8 @@ def run_reflection_loop(
             yield event_factory("progress_update", "", {"current": round_idx + 1})
 
             if added_count > 0:
-                checkpoint_fn(
-                    pdf_path=context.pdf_path,
-                    deck_name=context.deck_name,
-                    cards=state.all_cards,
-                    concept_map=context.concept_map,
-                    ai=context.ai,
-                    session_id=context.session_id,
-                    slide_set_name=context.slide_set_name,
-                    model_name=context.model_name,
-                    tags=context.tags,
-                    history_id=context.history_id,
-                )
+                # Checkpoint was here, now handled by HistoryManager/DatabaseManager in service layer on completion or sync.
+                pass
 
             should_break = len(state.all_cards) >= reflection_hard_cap or added_count == 0
             if should_break:

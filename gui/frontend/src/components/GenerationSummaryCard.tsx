@@ -48,7 +48,8 @@ export function GenerationSummaryCard({ handleGenerate, health }: GenerationSumm
         if (costWarningDismissed) {
             setCostWarningDismissed(false);
         }
-    }, [estimation, costWarningDismissed]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [estimation]);
 
     const estimatedCost = estimation?.cost ?? 0;
     const shouldShowCostWarning = !isEstimating && estimatedCost > COST_WARNING_THRESHOLD && !costWarningDismissed;

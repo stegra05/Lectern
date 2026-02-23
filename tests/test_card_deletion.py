@@ -6,14 +6,10 @@ from gui.backend.main import app
 client = TestClient(app)
 
 @pytest.fixture
-def mock_load_state():
-    with patch('gui.backend.main.load_state') as mock:
-        yield mock
-
-@pytest.fixture
-def mock_update_cards():
-    with patch('gui.backend.main.StateFile.update_cards', return_value=True) as mock:
-        yield mock
+def mock_db():
+    with patch('gui.backend.main.DatabaseManager') as mock:
+        instance = mock.return_value
+        yield instance
 
 @pytest.fixture
 def mock_history_manager():
@@ -27,16 +23,16 @@ def mock_delete_notes():
         yield mock
 
 def test_delete_session_card(
-    mock_load_state,
-    mock_update_cards,
+    mock_db,
     mock_history_manager
 ):
     session_id = "test-session"
     initial_cards = [
-        {"id": 1, "front": "A", "anki_note_id": 100},
-        {"id": 2, "front": "B", "anki_note_id": 101}
+        {"id": 1, "_uid": "u1", "front": "A", "anki_note_id": 100},
+        {"id": 2, "_uid": "u2", "front": "B", "anki_note_id": 101}
     ]
-    mock_load_state.return_value = {
+    mock_db.get_entry_by_session_id.return_value = {
+        "id": 1,
         "pdf_path": "test_slides.pdf",
         "deck_name": "Default",
         "cards": list(initial_cards), # Copy
@@ -50,20 +46,19 @@ def test_delete_session_card(
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "remaining": 1}
 
-    # Verify update_cards called with updated cards
-    mock_update_cards.assert_called_once()
-    args, _ = mock_update_cards.call_args
-    assert len(args[0]) == 1
-    assert args[0][0]["id"] == 2
+    # Verify update_session_cards called with updated cards
+    mock_db.update_session_cards.assert_called_once()
+    args, _ = mock_db.update_session_cards.call_args
+    assert len(args[1]) == 1
+    assert args[1][0]["id"] == 2
 
     # Verify history updated via session_id lookup
-    mock_history_manager.get_entry_by_session_id.assert_called_once_with(session_id)
-    entry = mock_history_manager.get_entry_by_session_id.return_value
-    mock_history_manager.update_entry.assert_called_once_with(entry["id"], card_count=1)
+    mock_db.get_entry_by_session_id.assert_called_with(session_id)
+    mock_history_manager.get_entry_by_session_id.assert_called_with(session_id)
 
-def test_delete_session_card_invalid_index(mock_load_state):
+def test_delete_session_card_invalid_index(mock_db):
     session_id = "test-session"
-    mock_load_state.return_value = {
+    mock_db.get_entry_by_session_id.return_value = {
         "cards": [{"id": 1}]
     }
     

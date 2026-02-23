@@ -1,7 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Keyboard, Edit3, Navigation, Settings } from 'lucide-react';
-import { clsx } from 'clsx';
 import type { KeyboardShortcut } from '../hooks/useKeyboardShortcuts';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 

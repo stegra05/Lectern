@@ -326,44 +326,7 @@ class TestServiceIntegration:
         assert any(e.type == "error" and "canonical card schema" in e.message.lower() for e in events)
 
 
-class TestServiceAdvanced:
-    @patch('lectern.lectern_service.check_connection')
-    @patch('lectern.lectern_service.LecternAIClient')
-    @patch('os.path.exists')
-    @patch('os.path.getsize')
-    def test_run_starts_fresh_without_resume(
-        self,
-        mock_getsize,
-        mock_exists,
-        mock_ai_client_class,
-        mock_check,
-        service,
-        mock_pdf_pages
-    ):
-        """Test that run starts fresh and does not restore history from old state."""
-        mock_exists.return_value = True
-        mock_getsize.return_value = 1024
-        mock_check.return_value = True
-        mock_exists.return_value = True
-        mock_getsize.return_value = 1024
-        mock_check.return_value = True
-        
-        mock_ai = MagicMock()
-        mock_ai.log_path = "/tmp/test.log"
-        mock_ai.generate_more_cards.return_value = {"cards": [], "done": True}
-        mock_ai_client_class.return_value = mock_ai
-        
-        events = list(service.run(
-            pdf_path="/fake/path.pdf",
-            deck_name="Test Deck",
-            model_name="gemini",
-            tags=[],
-            skip_export=True
-        ))
-        
-        assert not any("Resuming" in e.message for e in events if e.type == "info")
-        assert not any("Restored" in e.message for e in events if e.type == "info")
-        mock_ai.restore_history.assert_not_called()
+
 
     @patch('lectern.lectern_service.check_connection')
     @patch('lectern.lectern_service.LecternAIClient')
@@ -653,12 +616,10 @@ class TestServiceAdvanced:
     @patch('lectern.lectern_service.sample_examples_from_deck')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    @patch('lectern.lectern_service.save_state')
     @patch('lectern.lectern_service.HistoryManager')
     def test_example_sampling_exception(
         self,
         mock_history_class,
-        mock_save,
         mock_getsize,
         mock_exists,
         mock_samples,
@@ -850,12 +811,10 @@ class TestServiceAdvanced:
     @patch('lectern.lectern_service.LecternAIClient')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    @patch('lectern.lectern_service.save_state')
     @patch('lectern.lectern_service.HistoryManager')
     def test_script_mode_and_entry_id(
         self,
         mock_history_class,
-        mock_save,
         mock_getsize,
         mock_exists,
         mock_ai_class,
@@ -892,10 +851,8 @@ class TestServiceAdvanced:
     @patch('lectern.lectern_service.LecternAIClient')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    @patch('lectern.lectern_service.save_state')
     def test_dynamic_reflection_rounds_large_doc(
         self,
-        mock_save,
         mock_getsize,
         mock_exists,
         mock_ai_class,
@@ -1029,7 +986,6 @@ class TestLoopInternals:
     def test_generation_loop_stops_on_zero_added_and_checkpoints(self, service):
         ai = MagicMock()
         ai.generate_more_cards.return_value = {"cards": []}
-        service._save_checkpoint = MagicMock()
 
         context = GenerationLoopContext(
             ai=ai,
@@ -1064,13 +1020,11 @@ class TestLoopInternals:
         )
 
         assert ai.generate_more_cards.call_count == 1
-        assert service._save_checkpoint.call_count == 0
         assert any(e.type == "status" for e in events)
         assert any(e.type == "progress_update" for e in events)
 
     def test_generation_loop_honors_stop_check_before_ai_call(self, service):
         ai = MagicMock()
-        service._save_checkpoint = MagicMock()
 
         context = GenerationLoopContext(
             ai=ai,
@@ -1105,7 +1059,6 @@ class TestLoopInternals:
         )
 
         ai.generate_more_cards.assert_not_called()
-        service._save_checkpoint.assert_not_called()
         assert any(e.type == "warning" and "stopped" in e.message.lower() for e in events)
 
     def test_reflection_loop_checkpoints_per_round_until_no_new_cards(self, service):
@@ -1114,7 +1067,6 @@ class TestLoopInternals:
             {"cards": [{"fields": {"Front": "Q1"}}]},
             {"cards": []},
         ]
-        service._save_checkpoint = MagicMock()
 
         all_cards = [{"fields": {"Front": "Seed"}}]
         context = GenerationLoopContext(
@@ -1149,12 +1101,10 @@ class TestLoopInternals:
         )
 
         assert ai.reflect.call_count == 2
-        assert service._save_checkpoint.call_count == 1
         assert any(e.type == "status" and "Reflection Round 1/3" in e.message for e in events)
 
     def test_reflection_loop_emits_cap_reached_info(self, service):
         ai = MagicMock()
-        service._save_checkpoint = MagicMock()
 
         total_cards_cap = 10
         reflection_hard_cap = int(total_cards_cap * 1.2) + 5
@@ -1192,17 +1142,14 @@ class TestLoopInternals:
         )
 
         ai.reflect.assert_not_called()
-        service._save_checkpoint.assert_not_called()
         assert any(e.type == "info" and "cap reached" in e.message.lower() for e in events)
 
     @patch('lectern.lectern_service.check_connection')
     @patch('lectern.lectern_service.LecternAIClient')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    @patch('lectern.lectern_service.save_state')
     def test_concept_map_failure_and_fallback_name(
         self,
-        mock_save,
         mock_getsize,
         mock_exists,
         mock_ai_class,
@@ -1235,10 +1182,8 @@ class TestLoopInternals:
     @patch('lectern.lectern_service.LecternAIClient')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    @patch('lectern.lectern_service.save_state')
     def test_reflection_deduplication_and_error(
         self,
-        mock_save,
         mock_getsize,
         mock_exists,
         mock_ai_class,
@@ -1287,10 +1232,8 @@ class TestLoopInternals:
     @patch('lectern.lectern_service.LecternAIClient')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    @patch('lectern.lectern_service.save_state')
     def test_dynamic_rounds_mid_size(
         self,
-        mock_save,
         mock_getsize,
         mock_exists,
         mock_ai_class,
@@ -1323,10 +1266,8 @@ class TestLoopInternals:
     @patch('lectern.lectern_service.LecternAIClient')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    @patch('lectern.lectern_service.save_state')
     def test_dynamic_rounds_skipped_below_25(
         self,
-        mock_save,
         mock_getsize,
         mock_exists,
         mock_ai_class,

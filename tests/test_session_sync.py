@@ -7,14 +7,9 @@ from gui.backend.main import app
 client = TestClient(app)
 
 @pytest.fixture
-def mock_load_state():
-    with patch('gui.backend.main.load_state') as mock:
-        yield mock
-
-@pytest.fixture
-def mock_save_state():
-    with patch('gui.backend.main.save_state') as mock:
-        yield mock
+def mock_db():
+    with patch('gui.backend.main.DatabaseManager') as mock:
+        yield mock.return_value
 
 @pytest.fixture
 def mock_notes_info():
@@ -32,12 +27,12 @@ def mock_export_card_to_anki():
         yield mock
 
 def test_sync_session_updates_existing_note(
-    mock_load_state, 
+    mock_db, 
     mock_notes_info, 
     mock_update_note_fields
 ):
     session_id = "test-session"
-    mock_load_state.return_value = {
+    mock_db.get_entry_by_session_id.return_value = {
         "pdf_path": "test_slides.pdf",
         "deck_name": "Default",
         "cards": [{"anki_note_id": 123, "fields": {"Front": "F", "Back": "B"}}],
@@ -55,12 +50,12 @@ def test_sync_session_updates_existing_note(
     mock_update_note_fields.assert_called_once()
 
 def test_sync_session_recreates_deleted_note(
-    mock_load_state, 
+    mock_db, 
     mock_notes_info, 
     mock_export_card_to_anki
 ):
     session_id = "test-session"
-    mock_load_state.return_value = {
+    mock_db.get_entry_by_session_id.return_value = {
         "pdf_path": "test_slides.pdf",
         "deck_name": "Default",
         "cards": [{"anki_note_id": 123, "fields": {"Front": "F", "Back": "B"}}],

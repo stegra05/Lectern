@@ -10,7 +10,7 @@ from typing import Any, Dict, Generator, List, Optional, Callable, Literal, Iter
 from lectern import config
 from lectern.anki_connector import check_connection, sample_examples_from_deck
 from lectern.ai_client import LecternAIClient
-from lectern.checkpoint import save_checkpoint
+
 from lectern.cost_estimator import (
     derive_effective_target,
     estimate_card_cap,
@@ -31,7 +31,7 @@ from lectern.generation_loop import (
 )
 from lectern.utils.tags import infer_slide_set_name
 from lectern.utils.note_export import export_card_to_anki
-from lectern.utils.state import save_state, clear_state
+
 from lectern.utils.history import HistoryManager
 
 
@@ -443,7 +443,7 @@ class LecternGenerationService:
             yield ServiceEvent("step_end", "Export Complete", {"success": True, "created": created, "failed": failed})
             
             # Clear state on success
-            clear_state(session_id=cfg.session_id)
+            
             history_mgr.update_entry(history_id, status="completed", card_count=len(all_cards))
             
             elapsed = time.perf_counter() - start_time
@@ -505,32 +505,7 @@ class LecternGenerationService:
     def _should_stop(self, stop_check: Optional[Callable[[], bool]]) -> bool:
         return bool(stop_check and stop_check())
 
-    def _save_checkpoint(
-        self,
-        *,
-        pdf_path: str,
-        deck_name: str,
-        cards: List[Dict[str, Any]],
-        concept_map: Dict[str, Any],
-        ai: LecternAIClient,
-        session_id: Optional[str],
-        slide_set_name: str,
-        model_name: str,
-        tags: List[str],
-        history_id: Optional[str],
-    ) -> None:
-        save_checkpoint(
-            pdf_path=pdf_path,
-            deck_name=deck_name,
-            cards=cards,
-            concept_map=concept_map,
-            ai=ai,
-            session_id=session_id,
-            slide_set_name=slide_set_name,
-            model_name=model_name,
-            tags=tags,
-            history_id=history_id,
-        )
+
 
     def _yield_new_cards(
         self,
@@ -564,7 +539,6 @@ class LecternGenerationService:
             config=config,
             event_factory=ServiceEvent,
             should_stop=self._should_stop,
-            checkpoint_fn=self._save_checkpoint,
         ))
 
     def _run_reflection_loop(
@@ -580,5 +554,4 @@ class LecternGenerationService:
             config=config,
             event_factory=ServiceEvent,
             should_stop=self._should_stop,
-            checkpoint_fn=self._save_checkpoint,
         ))

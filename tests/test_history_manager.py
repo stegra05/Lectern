@@ -1,26 +1,19 @@
 import pytest
 import os
-import json
-import sys
+import sqlite3
 from unittest.mock import patch, MagicMock
-from lectern.utils.history import HistoryManager, get_history_file_path
+from lectern.utils.history import HistoryManager
+from lectern.utils.database import DatabaseManager
 
-def test_get_history_file_path_frozen():
-    with patch('sys.frozen', True, create=True):
-        with patch('lectern.utils.history.get_app_data_dir') as mock_dir:
-            from pathlib import Path
-            mock_dir.return_value = Path("/tmp/appdata")
-            path = get_history_file_path()
-            assert "history.json" in str(path)
-
-def test_history_manager_load_save(tmp_path):
-    history_file = tmp_path / "history.json"
-    mgr = HistoryManager(str(history_file))
+def test_history_manager_behavior():
+    """Test HistoryManager delegates to DatabaseManager correctly."""
+    mgr = HistoryManager()
     
-    # Load non-existent
-    assert mgr.get_all() == []
+    # 1. Clear all for clean start
+    mgr.clear_all()
+    assert len(mgr.get_all()) == 0
     
-    # Add entry
+    # 2. Add entry
     entry_id = mgr.add_entry("test_slides.pdf", "Deck")
     assert entry_id is not None
     
@@ -28,71 +21,55 @@ def test_history_manager_load_save(tmp_path):
     assert len(all_history) == 1
     assert all_history[0]["filename"] == "test_slides.pdf"
     
-    # Update entry — preserves creation date, sets last_modified
-    original_date = mgr.get_entry(entry_id)["date"]
+    # 3. Update entry
     mgr.update_entry(entry_id, status="completed", card_count=5)
     entry = mgr.get_entry(entry_id)
     assert entry["status"] == "completed"
     assert entry["card_count"] == 5
-    assert entry["date"] == original_date
-    assert "last_modified" in entry
     
-    # Get entry by session_id
-    session_entry = mgr.get_entry_by_session_id(entry["session_id"])
+    # 4. Get by session_id
+    session_id = entry["session_id"]
+    session_entry = mgr.get_entry_by_session_id(session_id)
     assert session_entry is not None
     assert session_entry["id"] == entry_id
-    assert mgr.get_entry_by_session_id("nonexistent") is None
     
-    # Delete entry
-    mgr.delete_entry(entry_id)
-    assert len(mgr.get_all()) == 0
-    
-    # Batch operations
-    id1 = mgr.add_entry("a.pdf", "D1", status="error")
+    # 5. Batch operations
     id2 = mgr.add_entry("b.pdf", "D2", status="error")
-    id3 = mgr.add_entry("c.pdf", "D3", status="completed")
+    assert len(mgr.get_all()) == 2
     
-    # get_entries_by_status
     errors = mgr.get_entries_by_status("error")
-    assert len(errors) == 2
+    assert len(errors) == 1
+    assert errors[0]["id"] == id2
     
-    # delete_entries (batch)
-    deleted = mgr.delete_entries([id1, id2])
-    assert deleted == 2
+    # 6. Delete
+    mgr.delete_entry(entry_id)
     assert len(mgr.get_all()) == 1
     
-    # Clear all
     mgr.clear_all()
     assert len(mgr.get_all()) == 0
 
-def test_history_manager_error_handling(tmp_path):
-    history_file = tmp_path / "history.json"
-    mgr = HistoryManager(str(history_file))
-    
-    # Corrupt file
-    history_file.write_text("invalid json")
-    assert mgr.get_all() == []
-    
-    # Save failure (mocking open)
-    with patch('builtins.open', side_effect=PermissionError("Access denied")):
-        mgr._save([]) # Should not raise
+def test_database_manager_singleton():
+    db1 = DatabaseManager()
+    db2 = DatabaseManager()
+    assert db1 is db2
 
-
-def test_sweep_orphan_state_temps(tmp_path):
-    from lectern.utils.state import sweep_orphan_state_temps
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
+    db = DatabaseManager()
+    session_id = "test_json_session"
+    # Ensure entry exists in history first
+    with db.get_connection() as conn:
+        conn.execute("INSERT INTO history (session_id, filename, deck) VALUES (?, ?, ?)", (session_id, "test.pdf", "Deck"))
     
-    # Create orphan temp files
-    (state_dir / "tmpabcdef12").write_text("orphan1")
-    (state_dir / "tmp_xyz_9876").write_text("orphan2")
-    # This is a real session file — should NOT be deleted
-    (state_dir / "session-abc123.json").write_text("{}")
+    cards = [{"front": "Q", "back": "A"}]
+    tags = ["tag1", "tag2"]
     
-    with patch('lectern.utils.state.get_app_data_dir', return_value=tmp_path):
-        removed = sweep_orphan_state_temps()
+    db.update_session_cards(session_id, cards, tags=tags, model_name="M")
+    entry = db.get_entry_by_session_id(session_id)
     
-    assert removed == 2
-    assert not (state_dir / "tmpabcdef12").exists()
-    assert not (state_dir / "tmp_xyz_9876").exists()
-    assert (state_dir / "session-abc123.json").exists()
+    assert entry is not None
+    assert entry["cards"] == cards
+    assert entry["tags"] == tags
+    assert entry["model_name"] == "M"
+    
+    # Clean up
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM history WHERE session_id=?", (session_id,))

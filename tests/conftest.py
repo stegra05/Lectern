@@ -80,23 +80,7 @@ def temp_state_dir() -> Generator[Path, None, None]:
         yield Path(tmpdir)
 
 
-@pytest.fixture
-def mock_state_persistence(temp_state_dir: Path) -> Generator[dict, None, None]:
-    """Mock state persistence with a temporary directory."""
-    mock_state = {
-        "pdf_path": "/test/slides.pdf",
-        "deck_name": "Test Deck",
-        "model_name": "Basic",
-        "cards": [],
-        "concept_map": {},
-        "history": [],
-    }
 
-    with patch("lectern.utils.state_persistence.STATE_DIR", temp_state_dir):
-        with patch("lectern.utils.state_persistence.load_state", return_value=mock_state):
-            with patch("lectern.utils.state_persistence.save_state") as mock_save:
-                mock_save.return_value = True
-                yield mock_state
 
 
 # --- PDF Fixtures ---

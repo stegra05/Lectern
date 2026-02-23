@@ -33,7 +33,7 @@ export const AnkiHealthPanel: React.FC<AnkiHealthPanelProps> = ({
             const info = await api.getAnkiStatus();
             setStatus(info);
             setLastChecked(new Date());
-        } catch (e) {
+        } catch {
             setStatus({
                 connected: false,
                 version: null,

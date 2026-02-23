@@ -240,18 +240,16 @@ def test_config_update_complex():
             mock_save.assert_called()
 
 def test_history_actions():
-    """Test history deletion and state clearing."""
+    """Test history deletion."""
     with patch('gui.backend.main.HistoryManager') as mock_mgr_class:
         mock_mgr = MagicMock()
-        mock_mgr.get_entry.return_value = {"session_id": "sid1"}
+        mock_mgr.get_entry.return_value = {"id": "1", "session_id": "sid1"}
         mock_mgr.delete_entry.return_value = True
         mock_mgr_class.return_value = mock_mgr
         
-        with patch('gui.backend.main.clear_state') as mock_clear:
-            response = client.delete("/history/1")
-            assert response.status_code == 200
-            mock_clear.assert_called_with("sid1")
-            mock_mgr.delete_entry.assert_called_with("1")
+        response = client.delete("/history/1")
+        assert response.status_code == 200
+        mock_mgr.delete_entry.assert_called_with("1")
 
 def test_generate_error_paths():
     """Test /generate with errors and SSE failures."""
@@ -270,14 +268,17 @@ def test_generate_error_paths():
 def test_sync_session_to_anki_logic():
     """Test the session sync generator logic."""
     mock_state = {
-        "pdf_path": "P", "deck_name": "D", "concept_map": {}, "history": [],
+        "pdf_path": "P", "deck": "D", "concept_map": {},
         "cards": [
             {"fields": {"F": "B"}, "anki_note_id": 123}, # Existing
             {"fields": {"F2": "B2"}} # New
         ]
     }
     
-    with patch('gui.backend.main.load_state', return_value=mock_state):
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = mock_state
+        mock_db_class.return_value = mock_db
         with patch('gui.backend.main.notes_info') as mock_info:
             mock_info.return_value = [{"noteId": 123}]
             with patch('gui.backend.main.update_note_fields') as mock_update:
@@ -309,6 +310,8 @@ def test_sync_drafts_endpoint():
     mock_runtime.draft_store.deck_name = "D"
     mock_runtime.draft_store.model_name = "M"
     mock_runtime.draft_store.tags = []
+    mock_runtime.draft_store.entry_id = "test_entry"
+    mock_runtime.draft_store.slide_set_name = "test_slide_set"
     
     with patch('gui.backend.main._get_session_or_404', return_value=mock_session):
         with patch('gui.backend.main._get_runtime_or_404', return_value=mock_runtime):
@@ -326,14 +329,20 @@ def test_sync_drafts_endpoint():
 def test_session_api_more():
     """Test more session API edge cases."""
     # update_session_cards
-    with patch('gui.backend.main.load_state', return_value={"pdf_path": "P", "deck_name": "D", "cards": [], "concept_map": {}, "history": []}):
-        with patch('gui.backend.main.StateFile.update_cards', return_value=True) as mock_update:
-            response = client.put("/session/s1/cards", json={"cards": [{"f": "b"}]})
-            assert response.status_code == 200
-            mock_update.assert_called()
+    mock_state = {"cards": [], "deck": "D"}
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = mock_state
+        mock_db_class.return_value = mock_db
+        response = client.put("/session/s1/cards", json={"cards": [{"f": "b"}]})
+        assert response.status_code == 200
+        mock_db.update_session_cards.assert_called()
     
     # delete_session_card error
-    with patch('gui.backend.main.load_state', return_value={"cards": []}):
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = {"cards": []}
+        mock_db_class.return_value = mock_db
         response = client.delete("/session/s1/cards/99")
         assert response.status_code == 404
 
@@ -395,7 +404,10 @@ def test_sync_nonexistent_session():
 
 def test_update_session_cards_not_found():
     """Test updating cards for a session that doesn't exist."""
-    with patch('gui.backend.main.os.path.exists', return_value=False):
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = None
+        mock_db_class.return_value = mock_db
         response = client.put("/session/ghost_session/cards", json={"cards": []})
         assert response.status_code == 404
 
@@ -485,7 +497,8 @@ def test_generate_event_generator_errors():
     mock_service = MagicMock()
     
     async def failing_gen(*args, **kwargs):
-        yield json.dumps({"type": "info"}) + "\n"
+        from lectern.lectern_service import ServiceEvent
+        yield ServiceEvent("info", "started", {})
         raise Exception("SSE Crash")
         
     # We'll use a session already in manager to avoid full /generate setup
@@ -512,11 +525,14 @@ def test_generate_event_generator_errors():
 def test_sync_session_to_anki_recreate_branch():
     """Test session sync recreates externally deleted Anki notes."""
     mock_state = {
-        "pdf_path": "P", "deck_name": "D", "concept_map": {}, "history": [],
+        "pdf_path": "P", "deck": "D", "concept_map": {},
         "cards": [{"fields": {"F": "B"}, "anki_note_id": 999}]
     }
     
-    with patch('gui.backend.main.load_state', return_value=mock_state):
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = mock_state
+        mock_db_class.return_value = mock_db
         # 1. Note deleted externally -> info returns empty
         with patch('gui.backend.main.notes_info', return_value=[{"noteId": 0}]):
             with patch('gui.backend.main.export_card_to_anki') as mock_export:
@@ -628,32 +644,34 @@ def test_simple_session_actions():
     mock_runtime.draft_store.get_drafts.return_value = []
     with patch('gui.backend.main._get_session_or_404', return_value=mock_session):
         with patch('gui.backend.main._get_runtime_or_404', return_value=mock_runtime):
-            with patch('gui.backend.main.load_state', return_value={"cards": []}):
+            with patch('gui.backend.main.DatabaseManager') as mock_db:
+                mock_db.return_value.get_entry_by_session_id.return_value = {"cards": []}
                 response = client.post("/drafts/sync?session_id=s1")
                 assert response.json()["created"] == 0
 
 def test_session_card_management_success():
     """Test successful card deletion and history update."""
-    mock_state = {"cards": [{"id": 0}, {"id": 1}], "pdf_path": "P", "deck_name": "D", "concept_map": {}, "history": []}
-    with patch('gui.backend.main.load_state', return_value=mock_state):
-        with patch('gui.backend.main.StateFile.update_cards', return_value=True) as mock_update:
-            with patch('gui.backend.main.HistoryManager') as mock_hist:
-                response = client.delete("/session/s1/cards/0")
-                assert response.status_code == 200
-                assert response.json()["remaining"] == 1
-                mock_update.assert_called()
-                mock_hist.return_value.update_entry.assert_called()
+    mock_state = {"cards": [{"id": 0}, {"id": 1}], "deck": "D"}
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = mock_state
+        mock_db_class.return_value = mock_db
+        with patch('gui.backend.main.HistoryManager') as mock_hist:
+            mock_hist.return_value.get_entry_by_session_id.return_value = {"id": "h1"}
+            response = client.delete("/session/s1/cards/0")
+            assert response.status_code == 200
+            assert response.json()["remaining"] == 1
+            mock_db.update_session_cards.assert_called()
+            mock_hist.return_value.update_entry.assert_called()
 
 def test_batch_delete_session_cards():
     """Test batch deletion of session cards."""
-    mock_state = {"cards": [{"id": 0}, {"id": 1}, {"id": 2}], "pdf_path": "P", "deck_name": "D", "history": []}
+    mock_state = {"cards": [{"id": 0}, {"id": 1}, {"id": 2}], "deck": "D"}
     
-    # We need to mock StateFile completely or patch its methods
-    with patch('gui.backend.main.StateFile') as mock_sf_class:
-        mock_sf = MagicMock()
-        mock_sf.load.return_value = {"cards": [{"id": 1}]} # After deletion (mocked)
-        mock_sf.delete_cards_by_indices.return_value = 2
-        mock_sf_class.return_value = mock_sf
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = mock_state
+        mock_db_class.return_value = mock_db
         
         with patch('gui.backend.main.HistoryManager') as mock_hist_class:
             mock_hist = MagicMock()
@@ -664,8 +682,7 @@ def test_batch_delete_session_cards():
             
             assert response.status_code == 200
             assert response.json()["deleted"] == 2
-            mock_sf.delete_cards_by_indices.assert_called_with([0, 2])
-            # Check history update
+            mock_db.update_session_cards.assert_called_with("s1", [{"id": 1}])
             mock_hist.update_entry.assert_called_with("entry1", card_count=1)
 
 def test_spa_routing():
@@ -735,21 +752,30 @@ def test_sync_failures_reporting():
     mock_session.session_id = "s1"
     mock_runtime = MagicMock()
     mock_runtime.draft_store.get_drafts.return_value = [{"fields": {"F": "B"}}]
-    # Export fails
-    with patch('gui.backend.main._get_session_or_404', return_value=mock_session):
-        with patch('gui.backend.main._get_runtime_or_404', return_value=mock_runtime):
-            with patch('gui.backend.main.export_card_to_anki') as mock_export:
-                mock_export.return_value.success = False
-                mock_export.return_value.error = "Anki busy"
-                
-                response = client.post("/drafts/sync?session_id=s1")
-                lines = [l for l in response.iter_lines() if l]
-                assert any("Failed to create note: Anki busy" in str(l) for l in lines)
-                assert any('"failed": 1' in str(l) for l in lines)
+    mock_runtime.draft_store.deck_name = "D"
+    mock_runtime.draft_store.model_name = "M"
+    mock_runtime.draft_store.tags = []
+    mock_runtime.draft_store.slide_set_name = "S"
+    mock_runtime.draft_store.entry_id = "E"
+
+    with patch('gui.backend.main.DatabaseManager'):
+        with patch('gui.backend.main._get_session_or_404', return_value=mock_session):
+            with patch('gui.backend.main._get_runtime_or_404', return_value=mock_runtime):
+                with patch('gui.backend.main.export_card_to_anki') as mock_export:
+                    mock_export.return_value.success = False
+                    mock_export.return_value.error = "Anki busy"
+                    
+                    response = client.post("/drafts/sync?session_id=s1")
+                    lines = [l for l in response.iter_lines() if l]
+                    assert any("Failed to create note: Anki busy" in str(l) for l in lines)
+                    assert any('"failed": 1' in str(l) for l in lines)
 
 def test_session_state_loading_failures():
     """Test session endpoints return empty state for missing state and handle empty cards."""
-    with patch('gui.backend.main.load_state', return_value=None):
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = None
+        mock_db_class.return_value = mock_db
         response = client.get("/session/ghost")
         assert response.status_code == 200
         data = response.json()
@@ -757,18 +783,21 @@ def test_session_state_loading_failures():
         assert data["session_id"] == "ghost"
         assert data["not_found"] is True
 
-    # Sync session with no cards
-    with patch('gui.backend.main.load_state', return_value={"cards": []}):
+        # Sync session with no cards
+        mock_db.get_entry_by_session_id.return_value = {"cards": []}
         response = client.post("/session/empty/sync")
         assert response.json()["created"] == 0
 
 def test_sync_session_runtime_error():
     """Test /session sync reports export failures in SSE stream."""
     mock_state = {
-        "pdf_path": "P", "deck_name": "D", "concept_map": {}, "history": [],
+        "pdf_path": "P", "deck": "D", "concept_map": {},
         "cards": [{"fields": {"F": "B"}}] # New card
     }
-    with patch('gui.backend.main.load_state', return_value=mock_state):
+    with patch('gui.backend.main.DatabaseManager') as mock_db_class:
+        mock_db = MagicMock()
+        mock_db.get_entry_by_session_id.return_value = mock_state
+        mock_db_class.return_value = mock_db
         with patch('gui.backend.main.export_card_to_anki') as mock_export:
             mock_export.return_value.success = False
             mock_export.return_value.error = "Sync crash"

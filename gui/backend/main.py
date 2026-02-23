@@ -39,7 +39,7 @@ from service import GenerationService, DraftStore
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.history import HistoryManager
-from lectern.utils.state import load_state, save_state, StateFile, resolve_state_context, clear_state, sweep_orphan_state_temps
+from lectern.utils.database import DatabaseManager
 from session import (
     SessionManager,
     SessionState,
@@ -65,7 +65,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title='Lectern API', version='1.8.0', lifespan=lifespan)
 session_manager.sweep_orphan_temp_files()
-sweep_orphan_state_temps()
 
 # NOTE(Estimate): Session-level cache for estimate base data. Key = (content_sha256, model).
 # Reuse token count across target/source changes for same PDF. TTL ~1h covers typical session.
@@ -361,11 +360,6 @@ async def create_deck_endpoint(req: DeckCreate):
 @app.delete("/history")
 async def clear_history():
     mgr = HistoryManager()
-    # Clean up state files before clearing history
-    for entry in mgr.get_all():
-        session_id = entry.get("session_id")
-        if session_id:
-            clear_state(session_id)
     mgr.clear_all()
     return {"status": "cleared"}
 
@@ -376,11 +370,6 @@ async def delete_history_entry(entry_id: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     
-    # Clean up persistent session state
-    session_id = entry.get("session_id")
-    if session_id:
-        await run_in_threadpool(clear_state, session_id)
-        
     success = await run_in_threadpool(mgr.delete_entry, entry_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete history entry")
@@ -404,12 +393,6 @@ def _batch_delete_impl(req_status: Optional[str], req_ids: Optional[List[str]]) 
             entries = [e for e in mgr.get_all() if e["id"] in set(req_ids)]
         else:
             return 0
-
-        # Clean up state files
-        for entry in entries:
-            sid = entry.get("session_id")
-            if sid:
-                clear_state(sid)
 
         entry_ids = [e["id"] for e in entries]
         deleted = mgr.delete_entries(entry_ids)
@@ -656,38 +639,26 @@ async def sync_drafts(session_id: Optional[str] = None):
     session = _get_session_or_404(session_id, require_session_id=True)
     runtime = _get_runtime_or_404(session.session_id, session=session)
     store = runtime.draft_store
-    state = load_state(session.session_id)
-    state_ctx = resolve_state_context(
-        session.session_id,
-        state=state,
-        fallback={
-            "cards": store.get_drafts(),
-            "deck_name": store.deck_name,
-            "model_name": store.model_name,
-            "tags": store.tags,
-            "slide_set_name": store.slide_set_name,
-            "entry_id": store.entry_id,
-        },
-    )
-    cards = state_ctx["cards"]
-    
+    db = DatabaseManager()
+
+    cards = store.get_drafts()
+    deck_name = store.deck_name
+    model_name = store.model_name
+    tags = store.tags
+    slide_set_name = store.slide_set_name
+    entry_id = store.entry_id
+
     if not cards:
         return {"created": 0, "failed": 0, "session_id": session.session_id}
-        
-    deck_name = state_ctx["deck_name"] or store.deck_name
-    model_name = state_ctx["model_name"] or store.model_name
-    tags = state_ctx["tags"] or store.tags
-    slide_set_name = state_ctx["slide_set_name"] or store.slide_set_name
-    entry_id = state_ctx["entry_id"] or store.entry_id
 
     def on_complete(updated_cards: List[dict], created: int, updated: int, failed: int) -> None:
-        StateFile(session.session_id).update_cards(
-            updated_cards,
+        db.update_session_cards(
+            session_id=session.session_id,
+            cards=updated_cards,
             deck_name=deck_name,
             slide_set_name=slide_set_name,
             model_name=model_name,
-            tags=tags,
-            entry_id=entry_id,
+            tags=tags
         )
 
         if entry_id:
@@ -725,10 +696,11 @@ class SessionCardsUpdate(BaseModel):
 
 @app.get("/session/{session_id}")
 async def get_session(session_id: str):
-    state = load_state(session_id)
-    if state is None:
+    db = DatabaseManager()
+    entry = db.get_entry_by_session_id(session_id)
+    if not entry:
         return {"cards": [], "session_id": session_id, "not_found": True}
-    return state
+    return entry
 
 @app.get("/session/{session_id}/status")
 async def get_session_status(session_id: str):
@@ -740,37 +712,35 @@ async def get_session_status(session_id: str):
 
 @app.put("/session/{session_id}/cards")
 async def update_session_cards(session_id: str, update: SessionCardsUpdate):
-    state = load_state(session_id)
-    if not state:
+    db = DatabaseManager()
+    entry = db.get_entry_by_session_id(session_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="Session not found")
     
     # Save the updated cards back to the session state
-    state_file = StateFile(session_id)
-    state_file.update_cards(update.cards)
+    db.update_session_cards(session_id, update.cards)
     return {"status": "ok", "session_id": session_id}
 
 @app.delete("/session/{session_id}/cards/{card_index}")
 async def delete_session_card(session_id: str, card_index: int):
-    state = load_state(session_id)
-    if not state:
+    db = DatabaseManager()
+    entry = db.get_entry_by_session_id(session_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    cards = state["cards"]
+    cards = entry.get("cards") or []
     if card_index < 0 or card_index >= len(cards):
         raise HTTPException(status_code=404, detail="Card not found")
     
     cards.pop(card_index)
-    
-    # Save the updated cards back to the session state
-    state_file = StateFile(session_id)
-    state_file.update_cards(cards)
+    db.update_session_cards(session_id, cards)
 
     # Try to update history card count via session_id lookup
     try:
         history_mgr = HistoryManager()
-        entry = history_mgr.get_entry_by_session_id(session_id)
-        if entry:
-            history_mgr.update_entry(entry["id"], card_count=len(cards))
+        entry_metadata = history_mgr.get_entry_by_session_id(session_id)
+        if entry_metadata:
+            history_mgr.update_entry(entry_metadata["id"], card_count=len(cards))
     except Exception as e:
         logger.warning(f"Failed to update history card count: {e}")
 
@@ -796,22 +766,34 @@ class SessionBatchDeleteRequest(BaseModel):
 
 @app.post("/session/{session_id}/cards/batch-delete")
 async def batch_delete_session_cards(session_id: str, req: SessionBatchDeleteRequest):
-    state_file = StateFile(session_id)
-    deleted_count = state_file.delete_cards_by_indices(req.indices)
+    db = DatabaseManager()
+    entry = db.get_entry_by_session_id(session_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    cards = entry.get("cards") or []
+    if not cards:
+        return {"status": "ok", "deleted": 0, "remaining": 0}
+        
+    indices_to_delete = sorted(set(req.indices), reverse=True)
+    deleted_count = 0
+    
+    for idx in indices_to_delete:
+        if 0 <= idx < len(cards):
+            cards.pop(idx)
+            deleted_count += 1
 
-    # Try to update history card count
+    db.update_session_cards(session_id, cards)
+    
     try:
         history_mgr = HistoryManager()
-        entry = history_mgr.get_entry_by_session_id(session_id)
-        if entry:
-            # We need to reload state to get correct remaining count
-            new_state = state_file.load()
-            remaining = len(new_state.get("cards", [])) if new_state else 0
-            history_mgr.update_entry(entry["id"], card_count=remaining)
+        hist_entry = history_mgr.get_entry_by_session_id(session_id)
+        if hist_entry:
+            history_mgr.update_entry(hist_entry["id"], card_count=len(cards))
     except Exception as e:
         logger.warning(f"Failed to update history card count: {e}")
 
-    return {"status": "ok", "deleted": deleted_count}
+    return {"status": "ok", "deleted": deleted_count, "remaining": len(cards)}
 
 @app.put("/anki/notes/{note_id}")
 async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
@@ -827,20 +809,20 @@ async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
 
 @app.post("/session/{session_id}/sync")
 async def sync_session_to_anki(session_id: str):
-    state = load_state(session_id)
-    state_ctx = resolve_state_context(session_id, state=state)
-    if not state_ctx["state"]:
+    db = DatabaseManager()
+    entry = db.get_entry_by_session_id(session_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    cards = state_ctx["cards"]
+    cards = entry.get("cards") or []
     if not cards:
         return {"created": 0, "updated": 0, "failed": 0, "session_id": session_id}
         
-    deck_name = state_ctx["deck_name"]
-    slide_set_name = state_ctx["slide_set_name"] or "Session Sync"
+    deck_name = entry.get("deck", "")
+    slide_set_name = entry.get("slide_set_name") or "Session Sync"
 
     def on_complete(updated_cards: List[dict], created: int, updated: int, failed: int) -> None:
-        StateFile(session_id).update_cards(updated_cards)
+        db.update_session_cards(session_id, updated_cards)
 
     async def sync_generator():
         async for payload in stream_sync_cards(

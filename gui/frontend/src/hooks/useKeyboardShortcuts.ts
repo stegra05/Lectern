@@ -92,8 +92,6 @@ export function useKeyboardShortcuts({
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const cmdKey = isMac ? event.metaKey : event.ctrlKey;
 
-        // Helper to check if any modal is open
-        const anyModalOpen = isSettingsOpen || isHistoryOpen || isShortcutsModalOpen;
 
         // -----------------------------------------------------------------------
         // Escape key - Close modals / Cancel edit

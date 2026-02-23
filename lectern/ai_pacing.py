@@ -3,9 +3,6 @@
 from dataclasses import dataclass
 from typing import List
 
-DENSITY_HIGH_MULTIPLIER = 1.25
-DENSITY_LOW_MULTIPLIER = 0.75
-
 @dataclass
 class PacingState:
     current_cards: int
@@ -17,7 +14,7 @@ class PacingState:
     @property
     def hint(self) -> str:
         """Generate a pacing hint string for the AI."""
-        if not self.covered_slides or self.current_cards < 10:
+        if not self.covered_slides or self.current_cards < 5:
             return ""
 
         last_slide = max(self.covered_slides)
@@ -27,15 +24,10 @@ class PacingState:
             
         actual_density = self.current_cards / last_slide
         
-        lines = [
-            f"Progress: Slide {last_slide} of {self.total_pages}.",
-            f"Status: You have generated {self.current_cards} cards so far (~{actual_density:.1f} per slide)."
-        ]
-
-        target = self.target_density
-        if actual_density > target * DENSITY_HIGH_MULTIPLIER:
-            lines.append(f"ADVICE: Density is too high (Target: ~{target:.1f}). Raise your bar for importance. Focus on more substantial concepts.")
-        elif actual_density < target * DENSITY_LOW_MULTIPLIER:
-            lines.append(f"ADVICE: Density is low (Target: ~{target:.1f}). Look closer at the slides for missed details or defined terms.")
-        
-        return "\n".join(lines) + "\n"
+        # provide factual status and a clean instruction
+        # rather than "ADVICE: SCREAMING"
+        return (
+            f"\n- CURRENT PROGRESS: Slide {last_slide} of {self.total_pages}.\n"
+            f"- GENERATION DENSITY: {self.current_cards} cards for {last_slide} slides (~{actual_density:.1f} per slide).\n"
+            f"- TARGET GOAL: ~{self.target_density:.1f} cards per slide. Please adjust your selectivity to match this target.\n"
+        )

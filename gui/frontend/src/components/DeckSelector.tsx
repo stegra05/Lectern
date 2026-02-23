@@ -97,11 +97,6 @@ const filterTreeBySearch = (
         return fullName.toLowerCase().includes(lowerQuery);
     };
 
-    // Check if a node or any descendant matches
-    const nodeOrDescendantMatches = (node: DeckNode): boolean => {
-        if (matchesDeck(node.fullName)) return true;
-        return Object.values(node.children).some(nodeOrDescendantMatches);
-    };
 
     // Clone a node, filtering children and marking matched paths
     const filterNode = (node: DeckNode): DeckNode | null => {
@@ -171,10 +166,10 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
     };
 
     // Handle selection
-    const handleSelect = (deckName: string) => {
+    const handleSelect = useCallback((deckName: string) => {
         onChange(deckName);
         setIsOpen(false);
-    };
+    }, [onChange]);
 
     // Handle input change
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

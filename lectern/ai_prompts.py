@@ -130,6 +130,7 @@ class PromptBuilder:
         pacing_hint: str = "",
         avoid_text: str = "",
         slide_coverage: str = "",
+        coverage_summary: str = "",
     ) -> str:
         """Build the card generation prompt."""
         
@@ -162,6 +163,7 @@ class PromptBuilder:
             "    - `done` must be a boolean.\n"
             f"{avoid_text}"
             f"{slide_coverage}"
+            f"{coverage_summary}"
             "    - Include `slide_topic` (short section/topic label, Title Case).\n"
             "    - Include `slide_number` when clear from context (integer page number).\n"
             "    - Keep `slide_topic` concise (ideally <= 8 words).\n"

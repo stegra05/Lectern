@@ -179,8 +179,11 @@ class LecternAIClient:
         try:
             return self._chat.send_message(message=message, config=call_config)
         except Exception as exc:
-            err_text = str(exc)
-            if "thinking" in err_text.lower() and ("not supported" in err_text.lower() or "INVALID_ARGUMENT" in err_text):
+            err_text = str(exc).lower()
+            # Catch known "thinking parameter not supported" or INVALID_ARGUMENT related to it
+            is_thinking_error = "thinking" in err_text and ("not supported" in err_text or "invalid_argument" in err_text)
+            
+            if is_thinking_error:
                 logger.warning(
                     "[AI] thinking_level rejected (model=%s, genai=%s): %s",
                     self._model_name, genai.__version__, err_text[:200],
@@ -224,38 +227,28 @@ class LecternAIClient:
 
         return "\n".join(summary_lines)
 
-    def _prune_history(self, all_card_fronts: List[str] | None = None) -> None:
-        """Prune chat history to manage token usage (sliding window)."""
+    def _prune_history(self, all_card_fronts: List[str] | None = None) -> str:
+        """Prune chat history to manage token usage (sliding window).
+        
+        Returns a rolling coverage summary string to be injected into the next prompt.
+        """
         try:
             history = self.get_history()
             if len(history) <= _HISTORY_PRUNE_THRESHOLD:
-                return
+                return ""
 
             summary_text = self._build_rolling_card_summary(all_card_fronts or [])
-            summary_turn: List[Dict[str, Any]] = []
-            if summary_text:
-                summary_turn = [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"text": "Summarize generated coverage so far before continuing."}
-                        ],
-                    },
-                    {
-                        "role": "model",
-                        "parts": [{"text": summary_text}],
-                    },
-                ]
-
+            
             new_history = (
                 history[:_HISTORY_PRUNE_HEAD]
-                + summary_turn
                 + history[-_HISTORY_PRUNE_TAIL:]
             )
             self.restore_history(new_history)
             logger.debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
+            return f"\n- GENERATION PROGRESS SO FAR:\n{summary_text}\n" if summary_text else ""
         except Exception as e:
             logger.debug(f"[AI] History pruning failed: {e}")
+            return ""
 
     def _is_rate_limit_error(self, exc: Exception) -> bool:
         """Check if an exception indicates a rate limit error."""
@@ -418,24 +411,25 @@ class LecternAIClient:
         pacing_hint: str = "",
         all_card_fronts: List[str] | None = None,
     ) -> Dict[str, Any]:
-        self._prune_history(all_card_fronts=all_card_fronts)
+        coverage_summary = self._prune_history(all_card_fronts=all_card_fronts)
         
         # Build context strings
         avoid_text = ""
         if avoid_fronts:
             trimmed = [f"- {front[:100]}" for front in avoid_fronts[:20]]
-            avoid_text = "\\n- Avoid re-generating:\\n" + "\\n".join(trimmed) + "\\n"
+            avoid_text = "\n- Avoid re-generating:\n" + "\n".join(trimmed) + "\n"
             
         slide_text = ""
         if covered_slides:
-            slide_text = f"\\n- Already covered slides: {', '.join(str(s) for s in covered_slides[:50])}...\\n"
+            slide_text = f"\n- Already covered slides: {', '.join(str(s) for s in covered_slides[:50])}...\n"
             
         # Use PromptBuilder
         prompt = self._prompt_builder.generation(
             limit=limit,
             pacing_hint=pacing_hint,
             avoid_text=avoid_text,
-            slide_coverage=slide_text
+            slide_coverage=slide_text,
+            coverage_summary=coverage_summary,
         )
         
         update: dict[str, Any] = {
@@ -495,9 +489,8 @@ class LecternAIClient:
         """Parse JSON response from AI using strict canonical schema."""
         self._last_parse_error = ""
         try:
-            raw = json.loads(text, parse_int=self._safe_parse_int)
-            normalized = self._normalize_card_payload(raw)
-            data_obj = model_class.model_validate(normalized)
+            raw = json.loads(text)
+            data_obj = model_class.model_validate(raw)
             result = data_obj.model_dump()
             if "cards" in result:
                 for card in result["cards"]:
@@ -520,8 +513,8 @@ class LecternAIClient:
                     ):
                         card["slide_number"] = int(slide_number.strip())
             # Preserve extra fields that are not in the Gemini-facing schema.
-            if "cards" in result and "cards" in normalized:
-                for res_card, raw_card in zip(result["cards"], normalized["cards"]):
+            if "cards" in result and "cards" in raw:
+                for res_card, raw_card in zip(result["cards"], raw["cards"]):
                     if isinstance(raw_card, dict):
                         for k, v in raw_card.items():
                             if k not in res_card:
@@ -532,63 +525,6 @@ class LecternAIClient:
             logger.warning("[AI] JSON parsing failed: %s", e)
             return None
 
-    @staticmethod
-    def _safe_parse_int(s: str) -> int | None:
-        """Guard against Gemini outputting absurdly large integer literals."""
-        if len(s) > 10:
-            return None
-        return int(s)
-
-    def _normalize_card_payload(self, payload: Any) -> Any:
-        """Normalize small casing/type drifts before strict schema validation."""
-        if not isinstance(payload, dict):
-            return payload
-        cards = payload.get("cards")
-        if not isinstance(cards, list):
-            return payload
-        normalized_cards: List[Any] = []
-        for card in cards:
-            if not isinstance(card, dict):
-                normalized_cards.append(card)
-                continue
-            normalized = dict(card)
-            model_name = str(normalized.get("model_name", "")).strip().lower()
-            if model_name == "basic":
-                normalized["model_name"] = "Basic"
-            elif model_name == "cloze":
-                normalized["model_name"] = "Cloze"
-            if isinstance(normalized.get("fields"), dict):
-                normalized["fields"] = [
-                    {"name": str(k), "value": (None if v is None else str(v))}
-                    for k, v in normalized["fields"].items()
-                ]
-            elif not isinstance(normalized.get("fields"), list):
-                model_name = str(normalized.get("model_name", "")).lower()
-                if model_name == "cloze":
-                    text = str(normalized.get("text") or "").strip()
-                    if text:
-                        normalized["fields"] = [{"name": "Text", "value": text}]
-                else:
-                    front = str(normalized.get("front") or "").strip()
-                    back = str(normalized.get("back") or "").strip()
-                    fields: List[Dict[str, str]] = []
-                    if front:
-                        fields.append({"name": "Front", "value": front})
-                    if back:
-                        fields.append({"name": "Back", "value": back})
-                    if fields:
-                        normalized["fields"] = fields
-            slide_number = normalized.get("slide_number")
-            if isinstance(slide_number, str) and slide_number.strip().isdigit() and len(slide_number.strip()) <= 5:
-                normalized["slide_number"] = slide_number.strip()
-            elif isinstance(slide_number, (int, float)) and (slide_number < 1 or slide_number > 99999):
-                normalized.pop("slide_number", None)
-            elif isinstance(slide_number, int):
-                normalized["slide_number"] = str(slide_number)
-            normalized_cards.append(normalized)
-        merged = dict(payload)
-        merged["cards"] = normalized_cards
-        return merged
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""

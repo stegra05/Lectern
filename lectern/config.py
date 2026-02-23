@@ -47,8 +47,8 @@ class ConfigManager:
 
     # Default values for all configurable keys
     _DEFAULTS: Dict[str, Any] = {
-        "gemini_model": "gemini-3-flash-preview",
-        "lightweight_model": "gemini-3-flash-preview",
+        "gemini_model": "gemini-3-flash",
+        "lightweight_model": "gemini-3-flash",
         "anki_url": "http://localhost:8765",
         "basic_model": "Basic",
         "cloze_model": "Cloze",

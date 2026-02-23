@@ -99,7 +99,7 @@ class TestConfigPriority:
         config = ConfigManager.instance()
 
         # gemini_model has a default value
-        assert config.get("gemini_model") == "gemini-3.0-flash"
+        assert config.get("gemini_model") == "gemini-3-flash"
 
     def test_env_var_overrides_default(self) -> None:
         """Environment variable takes precedence over default."""
@@ -354,8 +354,8 @@ class TestConfigDefaults:
         config = ConfigManager.instance()
 
         expected_defaults = {
-            "gemini_model": "gemini-3.0-flash",
-            "lightweight_model": "gemini-3.0-flash",
+            "gemini_model": "gemini-3-flash",
+            "lightweight_model": "gemini-3-flash",
             "anki_url": "http://localhost:8765",
             "basic_model": "Basic",
             "cloze_model": "Cloze",

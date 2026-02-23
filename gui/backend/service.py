@@ -6,7 +6,6 @@ from typing import AsyncGenerator, Dict, List, Any, Optional
 
 from lectern import config
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
-from lectern.utils.state import load_state, save_state, StateFile
 
 class DraftStore:
     def __init__(self, session_id: Optional[str] = None):
@@ -16,35 +15,11 @@ class DraftStore:
         self.model_name = ""
         self.tags = []
         self.entry_id: Optional[str] = None
-        self._state_cache: Optional[Dict[str, Any]] = None
-        self._state_file = StateFile(session_id)
+        self._cards: List[Dict[str, Any]] = []
 
     def set_session_id(self, session_id: str) -> None:
         self.session_id = session_id
-        self._state_file = StateFile(session_id)
-        self._state_cache = None
-
-    def _load_state(self, refresh: bool = False) -> Optional[Dict[str, Any]]:
-        if not self.session_id:
-            return None
-        if self._state_cache is None or refresh:
-            self._state_cache = load_state(self.session_id)
-        return self._state_cache
-
-    def _persist_state(self, cards: List[Dict[str, Any]]) -> None:
-        state = self._load_state()
-        if not state:
-            return
-        self._state_cache = {
-            **state,
-            "cards": cards,
-            "deck_name": state.get("deck_name", self.deck_name),
-            "slide_set_name": state.get("slide_set_name", self.slide_set_name),
-            "model_name": state.get("model_name", self.model_name),
-            "tags": state.get("tags", self.tags),
-            "entry_id": state.get("entry_id", self.entry_id),
-        }
-        self._state_file.update_cards(cards, **{k: v for k, v in self._state_cache.items() if k != "cards"})
+        self._cards = []
 
     def set_drafts(
         self, 
@@ -61,39 +36,26 @@ class DraftStore:
         self.tags = tags
         if entry_id:
             self.entry_id = entry_id
-        self._persist_state(cards)
+        self._cards = cards
         
     def get_drafts(self):
-        state = self._load_state()
-        if state and "cards" in state:
-            return state.get("cards", [])
-        return []
+        return self._cards
         
     def update_draft(self, index: int, card: Dict[str, Any]):
-        state = self._load_state()
-        if not state or "cards" not in state:
-            return False
-        cards = state.get("cards", [])
-        if 0 <= index < len(cards):
-            cards[index] = card
-            self._persist_state(cards)
+        if 0 <= index < len(self._cards):
+            self._cards[index] = card
             return True
         return False
         
     def delete_draft(self, index: int):
-        state = self._load_state()
-        if not state or "cards" not in state:
-            return False
-        cards = state.get("cards", [])
-        if 0 <= index < len(cards):
-            cards.pop(index)
-            self._persist_state(cards)
+        if 0 <= index < len(self._cards):
+            self._cards.pop(index)
             return True
         return False
 
     def replace_drafts(self, cards: List[Dict[str, Any]]):
         """Replaces the entire list of drafts while preserving metadata."""
-        self._persist_state(cards)
+        self._cards = cards
         return True
         
     def clear(self):
@@ -102,7 +64,7 @@ class DraftStore:
         self.model_name = ""
         self.tags = []
         self.entry_id = None
-        self._state_cache = None
+        self._cards = []
 
 class GenerationService:
     def __init__(self, draft_store: DraftStore):

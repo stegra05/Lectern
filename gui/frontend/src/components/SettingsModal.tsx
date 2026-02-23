@@ -113,7 +113,7 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme, totalSessio
         setIsSaving(true);
         setSaveSuccess(false);
         try {
-            const payload: any = {
+            const payload: Record<string, string> = {
                 gemini_model: editedConfig.gemini_model,
                 anki_url: editedConfig.anki_url,
                 basic_model: editedConfig.basic_model,

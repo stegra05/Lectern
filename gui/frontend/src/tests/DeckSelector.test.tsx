@@ -15,7 +15,6 @@ vi.mock('../api', () => ({
 
 describe('DeckSelector', () => {
     const mockOnChange = vi.fn();
-    const mockSetAvailableDecks = vi.fn();
 
     beforeEach(() => {
         vi.clearAllMocks();

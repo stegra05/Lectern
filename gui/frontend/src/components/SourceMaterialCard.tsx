@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Sparkles, Monitor, FileText } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlassCard } from './GlassCard';

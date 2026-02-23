@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Any, Dict, List, Literal, Optional, Type
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Concept(BaseModel):
@@ -37,12 +37,60 @@ class FieldPair(BaseModel):
 
 
 class AnkiCard(BaseModel):
-    """Gemini-facing card schema: list-of-fields is most stable."""
     model_name: str = Field(description="The Anki note type, either 'Basic' or 'Cloze'")
     fields: List[FieldPair] = Field(default_factory=list)
     slide_topic: Optional[str] = None
     slide_number: Optional[str] = None
     rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
+
+    @field_validator("model_name", mode="before")
+    @classmethod
+    def titleize_model_name(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_lower = v.strip().lower()
+            if v_lower == "basic": return "Basic"
+            if v_lower == "cloze": return "Cloze"
+            return v.strip().title()
+        return v
+
+    @field_validator("slide_number", mode="before")
+    @classmethod
+    def stringify_slide_number(cls, v: Any) -> Any:
+        if isinstance(v, (int, float)):
+            if v < 1 or v > 99999:
+                return None
+            return str(int(v))
+        if isinstance(v, str):
+            v_strip = v.strip()
+            if v_strip.isdigit() and len(v_strip) <= 5:
+                return v_strip
+            return None
+        return v
+    
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        
+        fields = data.get("fields")
+        if isinstance(fields, dict):
+            data["fields"] = [{"name": str(k), "value": (None if v is None else str(v))} for k, v in fields.items()]
+        elif not isinstance(fields, list):
+            model_name = str(data.get("model_name", "")).lower()
+            if model_name == "cloze":
+                text = str(data.get("text") or "").strip()
+                if text:
+                    data["fields"] = [{"name": "Text", "value": text}]
+            else:
+                front = str(data.get("front") or "").strip()
+                back = str(data.get("back") or "").strip()
+                gen_fields = []
+                if front: gen_fields.append({"name": "Front", "value": front})
+                if back: gen_fields.append({"name": "Back", "value": back})
+                if gen_fields:
+                    data["fields"] = gen_fields
+        return data
 
 
 class CardGenerationResponse(BaseModel):
