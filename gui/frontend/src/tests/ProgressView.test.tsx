@@ -78,9 +78,7 @@ vi.mock('../store', () => ({
 }));
 
 vi.mock('framer-motion', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const MockComponent = ({ children, ...props }: any) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { initial, animate, exit, variants, transition, layoutId, layout, ...validProps } = props;
         return React.createElement('div', validProps, children);
     };
@@ -91,7 +89,6 @@ vi.mock('framer-motion', () => {
             circle: MockComponent,
             path: MockComponent,
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
     };
 });

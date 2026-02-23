@@ -9,55 +9,45 @@ from lectern.lectern_service import ServiceEvent
 
 def test_draft_store_crud():
     store = DraftStore(session_id="s1")
-    state = {
-        "cards": [],
-        "deck_name": "",
-        "slide_set_name": "",
-        "model_name": "",
-        "tags": [],
-        "entry_id": None,
-    }
+    
+    # Initial state
+    assert store.get_drafts() == []
+    assert store.deck_name == ""
 
-    with patch("gui.backend.service.load_state", return_value=state):
-        with patch.object(store._state_file, "update_cards"):
-            # Initial state
-            assert store.get_drafts() == []
-            assert store.deck_name == ""
+    # Set drafts
+    cards = [{"front": "Q1", "back": "A1"}]
+    store.set_drafts(
+        cards=cards,
+        deck_name="Test Deck",
+        model_name="Basic",
+        tags=["t1"],
+        entry_id="e1",
+        slide_set_name="L1 Intro"
+    )
 
-            # Set drafts
-            cards = [{"front": "Q1", "back": "A1"}]
-            store.set_drafts(
-                cards=cards,
-                deck_name="Test Deck",
-                model_name="Basic",
-                tags=["t1"],
-                entry_id="e1",
-                slide_set_name="L1 Intro"
-            )
+    assert len(store.get_drafts()) == 1
+    assert store.deck_name == "Test Deck"
+    assert store.slide_set_name == "L1 Intro"
+    assert store.entry_id == "e1"
 
-            assert len(store.get_drafts()) == 1
-            assert store.deck_name == "Test Deck"
-            assert store.slide_set_name == "L1 Intro"
-            assert store.entry_id == "e1"
+    # Update draft
+    new_card = {"front": "Q1-Mod", "back": "A1"}
+    success = store.update_draft(0, new_card)
+    assert success is True
+    assert store.get_drafts()[0]["front"] == "Q1-Mod"
 
-            # Update draft
-            new_card = {"front": "Q1-Mod", "back": "A1"}
-            success = store.update_draft(0, new_card)
-            assert success is True
-            assert store.get_drafts()[0]["front"] == "Q1-Mod"
+    # Update invalid index
+    assert store.update_draft(99, {}) is False
 
-            # Update invalid index
-            assert store.update_draft(99, {}) is False
+    # Delete draft
+    success = store.delete_draft(0)
+    assert success is True
+    assert len(store.get_drafts()) == 0
 
-            # Delete draft
-            success = store.delete_draft(0)
-            assert success is True
-            assert len(store.get_drafts()) == 0
-
-            # Clear
-            store.set_drafts([{}], "D", "M", [])
-            store.clear()
-            assert store.deck_name == ""
+    # Clear
+    store.set_drafts([{}], "D", "M", [])
+    store.clear()
+    assert store.deck_name == ""
 
 # --- GenerationService Tests ---
 
@@ -71,19 +61,8 @@ def mock_core_service():
 async def test_generation_service_run_flow(mock_core_service):
     draft_store = DraftStore(session_id="s1")
     service = GenerationService(draft_store)
-    state = {
-        "cards": [],
-        "deck_name": "",
-        "slide_set_name": "",
-        "model_name": "",
-        "tags": [],
-        "entry_id": None,
-    }
     
     # Mock the generator to yield a sequence of events
-    # The real service returns a generator logic, but run_generation wraps it in asyncio.to_thread(next)
-    # The `service.core.run` returns an iterator.
-    
     mock_iterator = iter([
         ServiceEvent("progress_start", "Starting..."),
         ServiceEvent("step_start", "Analyzing PDF"),
@@ -95,15 +74,13 @@ async def test_generation_service_run_flow(mock_core_service):
     
     # Run the generator
     events = []
-    with patch("gui.backend.service.load_state", return_value=state):
-        with patch.object(draft_store._state_file, "update_cards"):
-            async for event in service.run_generation(
-                pdf_path="test_slides.pdf",
-                deck_name="Deck",
-                model_name="Basic",
-                tags=["tag"],
-            ):
-                events.append(event)
+    async for event in service.run_generation(
+        pdf_path="test_slides.pdf",
+        deck_name="Deck",
+        model_name="Basic",
+        tags=["tag"],
+    ):
+        events.append(event)
         
     # Validation
     assert len(events) > 0
