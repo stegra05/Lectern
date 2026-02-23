@@ -1,6 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SettingsModal } from '../components/SettingsModal';
 import { api } from '../api';
 
@@ -54,6 +53,7 @@ describe('SettingsModal', () => {
         await act(async () => {
             render(
                 <SettingsModal
+                    {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
                     theme="light"
@@ -76,6 +76,7 @@ describe('SettingsModal', () => {
         await act(async () => {
             render(
                 <SettingsModal
+                    {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
                     theme="light"
@@ -102,14 +103,18 @@ describe('SettingsModal', () => {
     });
 
     it('updates Gemini API key', async () => {
-        const user = userEvent.setup();
         render(<SettingsModal {...defaultProps} />);
 
         const input = await screen.findByPlaceholderText('Enter new Gemini API Key');
-        await user.type(input, 'new-api-key');
+
+        await act(async () => {
+            fireEvent.change(input, { target: { value: 'new-api-key' } });
+        });
 
         const updateButton = await screen.findByRole('button', { name: /Save Changes/i });
-        await user.click(updateButton);
+        await act(async () => {
+            fireEvent.click(updateButton);
+        });
 
         await waitFor(() => {
             expect(api.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ gemini_api_key: 'new-api-key' }));
@@ -122,6 +127,7 @@ describe('SettingsModal', () => {
         await act(async () => {
             render(
                 <SettingsModal
+                    {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
                     theme="light"
@@ -152,6 +158,7 @@ describe('SettingsModal', () => {
         await act(async () => {
             render(
                 <SettingsModal
+                    {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
                     theme="light"
@@ -185,6 +192,7 @@ describe('SettingsModal', () => {
         await act(async () => {
             render(
                 <SettingsModal
+                    {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
                     theme="light"
@@ -203,6 +211,7 @@ describe('SettingsModal', () => {
         await act(async () => {
             render(
                 <SettingsModal
+                    {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
                     theme="light"

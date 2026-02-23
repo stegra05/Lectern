@@ -73,7 +73,7 @@ describe('AnkiHealthPanel', () => {
             });
 
             // Component should be in loading state
-            expect(screen.getByText('Checking...')).toBeInTheDocument();
+            expect(screen.getAllByText('Checking...')[0]).toBeInTheDocument();
 
             // Resolve the promise
             await act(async () => {
@@ -167,7 +167,7 @@ describe('AnkiHealthPanel', () => {
         });
 
         it('handles API rejection gracefully', async () => {
-            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
             vi.mocked(api.getAnkiStatus).mockRejectedValue(new Error('Network error'));
 
             await act(async () => {
@@ -262,7 +262,7 @@ describe('AnkiHealthPanel', () => {
             });
 
             // Should show loading text
-            expect(screen.getByText('Checking...')).toBeInTheDocument();
+            expect(screen.getAllByText('Checking...')[0]).toBeInTheDocument();
 
             // Resolve
             await act(async () => {

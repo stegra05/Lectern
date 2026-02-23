@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { DeckSelector } from '../components/DeckSelector';
 import { api } from '../api';
@@ -13,11 +13,6 @@ vi.mock('../api', () => ({
     }
 }));
 
-// Mock Store
-vi.mock('../store', () => ({
-    useLecternStore: vi.fn()
-}));
-
 describe('DeckSelector', () => {
     const mockOnChange = vi.fn();
     const mockSetAvailableDecks = vi.fn();
@@ -27,13 +22,8 @@ describe('DeckSelector', () => {
         // Default API response
         (api.getDecks as Mock).mockResolvedValue({ decks: ['Uni', 'Uni::Math', 'Uni::CS'] });
 
-        // Default Store response
-        vi.mocked(useLecternStore).mockImplementation((selector: any) => {
-            return selector({
-                availableDecks: [], // Changed to empty array
-                setAvailableDecks: mockSetAvailableDecks,
-            });
-        });
+        // Reset real store
+        useLecternStore.getState().reset();
     });
 
     // New ControlledDeckSelector component
@@ -59,9 +49,9 @@ describe('DeckSelector', () => {
     });
 
     it('filters decks based on input', async () => {
-        // Redefine store mock for this test to have populated decks
-        vi.mocked(useLecternStore).mockImplementation((selector: any) => {
-            return selector({ availableDecks: ['Uni', 'Uni::Math', 'Uni::CS'], setAvailableDecks: mockSetAvailableDecks });
+        // Pre-populate actual store with decks
+        act(() => {
+            useLecternStore.getState().setAvailableDecks(['Uni', 'Uni::Math', 'Uni::CS']);
         });
 
         render(<ControlledDeckSelector />);

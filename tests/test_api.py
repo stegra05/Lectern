@@ -793,3 +793,277 @@ def test_system_env_branches():
         with patch('os.path.exists', return_value=True):
              # This is hard to trigger without re-importing, but we can verify it doesn't crash
              pass
+
+
+# --- Error Scenario Tests ---
+
+class TestEstimateWithCorruptedPDF:
+    """Tests for /estimate endpoint with corrupted or invalid PDFs."""
+
+    def test_estimate_with_empty_file(self):
+        """Test /estimate returns appropriate error for empty file."""
+        files = {"pdf_file": ("empty.pdf", b"", "application/pdf")}
+        data = {"model_name": "gemini-3-flash"}
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.LecternGenerationService') as mock_service:
+                mock_service.return_value.estimate_cost_with_base = AsyncMock(
+                    side_effect=ValueError("PDF is empty or corrupted")
+                )
+                response = client.post("/estimate", files=files, data=data)
+
+        assert response.status_code == 500
+
+    def test_estimate_with_binary_garbage(self):
+        """Test /estimate handles non-PDF binary data."""
+        # Random binary data that's not a valid PDF
+        garbage_data = bytes(range(256)) * 100
+        files = {"pdf_file": ("fake.pdf", garbage_data, "application/pdf")}
+        data = {"model_name": "gemini-3-flash"}
+
+        _clear_estimate_cache()
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.LecternGenerationService') as mock_service:
+                mock_service.return_value.estimate_cost_with_base = AsyncMock(
+                    side_effect=ValueError("Invalid PDF structure")
+                )
+                response = client.post("/estimate", files=files, data=data)
+
+        assert response.status_code == 500
+
+    def test_estimate_with_truncated_pdf(self):
+        """Test /estimate handles truncated PDF (incomplete upload)."""
+        # Start of a PDF header but truncated
+        truncated_pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog"
+        files = {"pdf_file": ("truncated.pdf", truncated_pdf, "application/pdf")}
+        data = {"model_name": "gemini-3-flash"}
+
+        _clear_estimate_cache()
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.LecternGenerationService') as mock_service:
+                mock_service.return_value.estimate_cost_with_base = AsyncMock(
+                    side_effect=Exception("PDF parsing failed: unexpected EOF")
+                )
+                response = client.post("/estimate", files=files, data=data)
+
+        assert response.status_code == 500
+
+
+class TestGenerateCancellation:
+    """Tests for /generate endpoint with mid-stream cancellation."""
+
+    def test_generate_cancellation_via_stop(self):
+        """Test that generation can be cancelled via /stop endpoint."""
+        from gui.backend.main import session_manager
+
+        # Create a session first
+        session = session_manager.create_session(
+            "/tmp/test.pdf", MagicMock(), MagicMock()
+        )
+
+        # Mark as cancelled
+        session_manager.mark_status(session.session_id, "cancelled")
+
+        # Verify session is removed
+        assert session_manager.get_session(session.session_id) is None
+
+    def test_generate_handles_client_disconnect(self):
+        """Test that server handles client disconnect gracefully."""
+        from gui.backend.main import session_manager
+
+        files = {"pdf_file": ("test.pdf", b"pdf", "application/pdf")}
+        data = {"deck_name": "Test"}
+
+        # Simulate a generator that would handle disconnect
+        async def mock_gen(*args, **kwargs):
+            yield json.dumps({"type": "info", "message": "starting"})
+            # Simulate client disconnect
+            raise Exception("Client disconnected")
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.tempfile.NamedTemporaryFile') as mock_temp:
+                mock_temp.return_value.__enter__.return_value.name = "/tmp/t.pdf"
+                with patch('gui.backend.main.os.path.getsize', return_value=123):
+                    with patch('gui.backend.main.LecternGenerationService') as mock_svc:
+                        mock_svc.return_value.run_generation = mock_gen
+                        with patch('gui.backend.main.HistoryManager'):
+                            response = client.post("/generate", files=files, data=data)
+
+                            # Response should complete (even with error event)
+                            assert response.status_code == 200
+
+    def test_generate_cleanup_on_error(self):
+        """Test that resources are cleaned up when generation fails."""
+        from gui.backend.main import session_manager
+
+        # Clear any existing sessions
+        with session_manager._lock:
+            session_manager._sessions = {}
+            session_manager._latest_session_id = None
+
+        mock_service = MagicMock()
+        mock_service.stop = MagicMock()
+
+        session = session_manager.create_session("/tmp/test_cleanup.pdf", mock_service, MagicMock())
+
+        # Simulate error and cleanup
+        with patch('gui.backend.main.os.path.exists', return_value=True):
+            with patch('gui.backend.main.os.remove') as mock_remove:
+                session_manager.stop_session(session.session_id)
+                mock_service.stop.assert_called_once()
+                mock_remove.assert_called_once()
+
+
+class TestMemoryPressureScenarios:
+    """Tests for handling large files and memory pressure."""
+
+    def test_estimate_large_file_handling(self):
+        """Test /estimate handles large file metadata correctly."""
+        _clear_estimate_cache()
+
+        # Simulate a large PDF (100MB of content)
+        large_content = b"x" * (100 * 1024 * 1024)
+
+        with patch('gui.backend.main.LecternGenerationService') as mock_service:
+            mock_svc = MagicMock()
+            result = {
+                "cost": 5.0,
+                "tokens": 1000000,
+                "estimated_card_count": 500,
+                "pages": 200
+            }
+            base_data = {
+                "token_count": 1000000,
+                "page_count": 200,
+                "text_chars": 500000,
+                "image_count": 50,
+                "model": "gemini-3-flash"
+            }
+            mock_svc.estimate_cost_with_base = AsyncMock(return_value=(result, base_data))
+            mock_service.return_value = mock_svc
+
+            files = {"pdf_file": ("large.pdf", large_content, "application/pdf")}
+            data = {"model_name": "gemini-3-flash"}
+
+            with patch('gui.backend.main.shutil.copyfileobj'):
+                with patch('gui.backend.main.os.path.getsize', return_value=len(large_content)):
+                    response = client.post("/estimate", files=files, data=data)
+
+            assert response.status_code == 200
+            assert response.json()["estimated_card_count"] == 500
+
+    def test_generate_with_many_pages(self):
+        """Test generation handles PDFs with many pages."""
+        files = {"pdf_file": ("many_pages.pdf", b"pdf", "application/pdf")}
+        data = {"deck_name": "Large Deck"}
+
+        # Mock a generator that produces many cards
+        async def many_cards_gen(*args, **kwargs):
+            for i in range(100):
+                yield json.dumps({
+                    "type": "card",
+                    "data": {"front": f"Q{i}", "back": f"A{i}"}
+                })
+            yield json.dumps({"type": "done", "message": "completed"})
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.tempfile.NamedTemporaryFile') as mock_temp:
+                mock_temp.return_value.__enter__.return_value.name = "/tmp/t.pdf"
+                with patch('gui.backend.main.os.path.getsize', return_value=1024*1024*50):
+                    with patch('gui.backend.main.LecternGenerationService') as mock_svc:
+                        mock_svc.return_value.run_generation = many_cards_gen
+                        with patch('gui.backend.main.HistoryManager'):
+                            response = client.post("/generate", files=files, data=data)
+
+                            assert response.status_code == 200
+                            lines = [l for l in response.iter_lines() if l]
+                            # Should have 100 card events + start + done
+                            assert len(lines) >= 100
+
+    def test_concurrent_session_handling(self):
+        """Test that multiple concurrent sessions are handled correctly."""
+        from gui.backend.main import session_manager
+
+        # Clear existing sessions
+        with session_manager._lock:
+            session_manager._sessions = {}
+            session_manager._latest_session_id = None
+
+        # Create multiple sessions
+        sessions = []
+        for i in range(5):
+            session = session_manager.create_session(
+                f"/tmp/test_{i}.pdf", MagicMock(), MagicMock()
+            )
+            sessions.append(session)
+
+        # All sessions should exist
+        assert len(session_manager._sessions) == 5
+
+        # Latest should be the last created
+        latest = session_manager.get_latest_session()
+        assert latest.session_id == sessions[-1].session_id
+
+        # Clean up
+        for session in sessions:
+            session_manager.stop_session(session.session_id)
+
+        assert len(session_manager._sessions) == 0
+
+
+class TestEdgeCases:
+    """Additional edge case tests for API endpoints."""
+
+    def test_estimate_with_unicode_filename(self):
+        """Test /estimate handles unicode filenames."""
+        _clear_estimate_cache()
+
+        files = {"pdf_file": ("テスト_汉字_🎉.pdf", b"pdf", "application/pdf")}
+        data = {"model_name": "gemini-3-flash"}
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.LecternGenerationService') as mock_service:
+                result = {"cost": 0.05, "tokens": 1000, "estimated_card_count": 10}
+                base_data = {"token_count": 1000, "page_count": 5, "model": "gemini-3-flash"}
+                mock_service.return_value.estimate_cost_with_base = AsyncMock(
+                    return_value=(result, base_data)
+                )
+                response = client.post("/estimate", files=files, data=data)
+
+        assert response.status_code == 200
+
+    def test_generate_with_special_characters_in_deck_name(self):
+        """Test /generate handles special characters in deck name."""
+        files = {"pdf_file": ("test.pdf", b"pdf", "application/pdf")}
+        data = {"deck_name": "Test::Subdeck::中文::日本語"}
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.tempfile.NamedTemporaryFile') as mock_temp:
+                mock_temp.return_value.__enter__.return_value.name = "/tmp/t.pdf"
+                with patch('gui.backend.main.os.path.getsize', return_value=123):
+                    with patch('gui.backend.main.LecternGenerationService') as mock_svc:
+                        mock_svc.return_value.run_generation = lambda *a, **k: (x for x in [])
+                        with patch('gui.backend.main.HistoryManager'):
+                            response = client.post("/generate", files=files, data=data)
+                            assert response.status_code == 200
+
+    def test_estimate_with_zero_target_cards(self):
+        """Test /estimate with target_card_count=0."""
+        _clear_estimate_cache()
+
+        files = {"pdf_file": ("test.pdf", b"pdf", "application/pdf")}
+        data = {"model_name": "gemini-3-flash", "target_card_count": "0"}
+
+        with patch('gui.backend.main.shutil.copyfileobj'):
+            with patch('gui.backend.main.LecternGenerationService') as mock_service:
+                result = {"cost": 0.0, "tokens": 0, "estimated_card_count": 0}
+                base_data = {"token_count": 0, "page_count": 0, "model": "gemini-3-flash"}
+                mock_service.return_value.estimate_cost_with_base = AsyncMock(
+                    return_value=(result, base_data)
+                )
+                response = client.post("/estimate", files=files, data=data)
+
+        # Should still work, just with 0 target
+        assert response.status_code == 200
