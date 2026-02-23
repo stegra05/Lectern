@@ -19,31 +19,17 @@ import * as generationLogic from './logic/generation';
 import { processStreamEvent } from './logic/stream';
 import { stampUid, stampUids } from './utils/uid';
 
-const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
-const SESSION_SPEND_KEY = 'lectern_session_spend';
-const BUDGET_LIMIT_KEY = 'lectern_budget_limit';
-
-const getStoredNumber = (key: string, fallback: number): number => {
-  if (typeof window === 'undefined') return fallback;
-  const stored = localStorage.getItem(key);
-  if (stored === null) return fallback;
-  const parsed = parseFloat(stored);
-  return isNaN(parsed) ? fallback : parsed;
-};
-
-const getStored = <T>(key: string, fallback: T): T => {
-  if (typeof window === 'undefined') return fallback;
-  const stored = localStorage.getItem(key);
-  return (stored as T) || fallback;
-};
+import { persist } from 'zustand/middleware';
 
 const getGenerationState = () => ({
   step: 'dashboard' as Step,
   pdfFile: null,
   deckName: '',
+  availableDecks: [],
   focusPrompt: '',
-  sourceType: getStored('sourceType', 'auto') as 'auto' | 'slides' | 'script',
+  sourceType: 'auto' as 'auto' | 'slides' | 'script',
   targetDeckSize: 1,
+  densityPreferences: { per1k: null, perSlide: null },
   logs: [],
   progress: { current: 0, total: 0 },
   currentPhase: 'idle' as Phase,
@@ -81,20 +67,14 @@ const getReviewState = () => ({
 const getUiState = () => ({
   confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 },
   searchQuery: '',
-  sortBy: getStored<SortOption>('cardSortBy', 'creation'),
+  sortBy: 'creation' as SortOption,
   copied: false,
   toasts: [],
 });
 
 const getBudgetState = () => ({
-  totalSessionSpend: getStoredNumber(SESSION_SPEND_KEY, 0),
-  budgetLimit: (() => {
-    if (typeof window === 'undefined') return null;
-    const stored = localStorage.getItem(BUDGET_LIMIT_KEY);
-    if (stored === null || stored === 'null') return null;
-    const parsed = parseFloat(stored);
-    return isNaN(parsed) ? null : parsed;
-  })() as number | null,
+  totalSessionSpend: 0,
+  budgetLimit: null as number | null,
 });
 
 const getInitialState = (): StoreState => ({
@@ -116,8 +96,9 @@ const processSyncEvent = async (
 
   if (event.type === 'done') {
     const { isHistorical, sessionId } = get();
-    const failed = event.data?.failed || 0;
-    const created = event.data?.created || 0;
+    const data = (event.data || {}) as { failed?: number; created?: number };
+    const failed = data.failed || 0;
+    const created = data.created || 0;
 
     try {
       if (isHistorical && sessionId) {
@@ -170,19 +151,15 @@ const createGenerationActions = (
     isEstimating: false,
   }),
   setDeckName: (name) => set({ deckName: name }),
+  setAvailableDecks: (decks) => set({ availableDecks: decks }),
   setFocusPrompt: (prompt) => set({ focusPrompt: prompt }),
-  setSourceType: (type) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sourceType', type);
-    }
-    set({ sourceType: type });
-  },
+  setSourceType: (type) => set({ sourceType: type }),
   setTargetDeckSize: (target) => {
     const { estimation } = get();
     set({ targetDeckSize: target });
 
     // Persist preference if we have an estimation context
-    if (estimation && typeof window !== 'undefined') {
+    if (estimation) {
       const pageCount = estimation.pages || 1;
       const textChars = estimation.text_chars || 0;
       const avgChars = textChars / pageCount;
@@ -191,11 +168,11 @@ const createGenerationActions = (
       if (isScript) {
         // Preference: cards per 1k chars
         const per1k = (target / textChars) * 1000;
-        localStorage.setItem('lectern_pref_cards_per_1k', per1k.toFixed(2));
+        set((state) => ({ densityPreferences: { ...state.densityPreferences, per1k } }));
       } else {
         // Preference: cards per slide
         const perSlide = target / pageCount;
-        localStorage.setItem('lectern_pref_cards_per_slide', perSlide.toFixed(2));
+        set((state) => ({ densityPreferences: { ...state.densityPreferences, perSlide } }));
       }
     }
   },
@@ -203,57 +180,38 @@ const createGenerationActions = (
   setEstimationError: (error) => set({ estimationError: error }),
   setTotalPages: (n) => set({ totalPages: n }),
   recommendTargetDeckSize: (est) => {
-    // Auto-set target based on content type
-    // Script (>1500 chars/page) -> lower density (0.75 cards/1000 chars)
-    // Slides (<400 chars/page) -> higher density (1.5 cards/slide)
     set({ totalPages: est.pages });
 
-    // Only update if not manually set yet (or strictly 'auto')
-    if (typeof window !== 'undefined') {
-      const pageCount = est.pages || 1;
-      const textChars = est.text_chars || 0;
-      const avgChars = textChars / pageCount;
-      const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
+    const pageCount = est.pages || 1;
+    const textChars = est.text_chars || 0;
+    const avgChars = textChars / pageCount;
+    const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
 
-      let preferredTarget: number | null = null;
+    let preferredTarget: number | null = null;
+    const prefs = get().densityPreferences;
 
-      if (isScript) {
-        const stored = localStorage.getItem('lectern_pref_cards_per_1k');
-        if (stored) {
-          const per1k = parseFloat(stored);
-          if (!isNaN(per1k)) {
-            preferredTarget = Math.round((per1k * textChars) / 1000);
-          }
-        }
-      } else {
-        const stored = localStorage.getItem('lectern_pref_cards_per_slide');
-        if (stored) {
-          const perSlide = parseFloat(stored);
-          if (!isNaN(perSlide)) {
-            preferredTarget = Math.round(perSlide * pageCount);
-          }
-        }
+    if (isScript) {
+      if (prefs.per1k !== null) {
+        preferredTarget = Math.round((prefs.per1k * textChars) / 1000);
       }
-
-      if (preferredTarget !== null) {
-        // Clamp to min 1
-        set({ targetDeckSize: Math.max(1, preferredTarget) });
-      } else if (est.suggested_card_count) {
-        // Fallback to backend suggestion if no preference
-        set({ targetDeckSize: est.suggested_card_count });
+    } else {
+      if (prefs.perSlide !== null) {
+        preferredTarget = Math.round(prefs.perSlide * pageCount);
       }
+    }
+
+    if (preferredTarget !== null) {
+      // Clamp to min 1
+      set({ targetDeckSize: Math.max(1, preferredTarget) });
+    } else if (est.suggested_card_count) {
+      // Fallback to backend suggestion if no preference
+      set({ targetDeckSize: est.suggested_card_count });
     }
   },
   setIsEstimating: (value) => set({ isEstimating: value }),
   setIsError: (value) => set({ isError: value }),
   setIsCancelling: (value) => set({ isCancelling: value }),
-  setSessionId: (id) => {
-    if (typeof window !== 'undefined') {
-      if (id) localStorage.setItem(ACTIVE_SESSION_KEY, id);
-      else localStorage.removeItem(ACTIVE_SESSION_KEY);
-    }
-    set({ sessionId: id });
-  },
+  setSessionId: (id) => set({ sessionId: id }),
   setPhaseFromEvent: (event) =>
     set((state) => {
       if (event.type !== 'step_start') return state;
@@ -279,20 +237,10 @@ const createGenerationActions = (
     set((state) => ({
       cards: [...state.cards, stampUid(card)],
     })),
-  reset: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(ACTIVE_SESSION_KEY);
-    }
-    set(getInitialState());
-  },
+  reset: () => set(getInitialState()),
   handleGenerate: () => generationLogic.handleGenerate(set, get),
   handleCancel: () => generationLogic.handleCancel(set, get),
-  handleReset: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(ACTIVE_SESSION_KEY);
-    }
-    set(getInitialState());
-  },
+  handleReset: () => set(getInitialState()),
   handleCopyLogs: () => {
     const { logs } = get();
     const text = logs
@@ -527,12 +475,7 @@ const createUiActions = (
   set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void
 ): UiActions => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
-  setSortBy: (option) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('cardSortBy', option);
-    }
-    set({ sortBy: option });
-  },
+  setSortBy: (option) => set({ sortBy: option }),
 });
 
 let toastIdCounter = 0;
@@ -669,9 +612,9 @@ const createBatchActions = (
       } else {
         // Fallback for no session ID (shouldn't happen in valid state)
         for (const index of indicesToDelete) {
-           // This path is likely unreachable if sessionId is required for API
-           console.warn('No session ID for batch delete, falling back to sequential draft delete');
-           await api.deleteDraft(index);
+          // This path is likely unreachable if sessionId is required for API
+          console.warn('No session ID for batch delete, falling back to sequential draft delete');
+          await api.deleteDraft(index);
         }
       }
 
@@ -749,25 +692,12 @@ const createBudgetActions = (
 ): BudgetActions => ({
   addToSessionSpend: (amount) => {
     const newTotal = get().totalSessionSpend + amount;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SESSION_SPEND_KEY, newTotal.toString());
-    }
     set({ totalSessionSpend: newTotal });
   },
   resetSessionSpend: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SESSION_SPEND_KEY, '0');
-    }
     set({ totalSessionSpend: 0 });
   },
   setBudgetLimit: (limit) => {
-    if (typeof window !== 'undefined') {
-      if (limit === null) {
-        localStorage.removeItem(BUDGET_LIMIT_KEY);
-      } else {
-        localStorage.setItem(BUDGET_LIMIT_KEY, limit.toString());
-      }
-    }
     set({ budgetLimit: limit });
   },
   wouldExceedBudget: (amount) => {
@@ -779,13 +709,30 @@ const createBudgetActions = (
 
 
 
-export const useLecternStore = create<LecternStore>((set, get) => ({
-  ...getInitialState(),
-  ...createGenerationActions(set, get),
-  ...createReviewActions(set, get),
-  ...createUiActions(set),
-  ...createToastActions(set),
-  ...createProgressTrackingActions(set),
-  ...createBatchActions(set, get),
-  ...createBudgetActions(set, get),
-}));
+export const useLecternStore = create<LecternStore>()(
+  persist(
+    (set, get) => ({
+      ...getInitialState(),
+      ...createGenerationActions(set, get),
+      ...createReviewActions(set, get),
+      ...createUiActions(set),
+      ...createToastActions(set),
+      ...createProgressTrackingActions(set),
+      ...createBatchActions(set, get),
+      ...createBudgetActions(set, get),
+    }),
+    {
+      name: 'lectern-storage',
+      partialize: (state) => ({
+        sourceType: state.sourceType,
+        sortBy: state.sortBy,
+        sessionId: state.sessionId,
+        totalSessionSpend: state.totalSessionSpend,
+        budgetLimit: state.budgetLimit,
+        deckName: state.deckName,
+        availableDecks: state.availableDecks,
+        densityPreferences: state.densityPreferences,
+      }),
+    }
+  )
+);

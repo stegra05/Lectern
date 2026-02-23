@@ -4,6 +4,7 @@ import { Check, Plus, Folder, FolderOpen, Search, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../api';
 import { KeyboardBadge } from './KeyboardBadge';
+import { useLecternStore } from '../store';
 
 interface DeckSelectorProps {
     value: string;
@@ -146,37 +147,14 @@ const filterTreeBySearch = (
 
 export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const [inputValue, setInputValue] = useState(value);
-    const [availableDecks, setAvailableDecks] = useState<string[]>([]);
+    const availableDecks = useLecternStore((s) => s.availableDecks);
+    const setAvailableDecks = useLecternStore((s) => s.setAvailableDecks);
     const [isLoading, setIsLoading] = useState(false);
     const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
-
-    // Initial load & caching
-    useEffect(() => {
-        // Load cached decks first for instant UI
-        const cached = localStorage.getItem('lectern_cached_decks');
-        if (cached) {
-            try {
-                setAvailableDecks(JSON.parse(cached));
-            } catch (e) {
-                console.error('Failed to parse cached decks', e);
-            }
-        }
-
-        // Load last used deck if no value provided
-        if (!value) {
-            const lastUsed = localStorage.getItem('lectern_last_deck');
-            if (lastUsed) {
-                onChange(lastUsed);
-                setInputValue(lastUsed);
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     // Fetch decks (background update)
     const fetchDecks = async () => {
@@ -186,31 +164,21 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
             const res = await api.getDecks();
             if (res.decks && Array.isArray(res.decks)) {
                 setAvailableDecks(res.decks);
-                localStorage.setItem('lectern_cached_decks', JSON.stringify(res.decks));
             }
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Update input when value prop changes
-    useEffect(() => {
-        setInputValue(value);
-    }, [value]);
-
-    // Persist selection
+    // Handle selection
     const handleSelect = (deckName: string) => {
         onChange(deckName);
-        setInputValue(deckName);
         setIsOpen(false);
-        localStorage.setItem('lectern_last_deck', deckName);
     };
 
     // Handle input change
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newValue = e.target.value;
-        setInputValue(newValue);
-        onChange(newValue);
+        onChange(e.target.value);
         setIsOpen(true);
     };
 
@@ -228,7 +196,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
 
     // Create deck on blur or enter if it doesn't exist
     const handleCreateDeck = async () => {
-        const trimmed = inputValue.trim();
+        const trimmed = value.trim();
         if (!trimmed) return;
 
         // Basic validation
@@ -245,12 +213,10 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
 
                 await api.createDeck(trimmed);
                 handleSelect(trimmed);
-
-                // Update cache
-                localStorage.setItem('lectern_cached_decks', JSON.stringify(newDecks));
             } catch (e) {
                 console.error('Failed to create deck', e);
-                // Revert if failed (optional, but good UX)
+                // Revert if failed
+                setAvailableDecks(availableDecks.filter(d => d !== trimmed));
             }
         } else {
             handleSelect(trimmed);
@@ -265,13 +231,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
         }
     };
 
-    // Filtered decks for flat list view (fallback/search)
-    const filteredDecks = useMemo(() => {
-        if (!inputValue) return availableDecks;
-        return availableDecks.filter(d =>
-            d.toLowerCase().includes(inputValue.toLowerCase())
-        );
-    }, [availableDecks, inputValue]);
+
 
     // Tree generation for dropdown
     const deckTree = useMemo(() => buildDeckTree(availableDecks.sort()), [availableDecks]);
@@ -354,7 +314,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
     // Check if filtered tree has any nodes
     const hasFilteredResults = Object.keys(filteredTree).length > 0;
 
-    const isNewDeck = inputValue && !availableDecks.includes(inputValue);
+    const isNewDeck = value && !availableDecks.includes(value);
 
     return (
         <div ref={containerRef} className="relative group">
@@ -362,7 +322,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                 <input
                     ref={inputRef}
                     type="text"
-                    value={inputValue}
+                    value={value}
                     onChange={handleInputChange}
                     onFocus={() => {
                         setIsOpen(true);
@@ -443,7 +403,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                                 }}
                             >
                                 <Plus className="w-4 h-4" />
-                                <span>Create new deck "<strong>{inputValue}</strong>"</span>
+                                <span>Create new deck "<strong>{value}</strong>"</span>
                             </div>
                         )}
 

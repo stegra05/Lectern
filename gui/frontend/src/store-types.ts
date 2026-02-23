@@ -36,9 +36,11 @@ export type StoreState = {
     step: Step;
     pdfFile: File | null;
     deckName: string;
+    availableDecks: string[];
     focusPrompt: string;
     sourceType: 'auto' | 'slides' | 'script';
     targetDeckSize: number;
+    densityPreferences: { per1k: number | null; perSlide: number | null };
     logs: ProgressEvent[];
     cards: Card[];
     progress: { current: number; total: number };
@@ -67,6 +69,7 @@ export type StoreState = {
     // Batch operations
     isMultiSelectMode: boolean;
     selectedCards: Set<string>;
+    lastSelectedUid: string | null;
 
     // UI bits
     copied: boolean;
@@ -93,6 +96,7 @@ export type GenerationActions = {
     setStep: (step: Step) => void;
     setPdfFile: (file: File | null) => void;
     setDeckName: (name: string) => void;
+    setAvailableDecks: (decks: string[]) => void;
     setFocusPrompt: (prompt: string) => void;
     setSourceType: (type: 'auto' | 'slides' | 'script') => void;
     setTargetDeckSize: (target: number) => void;

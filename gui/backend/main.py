@@ -271,22 +271,6 @@ async def update_config(cfg: ConfigUpdate):
         try:
             from lectern.utils.keychain_manager import set_gemini_key
             set_gemini_key(cfg.gemini_api_key)
-            
-            # Remove from .env if present to avoid confusion/leaks (dev mode only)
-            def update_env():
-                # NOTE(Frozen): .env files are a dev concept — skip in bundled app to
-                # avoid accidentally modifying files outside the bundle directory.
-                if getattr(sys, 'frozen', False):
-                    return
-                env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
-                if os.path.exists(env_path):
-                    with open(env_path, "r") as f:
-                        lines = f.readlines()
-                    new_lines = [line for line in lines if not line.startswith("GEMINI_API_KEY=")]
-                    with open(env_path, "w") as f:
-                        f.writelines(new_lines)
-
-            await run_in_threadpool(update_env)
             updated_fields.append("gemini_api_key")
         except Exception as e:
             logger.error(f"Failed to update API key: {e}")

@@ -15,7 +15,6 @@ import { useAppState } from './hooks/useAppState';
 import { useLecternStore } from './store';
 import { useHistory } from './hooks/useHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { extractBase, recomputeCost, type EstimationBase } from './utils/recompute';
 
 import { HomeView } from './views/HomeView';
 import { ProgressView } from './views/ProgressView';
@@ -94,38 +93,19 @@ function App() {
   const cards = useLecternStore((s) => s.cards);
   const syncSuccess = useLecternStore((s) => s.syncSuccess);
 
-  const {
-    step,
-    pdfFile,
-    deckName,
-    focusPrompt,
-    sourceType,
-    targetDeckSize,
-    estimation,
-    isEstimating,
-    estimationError,
-    sessionId,
-    setPdfFile,
-    setDeckName,
-    setFocusPrompt,
-    setSourceType,
-    setTargetDeckSize,
-    setEstimation,
-    setIsEstimating,
-    setEstimationError,
-    handleGenerate,
-    handleReset,
-    loadSession,
-    recoverSessionOnRefresh,
-    refreshRecoveredSession,
-    recommendTargetDeckSize,
-    // Budget actions and state
-    totalSessionSpend,
-    budgetLimit,
-    resetSessionSpend,
-    setBudgetLimit,
-    wouldExceedBudget,
-  } = useLecternStore();
+  const step = useLecternStore((s) => s.step);
+  const sessionId = useLecternStore((s) => s.sessionId);
+  const handleGenerate = useLecternStore((s) => s.handleGenerate);
+  const handleReset = useLecternStore((s) => s.handleReset);
+  const loadSession = useLecternStore((s) => s.loadSession);
+  const recoverSessionOnRefresh = useLecternStore((s) => s.recoverSessionOnRefresh);
+  const refreshRecoveredSession = useLecternStore((s) => s.refreshRecoveredSession);
+
+  // Budget actions and state for settings
+  const totalSessionSpend = useLecternStore((s) => s.totalSessionSpend);
+  const budgetLimit = useLecternStore((s) => s.budgetLimit);
+  const resetSessionSpend = useLecternStore((s) => s.resetSessionSpend);
+  const setBudgetLimit = useLecternStore((s) => s.setBudgetLimit);
 
   const {
     history,
@@ -172,79 +152,9 @@ function App() {
     deleteCard: handleDelete,
   });
 
-  // NOTE(Estimation): Cache base data from initial estimate for instant slider recompute.
-  const estimationBaseRef = useRef<EstimationBase | null>(null);
-  const previousEstimateContextRef = useRef<string | null>(null);
-
-  // Effect 1: Initial estimate — fires on PDF or source type change only.
-  useEffect(() => {
-    const controller = new AbortController();
-    estimationBaseRef.current = null;
-
-    const fetchEstimate = async () => {
-      if (!pdfFile) {
-        setEstimation(null);
-        setIsEstimating(false);
-        return;
-      }
-      setIsEstimating(true);
-      setEstimationError(null);
-      try {
-        const est = await api.estimateCost(
-          pdfFile,
-          health?.gemini_model,
-          sourceType,
-          undefined, // No target_card_count — use backend default for initial estimate
-          controller.signal
-        );
-        if (!controller.signal.aborted && est) {
-          estimationBaseRef.current = extractBase(est);
-          setEstimation(est);
-        }
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') {
-          console.error(e);
-          if (!controller.signal.aborted) {
-            setEstimation(null);
-            const msg = (e as Error).message || 'Estimation failed';
-            setEstimationError(
-              msg.includes('500') ? 'Estimation failed — check your Gemini API key in Settings.' : `Estimation failed: ${msg}`
-            );
-          }
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsEstimating(false);
-        }
-      }
-    };
-    fetchEstimate();
-    return () => controller.abort();
-  }, [pdfFile, health?.gemini_model, sourceType, setEstimation, setIsEstimating, setEstimationError]);
-
-  // Effect 2: Slider recompute — instant client-side math, no loading state.
-  useEffect(() => {
-    const base = estimationBaseRef.current;
-    if (!base) return;
-
-    const updated = recomputeCost(base, targetDeckSize);
-    setEstimation(updated);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetDeckSize]);
-
-  useEffect(() => {
-    if (!pdfFile) {
-      previousEstimateContextRef.current = null;
-      return;
-    }
-    if (estimation?.suggested_card_count === undefined) return;
-
-    const contextKey = `${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}:${sourceType}`;
-    if (previousEstimateContextRef.current !== contextKey) {
-      recommendTargetDeckSize(estimation);
-      previousEstimateContextRef.current = contextKey;
-    }
-  }, [pdfFile, sourceType, estimation, recommendTargetDeckSize]);
+  // Estimation side effects have been moved to useEstimationLogic hook
+  // which is called by HomeView to prevent App.tsx from subscribing
+  // to estimation state changes and causing full app re-renders.
 
   useEffect(() => {
     recoverSessionOnRefresh();
@@ -316,160 +226,144 @@ function App() {
 
   return (
     <ErrorBoundary>
-    <div className="min-h-screen bg-background text-text-main font-sans selection:bg-primary/20 selection:text-primary transition-colors duration-300">
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden text-primary/5">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-current rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-500/5 rounded-full blur-[120px]" />
-      </div>
+      <div className="min-h-screen bg-background text-text-main font-sans selection:bg-primary/20 selection:text-primary transition-colors duration-300">
+        {/* Ambient Background */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden text-primary/5">
+          <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-current rounded-full blur-[120px]" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-500/5 rounded-full blur-[120px]" />
+        </div>
 
-      <div className="relative w-full max-w-[95%] mx-auto p-6 lg:p-8 pt-6 lg:pt-10">
-        <header className="mb-8 flex items-center justify-between">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex flex-col"
-          >
-            <button
-              onClick={() => {
-                if (step !== 'dashboard') {
-                  api.stopGeneration(sessionId ?? undefined);
-                  handleReset();
-                }
-              }}
-              className="group text-left transition-transform active:scale-95"
+        <div className="relative w-full max-w-[95%] mx-auto p-6 lg:p-8 pt-6 lg:pt-10">
+          <header className="mb-8 flex items-center justify-between">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex flex-col"
             >
-              <h1 className="text-5xl font-bold tracking-tight text-text-main group-hover:text-primary transition-colors">
-                Lectern<span className="text-primary group-hover:text-text-main transition-colors">.</span>
-              </h1>
-              <div className="flex items-center gap-2 mt-2">
-                <BookOpen className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
-                <p className="text-text-muted font-medium tracking-wide group-hover:text-primary/70 transition-colors uppercase text-xs">AI-POWERED ANKI GENERATOR</p>
+              <button
+                onClick={() => {
+                  if (step !== 'dashboard') {
+                    api.stopGeneration(sessionId ?? undefined);
+                    handleReset();
+                  }
+                }}
+                className="group text-left transition-transform active:scale-95"
+              >
+                <h1 className="text-5xl font-bold tracking-tight text-text-main group-hover:text-primary transition-colors">
+                  Lectern<span className="text-primary group-hover:text-text-main transition-colors">.</span>
+                </h1>
+                <div className="flex items-center gap-2 mt-2">
+                  <BookOpen className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
+                  <p className="text-text-muted font-medium tracking-wide group-hover:text-primary/70 transition-colors uppercase text-xs">AI-POWERED ANKI GENERATOR</p>
+                </div>
+              </button>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-6"
+            >
+              <div className="flex items-center gap-3">
+                <HealthStatus
+                  health={health}
+                  isChecking={isRefreshingStatus}
+                  onRefresh={refreshHealth}
+                  onAnkiClick={() => setIsAnkiHealthOpen(true)}
+                />
+                <button
+                  onClick={() => setIsHistoryOpen(true)}
+                  className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
+                  title="Recent Sessions"
+                >
+                  <Clock className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={toggleTheme}
+                  className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
+                  title="Toggle Theme"
+                >
+                  {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
+                  title="Settings"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
               </div>
-            </button>
-          </motion.div>
+            </motion.div>
+          </header>
 
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-6"
-          >
-            <div className="flex items-center gap-3">
-              <HealthStatus
-                health={health}
-                isChecking={isRefreshingStatus}
-                onRefresh={refreshHealth}
-                onAnkiClick={() => setIsAnkiHealthOpen(true)}
-              />
-              <button
-                onClick={() => setIsHistoryOpen(true)}
-                className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
-                title="Recent Sessions"
-              >
-                <Clock className="w-5 h-5" />
-              </button>
-              <button
-                onClick={toggleTheme}
-                className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
-                title="Toggle Theme"
-              >
-                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-              <button
-                onClick={() => setIsSettingsOpen(true)}
-                className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
-                title="Settings"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-            </div>
-          </motion.div>
-        </header>
+          <main className="relative">
+            <AnimatePresence mode="wait">
+              {showOnboarding ? (
+                <OnboardingFlow key="onboarding" onComplete={refreshHealth} />
+              ) : (step === 'dashboard' || step === 'config') ? (
+                <HomeView
+                  key="home"
+                  handleGenerate={handleGenerateWithConfirm}
+                  health={health}
+                />
+              ) : (
+                <ProgressView key="progress" />
+              )}
+            </AnimatePresence>
+          </main>
+        </div>
 
-        <main className="relative">
-          <AnimatePresence mode="wait">
-            {showOnboarding ? (
-              <OnboardingFlow key="onboarding" onComplete={refreshHealth} />
-            ) : (step === 'dashboard' || step === 'config') ? (
-              <HomeView
-                key="home"
-                pdfFile={pdfFile}
-                setPdfFile={setPdfFile}
-                deckName={deckName}
-                setDeckName={setDeckName}
-                sourceType={sourceType}
-                setSourceType={setSourceType}
-                targetDeckSize={targetDeckSize}
-                setTargetDeckSize={setTargetDeckSize}
-                focusPrompt={focusPrompt}
-                setFocusPrompt={setFocusPrompt}
-                estimation={estimation}
-                isEstimating={isEstimating}
-                estimationError={estimationError}
-                handleGenerate={handleGenerateWithConfirm}
-                health={health}
-                totalSessionSpend={totalSessionSpend}
-                budgetLimit={budgetLimit}
-                wouldExceedBudget={wouldExceedBudget}
-              />
-            ) : (
-              <ProgressView key="progress" />
-            )}
-          </AnimatePresence>
-        </main>
+        <HistoryModal
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          history={history}
+          clearAllHistory={clearAllHistory}
+          deleteHistoryEntry={deleteHistoryEntry}
+          batchDeleteHistory={batchDeleteHistory}
+          loadSession={loadSession}
+        />
+
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          totalSessionSpend={totalSessionSpend}
+          budgetLimit={budgetLimit}
+          onResetSessionSpend={resetSessionSpend}
+          onSetBudgetLimit={setBudgetLimit}
+        />
+
+        <KeyboardShortcutsModal
+          isOpen={isShortcutsModalOpen}
+          onClose={() => setIsShortcutsModalOpen(false)}
+          shortcuts={shortcuts}
+        />
+
+        <ConfirmDialog
+          isOpen={isUnsyncedConfirmOpen}
+          title="Unsynced Cards"
+          message={`You have ${cards.length} card${cards.length !== 1 ? 's' : ''} that haven't been synced to Anki. Starting a new session will discard these cards. Continue anyway?`}
+          confirmLabel="Start New Session"
+          cancelLabel="Cancel"
+          variant="warning"
+          onConfirm={handleConfirmGenerate}
+          onCancel={handleCancelGenerate}
+        />
+
+        <AnkiHealthPanel
+          isOpen={isAnkiHealthOpen}
+          onClose={() => setIsAnkiHealthOpen(false)}
+          onOpenSettings={() => {
+            setIsAnkiHealthOpen(false);
+            setIsSettingsOpen(true);
+          }}
+        />
+
+        <StoreToasts />
+
+
       </div>
-
-      <HistoryModal
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        history={history}
-        clearAllHistory={clearAllHistory}
-        deleteHistoryEntry={deleteHistoryEntry}
-        batchDeleteHistory={batchDeleteHistory}
-        loadSession={loadSession}
-      />
-
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        theme={theme}
-        toggleTheme={toggleTheme}
-        totalSessionSpend={totalSessionSpend}
-        budgetLimit={budgetLimit}
-        onResetSessionSpend={resetSessionSpend}
-        onSetBudgetLimit={setBudgetLimit}
-      />
-
-      <KeyboardShortcutsModal
-        isOpen={isShortcutsModalOpen}
-        onClose={() => setIsShortcutsModalOpen(false)}
-        shortcuts={shortcuts}
-      />
-
-      <ConfirmDialog
-        isOpen={isUnsyncedConfirmOpen}
-        title="Unsynced Cards"
-        message={`You have ${cards.length} card${cards.length !== 1 ? 's' : ''} that haven't been synced to Anki. Starting a new session will discard these cards. Continue anyway?`}
-        confirmLabel="Start New Session"
-        cancelLabel="Cancel"
-        variant="warning"
-        onConfirm={handleConfirmGenerate}
-        onCancel={handleCancelGenerate}
-      />
-
-      <AnkiHealthPanel
-        isOpen={isAnkiHealthOpen}
-        onClose={() => setIsAnkiHealthOpen(false)}
-        onOpenSettings={() => {
-          setIsAnkiHealthOpen(false);
-          setIsSettingsOpen(true);
-        }}
-      />
-
-      <StoreToasts />
-
-
-    </div>
     </ErrorBoundary>
   );
 }

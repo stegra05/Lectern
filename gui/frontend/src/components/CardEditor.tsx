@@ -118,46 +118,27 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 }) => {
     const [isPreviewMode, setIsPreviewMode] = useState(false);
     const [isFlipped, setIsFlipped] = useState(false);
-    const textareaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
 
-    // Get fields from card, handling both direct and nested field structures
+    // Get fields from card
     const fields = card.fields || {};
     const fieldEntries = Object.entries(fields);
-
-    // Get front/back for preview - try common field names
     const isCloze = (card.model_name || '').toLowerCase().includes('cloze');
-
     const getFrontContent = () => {
-        const raw = fields['Front'] || fields['Question'] || fields['Text'] || '';
-        return isCloze ? renderClozeFront(raw) : raw;
+        if (fieldEntries.length === 0) return '';
+        const rawFront = fieldEntries[0][1];
+        return isCloze ? renderClozeFront(String(rawFront)) : String(rawFront);
     };
 
     const getBackContent = () => {
-        const raw = fields['Back'] || fields['Answer'] || '';
-        if (isCloze) {
-            const rawText = fields['Text'] || '';
-            return renderClozeBack(rawText);
-        }
-        return raw;
+        if (fieldEntries.length === 0) return '';
+        if (isCloze) return renderClozeBack(String(fieldEntries[0][1]));
+        const rawBack = fieldEntries.length > 1 ? fieldEntries[1][1] : fieldEntries[0][1];
+        return String(rawBack);
     };
 
-    // Handle Tab key to move between fields instead of inserting tab
+    // Use browser defaults for Tab handling. Only listen for Cmd+Enter to save and Esc to cancel.
     const handleKeyDown = useCallback(
-        (e: KeyboardEvent<HTMLTextAreaElement>, currentField: string) => {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-
-                const currentIndex = fieldEntries.findIndex(([key]) => key === currentField);
-                const direction = e.shiftKey ? -1 : 1;
-                const nextIndex = (currentIndex + direction + fieldEntries.length) % fieldEntries.length;
-
-                if (nextIndex !== currentIndex) {
-                    const nextField = fieldEntries[nextIndex][0];
-                    const nextTextarea = textareaRefs.current.get(nextField);
-                    nextTextarea?.focus();
-                }
-            }
-
+        (e: KeyboardEvent<HTMLTextAreaElement>) => {
             // Cmd/Ctrl + Enter to save
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -170,16 +151,8 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                 onCancel();
             }
         },
-        [fieldEntries, onSave, onCancel]
+        [onSave, onCancel]
     );
-
-    const setTextareaRef = (field: string) => (el: HTMLTextAreaElement | null) => {
-        if (el) {
-            textareaRefs.current.set(field, el);
-        } else {
-            textareaRefs.current.delete(field);
-        }
-    };
 
     const togglePreview = () => {
         setIsPreviewMode(!isPreviewMode);
@@ -298,10 +271,9 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                                     <CharCount field={key} count={String(value).length} />
                                 </div>
                                 <textarea
-                                    ref={setTextareaRef(key)}
                                     value={String(value)}
                                     onChange={(e) => onChange(key, e.target.value)}
-                                    onKeyDown={(e) => handleKeyDown(e, key)}
+                                    onKeyDown={handleKeyDown}
                                     disabled={isSaving}
                                     className={clsx(
                                         "w-full bg-background border border-border rounded-lg p-3",
