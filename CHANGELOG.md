@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-02-23
+
+### Added
+- New **Anki Health Panel** for real-time connection diagnostics and troubleshooting
+- Enhanced `AnkiConnector` with robust health checks and better version validation
+- Improved `LecternAIClient` token management and model profile configuration
+
+### Changed
+- Refined state management in `store.ts` for connection status tracking
+- Finalized migration of configuration management to a singleton pattern
+- UI updates in `ProgressView.tsx` for cleaner health reporting
+
 ## [1.7.0] - 2026-02-23
 
 ### Added
