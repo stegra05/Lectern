@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Plus, Folder, FolderOpen, Search, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../api';
+import { KeyboardBadge } from './KeyboardBadge';
 
 interface DeckSelectorProps {
     value: string;
@@ -378,6 +379,10 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                 />
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                     <Folder className="w-5 h-5" />
+                </div>
+
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                    <KeyboardBadge shortcut="⌘K" className="text-xs" />
                 </div>
 
                 {isLoading && (

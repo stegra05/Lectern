@@ -82,6 +82,7 @@ export type StoreState = {
 
     // Undo buffer for deleted cards
     deletedCards: DeletedCardBuffer[];
+    batchDeletedCards: DeletedCardBuffer[];
 
     // Budget tracking
     totalSessionSpend: number;
@@ -148,6 +149,8 @@ export type BatchActions = {
     selectAllCards: () => void;
     clearSelection: () => void;
     batchDeleteSelected: () => Promise<void>;
+    undoBatchDelete: () => void;
+    clearBatchDeletedCard: (cardUid: string) => void;
 };
 
 export type ToastActions = {

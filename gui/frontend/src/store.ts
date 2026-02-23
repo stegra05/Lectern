@@ -72,6 +72,7 @@ const getReviewState = () => ({
   syncProgress: { current: 0, total: 0 },
   syncLogs: [],
   deletedCards: [] as import('./store-types').DeletedCardBuffer[],
+  batchDeletedCards: [] as import('./store-types').DeletedCardBuffer[],
   isMultiSelectMode: false,
   selectedCards: new Set<string>(),
 });
@@ -160,7 +161,13 @@ const createGenerationActions = (
   get: () => LecternStore
 ): GenerationActions => ({
   setStep: (step) => set({ step }),
-  setPdfFile: (file) => set({ pdfFile: file }),
+  setPdfFile: (file) => set({
+    pdfFile: file,
+    // Reset estimation state when file changes to prevent stale data
+    estimation: null,
+    estimationError: null,
+    isEstimating: false,
+  }),
   setDeckName: (name) => set({ deckName: name }),
   setFocusPrompt: (prompt) => set({ focusPrompt: prompt }),
   setSourceType: (type) => {
@@ -597,7 +604,7 @@ const createBatchActions = (
     set({ selectedCards: new Set() });
   },
   batchDeleteSelected: async () => {
-    const { cards, selectedCards } = get();
+    const { cards, selectedCards, batchDeletedCards } = get();
     const sessionId = resolveSessionId(get);
 
     if (selectedCards.size === 0) return;
@@ -627,21 +634,71 @@ const createBatchActions = (
         }
       }
 
-      // Update local state
-      const newCards = cards.filter((c) => !c._uid || !selectedCards.has(c._uid));
+      // Store deleted cards in buffer for undo
+      const deletedCardsBuffer: import('./store-types').DeletedCardBuffer[] = indicesToDelete.map(index => {
+        const card = cards[index];
+        const timeoutId = setTimeout(() => {
+          get().clearBatchDeletedCard(card._uid || '');
+        }, 30000);
+
+        return {
+          card,
+          originalIndex: index,
+          deletedAt: Date.now(),
+          timeoutId,
+        };
+      });
 
       set((state) => ({
-        cards: newCards,
+        cards: cards.filter((c) => !c._uid || !selectedCards.has(c._uid)),
         selectedCards: new Set(),
         isMultiSelectMode: false,
+        batchDeletedCards: [...batchDeletedCards, ...deletedCardsBuffer],
         confirmModal: { ...state.confirmModal, isOpen: false },
       }));
 
-      get().addToast('info', `${indicesToDelete.length} card${indicesToDelete.length !== 1 ? 's' : ''} removed`);
+      get().addToast(
+        'info',
+        `${indicesToDelete.length} card${indicesToDelete.length !== 1 ? 's' : ''} removed`,
+        30000,
+        () => get().undoBatchDelete(),
+        'Undo'
+      );
     } catch (e) {
       console.error('Failed to batch delete cards', e);
       get().addToast('error', 'Failed to delete selected cards');
     }
+  },
+  undoBatchDelete: () => {
+    const { batchDeletedCards } = get();
+    if (batchDeletedCards.length === 0) return;
+
+    // Clear all timeouts
+    batchDeletedCards.forEach(entry => {
+      if (entry.timeoutId) {
+        clearTimeout(entry.timeoutId);
+      }
+    });
+
+    // Get current cards
+    const { cards } = get();
+    const newCards = [...cards];
+
+    // Restore all deleted cards in their original positions
+    batchDeletedCards.sort((a, b) => b.originalIndex - a.originalIndex);
+    batchDeletedCards.forEach(entry => {
+      const insertIndex = entry.originalIndex >= 0 && entry.originalIndex <= newCards.length
+        ? entry.originalIndex
+        : newCards.length;
+      newCards.splice(insertIndex, 0, entry.card);
+    });
+
+    set({ cards: newCards, batchDeletedCards: [] });
+  },
+  clearBatchDeletedCard: (cardUid: string) => {
+    set((state) => ({
+      batchDeletedCards: state.batchDeletedCards.filter((e) => e.card._uid !== cardUid),
+    }));
   },
 });
 

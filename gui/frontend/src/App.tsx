@@ -374,43 +374,30 @@ function App() {
           <AnimatePresence mode="wait">
             {showOnboarding ? (
               <OnboardingFlow key="onboarding" onComplete={refreshHealth} />
+            ) : (step === 'dashboard' || step === 'config') ? (
+              <HomeView
+                key="home"
+                pdfFile={pdfFile}
+                setPdfFile={setPdfFile}
+                deckName={deckName}
+                setDeckName={setDeckName}
+                sourceType={sourceType}
+                setSourceType={setSourceType}
+                targetDeckSize={targetDeckSize}
+                setTargetDeckSize={setTargetDeckSize}
+                focusPrompt={focusPrompt}
+                setFocusPrompt={setFocusPrompt}
+                estimation={estimation}
+                isEstimating={isEstimating}
+                estimationError={estimationError}
+                handleGenerate={handleGenerateWithConfirm}
+                health={health}
+                totalSessionSpend={totalSessionSpend}
+                budgetLimit={budgetLimit}
+                wouldExceedBudget={wouldExceedBudget}
+              />
             ) : (
-              <motion.div
-                key="content"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-              >
-                <AnimatePresence mode="wait">
-                  {(step === 'dashboard' || step === 'config') && (
-                    <HomeView
-                      key="home"
-                      pdfFile={pdfFile}
-                      setPdfFile={setPdfFile}
-                      deckName={deckName}
-                      setDeckName={setDeckName}
-                      sourceType={sourceType}
-                      setSourceType={setSourceType}
-                      targetDeckSize={targetDeckSize}
-                      setTargetDeckSize={setTargetDeckSize}
-                      focusPrompt={focusPrompt}
-                      setFocusPrompt={setFocusPrompt}
-                      estimation={estimation}
-                      isEstimating={isEstimating}
-                      estimationError={estimationError}
-                      handleGenerate={handleGenerateWithConfirm}
-                      health={health}
-                      totalSessionSpend={totalSessionSpend}
-                      budgetLimit={budgetLimit}
-                      wouldExceedBudget={wouldExceedBudget}
-                    />
-                  )}
-
-                  {(step === 'generating' || step === 'done') && (
-                    <ProgressView key="progress" />
-                  )}
-                </AnimatePresence>
-              </motion.div>
+              <ProgressView key="progress" />
             )}
           </AnimatePresence>
         </main>

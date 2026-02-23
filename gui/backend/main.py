@@ -34,6 +34,7 @@ from starlette.concurrency import run_in_threadpool
 
 from lectern.anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes
 from lectern import config
+from lectern.config import ConfigManager
 from service import GenerationService, DraftStore
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
 from lectern.utils.note_export import export_card_to_anki
@@ -302,18 +303,19 @@ async def update_config(cfg: ConfigUpdate):
     
     if json_updates:
         try:
-            config.save_user_config(json_updates)
+            # Use ConfigManager to persist and get live values
+            mgr = ConfigManager.instance()
+            for key, value in json_updates.items():
+                mgr.set(key, value)
         except Exception as e:
             logger.error(f"Failed to save user config: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-    
-    # Reload config module to reflect changes immediately
+
+    # Invalidate the note-export model cache so new values are picked up
     if updated_fields:
-        from importlib import reload
-        reload(config)
-        # Also invalidate the note-export model cache
         from lectern.utils import note_export as _ne
         _ne._anki_models_cache = None
+        _ne._detected_builtins_cache = None
         result: dict = {"status": "updated", "fields": updated_fields}
         if warnings:
             result["warnings"] = warnings
@@ -552,6 +554,7 @@ async def generate_cards(
     }
 
     async def event_generator():
+        card_count = 0  # Track number of cards generated
         yield event_json(
             "session_start",
             "Session started",
@@ -574,11 +577,21 @@ async def generate_cards(
                 try:
                     parsed = json.loads(event_str)
                     event_type = parsed.get("type")
+                    # Track card count
+                    if event_type == "card":
+                        card_count += 1
                     if event_type in status_handlers:
                         status, cleanup = status_handlers[event_type]
                         session_manager.mark_status(session.session_id, status)
                         if cleanup:
                             session_manager.cleanup_temp_file(session.session_id)
+                        # Update history entry with card count on done
+                        if event_type == "done":
+                            history_mgr.update_entry(
+                                entry_id=entry_id,
+                                status="generated",
+                                card_count=card_count
+                            )
                 except Exception:
                     pass
         except Exception as e:
@@ -708,8 +721,8 @@ class SessionCardsUpdate(BaseModel):
 @app.get("/session/{session_id}")
 async def get_session(session_id: str):
     state = load_state(session_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found")
+    if state is None:
+        return {"cards": [], "session_id": session_id, "not_found": True}
     return state
 
 @app.get("/session/{session_id}/status")

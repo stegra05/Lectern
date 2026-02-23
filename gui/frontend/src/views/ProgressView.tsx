@@ -10,6 +10,7 @@ import { SidebarPane } from '../components/SidebarPane';
 import { CardEditor } from '../components/CardEditor';
 import { BatchActionBar } from '../components/BatchActionBar';
 import { FocusMode } from '../components/FocusMode';
+import { CardSkeleton } from '../components/CardSkeleton';
 import { useLecternStore } from '../store';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
 import { getCardSlideNumber } from '../utils/cardMetadata';
@@ -903,6 +904,16 @@ export function ProgressView() {
                             )}
                         </div>
                     )}
+                    {/* Loading skeletons */}
+                    {currentPhase === 'generating' && cards.length === 0 && (
+                        <div className="space-y-4">
+                            {[1, 2, 3].map((i) => (
+                                <CardSkeleton key={i} />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Actual cards */}
                     <div className="space-y-4">
                         {sortedCards.map((card, i) => {
                             const stableKey = card._uid || `card-fallback-${i}`;

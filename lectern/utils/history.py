@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -10,6 +11,8 @@ from pathlib import Path
 from lectern.utils.path_utils import get_app_data_dir
 
 logger = logging.getLogger(__name__)
+
+MAX_HISTORY_ENTRIES = 500
 
 def get_history_file_path() -> str:
     """
@@ -31,8 +34,137 @@ HISTORY_FILE = get_history_file_path()
 class HistoryManager:
     def __init__(self, history_file: str = HISTORY_FILE):
         self.history_file = history_file
+        self._lock = threading.Lock()
 
     def _load(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            if not os.path.exists(self.history_file):
+                return []
+            try:
+                with open(self.history_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                logger.warning("Failed to load history file: %s", self.history_file)
+                return []
+
+    def _save(self, history: List[Dict[str, Any]]) -> bool:
+        with self._lock:
+            try:
+                # Truncate to prevent infinite growth
+                if len(history) > MAX_HISTORY_ENTRIES:
+                    history = history[-MAX_HISTORY_ENTRIES:]
+                with open(self.history_file, "w", encoding="utf-8") as f:
+                    json.dump(history, f, ensure_ascii=False)
+                return True
+            except Exception:
+                logger.exception("Failed to save history file: %s", self.history_file)
+                return False
+
+    def get_all(self) -> List[Dict[str, Any]]:
+        """Return all history entries, sorted by most recent activity desc."""
+        with self._lock:
+            history = self._load_unlocked()
+            history.sort(key=lambda x: x.get("last_modified", x.get("date", "")), reverse=True)
+            return history
+
+    def add_entry(self,
+                  filename: str,
+                  deck: str,
+                  session_id: Optional[str] = None,
+                  status: str = "draft") -> str:
+        """Create a new history entry and return its ID."""
+        with self._lock:
+            history = self._load_unlocked()
+            entry_id = str(uuid.uuid4())
+            # If no session_id provided, default to entry_id (legacy behavior)
+            final_session_id = session_id if session_id else entry_id
+
+            entry = {
+                "id": entry_id,
+                "session_id": final_session_id,  # Explicit link to state file
+                "filename": os.path.basename(filename),
+                "full_path": os.path.abspath(filename),
+                "deck": deck,
+                "date": datetime.now().isoformat(),
+                "card_count": 0,
+                "status": status
+            }
+            history.insert(0, entry)
+            if not self._save_unlocked(history):
+                logger.warning("History entry not persisted: %s", entry_id)
+            return entry_id
+
+    def update_entry(self,
+                     entry_id: str,
+                     status: Optional[str] = None,
+                     card_count: Optional[int] = None) -> None:
+        """Update an existing history entry."""
+        with self._lock:
+            history = self._load_unlocked()
+            for entry in history:
+                if entry["id"] == entry_id:
+                    if status is not None:
+                        entry["status"] = status
+                    if card_count is not None:
+                        entry["card_count"] = card_count
+                    entry["last_modified"] = datetime.now().isoformat()
+                    break
+            if not self._save_unlocked(history):
+                logger.warning("History update not persisted: %s", entry_id)
+
+    def get_entry(self, entry_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            history = self._load_unlocked()
+            for entry in history:
+                if entry["id"] == entry_id:
+                    return entry
+            return None
+
+    def get_entry_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Find a history entry by its session_id field."""
+        with self._lock:
+            history = self._load_unlocked()
+            for entry in history:
+                if entry.get("session_id") == session_id:
+                    return entry
+            return None
+
+    def delete_entry(self, entry_id: str) -> bool:
+        """Delete a specific history entry by ID."""
+        with self._lock:
+            history = self._load_unlocked()
+            initial_len = len(history)
+            history = [e for e in history if e["id"] != entry_id]
+            if len(history) < initial_len:
+                return self._save_unlocked(history)
+            return False
+
+    def delete_entries(self, entry_ids: List[str]) -> int:
+        """Delete multiple history entries by ID. Returns count of deleted entries."""
+        with self._lock:
+            history = self._load_unlocked()
+            id_set = set(entry_ids)
+            original_len = len(history)
+            history = [e for e in history if e["id"] not in id_set]
+            deleted = original_len - len(history)
+            if deleted > 0:
+                self._save_unlocked(history)
+            return deleted
+
+    def get_entries_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """Return all history entries matching the given status."""
+        with self._lock:
+            history = self._load_unlocked()
+            return [e for e in history if e.get("status") == status]
+
+    def clear_all(self) -> None:
+        """Clear all history entries."""
+        with self._lock:
+            if not self._save_unlocked([]):
+                logger.warning("Failed to clear history file: %s", self.history_file)
+
+    def _load_unlocked(self) -> List[Dict[str, Any]]:
+        """Load history without acquiring lock. Must be called with lock held."""
         if not os.path.exists(self.history_file):
             return []
         try:
@@ -42,105 +174,15 @@ class HistoryManager:
             logger.warning("Failed to load history file: %s", self.history_file)
             return []
 
-    def _save(self, history: List[Dict[str, Any]]) -> bool:
+    def _save_unlocked(self, history: List[Dict[str, Any]]) -> bool:
+        """Save history without acquiring lock. Must be called with lock held."""
         try:
+            # Truncate to prevent infinite growth
+            if len(history) > MAX_HISTORY_ENTRIES:
+                history = history[-MAX_HISTORY_ENTRIES:]
             with open(self.history_file, "w", encoding="utf-8") as f:
                 json.dump(history, f, ensure_ascii=False)
             return True
         except Exception:
             logger.exception("Failed to save history file: %s", self.history_file)
             return False
-
-    def get_all(self) -> List[Dict[str, Any]]:
-        """Return all history entries, sorted by most recent activity desc."""
-        history = self._load()
-        history.sort(key=lambda x: x.get("last_modified", x.get("date", "")), reverse=True)
-        return history
-
-    def add_entry(self, 
-                  filename: str, 
-                  deck: str, 
-                  session_id: Optional[str] = None,
-                  status: str = "draft") -> str:
-        """Create a new history entry and return its ID."""
-        history = self._load()
-        entry_id = str(uuid.uuid4())
-        # If no session_id provided, default to entry_id (legacy behavior)
-        final_session_id = session_id if session_id else entry_id
-        
-        entry = {
-            "id": entry_id,
-            "session_id": final_session_id,  # Explicit link to state file
-            "filename": os.path.basename(filename),
-            "full_path": os.path.abspath(filename),
-            "deck": deck,
-            "date": datetime.now().isoformat(),
-            "card_count": 0,
-            "status": status
-        }
-        history.insert(0, entry)
-        if not self._save(history):
-            logger.warning("History entry not persisted: %s", entry_id)
-        return entry_id
-
-    def update_entry(self, 
-                     entry_id: str, 
-                     status: Optional[str] = None, 
-                     card_count: Optional[int] = None) -> None:
-        """Update an existing history entry."""
-        history = self._load()
-        for entry in history:
-            if entry["id"] == entry_id:
-                if status is not None:
-                    entry["status"] = status
-                if card_count is not None:
-                    entry["card_count"] = card_count
-                entry["last_modified"] = datetime.now().isoformat()
-                break
-        if not self._save(history):
-            logger.warning("History update not persisted: %s", entry_id)
-
-    def get_entry(self, entry_id: str) -> Optional[Dict[str, Any]]:
-        history = self._load()
-        for entry in history:
-            if entry["id"] == entry_id:
-                return entry
-        return None
-
-    def get_entry_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Find a history entry by its session_id field."""
-        history = self._load()
-        for entry in history:
-            if entry.get("session_id") == session_id:
-                return entry
-        return None
-
-    def delete_entry(self, entry_id: str) -> bool:
-        """Delete a specific history entry by ID."""
-        history = self._load()
-        initial_len = len(history)
-        history = [e for e in history if e["id"] != entry_id]
-        if len(history) < initial_len:
-            return self._save(history)
-        return False
-
-    def delete_entries(self, entry_ids: List[str]) -> int:
-        """Delete multiple history entries by ID. Returns count of deleted entries."""
-        history = self._load()
-        id_set = set(entry_ids)
-        original_len = len(history)
-        history = [e for e in history if e["id"] not in id_set]
-        deleted = original_len - len(history)
-        if deleted > 0:
-            self._save(history)
-        return deleted
-
-    def get_entries_by_status(self, status: str) -> List[Dict[str, Any]]:
-        """Return all history entries matching the given status."""
-        history = self._load()
-        return [e for e in history if e.get("status") == status]
-
-    def clear_all(self) -> None:
-        """Clear all history entries."""
-        if not self._save([]):
-            logger.warning("Failed to clear history file: %s", self.history_file)

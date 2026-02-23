@@ -4,6 +4,9 @@ Configuration module for the Lectern application.
 This module centralizes configuration values such as API keys and service
 endpoints. Secrets are read from environment variables to avoid hardcoding
 them in the repository.
+
+Uses ConfigManager singleton for runtime configuration management to avoid
+hot-reload issues with module-level constants.
 """
 
 from __future__ import annotations
@@ -26,121 +29,180 @@ from lectern.utils.keychain_manager import get_gemini_key
 
 logger = logging.getLogger(__name__)
 
-def _load_environment_files() -> None:
-    """Load environment variables from project .env and fallback to home .env.
 
-    - First tries `.env` in the project root (current working directory).
-    - Then tries `~/.env` as a fallback if not already set.
+# --- ConfigManager Singleton ---
+
+class ConfigManager:
+    """Singleton configuration manager for Lectern.
+
+    Replaces module-level constants to fix hot-reload issues. Provides:
+    - get(key, default): Retrieve config value with fallback
+    - set(key, value): Update config value and persist to disk
+    - instance(): Class method to get the singleton instance
+
+    Priority order: Environment Variable > User Config (JSON) > Default
     """
 
+    _instance: Optional["ConfigManager"] = None
+
+    # Default values for all configurable keys
+    _DEFAULTS: Dict[str, Any] = {
+        "gemini_model": "gemini-3-flash-preview",
+        "lightweight_model": "gemini-3-flash-preview",
+        "anki_url": "http://localhost:8765",
+        "basic_model": "Basic",
+        "cloze_model": "Cloze",
+        "tag_template": "{{deck}}::{{slide_set}}::{{topic}}",
+    }
+
+    # Environment variable name mappings
+    _ENV_MAPPINGS = {
+        "gemini_model": "DEFAULT_GEMINI_MODEL",
+        "lightweight_model": "LIGHTWEIGHT_MODEL",
+        "anki_url": "ANKI_CONNECT_URL",
+        "basic_model": "BASIC_MODEL_NAME",
+        "cloze_model": "CLOZE_MODEL_NAME",
+        "tag_template": "TAG_TEMPLATE",
+    }
+
+    def __init__(self) -> None:
+        """Initialize config manager. Called once via instance()."""
+        self._config: Dict[str, Any] = {}
+        self._config_path = get_app_data_dir() / "user_config.json"
+        self._legacy_config_path = Path(__file__).resolve().parent / "user_config.json"
+        self._load()
+
+    @classmethod
+    def instance(cls) -> "ConfigManager":
+        """Get the singleton ConfigManager instance."""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    @classmethod
+    def _reset_instance(cls) -> None:
+        """Reset the singleton instance. Only for testing."""
+        cls._instance = None
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get config value with priority: Env Var > User Config > Default.
+
+        Args:
+            key: Config key in snake_case (e.g., "gemini_model")
+            default: Fallback value if key not found anywhere
+
+        Returns:
+            Config value from env var, user config, or default
+        """
+        # 1. Check environment variable first (highest priority)
+        env_key = self._ENV_MAPPINGS.get(key, key.upper())
+        env_val = os.getenv(env_key)
+        if env_val is not None:
+            return env_val
+
+        # 2. Check user config
+        if key in self._config:
+            return self._config[key]
+
+        # 3. Return default
+        if default is not None:
+            return default
+        return self._DEFAULTS.get(key)
+
+    def set(self, key: str, value: Any) -> None:
+        """Set config value and persist to disk.
+
+        Args:
+            key: Config key in snake_case (e.g., "anki_url")
+            value: Value to set (must be JSON-serializable)
+        """
+        self._config[key] = value
+        self._save()
+
+    def get_all(self) -> Dict[str, Any]:
+        """Get all user config values."""
+        return dict(self._config)
+
+    def _load(self) -> None:
+        """Load configuration from JSON file."""
+        self._prepare_config_path()
+        if self._config_path.exists():
+            try:
+                with open(self._config_path, "r", encoding="utf-8") as f:
+                    self._config = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load user_config.json: {e}")
+                self._config = {}
+
+    def _save(self) -> None:
+        """Save configuration to JSON file."""
+        try:
+            self._prepare_config_path()
+            with open(self._config_path, "w", encoding="utf-8") as f:
+                json.dump(self._config, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save user_config.json: {e}")
+
+    def _prepare_config_path(self) -> None:
+        """Ensure config directory exists and migrate from legacy path."""
+        try:
+            self._config_path.parent.mkdir(parents=True, exist_ok=True)
+            if self._legacy_config_path.exists() and not self._config_path.exists():
+                shutil.copy2(self._legacy_config_path, self._config_path)
+        except Exception as e:
+            logger.warning(f"Failed to prepare user_config.json path: {e}")
+
+
+# --- Helper Functions ---
+
+def _load_environment_files() -> None:
+    """Load environment variables from project .env and fallback to home .env."""
     if load_dotenv is None:
         return
-
-    # Load from CWD/project root if present
     load_dotenv(override=False)
-
-    # Fallback to ~/.env for users who prefer global secrets
     home_env_path = os.path.join(os.path.expanduser("~"), ".env")
     if os.path.exists(home_env_path):
         load_dotenv(dotenv_path=home_env_path, override=False)
 
-# Load env files before reading values
+
+# Load env files at module init
 _load_environment_files()
 
-# --- User Config (JSON) Loading ---
-
-_CONFIG_DIR = Path(__file__).resolve().parent
-_LEGACY_USER_CONFIG_PATH = _CONFIG_DIR / "user_config.json"
-_USER_CONFIG_PATH = get_app_data_dir() / "user_config.json"
-_USER_CONFIG: Dict[str, Any] = {}
-
-
-def _prepare_user_config_path() -> None:
-    """Ensure user config path exists and migrate from legacy path once."""
-    try:
-        _USER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        if _LEGACY_USER_CONFIG_PATH.exists() and not _USER_CONFIG_PATH.exists():
-            shutil.copy2(_LEGACY_USER_CONFIG_PATH, _USER_CONFIG_PATH)
-    except Exception as e:
-        logger.warning(f"Warning: Failed to prepare user_config.json path: {e}")
-
-def _load_user_config() -> Dict[str, Any]:
-    """Load user configuration from JSON file if it exists."""
-    global _USER_CONFIG
-    _prepare_user_config_path()
-    if os.path.exists(_USER_CONFIG_PATH):
-        try:
-            with open(_USER_CONFIG_PATH, "r", encoding="utf-8") as f:
-                _USER_CONFIG = json.load(f)
-        except Exception as e:
-            logger.warning(f"Warning: Failed to load user_config.json: {e}")
-            _USER_CONFIG = {}
-    return _USER_CONFIG
 
 def save_user_config(config: Dict[str, Any]) -> None:
-    """Save user configuration to JSON file."""
-    global _USER_CONFIG
-    _USER_CONFIG.update(config)
-    try:
-        _prepare_user_config_path()
-        with open(_USER_CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(_USER_CONFIG, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Warning: Failed to save user_config.json: {e}")
-
-def _get_config(key: str, default: Any, env_key: Optional[str] = None) -> Any:
-    """Get config value with priority: Env Var > User Config > Default."""
-    # 1. Check environment variable
-    env_name = env_key or key.upper()
-    env_val = os.getenv(env_name)
-    if env_val is not None:
-        return env_val
-    # 2. Check user config
-    if key in _USER_CONFIG:
-        return _USER_CONFIG[key]
-    # 3. Return default
-    return default
-
-# Load user config at module init
-_load_user_config()
+    """Save user configuration to JSON file. Delegates to ConfigManager."""
+    mgr = ConfigManager.instance()
+    for key, value in config.items():
+        mgr.set(key, value)
 
 
-# Google Gemini API key. Must be provided via environment variable or keychain for security.
+def assert_required_config() -> None:
+    """Raise a ValueError if critical configuration is missing."""
+    api_key = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        raise ValueError(
+            "GEMINI_API_KEY is not set. Please export it in your environment."
+        )
+
+
+# --- Module-level Constants (for backward compatibility) ---
+# These are evaluated once at import time. For hot-reloadable values,
+# use ConfigManager.instance().get() directly.
+
+# API Key (from keychain, static)
 GEMINI_API_KEY: str = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
 
-# Default Gemini model name for generation.
-# Centralizes the model selection to avoid hardcoding in modules.
-DEFAULT_GEMINI_MODEL: str = _get_config("gemini_model", "gemini-3-flash-preview", "DEFAULT_GEMINI_MODEL")
-
-# Lightweight model for fast, cheap inference tasks like naming and classification.
-# Uses Gemini 3 Flash by default for speed and cost efficiency.
-LIGHTWEIGHT_MODEL: str = _get_config("lightweight_model", "gemini-3-flash-preview", "LIGHTWEIGHT_MODEL")
-
-# AnkiConnect default URL. Can be overridden via environment variable if needed.
-ANKI_CONNECT_URL: str = _get_config("anki_url", "http://localhost:8765", "ANKI_CONNECT_URL")
-
-# Allowed origins for the GUI backend CORS configuration.
+# CORS origins (static at module load)
 FRONTEND_ORIGINS: list[str] = [
     origin.strip()
     for origin in os.getenv(
         "LECTERN_FRONTEND_ORIGINS",
-        # NOTE(Ports): 5173 = Vite dev, 4173 = bundled app (launcher.py), 8000 = legacy dev
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,http://localhost:8000,http://127.0.0.1:8000",
     ).split(",")
     if origin.strip()
 ]
 
-
-# Default Anki note models to use (English). These are overridden via
-# user_config.json or environment variables.
-# NOTE: In localized Anki installs (e.g. German), these names are auto-resolved
-# via field fingerprints (see note_export.py). These English names serve as 
-# canonical IDs and offline fallbacks.
-DEFAULT_BASIC_MODEL: str = _get_config("basic_model", "Basic", "BASIC_MODEL_NAME")
-DEFAULT_CLOZE_MODEL: str = _get_config("cloze_model", "Cloze", "CLOZE_MODEL_NAME")
-
-# Default tag behavior. When enabled, the application will ensure this tag is
-# present on every created note unless explicitly disabled via CLI.
+# Tag defaults (static)
 DEFAULT_TAG: str = os.getenv("DEFAULT_TAG", "lectern")
 ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not in (
     "0",
@@ -148,67 +210,18 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
     "no",
 )
 
-# NOTE(Tags): The legacy GROUP_TAGS_BY_DECK option has been removed.
-# The hierarchical tagging system now always uses the 4-level format:
-#   Deck::SlideSet::Topic::Tag
-# Example: "Introduction to Machine Learning::Lecture 1 Supervised Learning::Image Classification::preprocessing"
-
-
-# Hierarchical tag assembly template
-# Placeholders: {{deck}}, {{slide_set}}, {{topic}}
-TAG_TEMPLATE: str = _get_config("tag_template", "{{deck}}::{{slide_set}}::{{topic}}", "TAG_TEMPLATE")
-
-
-def assert_required_config() -> None:
-    """Raise a ValueError if critical configuration is missing.
-
-    This validation is intended to be called at application startup
-    to fail fast when required configuration is not present.
-    """
-
-    if not GEMINI_API_KEY:
-        raise ValueError(
-            "GEMINI_API_KEY is not set. Please export it in your environment."
-        )
-
-
-
-# Batch generation settings
-# Caps for total note creation per run
-# Minimum cards per slide (enforced threshold, e.g., 0.8 -> at least 80% of page count)
+# Batch generation settings (env-only)
 MIN_CARDS_PER_SLIDE: float = float(os.getenv("MIN_CARDS_PER_SLIDE", "0.8"))
-
-# Target cards per slide (e.g., 1.5 -> ~50% more cards than slides)
 CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2"))
-
-# Heuristic for text density: target this many characters per card
 CHARS_PER_CARD_TARGET: int = int(os.getenv("CHARS_PER_CARD_TARGET", "200"))
-
-# Density thresholds (chars per page) for auto-detection
-# "script" mode: > 1500 chars/page
-# "normal" mode: 400-1500 chars/page
-# "slides" mode: < 400 chars/page
 DENSE_THRESHOLD_CHARS_PER_PAGE: int = int(os.getenv("DENSE_THRESHOLD_CHARS_PER_PAGE", "1500"))
 NORMAL_THRESHOLD_CHARS_PER_PAGE: int = int(os.getenv("NORMAL_THRESHOLD_CHARS_PER_PAGE", "400"))
-
-# Cards per character in dense mode (e.g., 500 -> ~1 card per paragraph)
 SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
-
-# Script suggestion: cards produced per 1 000 extracted characters.
-# 3.0 → ~18 cards for a 6 000-char (3-page) script PDF.
 SCRIPT_SUGGESTED_CARDS_PER_1K: float = float(os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "3.0"))
-
-# Absolute maximum total notes (0 disables the hard cap)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
-
-# Batch Sizing
 MIN_NOTES_PER_BATCH: int = int(os.getenv("MIN_NOTES_PER_BATCH", "20"))
 MAX_NOTES_PER_BATCH: int = int(os.getenv("MAX_NOTES_PER_BATCH", "50"))
-
-# Script Mode Base Chars (for density normalization)
 SCRIPT_BASE_CHARS: int = int(os.getenv("SCRIPT_BASE_CHARS", "1000"))
-
-# Gemini 3 generation temperature (Google recommends 1.0).
 GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "1.0"))
 USE_NATIVE_PDF: bool = os.getenv("USE_NATIVE_PDF", "true").lower() in ("1", "true", "yes")
 
@@ -220,31 +233,43 @@ LOG_SESSION_CONTENT: bool = os.getenv("LOG_SESSION_CONTENT", "true").lower() not
 )
 LOG_MAX_RESPONSE_CHARS: int = int(os.getenv("LOG_MAX_RESPONSE_CHARS", "20000"))
 
-
-# --- Estimation and Pricing ---
-# Gemini model pricing (per million tokens, checked against ai.google.dev/pricing on 2026-02-09)
-# Format: {model_pattern: (input_rate_usd, output_rate_usd)}
-GEMINI_PRICING = {
-    "gemini-3-pro": (2.00, 12.00),     # $2.00/M in, $12.00/M out
-    "gemini-3-flash": (0.50, 3.00),    # Gemini 3 Flash Preview (Standard): $0.50/M in, $3.00/M out
-    "gemini-2.5-pro": (1.25, 10.00),   # $1.25/M in, $10.00/M out (Legacy)
-    "gemini-2.5-flash": (0.30, 2.50),  # $0.30/M in, $2.50/M out (Legacy)
-    "default": (0.50, 4.00),           # Conservative fallback
+# Pricing dictionary
+GEMINI_PRICING: Dict[str, tuple[float, float]] = {
+    "gemini-3-pro": (2.00, 12.00),
+    "gemini-3-flash": (0.50, 3.00),
+    "gemini-2.5-pro": (1.25, 10.00),
+    "gemini-2.5-flash": (0.30, 2.50),
+    "default": (0.50, 4.00),
 }
 
 # Heuristics for cost estimation
-ESTIMATION_BASE_OUTPUT_RATIO = 0.20  # Base output ratio for overhead (concept map, reflection, system prompts)
-ESTIMATION_TOKENS_PER_CARD = 100     # ~100 output tokens per generated card (median of 50-150 range)
-ESTIMATION_PROMPT_OVERHEAD = 3000    # System instruction + overhead for concept map & first batch
-# For Gemini multimodal tokenization docs (2025-12-18):
-# - <=384px image: 258 tokens
-# - larger images: tiled to 768x768 and charged 258 tokens per tile
-# We use 258 as a baseline per-image estimate and can optionally verify with count_tokens.
-GEMINI_IMAGE_TOKEN_COST = 258
-ESTIMATION_VERIFY_IMAGE_TOKEN_COST = os.getenv("ESTIMATION_VERIFY_IMAGE_TOKEN_COST", "false").lower() in (
+ESTIMATION_BASE_OUTPUT_RATIO: float = 0.20
+ESTIMATION_TOKENS_PER_CARD: int = 100
+ESTIMATION_PROMPT_OVERHEAD: int = 3000
+GEMINI_IMAGE_TOKEN_COST: int = 258
+ESTIMATION_VERIFY_IMAGE_TOKEN_COST: bool = os.getenv("ESTIMATION_VERIFY_IMAGE_TOKEN_COST", "false").lower() in (
     "1",
     "true",
     "yes",
 )
 
 
+# --- Dynamic Config via __getattr__ ---
+# This allows config.DEFAULT_GEMINI_MODEL to return live values from ConfigManager.
+
+def __getattr__(name: str) -> Any:
+    """Dynamic attribute access for hot-reloadable config values."""
+    # Map module attribute names to ConfigManager keys
+    key_mapping = {
+        "DEFAULT_GEMINI_MODEL": "gemini_model",
+        "LIGHTWEIGHT_MODEL": "lightweight_model",
+        "ANKI_CONNECT_URL": "anki_url",
+        "DEFAULT_BASIC_MODEL": "basic_model",
+        "DEFAULT_CLOZE_MODEL": "cloze_model",
+        "TAG_TEMPLATE": "tag_template",
+    }
+
+    if name in key_mapping:
+        return ConfigManager.instance().get(key_mapping[name])
+
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

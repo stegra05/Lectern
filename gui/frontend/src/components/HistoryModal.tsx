@@ -20,7 +20,7 @@ type FilterType = 'all' | 'completed' | 'draft' | 'error' | 'cancelled';
 const FILTER_LABELS: Record<FilterType, string> = {
     all: 'All',
     completed: 'Completed',
-    draft: 'In Progress',
+    draft: 'Drafts',
     error: 'Errors',
     cancelled: 'Cancelled',
 };

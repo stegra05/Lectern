@@ -58,6 +58,14 @@ export function FilePicker({ file, onFileSelect }: FilePickerProps) {
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                inputRef.current?.click();
+                            }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Upload PDF file. Click to browse or drag and drop."
                         className={clsx(
                             "relative group cursor-pointer border-2 border-dashed rounded-xl p-8 transition-all duration-300",
                             isDragging
