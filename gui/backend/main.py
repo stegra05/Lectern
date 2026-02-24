@@ -422,7 +422,6 @@ def _estimate_cache_key(tmp_path: str, model: str) -> tuple:
 async def estimate_cost(
     pdf_file: UploadFile = File(...),
     model_name: Optional[str] = Form(None),
-    source_type: str = Form("auto"),
     target_card_count: Optional[int] = Form(None),
 ):
 
@@ -452,7 +451,6 @@ async def estimate_cost(
                 text_chars=base_data["text_chars"],
                 image_count=base_data["image_count"],
                 model=base_data["model"],
-                source_type=source_type,
                 target_card_count=target_card_count,
             )
             return data
@@ -462,7 +460,6 @@ async def estimate_cost(
         data, base_data = await service.estimate_cost_with_base(
             tmp_path,
             model_name=model_name,
-            source_type=source_type,
             target_card_count=target_card_count,
         )
         _estimate_base_cache[cache_key] = base_data
@@ -482,7 +479,6 @@ async def generate_cards(
     tags: str = Form("[]"),  # JSON string
     context_deck: str = Form(""),
     focus_prompt: str = Form(""),  # Optional user focus
-    source_type: str = Form("auto"),  # "auto", "slides", "script"
     target_card_count: Optional[int] = Form(None),
 ):
     draft_store = DraftStore()
@@ -491,9 +487,6 @@ async def generate_cards(
     # NOTE(Exam-Mode): exam_mode is removed in favor of focus_prompt.
     if focus_prompt:
         logger.info(f"User focus: '{focus_prompt}'")
-    
-    if source_type != "auto":
-        logger.info(f"Source type override: {source_type}")
     
     # Parse tags from JSON string
     try:
@@ -561,7 +554,6 @@ async def generate_cards(
                 context_deck=context_deck,
                 entry_id=entry_id,
                 focus_prompt=focus_prompt,
-                source_type=source_type,
                 target_card_count=target_card_count,
                 session_id=session.session_id,
             ):

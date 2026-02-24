@@ -37,7 +37,6 @@ export interface GenerateRequest {
     tags?: string[];
     context_deck?: string;
     focus_prompt?: string;
-    source_type?: string;  // "auto", "slides", "script"
     target_card_count?: number;
 }
 
@@ -72,6 +71,8 @@ export interface ProgressEvent {
     | "note_created"
     | "note_updated"
     | "note_recreated"
+    | "card"
+    | "cards_replaced"
     | "done"
     | "cancelled"
     | "step_start"
@@ -159,9 +160,9 @@ export interface Estimation {
     pages: number;
     text_chars?: number;
     model: string;
-    estimated_card_count?: number;
     suggested_card_count?: number;
     image_count?: number;
+    document_type?: string;
 }
 
 export interface HealthStatus {
@@ -299,14 +300,12 @@ export const api = {
     estimateCost: async (
         file: File,
         modelName?: string,
-        sourceType: string = "auto",
         targetCardCount?: number,
         signal?: AbortSignal
     ) => {
         const formData = new FormData();
         formData.append("pdf_file", file);
         if (modelName) formData.append("model_name", modelName);
-        formData.append("source_type", sourceType);
         if (targetCardCount !== undefined) {
             formData.append("target_card_count", String(targetCardCount));
         }
@@ -352,7 +351,6 @@ export const api = {
         if (req.tags) formData.append("tags", JSON.stringify(req.tags));
         if (req.context_deck) formData.append("context_deck", req.context_deck);
         formData.append("focus_prompt", req.focus_prompt || "");
-        formData.append("source_type", req.source_type ?? "auto");
         if (req.target_card_count !== undefined) {
             formData.append("target_card_count", String(req.target_card_count));
         }

@@ -206,15 +206,36 @@ def run_reflection_loop(
             return
 
         try:
-            # Limit reflection batch to avoid overwhelming, but at least do 5 if space allows.
-            batch_limit = min(config.actual_batch_size, remaining)
+            # Select the most recent batch of cards to refine
+            batch_size = min(config.actual_batch_size, len(state.all_cards), remaining)
+            if batch_size == 0:
+                break
+                
+            cards_to_refine = state.all_cards[-batch_size:]
+            import json
+            cards_to_refine_json = json.dumps(cards_to_refine, ensure_ascii=False)
+
             out = context.ai.reflect(
-                limit=batch_limit,
+                limit=batch_size,
                 all_card_fronts=collect_card_fronts(state.all_cards)[-200:],
+                cards_to_refine_json=cards_to_refine_json,
             )
             for w in context.ai.drain_warnings():
                 yield event_factory("warning", w)
             new_cards = out.get("cards", [])
+
+            # We are replacing the batch we sent in.
+            # Pop old ones from state to prevent duplicates in seen_keys, though seen_keys won't perfectly forget unless we manually remove them.
+            # To be clean, just pop them from all_cards.
+            state.all_cards = state.all_cards[:-batch_size]
+            
+            # Note: seen_keys still contains the old keys, which might prevent slightly-modified duplicates. 
+            # This is acceptable to prevent global duplicates, but to allow refining the exact SAME text (e.g. if LLM returns the card unmodified), 
+            # we should ignore seen_keys for this replacement step or remove the old keys.
+            for c in cards_to_refine:
+                k = get_card_key(c)
+                if k in state.seen_keys:
+                    state.seen_keys.remove(k)
 
             added_count = yield from yield_new_cards(
                 new_cards=new_cards,
@@ -223,6 +244,9 @@ def run_reflection_loop(
                 message="Refined card",
                 event_factory=event_factory,
             )
+
+            # Signal frontend to replace the whole deck
+            yield event_factory("cards_replaced", "Applied reflection batch", {"cards": state.all_cards})
 
             yield event_factory("progress_update", "", {"current": round_idx + 1})
 

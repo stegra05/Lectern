@@ -191,7 +191,7 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                             </div>
 
                             {/* Card Content */}
-                            <div className="flex-1 overflow-y-auto p-12 space-y-8 scrollbar-thin scrollbar-thumb-border">
+                            <div className="flex-1 overflow-y-auto px-12 pt-16 pb-12 space-y-8 scrollbar-thin scrollbar-thumb-border">
                                 {Object.entries(currentCard.fields || {}).map(([key, value]) => (
                                     <div key={key}>
                                         <div className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em] mb-3 opacity-50">{key}</div>

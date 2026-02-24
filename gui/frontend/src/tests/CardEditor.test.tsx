@@ -13,6 +13,19 @@ vi.mock('framer-motion', () => ({
     AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
+vi.mock('../components/RichTextEditor', () => ({
+    RichTextEditor: ({ value, onChange, placeholder, disabled, onKeyDown }: any) => (
+        <textarea
+            data-testid="rich-text-editor"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            disabled={disabled}
+        />
+    )
+}));
+
 describe('CardEditor', () => {
     afterEach(cleanup);
 

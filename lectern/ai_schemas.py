@@ -29,6 +29,7 @@ class ConceptMapResponse(BaseModel):
     slide_set_name: Optional[str] = None
     page_count: Optional[int] = None
     estimated_text_chars: Optional[int] = None
+    document_type: Optional[Literal["script", "slides", "mixed"]] = Field(None, description="Classify the document's density and structure: 'script' for text-dense books/papers, 'slides' for visual-heavy presentations.")
 
 
 class FieldPair(BaseModel):

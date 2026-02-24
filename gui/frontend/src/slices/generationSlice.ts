@@ -9,7 +9,6 @@ export const getGenerationState = () => ({
   deckName: "",
   availableDecks: [] as string[],
   focusPrompt: "",
-  sourceType: "auto" as "auto" | "slides" | "script",
   targetDeckSize: 1,
   densityPreferences: { per1k: null as number | null, perSlide: null as number | null },
   logs: [] as import("../api").ProgressEvent[],
@@ -47,7 +46,6 @@ export const createGenerationActions = (
   setDeckName: (name) => set({ deckName: name }),
   setAvailableDecks: (decks) => set({ availableDecks: decks }),
   setFocusPrompt: (prompt) => set({ focusPrompt: prompt }),
-  setSourceType: (type) => set({ sourceType: type }),
   setTargetDeckSize: (target) => {
     const { estimation } = get();
     set({ targetDeckSize: target });

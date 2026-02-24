@@ -86,7 +86,6 @@ class GenerationService:
         context_deck: str = "",
         entry_id: str = None,
         focus_prompt: str = "",
-        source_type: str = "auto",  # "auto", "slides", "script"
         target_card_count: int | None = None,
         session_id: Optional[str] = None,
     ) -> AsyncGenerator[ServiceEvent, None]:
@@ -104,7 +103,6 @@ class GenerationService:
             skip_export=True,  # Always skip export in GUI now
             stop_check=lambda: self.stop_requested,
             focus_prompt=focus_prompt,
-            source_type=source_type,
             target_card_count=target_card_count,
             session_id=session_id,
         )

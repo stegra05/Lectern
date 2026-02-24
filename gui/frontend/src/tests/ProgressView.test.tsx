@@ -13,6 +13,19 @@ vi.mock('../hooks/useTrickleProgress', () => ({
     useTrickleProgress: (val: number) => ({ display: val, isStalled: false })
 }));
 
+vi.mock('../components/RichTextEditor', () => ({
+    RichTextEditor: ({ value, onChange, placeholder, disabled, onKeyDown }: any) => (
+        <textarea
+            data-testid="rich-text-editor"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            disabled={disabled}
+        />
+    )
+}));
+
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
@@ -143,7 +156,7 @@ describe('ProgressView', () => {
             return selector ? selector(storeState) : storeState;
         });
     });
-    
+
     // ... tests ...
 
 
@@ -167,8 +180,7 @@ describe('ProgressView', () => {
             ...defaultState,
             setSortBy: vi.fn(),
         };
-        
-        vi.mocked(mockUseLecternStore).mockReturnValue(mockState);
+        storeState = mockState;
 
         render(<ProgressView />);
         const topicPill = screen.getByText('topic');
@@ -280,6 +292,7 @@ describe('ProgressView', () => {
 
     it('shows error overlay when isError is true', () => {
         const mockState: any = {
+            ...defaultState,
             step: 'generating',
             currentPhase: 'generating',
             logs: [{ type: 'error', message: 'Fatal error', timestamp: Date.now() }],
@@ -287,25 +300,8 @@ describe('ProgressView', () => {
             progress: { current: 0, total: 10 },
             isError: true,
             isCancelling: false,
-            // ... add other necessary default props
-            handleCopyLogs: vi.fn(),
-            handleCancel: vi.fn(),
-            handleReset: vi.fn(),
-            sortBy: 'creation',
-            searchQuery: '',
-            isHistorical: false,
-            editingIndex: null,
-            isSyncing: false,
-            syncSuccess: false,
-            syncPartialFailure: null,
-            confirmModal: { isOpen: false },
-            isMultiSelectMode: false,
-            selectedCards: new Set(),
-            setupStepsCompleted: 0,
-            conceptProgress: { current: 0, total: 0 },
         };
-
-        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
+        storeState = mockState;
 
         render(<ProgressView />);
         expect(screen.getByText(/Generation Failed/i)).toBeInTheDocument();
@@ -320,14 +316,13 @@ describe('ProgressView', () => {
             slide_topic: 'Deep Learning',
             _uid: '123'
         }];
-        
+
         const mockState: any = {
             ...defaultState,
             cards,
             step: 'done' // Ensure we are in a state where cards are rendered in list
         };
-        
-        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
+        storeState = mockState;
 
         render(<ProgressView />);
         expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
@@ -343,8 +338,7 @@ describe('ProgressView', () => {
             startEdit: vi.fn(),
             setConfirmModal: vi.fn(),
         };
-        
-        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
+        storeState = mockState;
 
         render(<ProgressView />);
 
@@ -370,13 +364,12 @@ describe('ProgressView', () => {
             cancelEdit: vi.fn(),
             handleFieldChange: vi.fn()
         };
-        
-        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
+        storeState = mockState;
 
         render(<ProgressView />);
         expect(screen.getByText(/Editing Card/i)).toBeInTheDocument();
         expect(screen.getByDisplayValue('A')).toBeInTheDocument();
-        
+
         // Save
         const saveBtn = screen.getByText('Save');
         saveBtn.click();
@@ -392,8 +385,7 @@ describe('ProgressView', () => {
             handleAnkiDelete: vi.fn(),
             setConfirmModal: vi.fn(),
         };
-        
-        (mockUseLecternStore as unknown as Mock).mockReturnValue(mockState);
+        storeState = mockState;
 
         render(<ProgressView />);
 

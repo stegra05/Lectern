@@ -1,10 +1,11 @@
-import React, { useState, useCallback, type KeyboardEvent } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Save, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import DOMPurify from 'dompurify';
 import type { Card } from '../api';
 import { renderClozeFront, renderClozeBack } from '../utils/cloze';
+import { RichTextEditor } from './RichTextEditor';
 
 // Field limits for character count warnings
 const FIELD_LIMITS: Record<string, number> = {
@@ -139,7 +140,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 
     // Use browser defaults for Tab handling. Only listen for Cmd+Enter to save and Esc to cancel.
     const handleKeyDown = useCallback(
-        (e: KeyboardEvent<HTMLTextAreaElement>) => {
+        (e: React.KeyboardEvent<HTMLElement>) => {
             // Cmd/Ctrl + Enter to save
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -271,21 +272,12 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                                     </label>
                                     <CharCount field={key} count={String(value).length} />
                                 </div>
-                                <textarea
+                                <RichTextEditor
                                     value={String(value)}
-                                    onChange={(e) => onChange(key, e.target.value)}
+                                    onChange={(newVal) => onChange(key, newVal)}
                                     onKeyDown={handleKeyDown}
                                     disabled={isSaving}
-                                    className={clsx(
-                                        "w-full bg-background border border-border rounded-lg p-3",
-                                        "text-sm text-text-main leading-relaxed",
-                                        "focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none",
-                                        "min-h-[100px] resize-y font-mono",
-                                        "placeholder:text-text-muted/30",
-                                        "disabled:opacity-50 disabled:cursor-not-allowed"
-                                    )}
                                     placeholder={`Enter ${key.toLowerCase()}...`}
-                                    rows={4}
                                 />
                             </div>
                         ))}

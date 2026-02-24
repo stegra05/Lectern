@@ -4,12 +4,12 @@ from lectern import config
 
 def test_compute_suggested_card_count_slides():
     # 10 pages, slides mode -> 1 card per slide = 10 cards
-    count = compute_suggested_card_count(page_count=10, text_chars=2000, source_type="slides")
+    count = compute_suggested_card_count(page_count=10, text_chars=2000)
     assert count == 10
 
 def test_compute_suggested_card_count_script():
     # 5000 chars, script mode -> (5000/1000) * 3.0 = 15 cards
-    count = compute_suggested_card_count(page_count=2, text_chars=5000, source_type="script")
+    count = compute_suggested_card_count(page_count=2, text_chars=5000)
     assert count == 15
 
 def test_derive_effective_target_slides():
@@ -17,9 +17,8 @@ def test_derive_effective_target_slides():
     density, is_script = derive_effective_target(
         page_count=10, 
         estimated_text_chars=2000, 
-        source_type="slides", 
-        target_card_count=20, 
-        density_target=None
+        target_card_count=20,
+        density_target=None,
     )
     assert density == 2.0
     assert is_script is False
@@ -29,9 +28,8 @@ def test_derive_effective_target_script():
     density, is_script = derive_effective_target(
         page_count=2, 
         estimated_text_chars=5000, 
-        source_type="script", 
-        target_card_count=10, 
-        density_target=None
+        target_card_count=10,
+        density_target=None,
     )
     assert density == 2.0
     assert is_script is True
@@ -41,7 +39,6 @@ def test_estimate_card_cap_respects_target():
         page_count=10, 
         estimated_text_chars=2000, 
         image_count=0, 
-        source_type="slides", 
         density_target=None,
         target_card_count=42
     )
@@ -54,9 +51,8 @@ def test_estimate_card_cap_fallback():
         page_count=10, 
         estimated_text_chars=2000, 
         image_count=0, 
-        source_type="slides", 
         density_target=None,
-        target_card_count=None
+        target_card_count=None,
     )
     # Default 1.2 * 10 = 12
     assert cap == 12
@@ -72,7 +68,6 @@ def test_cost_scales_with_card_count():
         text_chars=5000,
         image_count=0,
         model="gemini-3-flash-preview",
-        source_type="slides",
         density_target=None,
     )
 

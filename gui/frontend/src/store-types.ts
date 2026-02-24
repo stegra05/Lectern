@@ -38,7 +38,6 @@ export type StoreState = {
     deckName: string;
     availableDecks: string[];
     focusPrompt: string;
-    sourceType: 'auto' | 'slides' | 'script';
     targetDeckSize: number;
     densityPreferences: { per1k: number | null; perSlide: number | null };
     logs: ProgressEvent[];
@@ -98,7 +97,6 @@ export type GenerationActions = {
     setDeckName: (name: string) => void;
     setAvailableDecks: (decks: string[]) => void;
     setFocusPrompt: (prompt: string) => void;
-    setSourceType: (type: 'auto' | 'slides' | 'script') => void;
     setTargetDeckSize: (target: number) => void;
     setEstimation: (est: Estimation | null) => void;
     setIsEstimating: (value: boolean) => void;

@@ -43,6 +43,17 @@ export const processGenerationEvent = (
         return;
     }
 
+    if (event.type === 'cards_replaced') {
+        set((prev) => {
+            const newCards = stampUids(normalizeCardsMetadata((event.data as any).cards || []));
+            return {
+                cards: newCards,
+                totalPages: Math.max(prev.totalPages, deriveTotalPages(newCards)),
+            };
+        });
+        return;
+    }
+
     if (event.type === 'step_start') {
         const phase = (event.data as { phase?: Phase } | undefined)?.phase;
         if (phase) {
@@ -135,7 +146,6 @@ export const handleGenerate = async (
                 pdf_file: state.pdfFile,
                 deck_name: state.deckName,
                 focus_prompt: state.focusPrompt,
-                source_type: state.sourceType,
                 target_card_count: state.targetDeckSize,
             },
             (event) => processGenerationEvent(event, set)

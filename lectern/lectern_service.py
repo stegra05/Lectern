@@ -56,6 +56,7 @@ EventType = Literal[
     "note_created",
     "note_updated",
     "note_recreated",
+    "cards_replaced",
 ]
 
 
@@ -75,7 +76,6 @@ class GenerationConfig:
     skip_export: bool = False
     stop_check: Optional[Callable[[], bool]] = None
     focus_prompt: Optional[str] = None
-    source_type: str = "auto"  # "auto", "slides", "script"
     target_card_count: Optional[int] = None
     session_id: Optional[str] = None
     entry_id: Optional[str] = None
@@ -97,7 +97,6 @@ class LecternGenerationService:
         skip_export: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
         focus_prompt: Optional[str] = None,
-        source_type: str = "auto",  # "auto", "slides", "script"
         target_card_count: Optional[int] = None,
         session_id: Optional[str] = None,
         entry_id: Optional[str] = None,
@@ -112,7 +111,6 @@ class LecternGenerationService:
             skip_export=skip_export,
             stop_check=stop_check,
             focus_prompt=focus_prompt,
-            source_type=source_type,
             target_card_count=target_card_count,
             session_id=session_id,
             entry_id=entry_id,
@@ -293,13 +291,14 @@ class LecternGenerationService:
             seen_keys = set()
 
             # Targets
+            document_type = concept_map.get("document_type") if concept_map else None
             effective_target, _ = derive_effective_target(
                 page_count=len(pages),
                 estimated_text_chars=total_text_chars,
-                source_type=cfg.source_type,
                 target_card_count=cfg.target_card_count,
                 density_target=None,
                 script_base_chars=config.SCRIPT_BASE_CHARS,
+                force_mode=document_type,
             )
 
             # Calculate chars per page for mode detection
@@ -308,10 +307,10 @@ class LecternGenerationService:
                 page_count=len(pages),
                 estimated_text_chars=total_text_chars,
                 image_count=0,
-                source_type=cfg.source_type,
                 density_target=None,
                 target_card_count=cfg.target_card_count,
                 script_base_chars=config.SCRIPT_BASE_CHARS,
+                force_mode=document_type,
             )
 
             if is_script_mode:
@@ -475,7 +474,6 @@ class LecternGenerationService:
         self,
         pdf_path: str,
         model_name: str | None = None,
-        source_type: str = "auto",
         target_card_count: int | None = None,
     ) -> Dict[str, Any]:
         """Estimate the token count and cost for processing a PDF.
@@ -485,7 +483,6 @@ class LecternGenerationService:
         return await estimate_cost_impl(
             pdf_path=pdf_path,
             model_name=model_name,
-            source_type=source_type,
             target_card_count=target_card_count,
         )
 
@@ -493,14 +490,12 @@ class LecternGenerationService:
         self,
         pdf_path: str,
         model_name: str | None = None,
-        source_type: str = "auto",
         target_card_count: int | None = None,
     ) -> tuple[Dict[str, Any], Dict[str, Any]]:
         """Full estimate + base data for cache. Returns (response, base_data)."""
         return await estimate_cost_with_base_impl(
             pdf_path=pdf_path,
             model_name=model_name,
-            source_type=source_type,
             target_card_count=target_card_count,
         )
 

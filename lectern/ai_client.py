@@ -460,10 +460,11 @@ class LecternAIClient:
         limit: int,
         reflection_prompt: str | None = None,
         all_card_fronts: List[str] | None = None,
+        cards_to_refine_json: str = "",
     ) -> Dict[str, Any]:
         self._prune_history(all_card_fronts=all_card_fronts)
         
-        prompt = reflection_prompt or self._prompt_builder.reflection(limit=limit)
+        prompt = reflection_prompt or self._prompt_builder.reflection(limit=limit, cards_to_refine=cards_to_refine_json)
         
         update: dict[str, Any] = {"response_schema": _REFLECTION_SCHEMA}
         thinking = self._thinking_config_for("reflection")

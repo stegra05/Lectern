@@ -170,22 +170,28 @@ class PromptBuilder:
             "    - Do not include `rationale`.\n"
         )
 
-    def reflection(self, limit: int) -> str:
+    def reflection(self, limit: int, cards_to_refine: str = "") -> str:
         """Build the reflection prompt."""
         focus_context = ""
         if self.cfg.focus_prompt:
             focus_context = f"- Check alignment with user focus: \"{self.cfg.focus_prompt}\"\n"
 
+        cards_context = ""
+        if cards_to_refine:
+            cards_context = f"\nCards to Refine:\n{cards_to_refine}\n"
+
         return (
-            "You are a Quality Assurance Specialist. Review the last batch.\n"
+            "You are a Quality Assurance Specialist. Review the provided cards and refine them.\n"
             "Critique Criteria:\n"
-            "    - Redundancy: Duplicate/overlapping?\n"
-            "    - Vagueness: Ambiguous?\n"
-            "    - Complexity: Too long? (Split it!)\n"
+            "    - Redundancy: Duplicate/overlapping? Merge them.\n"
+            "    - Vagueness: Ambiguous? Clarify them.\n"
+            "    - Complexity: Too long? Split them.\n"
             f"{focus_context}"
             "Action:\n"
-            "    - Write a concise `reflection`.\n"
-            "    - Generate improved replacements or gap-filling cards.\n"
+            "    - Write a concise `reflection` on the quality of these cards.\n"
+            "    - Rewrite the cards applying your critique. Add gap-filling cards if necessary.\n"
+            "    - Return the fully refined set of cards that should replace the input batch.\n"
             f"Language: Ensure all content is in {self.cfg.language}.\n"
+            f"{cards_context}"
             f"Return ONLY JSON: {{reflection, cards, done}}. Limit {limit} cards."
         )

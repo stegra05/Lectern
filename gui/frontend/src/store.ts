@@ -46,7 +46,6 @@ export const useLecternStore = create<LecternStore>()(
     {
       name: "lectern-storage",
       partialize: (state) => ({
-        sourceType: state.sourceType,
         sortBy: state.sortBy,
         sessionId: state.sessionId,
         totalSessionSpend: state.totalSessionSpend,

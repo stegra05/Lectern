@@ -3,7 +3,7 @@ import { AlertCircle, Calculator, FileSearch, Info, Lock, Upload } from 'lucide-
 import { clsx } from 'clsx';
 import { GlassCard } from './GlassCard';
 import { useLecternStore } from '../store';
-import { computeCardsPerUnit, computeTargetSliderConfig } from '../utils/density';
+import { computeTargetSliderConfig } from '../utils/density';
 import { translateError } from '../utils/errorMessages';
 import { useEstimationPhase, type EstimationPhase } from '../hooks/useEstimationPhase';
 import type { LucideIcon } from 'lucide-react';
@@ -24,7 +24,6 @@ export function ConfigurationCard() {
     const estimation = useLecternStore((s) => s.estimation);
     const isEstimating = useLecternStore((s) => s.isEstimating);
     const estimationError = useLecternStore((s) => s.estimationError);
-    const sourceType = useLecternStore((s) => s.sourceType);
 
     const estimationPhase = useEstimationPhase(isEstimating);
     const sliderConfig = computeTargetSliderConfig(estimation?.suggested_card_count);
@@ -36,8 +35,6 @@ export function ConfigurationCard() {
         // Defer to avoid setting state during render
         queueMicrotask(() => setTargetDeckSize(clamped));
     }
-
-    const cardsPerUnit = computeCardsPerUnit(targetDeckSize, sourceType, estimation);
 
     return (
         <GlassCard className="space-y-6">
@@ -59,9 +56,28 @@ export function ConfigurationCard() {
                             )}
                         </div>
                         <div className="text-right">
-                            <span className={clsx("text-xl font-bold", sliderConfig.disabled ? "text-text-muted" : "text-primary")}>
-                                {targetDeckSize}
-                            </span>
+                            <input
+                                type="number"
+                                min={sliderConfig.min}
+                                max={sliderConfig.max}
+                                value={targetDeckSize}
+                                disabled={sliderConfig.disabled}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val)) setTargetDeckSize(val);
+                                }}
+                                onBlur={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (isNaN(val) || val < sliderConfig.min) setTargetDeckSize(sliderConfig.min);
+                                    else if (val > sliderConfig.max) setTargetDeckSize(sliderConfig.max);
+                                }}
+                                className={clsx(
+                                    "text-right text-xl font-bold bg-transparent border-b-2 outline-none w-16 px-1 transition-colors",
+                                    sliderConfig.disabled
+                                        ? "text-text-muted border-transparent"
+                                        : "text-primary border-primary/30 focus:border-primary focus:bg-primary/10 rounded-t hover:border-primary/50"
+                                )}
+                            />
                         </div>
                     </div>
 
@@ -123,28 +139,21 @@ export function ConfigurationCard() {
                         );
                     })()}
 
-                    <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-start gap-3">
-                        <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                        <div className="text-xs text-text-muted leading-relaxed">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="font-bold text-primary">
-                                    {cardsPerUnit.label}: {cardsPerUnit.value}
+                    {estimation?.suggested_card_count !== undefined && (
+                        <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-center gap-3">
+                            <Info className="w-4 h-4 text-primary shrink-0" />
+                            <div className="flex justify-between items-center w-full">
+                                <span className="text-xs text-text-muted">
+                                    AI recommendation based on document analysis.
+                                    {estimation.document_type === 'script' && ' (Detected text-dense script)'}
+                                    {estimation.document_type === 'slides' && ' (Detected visual-heavy material)'}
                                 </span>
-                                {estimation?.suggested_card_count !== undefined && (
-                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
-                                        SUGGESTED {estimation.suggested_card_count}
-                                    </span>
-                                )}
+                                <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
+                                    SUGGESTED {estimation.suggested_card_count}
+                                </span>
                             </div>
-                            <span>
-                                {isEstimating
-                                    ? 'Analyzing document to determine a recommended card target.'
-                                    : sliderConfig.disabled && estimationError
-                                        ? 'Could not analyze document. Check your API key.'
-                                        : 'Backend derives the density target from this total card goal.'}
-                            </span>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="pt-4 border-t border-border/30">

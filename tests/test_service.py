@@ -697,7 +697,6 @@ class TestServiceIntegration:
             deck_name="T",
             model_name="M",
             tags=[],
-            source_type="script",
             target_card_count=6,
             skip_export=True
         ))
@@ -840,7 +839,6 @@ class TestServiceIntegration:
             deck_name="T",
             model_name="M",
             tags=[],
-            source_type="script",
             entry_id="existing_id",
             skip_export=True
         ))
@@ -930,7 +928,6 @@ class TestServiceIntegration:
         script_result = await service.estimate_cost(
             "/fake/path.pdf",
             model_name="gemini-3-flash",
-            source_type="script",
             target_card_count=8,
         )
         assert script_result["estimated_card_count"] == 8
@@ -938,7 +935,6 @@ class TestServiceIntegration:
         slides_result = await service.estimate_cost(
             "/fake/path.pdf",
             model_name="gemini-3-flash",
-            source_type="slides",
             target_card_count=3,
         )
         assert slides_result["estimated_card_count"] == 3
@@ -950,7 +946,6 @@ class TestServiceIntegration:
         base = {"token_count": 1000, "page_count": 10, "text_chars": 8000, "image_count": 2, "model": "gemini-3-flash"}
         result = recompute_estimate(
             **base,
-            source_type="script",
             target_card_count=40,
         )
         assert "estimated_card_count" in result
