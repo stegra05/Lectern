@@ -1,4 +1,5 @@
 import { useLecternStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import type { Phase } from '../components/PhaseIndicator';
 
 /**
@@ -16,50 +17,50 @@ import type { Phase } from '../components/PhaseIndicator';
 // ---------------------------------------------------------------------------
 
 /** State for activity log display */
-export const useLogsState = () => useLecternStore((s) => ({
+export const useLogsState = () => useLecternStore(useShallow((s) => ({
     logs: s.logs,
     copied: s.copied,
-}));
+})));
 
 /** State for progress indicators */
-export const useProgressState = () => useLecternStore((s) => ({
+export const useProgressState = () => useLecternStore(useShallow((s) => ({
     progress: s.progress,
     conceptProgress: s.conceptProgress,
     currentPhase: s.currentPhase,
     setupStepsCompleted: s.setupStepsCompleted,
     cardsLength: s.cards.length,
-}));
+})));
 
 // ---------------------------------------------------------------------------
 // Slow-changing state (cards, editing) - updates less frequently
 // ---------------------------------------------------------------------------
 
 /** State for card list and editing */
-export const useCardsState = () => useLecternStore((s) => ({
+export const useCardsState = () => useLecternStore(useShallow((s) => ({
     cards: s.cards,
     editingIndex: s.editingIndex,
     editForm: s.editForm,
-}));
+})));
 
 /** State for sync operations */
-export const useSyncState = () => useLecternStore((s) => ({
+export const useSyncState = () => useLecternStore(useShallow((s) => ({
     isSyncing: s.isSyncing,
     syncSuccess: s.syncSuccess,
     syncPartialFailure: s.syncPartialFailure,
     syncProgress: s.syncProgress,
     syncLogs: s.syncLogs,
-}));
+})));
 
 /** State for UI controls (search, sort, selection) */
-export const useUIState = () => useLecternStore((s) => ({
+export const useUIState = () => useLecternStore(useShallow((s) => ({
     sortBy: s.sortBy,
     searchQuery: s.searchQuery,
     isMultiSelectMode: s.isMultiSelectMode,
     selectedCards: s.selectedCards,
-}));
+})));
 
 /** State for session/step info */
-export const useSessionState = () => useLecternStore((s) => ({
+export const useSessionState = () => useLecternStore(useShallow((s) => ({
     step: s.step,
     currentPhase: s.currentPhase as Phase,
     isError: s.isError,
@@ -67,12 +68,12 @@ export const useSessionState = () => useLecternStore((s) => ({
     isHistorical: s.isHistorical,
     sessionId: s.sessionId,
     totalPages: s.totalPages,
-}));
+})));
 
 /** State for confirmation modal */
-export const useConfirmModalState = () => useLecternStore((s) => ({
+export const useConfirmModalState = () => useLecternStore(useShallow((s) => ({
     confirmModal: s.confirmModal,
-}));
+})));
 
 // ---------------------------------------------------------------------------
 // Individual selectors for specific values (most granular)
@@ -97,7 +98,7 @@ export const useSyncLogs = () => useLecternStore((s) => s.syncLogs);
 // ---------------------------------------------------------------------------
 
 /** All store actions - stable references, won't cause re-renders */
-export const useLecternActions = () => useLecternStore((s) => ({
+export const useLecternActions = () => useLecternStore(useShallow((s) => ({
     // Generation actions
     handleCopyLogs: s.handleCopyLogs,
     handleCancel: s.handleCancel,
@@ -124,4 +125,4 @@ export const useLecternActions = () => useLecternStore((s) => ({
     selectAllCards: s.selectAllCards,
     clearSelection: s.clearSelection,
     batchDeleteSelected: s.batchDeleteSelected,
-}));
+})));

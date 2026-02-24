@@ -379,11 +379,9 @@ export function ProgressView() {
     const confirmModal = useLecternStore((s) => s.confirmModal);
 
     // Reset filters when step changes
-    const [prevStep, setPrevStep] = useState(step);
-    if (prevStep !== step) {
-        setPrevStep(step);
+    useEffect(() => {
         setActivePage(null);
-    }
+    }, [step]);
 
     const lastError = useMemo(() => findLastError(logs, isError), [isError, logs]);
 

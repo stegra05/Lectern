@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 /**
  * Configuration options for the trickle progress behavior.
@@ -50,7 +50,7 @@ export function useTrickleProgress(
     const cfg: TrickleConfig = { ...DEFAULT_CONFIG, ...config };
 
     const [display, setDisplay] = useState(targetPct);
-    const [isStalled, setIsStalled] = useState(false);
+    const [isStalled] = useState(false);
     const prevTarget = useRef(targetPct);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,5 +113,8 @@ export function useTrickleProgress(
         stopAllTimers,
     ]);
 
-    return { display: Math.round(Math.max(display, targetPct)), isStalled };
+    return useMemo(() => ({
+        display: Math.round(Math.max(display, targetPct)),
+        isStalled
+    }), [display, targetPct, isStalled]);
 }
