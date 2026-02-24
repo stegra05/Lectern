@@ -79,7 +79,7 @@ def test_estimate_endpoint(mock_service_class):
     mock_service_class.return_value = mock_service
 
     files = {"pdf_file": ("test_script.pdf", b"pdf content", "application/pdf")}
-    data = {"model_name": "gemini-3-flash", "source_type": "script", "target_card_count": "20"}
+    data = {"model_name": "gemini-3-flash", "target_card_count": "20"}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
         response = client.post("/estimate", files=files, data=data)
@@ -90,7 +90,6 @@ def test_estimate_endpoint(mock_service_class):
         mock_service.estimate_cost_with_base.assert_awaited_once()
         call_kwargs = mock_service.estimate_cost_with_base.call_args[1]
         assert call_kwargs["model_name"] == "gemini-3-flash"
-        assert call_kwargs["source_type"] == "script"
         assert call_kwargs["target_card_count"] == 20
 
 
@@ -105,7 +104,7 @@ def test_estimate_cache_hit(mock_service_class):
     mock_service_class.return_value = mock_service
 
     files = {"pdf_file": ("test_script.pdf", b"same content both times", "application/pdf")}
-    data = {"model_name": "gemini-3-flash", "source_type": "script", "target_card_count": "20"}
+    data = {"model_name": "gemini-3-flash", "target_card_count": "20"}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
         # First request: cache miss, full estimate
@@ -113,7 +112,7 @@ def test_estimate_cache_hit(mock_service_class):
         assert r1.status_code == 200
         assert mock_service.estimate_cost_with_base.call_count == 1
         # Second request: same file content -> cache hit, fast recompute (different density)
-        data2 = {"model_name": "gemini-3-flash", "source_type": "script", "target_card_count": "30"}
+        data2 = {"model_name": "gemini-3-flash", "target_card_count": "30"}
         r2 = client.post("/estimate", files=files, data=data2)
         assert r2.status_code == 200
         # Service not called again; recompute_estimate used
@@ -137,9 +136,9 @@ def test_estimate_cache_miss_different_model(mock_service_class):
     files = {"pdf_file": ("test_slides.pdf", b"same content", "application/pdf")}
 
     with patch('gui.backend.main.shutil.copyfileobj'):
-        r1 = client.post("/estimate", files=files, data={"model_name": "gemini-3-flash", "source_type": "auto", "target_card_count": "15"})
+        r1 = client.post("/estimate", files=files, data={"model_name": "gemini-3-flash", "target_card_count": "15"})
         assert r1.status_code == 200
-        r2 = client.post("/estimate", files=files, data={"model_name": "gemini-3-pro", "source_type": "auto", "target_card_count": "15"})
+        r2 = client.post("/estimate", files=files, data={"model_name": "gemini-3-pro", "target_card_count": "15"})
         assert r2.status_code == 200
         # Different model -> cache miss -> service called twice
         assert mock_service.estimate_cost_with_base.call_count == 2
@@ -615,12 +614,11 @@ def test_history_clear_all():
         mock_mgr.clear_all.assert_called_once()
 
 def test_generate_with_overrides():
-    """Test generating cards with focus prompt and source type override."""
+    """Test generating cards with focus prompt override."""
     files = {"pdf_file": ("test_slides.pdf", b"p", "application/pdf")}
     data = {
         "deck_name": "D",
         "focus_prompt": "Medical",
-        "source_type": "slides"
     }
     with patch('gui.backend.main.shutil.copyfileobj'):
         with patch('gui.backend.main.tempfile.NamedTemporaryFile') as mock_temp:
@@ -651,39 +649,37 @@ def test_simple_session_actions():
 
 def test_session_card_management_success():
     """Test successful card deletion and history update."""
-    mock_state = {"cards": [{"id": 0}, {"id": 1}], "deck": "D"}
+    mock_state = {"cards": [{"id": 0}, {"id": 1}], "deck": "D", "slide_set_name": "S", "model_name": "M", "tags": []}
     with patch('gui.backend.main.DatabaseManager') as mock_db_class:
         mock_db = MagicMock()
         mock_db.get_entry_by_session_id.return_value = mock_state
         mock_db_class.return_value = mock_db
         with patch('gui.backend.main.HistoryManager') as mock_hist:
-            mock_hist.return_value.get_entry_by_session_id.return_value = {"id": "h1"}
             response = client.delete("/session/s1/cards/0")
             assert response.status_code == 200
             assert response.json()["remaining"] == 1
             mock_db.update_session_cards.assert_called()
-            mock_hist.return_value.update_entry.assert_called()
+            mock_hist.return_value.sync_session_state.assert_called()
 
 def test_batch_delete_session_cards():
     """Test batch deletion of session cards."""
-    mock_state = {"cards": [{"id": 0}, {"id": 1}, {"id": 2}], "deck": "D"}
-    
+    mock_state = {"cards": [{"id": 0}, {"id": 1}, {"id": 2}], "deck": "D", "slide_set_name": "S", "model_name": "M", "tags": []}
+
     with patch('gui.backend.main.DatabaseManager') as mock_db_class:
         mock_db = MagicMock()
         mock_db.get_entry_by_session_id.return_value = mock_state
         mock_db_class.return_value = mock_db
-        
+
         with patch('gui.backend.main.HistoryManager') as mock_hist_class:
             mock_hist = MagicMock()
-            mock_hist.get_entry_by_session_id.return_value = {"id": "entry1"}
             mock_hist_class.return_value = mock_hist
-            
+
             response = client.post("/session/s1/cards/batch-delete", json={"indices": [0, 2]})
-            
+
             assert response.status_code == 200
             assert response.json()["deleted"] == 2
             mock_db.update_session_cards.assert_called_with("s1", [{"id": 1}])
-            mock_hist.update_entry.assert_called_with("entry1", card_count=1)
+            mock_hist.sync_session_state.assert_called()
 
 def test_spa_routing():
     """Test serving index.html for non-existent but non-API paths."""

@@ -34,7 +34,10 @@ def test_delete_session_card(
     mock_db.get_entry_by_session_id.return_value = {
         "id": 1,
         "pdf_path": "test_slides.pdf",
-        "deck_name": "Default",
+        "deck": "Default",
+        "slide_set_name": "test_slides",
+        "model_name": "LecternBasic",
+        "tags": [],
         "cards": list(initial_cards), # Copy
         "concept_map": {},
         "history": []
@@ -42,7 +45,7 @@ def test_delete_session_card(
 
     # Delete first card (index 0)
     response = client.delete(f"/session/{session_id}/cards/0")
-    
+
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "remaining": 1}
 
@@ -52,9 +55,9 @@ def test_delete_session_card(
     assert len(args[1]) == 1
     assert args[1][0]["id"] == 2
 
-    # Verify history updated via session_id lookup
+    # Verify history updated via sync_session_state
     mock_db.get_entry_by_session_id.assert_called_with(session_id)
-    mock_history_manager.get_entry_by_session_id.assert_called_with(session_id)
+    mock_history_manager.sync_session_state.assert_called()
 
 def test_delete_session_card_invalid_index(mock_db):
     session_id = "test-session"
