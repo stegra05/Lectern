@@ -7,13 +7,9 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    theme: 'light' | 'dark';
-    toggleTheme: () => void;
     // Budget tracking props
     totalSessionSpend: number;
-    budgetLimit: number | null;
     onResetSessionSpend: () => void;
-    onSetBudgetLimit: (limit: number | null) => void;
 }
 
 interface ConfigState {
@@ -24,7 +20,7 @@ interface ConfigState {
     tag_template: string;
 }
 
-export function SettingsModal({ isOpen, onClose, theme, toggleTheme, totalSessionSpend, budgetLimit, onResetSessionSpend, onSetBudgetLimit }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessionSpend }: SettingsModalProps) {
     const [config, setConfig] = useState<ConfigState | null>(null);
     const [editedConfig, setEditedConfig] = useState<ConfigState | null>(null);
     const [loading, setLoading] = useState(true);
@@ -35,7 +31,6 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme, totalSessio
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showBudget, setShowBudget] = useState(false);
-    const [budgetInput, setBudgetInput] = useState<string>(budgetLimit?.toString() ?? '');
     const [versionInfo, setVersionInfo] = useState<{ current: string; latest: string | null; update_available: boolean; release_url: string } | null>(null);
     const [checkLoading, setCheckLoading] = useState(false);
 
@@ -202,25 +197,6 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme, totalSessio
                             </div>
 
                             <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-text-muted">Appearance</label>
-                                    <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface">
-                                        <span className="text-text-main text-sm">Dark Mode</span>
-                                        <button
-                                            onClick={toggleTheme}
-                                            role="switch"
-                                            aria-checked={theme === 'dark'}
-                                            aria-label="Toggle dark mode"
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background ${theme === 'dark' ? 'bg-primary' : 'bg-zinc-300 dark:bg-zinc-700'}`}
-                                        >
-                                            <span
-                                                className={`${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
-                                            />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="w-full h-px bg-border my-4" />
 
                                 {loading ? (
                                     <div className="flex justify-center py-8">
@@ -409,56 +385,6 @@ export function SettingsModal({ isOpen, onClose, theme, toggleTheme, totalSessio
                                                                 <RotateCcw className="w-3 h-3" />
                                                                 Reset Session Spend
                                                             </button>
-                                                        </div>
-
-                                                        {/* Budget Limit */}
-                                                        <div className="space-y-2">
-                                                            <label className="text-sm font-medium text-text-muted flex items-center">
-                                                                Budget Limit (Optional)
-                                                                <Tooltip text="Set a maximum spending limit for this session. Operations will be blocked when the limit is reached." />
-                                                            </label>
-                                                            <div className="flex gap-2">
-                                                                <div className="relative flex-1">
-                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">$</span>
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        value={budgetInput}
-                                                                        onChange={(e) => setBudgetInput(e.target.value)}
-                                                                        placeholder="No limit"
-                                                                        aria-label="Budget limit in dollars"
-                                                                        className="w-full bg-background border border-border rounded-lg py-2.5 pl-7 pr-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-text-muted"
-                                                                    />
-                                                                </div>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const value = budgetInput.trim() === '' ? null : parseFloat(budgetInput);
-                                                                        onSetBudgetLimit(value && !isNaN(value) ? value : null);
-                                                                    }}
-                                                                    className="px-4 py-2 bg-surface hover:bg-surface/80 text-text-main rounded-lg font-medium transition-colors text-sm border border-border"
-                                                                >
-                                                                    Set
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setBudgetInput('');
-                                                                        onSetBudgetLimit(null);
-                                                                    }}
-                                                                    className="px-3 py-2 bg-surface hover:bg-surface/80 text-text-muted rounded-lg transition-colors text-sm border border-border"
-                                                                    title="Clear budget limit"
-                                                                >
-                                                                    <X className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                            {budgetLimit !== null && (
-                                                                <p className="text-xs text-text-muted">
-                                                                    Current limit: <span className="font-medium text-primary">${budgetLimit.toFixed(2)}</span>
-                                                                    {totalSessionSpend >= budgetLimit && (
-                                                                        <span className="ml-2 text-amber-400">(Limit reached)</span>
-                                                                    )}
-                                                                </p>
-                                                            )}
                                                         </div>
                                                     </motion.div>
                                                 )}

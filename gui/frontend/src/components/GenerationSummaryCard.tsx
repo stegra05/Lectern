@@ -32,9 +32,6 @@ export function GenerationSummaryCard({ handleGenerate, health }: GenerationSumm
     const targetDeckSize = useLecternStore((s) => s.targetDeckSize);
     const estimation = useLecternStore((s) => s.estimation);
     const isEstimating = useLecternStore((s) => s.isEstimating);
-    const budgetLimit = useLecternStore((s) => s.budgetLimit);
-    const totalSessionSpend = useLecternStore((s) => s.totalSessionSpend);
-    const wouldExceedBudget = useLecternStore((s) => s.wouldExceedBudget);
 
     const estimationPhase = useEstimationPhase(isEstimating);
 
@@ -53,19 +50,16 @@ export function GenerationSummaryCard({ handleGenerate, health }: GenerationSumm
 
     const estimatedCost = estimation?.cost ?? 0;
     const shouldShowCostWarning = !isEstimating && estimatedCost > COST_WARNING_THRESHOLD && !costWarningDismissed;
-    const wouldHitBudget = wouldExceedBudget(estimatedCost);
-    const isBudgetExceeded = budgetLimit !== null && wouldHitBudget;
 
-    // The logic to determine if slider is disabled is slightly duplicated here 
+    // The logic to determine if slider is disabled is slightly duplicated here
     // but it's simpler than storing it just for this check.
     const sliderDisabled = isEstimating || (estimation?.suggested_card_count === undefined);
 
-    const isButtonDisabled = !pdfFile || !deckName || isEstimating || sliderDisabled || isBudgetExceeded;
+    const isButtonDisabled = !pdfFile || !deckName || isEstimating || sliderDisabled;
 
     const getDisabledReason = () => {
         if (!pdfFile) return 'Upload a PDF first';
         if (!deckName) return 'Select a target deck above';
-        if (isBudgetExceeded) return 'Budget limit reached';
         if (isEstimating) return 'Calculating cost estimate...';
         if (sliderDisabled) return 'Estimation in progress...';
         return '';
@@ -79,9 +73,6 @@ export function GenerationSummaryCard({ handleGenerate, health }: GenerationSumm
         }
         if (shouldShowCostWarning) {
             setShowCostWarning(true);
-            return;
-        }
-        if (isBudgetExceeded) {
             return;
         }
         handleGenerate();
@@ -244,33 +235,6 @@ export function GenerationSummaryCard({ handleGenerate, health }: GenerationSumm
                         )}
                     </div>
                 )}
-
-                {/* Budget Limit Exceeded Warning */}
-                <AnimatePresence>
-                    {isBudgetExceeded && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="overflow-hidden"
-                        >
-                            <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-                                <div className="flex items-start gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
-                                    <div className="flex-1">
-                                        <p className="text-sm font-semibold text-red-300">Budget Limit Reached</p>
-                                        <p className="text-xs text-red-200/80 mt-1">
-                                            You've spent ${totalSessionSpend.toFixed(2)} of your ${budgetLimit!.toFixed(2)} limit.
-                                        </p>
-                                        <p className="text-xs text-red-200/60 mt-1">
-                                            This operation would cost ${estimatedCost.toFixed(3)}. Reset your session spend or increase your budget to continue.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
 
                 {/* Cost Warning Modal/Banner */}
                 <AnimatePresence>

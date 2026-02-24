@@ -409,7 +409,18 @@ class LecternGenerationService:
             if cfg.skip_export:
                  # Draft Mode: Save state but don't export
                  yield ServiceEvent("info", "Skipping Anki export (Draft Mode)")
-                 history_mgr.update_entry(history_id, card_count=len(all_cards))
+                 
+                 # IMPORTANT: Persist cards to DB so they survive app restart/refresh
+                 history_mgr.sync_session_state(
+                     session_id=cfg.session_id or history_id,
+                     cards=all_cards,
+                     status="completed",
+                     deck_name=cfg.deck_name,
+                     slide_set_name=slide_set_name,
+                     model_name=cfg.model_name,
+                     tags=cfg.tags
+                 )
+                 
                  yield ServiceEvent("done", "Draft Generation Complete", {
                     "created": 0, 
                     "failed": 0, 
@@ -449,9 +460,16 @@ class LecternGenerationService:
 
             yield ServiceEvent("step_end", "Export Complete", {"success": True, "created": created, "failed": failed})
             
-            # Clear state on success
-            
-            history_mgr.update_entry(history_id, status="completed", card_count=len(all_cards))
+            # Persist final state (including any note IDs created)
+            history_mgr.sync_session_state(
+                session_id=cfg.session_id or history_id,
+                cards=all_cards,
+                status="completed",
+                deck_name=cfg.deck_name,
+                slide_set_name=slide_set_name,
+                model_name=cfg.model_name,
+                tags=cfg.tags
+            )
             
             elapsed = time.perf_counter() - start_time
             yield ServiceEvent("done", "Job Complete", {

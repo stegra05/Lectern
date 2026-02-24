@@ -1,21 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, Save, X, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Save, X, RotateCcw, Tag } from 'lucide-react';
 import { clsx } from 'clsx';
 import DOMPurify from 'dompurify';
 import type { Card } from '../api';
 import { renderClozeFront, renderClozeBack } from '../utils/cloze';
 import { RichTextEditor } from './RichTextEditor';
-
-// Field limits for character count warnings
-const FIELD_LIMITS: Record<string, number> = {
-    Front: 500,
-    Back: 1000,
-    Text: 2000,
-    Question: 500,
-    Answer: 1000,
-    Topic: 100,
-};
 
 interface CardEditorProps {
     card: Card;
@@ -25,31 +15,12 @@ interface CardEditorProps {
     isSaving?: boolean;
 }
 
-/** Character count display with warning states */
-const CharCount: React.FC<{ field: string; count: number }> = ({ field, count }) => {
-    const limit = FIELD_LIMITS[field] || 500;
-    const percentage = (count / limit) * 100;
-    const isNearLimit = percentage >= 80;
-    const isOverLimit = percentage >= 100;
-
-    return (
-        <span
-            className={clsx(
-                "text-[10px] font-mono transition-colors",
-                isOverLimit
-                    ? "text-red-400"
-                    : isNearLimit
-                        ? "text-yellow-400"
-                        : "text-text-muted/60"
-            )}
-        >
-            {count} / {limit}
-            {isOverLimit && (
-                <AlertTriangle className="inline-block w-3 h-3 ml-1 text-red-400" />
-            )}
-        </span>
-    );
-};
+/** Neutral character count display */
+const CharCount: React.FC<{ count: number }> = ({ count }) => (
+    <span className="text-[10px] font-mono text-text-muted/50">
+        {count}
+    </span>
+);
 
 /** Anki-style card preview with flip animation */
 const CardPreview: React.FC<{
@@ -169,6 +140,13 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                     <span className="text-xs font-bold text-primary uppercase tracking-wider">
                         Editing Card
                     </span>
+                    {/* Topic badge - read-only metadata */}
+                    {card.slide_topic !== undefined && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary/70 text-[10px] font-medium">
+                            <Tag className="w-3 h-3" />
+                            {card.slide_topic}
+                        </span>
+                    )}
                     <span className="text-[10px] text-text-muted/50 font-mono">
                         Tab to navigate | Cmd+Enter to save
                     </span>
@@ -270,7 +248,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                                     <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">
                                         {key}
                                     </label>
-                                    <CharCount field={key} count={String(value).length} />
+                                    <CharCount count={String(value).length} />
                                 </div>
                                 <RichTextEditor
                                     value={String(value)}
@@ -281,25 +259,6 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                                 />
                             </div>
                         ))}
-
-                        {/* Topic field if it exists on the card (not in fields) */}
-                        {card.slide_topic !== undefined && (
-                            <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">
-                                        Topic
-                                    </label>
-                                    <CharCount field="Topic" count={String(card.slide_topic).length} />
-                                </div>
-                                <input
-                                    type="text"
-                                    value={card.slide_topic || ''}
-                                    disabled
-                                    className="w-full bg-background/50 border border-border/50 rounded-lg px-3 py-2 text-sm text-text-muted cursor-not-allowed"
-                                    title="Topic is set automatically from slide content"
-                                />
-                            </div>
-                        )}
                     </motion.div>
                 )}
             </AnimatePresence>

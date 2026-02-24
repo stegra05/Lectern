@@ -15,6 +15,7 @@ import { useLecternStore } from '../store';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
 import { getCardSlideNumber } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
+import { useTimeEstimate } from '../hooks/useTimeEstimate';
 import { type FriendlyError, translateError } from '../utils/errorMessages';
 import { highlightCloze } from '../utils/cloze';
 
@@ -323,21 +324,6 @@ function ErrorOverlay({ isError, lastError, handleCopyLogs, copied, handleReset,
     );
 }
 
-// ---------------------------------------------------------------------------
-// Topic helpers
-// ---------------------------------------------------------------------------
-
-function extractTopics(cards: { slide_topic?: string }[]): { topic: string; count: number }[] {
-    const counts = new Map<string, number>();
-    for (const card of cards) {
-        const topic = card.slide_topic || 'Uncategorized';
-        counts.set(topic, (counts.get(topic) || 0) + 1);
-    }
-    return Array.from(counts.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([topic, count]) => ({ topic, count }));
-}
-
 function countByType(cards: { model_name?: string }[]): { basic: number; cloze: number } {
     let basic = 0, cloze = 0;
     for (const card of cards) {
@@ -414,7 +400,6 @@ export function ProgressView() {
     const conceptProgress = useLecternStore((s) => s.conceptProgress);
 
     const logsEndRef = useRef<HTMLDivElement>(null);
-    const [activeTopic, setActiveTopic] = useState<string | null>(null);
     const [activePage, setActivePage] = useState<number | null>(null);
     const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
     const [isFocusMode, setIsFocusMode] = useState(false);
@@ -423,7 +408,6 @@ export function ProgressView() {
     const [prevStep, setPrevStep] = useState(step);
     if (prevStep !== step) {
         setPrevStep(step);
-        setActiveTopic(null);
         setActivePage(null);
     }
 
@@ -436,14 +420,11 @@ export function ProgressView() {
 
     const filteredCards = useMemo(() => {
         let result = filterCards(cards, searchQuery);
-        if (activeTopic) {
-            result = result.filter(c => (c.slide_topic || 'Uncategorized') === activeTopic);
-        }
         if (activePage !== null) {
             result = result.filter(c => getCardSlideNumber(c) === activePage);
         }
         return result;
-    }, [cards, searchQuery, activeTopic, activePage]);
+    }, [cards, searchQuery, activePage]);
 
     const sortedCards = useMemo(() => sortCards(filteredCards, sortBy), [filteredCards, sortBy]);
 
@@ -454,7 +435,6 @@ export function ProgressView() {
         return map;
     }, [cards]);
 
-    const topics = useMemo(() => extractTopics(cards), [cards]);
     const typeCounts = useMemo(() => countByType(cards), [cards]);
 
     // Synthesize progress percentage from phase + batch progress:
@@ -493,6 +473,14 @@ export function ProgressView() {
     }, [currentPhase, progress, step, cards.length, setupStepsCompleted, conceptProgress]);
 
     const { display: progressPct, isStalled } = useTrickleProgress(rawProgressPct);
+
+    // Time estimation using the useTimeEstimate hook
+    const timeEstimate = useTimeEstimate(
+        currentPhase as 'concept' | 'generating' | 'reflecting' | 'complete' | 'idle',
+        cards.length,
+        progress.total,
+        progress.total > 0 ? progress.current / progress.total : 0
+    );
 
     // -----------------------------------------------------------------------
     // Sidebar: Generating state
@@ -586,38 +574,46 @@ export function ProgressView() {
                     <div>
                         <h3 className="text-xs font-medium text-text-main">Progress</h3>
                         <p className="text-[10px] text-text-muted mt-0.5 font-mono">
-                            {isStalled ? (
-                                <span className="flex items-center gap-1.5 text-yellow-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                                    WAITING FOR RESPONSE...
-                                </span>
-                            ) : (
-                                <>
-                                    {currentPhase === 'concept' && (
-                                        conceptProgress.total > 0 ? (
-                                            <span className="flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                                ANALYZING SLIDE {conceptProgress.current}/{conceptProgress.total}...
-                                            </span>
-                                        ) : (
-                                            <span className="flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                                ANALYZING SLIDES...
-                                            </span>
-                                        )
-                                    )}
-                                    {currentPhase === 'generating' && `GENERATED: ${cards.length}`}
-                                    {currentPhase === 'reflecting' && 'REFINING QUALITY...'}
-                                    {currentPhase === 'complete' && `DONE — ${cards.length} CARDS`}
-                                    {(!currentPhase || currentPhase === 'idle') && 'STARTING...'}
-                                </>
-                            )}
+                            {/* Status indicator with tooltip */}
+                            <span className="flex items-center gap-1.5 group relative">
+                                <span className={clsx(
+                                    "w-1.5 h-1.5 rounded-full animate-pulse",
+                                    isStalled ? "bg-yellow-400" : "bg-primary"
+                                )} />
+                                {/* Phase-specific text */}
+                                {currentPhase === 'concept' && (
+                                    conceptProgress.total > 0 ? (
+                                        <span>Slide {conceptProgress.current}/{conceptProgress.total}</span>
+                                    ) : (
+                                        <span>Analyzing slides...</span>
+                                    )
+                                )}
+                                {currentPhase === 'generating' && (
+                                    progress.total > 0
+                                        ? <span>{cards.length}/{progress.total} cards</span>
+                                        : <span>{cards.length} cards</span>
+                                )}
+                                {currentPhase === 'reflecting' && <span>Reviewing...</span>}
+                                {currentPhase === 'complete' && <span className="text-primary">Done - {cards.length} cards</span>}
+                                {(!currentPhase || currentPhase === 'idle') && <span>Starting...</span>}
+
+                                {/* Tooltip with time estimate and stall context */}
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-0 mb-2 px-3 py-2 bg-zinc-800 text-zinc-200 text-xs rounded-lg whitespace-nowrap pointer-events-none border border-zinc-700 shadow-xl z-50">
+                                    {timeEstimate.formatted || 'Calculating...'}
+                                    {isStalled && <div className="text-yellow-400 mt-1">AI is processing - this can take 10-30s per batch</div>}
+                                </div>
+                            </span>
                         </p>
                     </div>
-                    <span className={clsx(
-                        "text-xl font-bold",
-                        isStalled ? "text-yellow-400" : "text-primary"
-                    )}>{progressPct}%</span>
+                    <span
+                        className={clsx(
+                            "text-xl font-bold cursor-default",
+                            isStalled ? "text-yellow-400" : "text-primary"
+                        )}
+                        title={timeEstimate.formatted || undefined}
+                    >
+                        {progressPct}%
+                    </span>
                 </div>
                 <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden">
                     <div
@@ -629,6 +625,13 @@ export function ProgressView() {
                         style={{ width: `${Math.min(100, progressPct)}%` }}
                     />
                 </div>
+                {/* Time estimate below progress bar */}
+                {timeEstimate.formatted && currentPhase !== 'complete' && currentPhase !== 'idle' && (
+                    <p className="text-[10px] text-text-muted mt-1.5">
+                        {timeEstimate.formatted}
+                        {timeEstimate.confidence === 'low' && ' (estimating...)'}
+                    </p>
+                )}
             </div>
         </div>
     );
@@ -650,10 +653,6 @@ export function ProgressView() {
                             <div className="text-xl font-bold text-text-main mt-1">{cards.length}</div>
                         </div>
                         <div className="bg-background p-3 rounded-lg border border-border">
-                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Topics</div>
-                            <div className="text-xl font-bold text-primary mt-1">{topics.length}</div>
-                        </div>
-                        <div className="bg-background p-3 rounded-lg border border-border">
                             <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Basic</div>
                             <div className="text-xl font-bold text-text-main mt-1">{typeCounts.basic}</div>
                         </div>
@@ -672,7 +671,6 @@ export function ProgressView() {
                         activePage={activePage}
                         onPageClick={(page) => {
                             setActivePage(prev => prev === page ? null : page);
-                            if (activeTopic) setActiveTopic(null);
                         }}
                     />
                 </SidebarPane>
@@ -725,61 +723,6 @@ export function ProgressView() {
                     </div>
                 </SidebarPane>
 
-                {/* Topics Filter */}
-                <SidebarPane
-                    title="Topics"
-                    icon={Layers}
-                    defaultOpen={step === 'done'}
-                    className="border-b-0" // Last item, no border needed
-                    rightElement={
-                        activeTopic && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveTopic(null);
-                                }}
-                                className="text-[10px] text-primary hover:text-primary/80 font-bold px-2 py-1 bg-primary/10 rounded transition-colors"
-                            >
-                                SHOW ALL
-                            </button>
-                        )
-                    }
-                >
-                    <div className="space-y-1.5 max-h-[40vh] overflow-y-auto scrollbar-thin scrollbar-thumb-border pr-1">
-                        {topics.map(({ topic, count }) => (
-                            <button
-                                key={topic}
-                                onClick={() => {
-                                    setActiveTopic(activeTopic === topic ? null : topic);
-                                    if (activePage) setActivePage(null); // Clear page filter
-                                }}
-                                className={clsx(
-                                    "w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
-                                    activeTopic === topic
-                                        ? "bg-primary/10 border border-primary/30 shadow-sm"
-                                        : "hover:bg-surface border border-transparent hover:border-border"
-                                )}
-                            >
-                                <div className="flex-1 min-w-0">
-                                    <h4 className={clsx(
-                                        "text-sm font-medium truncate",
-                                        activeTopic === topic ? "text-text-main" : "text-text-muted"
-                                    )}>
-                                        {topic}
-                                    </h4>
-                                </div>
-                                <span className={clsx(
-                                    "text-[10px] font-mono px-1.5 py-0.5 rounded",
-                                    activeTopic === topic
-                                        ? "bg-primary/10 text-primary"
-                                        : "bg-surface text-text-muted border border-border"
-                                )}>
-                                    {count}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                </SidebarPane>
             </div>
 
             {/* New Session + Sync CTA */}
@@ -1078,8 +1021,8 @@ export function ProgressView() {
                             );
                         })}
                     </div>
-                    {/* Empty State */}
-                    {cards.length === 0 && (
+                    {/* Empty State - only show when not generating (skeletons handle that case) */}
+                    {cards.length === 0 && currentPhase !== 'generating' && (
                         <div className="h-full flex flex-col items-center justify-center text-text-muted border-2 border-dashed border-border rounded-xl bg-surface/20 min-h-[300px]">
                             <AlertCircle className="w-8 h-8 mb-4 opacity-20" />
                             <p className="font-medium">Waiting for cards…</p>

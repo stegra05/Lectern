@@ -18,17 +18,12 @@ vi.mock('../api', () => ({
 const defaultProps = {
     isOpen: true,
     onClose: vi.fn(),
-    theme: 'light' as const,
-    toggleTheme: vi.fn(),
     totalSessionSpend: 0,
-    budgetLimit: null,
     onResetSessionSpend: vi.fn(),
-    onSetBudgetLimit: vi.fn(),
 };
 
 describe('SettingsModal', () => {
     const mockOnClose = vi.fn();
-    const mockToggleTheme = vi.fn();
     const defaultConfig = {
         gemini_model: 'gemini-3-flash-preview',
         anki_url: 'http://localhost:8765',
@@ -56,8 +51,6 @@ describe('SettingsModal', () => {
                     {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
-                    theme="light"
-                    toggleTheme={mockToggleTheme}
                 />
             );
         });
@@ -79,8 +72,6 @@ describe('SettingsModal', () => {
                     {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
-                    theme="light"
-                    toggleTheme={mockToggleTheme}
                 />
             );
         });
@@ -130,8 +121,6 @@ describe('SettingsModal', () => {
                     {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
-                    theme="light"
-                    toggleTheme={mockToggleTheme}
                 />
             );
         });
@@ -161,8 +150,6 @@ describe('SettingsModal', () => {
                     {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
-                    theme="light"
-                    toggleTheme={mockToggleTheme}
                 />
             );
         });
@@ -195,8 +182,6 @@ describe('SettingsModal', () => {
                     {...defaultProps}
                     isOpen={true}
                     onClose={mockOnClose}
-                    theme="light"
-                    toggleTheme={mockToggleTheme}
                 />
             );
         });
@@ -205,25 +190,5 @@ describe('SettingsModal', () => {
             expect(screen.getByText('Update available!')).toBeInTheDocument();
             expect(screen.getByText('Download')).toBeInTheDocument();
         });
-    });
-
-    it('toggles dark mode', async () => {
-        await act(async () => {
-            render(
-                <SettingsModal
-                    {...defaultProps}
-                    isOpen={true}
-                    onClose={mockOnClose}
-                    theme="light"
-                    toggleTheme={mockToggleTheme}
-                />
-            );
-        });
-
-        const toggle = screen.getByLabelText('Toggle dark mode');
-        await act(async () => {
-            fireEvent.click(toggle);
-        });
-        expect(mockToggleTheme).toHaveBeenCalled();
     });
 });

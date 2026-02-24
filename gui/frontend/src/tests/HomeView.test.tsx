@@ -42,8 +42,6 @@ describe('HomeView', () => {
             isEstimating: false,
             estimationError: null,
             totalSessionSpend: 0,
-            budgetLimit: null,
-            wouldExceedBudget: vi.fn(() => false),
             addToSessionSpend: vi.fn(),
             availableDecks: [],
             setAvailableDecks: vi.fn(),

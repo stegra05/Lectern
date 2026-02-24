@@ -28,7 +28,7 @@ class DraftStore:
         deck_name: str, 
         model_name: str, 
         tags: List[str], 
-        entry_id: str = None,
+        entry_id: Optional[str] = None,
         slide_set_name: str = "",  # NOTE(Tags): Pass through for hierarchical tagging
     ):
         self.deck_name = deck_name
@@ -59,6 +59,12 @@ class DraftStore:
         self._cards = cards
         return True
         
+    def add_card(self, card: Dict[str, Any]):
+        self._cards.append(card)
+
+    def set_cards(self, cards: List[Dict[str, Any]]):
+        self._cards = cards
+
     def clear(self):
         self.deck_name = ""
         self.slide_set_name = ""
@@ -84,7 +90,7 @@ class GenerationService:
         model_name: str,
         tags: List[str],
         context_deck: str = "",
-        entry_id: str = None,
+        entry_id: Optional[str] = None,
         focus_prompt: str = "",
         target_card_count: int | None = None,
         session_id: Optional[str] = None,
@@ -129,8 +135,25 @@ class GenerationService:
             if event is None:
                 break
             
-            if event.type == "done":
-                # Capture cards for draft store when generation completes
+            # Record metadata in draft store on first sight
+            if not self.draft_store.deck_name:
+                self.draft_store.deck_name = deck_name
+                self.draft_store.model_name = model_name
+                self.draft_store.tags = tags
+                self.draft_store.entry_id = entry_id
+
+            if event.type == "card":
+                # Incrementally update draft store for live checkpointing
+                card = event.data.get("card")
+                if card:
+                    self.draft_store.add_card(card)
+            elif event.type == "cards_replaced":
+                # Sync bulk changes (e.g. from reflection)
+                cards = event.data.get("cards")
+                if isinstance(cards, list):
+                    self.draft_store.set_cards(cards)
+            elif event.type == "done":
+                # Final capture for draft store when generation completes
                 if event.data and isinstance(event.data, dict) and "cards" in event.data:
                     self.draft_store.set_drafts(
                         event.data["cards"],
@@ -138,11 +161,14 @@ class GenerationService:
                         model_name,
                         tags,
                         entry_id,
-                        slide_set_name=event.data.get("slide_set_name", ""),  # NOTE(Tags): hierarchical tagging
+                        slide_set_name=event.data.get("slide_set_name", ""),
                     )
             elif event.type == "step_end":
                 # Preserve success/failure in data but make message user-friendly
                 if event.data.get("success"):
                     event.message = f"✔ {event.message}"
+                # If slide_set_name was resolved, capture it
+                if "slide_set_name" in event.data:
+                    self.draft_store.slide_set_name = event.data["slide_set_name"]
 
             yield event

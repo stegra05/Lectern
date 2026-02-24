@@ -103,9 +103,7 @@ function App() {
 
   // Budget actions and state for settings
   const totalSessionSpend = useLecternStore((s) => s.totalSessionSpend);
-  const budgetLimit = useLecternStore((s) => s.budgetLimit);
   const resetSessionSpend = useLecternStore((s) => s.resetSessionSpend);
-  const setBudgetLimit = useLecternStore((s) => s.setBudgetLimit);
 
   const {
     history,
@@ -326,12 +324,8 @@ function App() {
         <SettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
-          theme={theme}
-          toggleTheme={toggleTheme}
           totalSessionSpend={totalSessionSpend}
-          budgetLimit={budgetLimit}
           onResetSessionSpend={resetSessionSpend}
-          onSetBudgetLimit={setBudgetLimit}
         />
 
         <KeyboardShortcutsModal

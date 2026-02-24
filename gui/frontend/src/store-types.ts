@@ -88,7 +88,6 @@ export type StoreState = {
 
     // Budget tracking
     totalSessionSpend: number;
-    budgetLimit: number | null;
 };
 
 export type GenerationActions = {
@@ -172,10 +171,6 @@ export type BudgetActions = {
     addToSessionSpend: (amount: number) => void;
     /** Reset session spend to zero */
     resetSessionSpend: () => void;
-    /** Set budget limit (null to disable) */
-    setBudgetLimit: (limit: number | null) => void;
-    /** Check if spending would exceed budget */
-    wouldExceedBudget: (amount: number) => boolean;
 };
 
 export type StoreActions = GenerationActions & ReviewActions & UiActions & ToastActions & ProgressTrackingActions & BatchActions & BudgetActions;

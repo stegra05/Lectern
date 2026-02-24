@@ -49,7 +49,6 @@ export const useLecternStore = create<LecternStore>()(
         sortBy: state.sortBy,
         sessionId: state.sessionId,
         totalSessionSpend: state.totalSessionSpend,
-        budgetLimit: state.budgetLimit,
         deckName: state.deckName,
         availableDecks: state.availableDecks,
         densityPreferences: state.densityPreferences,

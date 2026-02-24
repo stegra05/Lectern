@@ -12,7 +12,6 @@ export const getUiState = () => ({
 
 export const getBudgetState = () => ({
   totalSessionSpend: 0,
-  budgetLimit: null as number | null,
 });
 
 export const createUiActions = (
@@ -56,14 +55,6 @@ export const createBudgetActions = (
   },
   resetSessionSpend: () => {
     set({ totalSessionSpend: 0 });
-  },
-  setBudgetLimit: (limit) => {
-    set({ budgetLimit: limit });
-  },
-  wouldExceedBudget: (amount) => {
-    const { budgetLimit, totalSessionSpend } = get();
-    if (budgetLimit === null) return false;
-    return totalSessionSpend + amount > budgetLimit;
   },
 });
 

@@ -46,7 +46,6 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     deletedCards: [],
     batchDeletedCards: [],
     totalSessionSpend: 0,
-    budgetLimit: null,
     ...overrides,
   };
 }

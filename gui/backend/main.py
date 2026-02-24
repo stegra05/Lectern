@@ -95,10 +95,10 @@ def event_json(event_type: str, message: str = "", data: Optional[Dict] = None) 
 async def stream_sync_cards(
     cards: List[dict],
     deck_name: str,
-    slide_set_name: str,
-    additional_tags: List[str],
-    *,
-    allow_updates: bool,
+    tags: List[str],
+    entry_id: Optional[str] = None,
+    slide_set_name: str = "",  # NOTE(Tags): Pass through for hierarchical tagging
+    allow_updates: bool = False, # Default to False if not specified
     on_complete: Optional[Callable[[List[dict], int, int, int], None]] = None,
 ):
     created = 0
@@ -113,7 +113,7 @@ async def stream_sync_cards(
             deck_name=deck_name,
             slide_set_name=slide_set_name,
             fallback_model=config.DEFAULT_BASIC_MODEL,
-            additional_tags=additional_tags,
+            additional_tags=tags,
         )
         if result.success:
             card["anki_note_id"] = result.note_id
@@ -531,6 +531,8 @@ async def generate_cards(
         session_id=session.session_id,
         status="draft"
     )
+    # Set entry_id in draft_store for later use in sync
+    draft_store.entry_id = entry_id
 
     status_handlers = {
         "done": ("completed", True),
@@ -539,7 +541,7 @@ async def generate_cards(
     }
 
     async def event_generator():
-        card_count = 0  # Track number of cards generated
+        card_count: int = 0  # Track number of cards generated
         yield ndjson_event(
             "session_start",
             "Session started",
@@ -568,13 +570,26 @@ async def generate_cards(
                         session_manager.mark_status(session.session_id, status)
                         if cleanup:
                             session_manager.cleanup_temp_file(session.session_id)
-                        # Update history entry with card count on done
-                        if event_type == "done":
-                            history_mgr.update_entry(
-                                entry_id=entry_id,
-                                status="completed",
-                                card_count=card_count
-                            )
+                        # Persistent state: update cards when a phase ends or job is done
+                        if event_type == "done" or event_type == "step_end" or event_type == "cards_replaced":
+                            # Get latest cards from draft store (updated incrementally by service)
+                            current_cards = draft_store.get_drafts()
+                            
+                            # If slide_set_name was resolved, capture it
+                            if event.data and "slide_set_name" in event.data:
+                                draft_store.slide_set_name = event.data["slide_set_name"]
+
+                            if current_cards:
+                                # Persist to database via manager (handles metadata updates too)
+                                history_mgr.sync_session_state(
+                                    session_id=session.session_id,
+                                    cards=current_cards,
+                                    status="completed" if event_type == "done" else None,
+                                    deck_name=deck_name,
+                                    slide_set_name=draft_store.slide_set_name,
+                                    model_name=model_name,
+                                    tags=tags_list
+                                )
                 except Exception:
                     pass
         except Exception as e:
@@ -606,6 +621,17 @@ async def update_drafts(update: DraftsUpdate, session_id: Optional[str] = None):
     session = _get_session_or_404(session_id, require_session_id=True)
     runtime = _get_runtime_or_404(session.session_id, session=session)
     runtime.draft_store.replace_drafts(update.cards)
+    
+    # Persist to DB via manager
+    history_mgr = HistoryManager()
+    history_mgr.sync_session_state(
+        session_id=session.session_id,
+        cards=update.cards,
+        deck_name=runtime.draft_store.deck_name,
+        model_name=runtime.draft_store.model_name,
+        tags=runtime.draft_store.tags
+    )
+
     return {"status": "updated", "session_id": session.session_id}
 
 class DraftUpdate(BaseModel):
@@ -618,6 +644,18 @@ async def update_draft(index: int, update: DraftUpdate, session_id: Optional[str
     success = runtime.draft_store.update_draft(index, update.card)
     if not success:
         raise HTTPException(status_code=404, detail="Draft not found")
+        
+    # Persist to DB via manager
+    cards = runtime.draft_store.get_drafts()
+    history_mgr = HistoryManager()
+    history_mgr.save_session_cards(
+        session_id=session.session_id,
+        cards=cards,
+        deck_name=runtime.draft_store.deck_name,
+        model_name=runtime.draft_store.model_name,
+        tags=runtime.draft_store.tags
+    )
+    
     return {"status": "updated", "session_id": session.session_id}
 
 @app.delete("/drafts/{index}")
@@ -627,6 +665,18 @@ async def delete_draft(index: int, session_id: Optional[str] = None):
     success = runtime.draft_store.delete_draft(index)
     if not success:
         raise HTTPException(status_code=404, detail="Draft not found")
+        
+    # Persist to DB via manager
+    cards = runtime.draft_store.get_drafts()
+    history_mgr = HistoryManager()
+    history_mgr.sync_session_state(
+        session_id=session.session_id,
+        cards=cards,
+        deck_name=runtime.draft_store.deck_name,
+        model_name=runtime.draft_store.model_name,
+        tags=runtime.draft_store.tags
+    )
+        
     return {"status": "deleted", "session_id": session.session_id}
 
 @app.post("/drafts/sync")
@@ -675,8 +725,9 @@ async def sync_drafts(session_id: Optional[str] = None):
         async for payload in stream_sync_cards(
             cards=cards,
             deck_name=deck_name,
+            tags=tags or [],
+            entry_id=entry_id,
             slide_set_name=slide_set_name or "Draft Sync",
-            additional_tags=tags or [],
             allow_updates=False,
             on_complete=on_complete,
         ):
@@ -730,14 +781,16 @@ async def delete_session_card(session_id: str, card_index: int):
     cards.pop(card_index)
     db.update_session_cards(session_id, cards)
 
-    # Try to update history card count via session_id lookup
-    try:
-        history_mgr = HistoryManager()
-        entry_metadata = history_mgr.get_entry_by_session_id(session_id)
-        if entry_metadata:
-            history_mgr.update_entry(entry_metadata["id"], card_count=len(cards))
-    except Exception as e:
-        logger.warning(f"Failed to update history card count: {e}")
+    # Persist via manager
+    history_mgr = HistoryManager()
+    history_mgr.sync_session_state(
+        session_id=session_id,
+        cards=cards,
+        deck_name=entry.get("deck"),
+        slide_set_name=entry.get("slide_set_name"),
+        model_name=entry.get("model_name"),
+        tags=entry.get("tags")
+    )
 
     return {"status": "ok", "remaining": len(cards)}
 
@@ -780,13 +833,16 @@ async def batch_delete_session_cards(session_id: str, req: SessionBatchDeleteReq
 
     db.update_session_cards(session_id, cards)
     
-    try:
-        history_mgr = HistoryManager()
-        hist_entry = history_mgr.get_entry_by_session_id(session_id)
-        if hist_entry:
-            history_mgr.update_entry(hist_entry["id"], card_count=len(cards))
-    except Exception as e:
-        logger.warning(f"Failed to update history card count: {e}")
+    # Persist via manager
+    history_mgr = HistoryManager()
+    history_mgr.sync_session_state(
+        session_id=session_id,
+        cards=cards,
+        deck_name=entry.get("deck"),
+        slide_set_name=entry.get("slide_set_name"),
+        model_name=entry.get("model_name"),
+        tags=entry.get("tags")
+    )
 
     return {"status": "ok", "deleted": deleted_count, "remaining": len(cards)}
 
@@ -817,14 +873,19 @@ async def sync_session_to_anki(session_id: str):
     slide_set_name = entry.get("slide_set_name") or "Session Sync"
 
     def on_complete(updated_cards: List[dict], created: int, updated: int, failed: int) -> None:
-        db.update_session_cards(session_id, updated_cards)
+        history_mgr = HistoryManager()
+        history_mgr.sync_session_state(
+            session_id=session_id,
+            cards=updated_cards,
+            status="completed" if failed == 0 else "error"
+        )
 
     async def sync_generator():
         async for payload in stream_sync_cards(
             cards=cards,
             deck_name=deck_name,
+            tags=[],
             slide_set_name=slide_set_name,
-            additional_tags=[],
             allow_updates=True,
             on_complete=on_complete,
         ):
