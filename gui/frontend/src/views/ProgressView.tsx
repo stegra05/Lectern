@@ -482,7 +482,7 @@ export function ProgressView() {
         return 1; // Start at 1% to show activity has begun
     }, [currentPhase, progress, step, cards.length, setupStepsCompleted, conceptProgress]);
 
-    const { display: progressPct } = useTrickleProgress(rawProgressPct);
+    const progressResult = useTrickleProgress(rawProgressPct);
 
     // Time estimation using the useTimeEstimate hook with overall progress
     const timeEstimate = useTimeEstimate(
@@ -583,7 +583,7 @@ export function ProgressView() {
                 <div className="flex justify-between items-end mb-2">
                     <div>
                         <h3 className="text-xs font-medium text-text-main">Progress</h3>
-                        <p className="text-[10px] text-text-muted mt-0.5 font-mono">
+                        <div className="text-[10px] text-text-muted mt-0.5 font-mono">
                             {/* Status indicator with tooltip */}
                             <span className="flex items-center gap-1.5 group relative">
                                 <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -609,19 +609,19 @@ export function ProgressView() {
                                     {timeEstimate.formatted || 'Calculating...'}
                                 </div>
                             </span>
-                        </p>
+                        </div>
                     </div>
                     <span
                         className="text-xl font-bold cursor-default text-primary"
                         title={timeEstimate.formatted || undefined}
                     >
-                        {progressPct.display}%
+                        {progressResult.display}%
                     </span>
                 </div>
                 <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden">
                     <div
                         className="h-full rounded-full bg-primary shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out"
-                        style={{ width: `${Math.min(100, progressPct.display)}%` }}
+                        style={{ width: `${Math.min(100, progressResult.display)}%` }}
                     />
                 </div>
                 {/* Time estimate below progress bar */}

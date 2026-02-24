@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Calculator, FileSearch, Info, Lock, Upload } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -26,6 +26,13 @@ export function ConfigurationCard() {
     const isEstimating = useLecternStore((s) => s.isEstimating);
     const estimationError = useLecternStore((s) => s.estimationError);
 
+    const [inputValue, setInputValue] = useState(String(targetDeckSize));
+
+    // Sync input when targetDeckSize changes from elsewhere (e.g., slider)
+    useEffect(() => {
+        setInputValue(String(targetDeckSize));
+    }, [targetDeckSize]);
+
     const estimationPhase = useEstimationPhase(isEstimating);
     const sliderConfig = computeTargetSliderConfig(estimation?.suggested_card_count);
 
@@ -50,16 +57,15 @@ export function ConfigurationCard() {
                         </div>
                         <input
                             type="number"
-                            value={targetDeckSize}
+                            value={inputValue}
                             disabled={sliderConfig.disabled}
-                            onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!isNaN(val) && val >= 1) setTargetDeckSize(val);
-                            }}
+                            onChange={(e) => setInputValue(e.target.value)}
                             onFocus={(e) => e.target.select()}
-                            onBlur={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (isNaN(val) || val < 1) setTargetDeckSize(1);
+                            onBlur={() => {
+                                const val = parseInt(inputValue, 10);
+                                const finalVal = isNaN(val) || val < 1 ? 1 : val;
+                                setTargetDeckSize(finalVal);
+                                setInputValue(String(finalVal));
                             }}
                             className={clsx(
                                 "text-right text-xl font-bold bg-transparent border-b-2 outline-none w-20 px-2 transition-colors",
