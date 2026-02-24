@@ -1,29 +1,29 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Terminal, Copy, Check, Loader2, CheckCircle2, RotateCcw, Search, Trash2, Edit2, UploadCloud, Archive, AlertCircle, CheckSquare, Square, Maximize2 } from 'lucide-react';
-import { clsx } from 'clsx';
+import { Layers, Terminal, Copy, Check, CheckCircle2, RotateCcw, UploadCloud } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { PhaseIndicator } from '../components/PhaseIndicator';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { CoverageGrid } from '../components/CoverageGrid';
 import { SidebarPane } from '../components/SidebarPane';
-import { CardEditor } from '../components/CardEditor';
 import { BatchActionBar } from '../components/BatchActionBar';
 import { FocusMode } from '../components/FocusMode';
-import { CardSkeleton } from '../components/CardSkeleton';
+import { ActivityLog } from '../components/ActivityLog';
+import { ProgressFooter } from '../components/ProgressFooter';
+import { CardToolbar } from '../components/CardToolbar';
+import { CardList } from '../components/CardList';
 import { useLecternStore } from '../store';
+import { useLogsState, useProgressState, useSessionState, useCardsState, useSyncState, useUIState, useLecternActions } from '../hooks/useLecternSelectors';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
-import { getCardSlideNumber } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
 import { useTimeEstimate } from '../hooks/useTimeEstimate';
 import { type FriendlyError, translateError } from '../utils/errorMessages';
-import { highlightCloze } from '../utils/cloze';
 
 import type { Phase } from '../components/PhaseIndicator';
 import type { ProgressEvent } from '../api';
 
 // ---------------------------------------------------------------------------
-// Overlay components (unchanged from original)
+// Overlay components
 // ---------------------------------------------------------------------------
 
 interface SyncOverlayProps {
@@ -177,7 +177,6 @@ function SyncPartialFailureOverlay({
 }: SyncPartialFailureOverlayProps) {
     const [copied, setCopied] = useState(false);
 
-    // Filter logs for warnings/errors to show failure details
     const failureLogs = syncLogs.filter(
         (log) => log.type === 'warning' || log.type === 'error'
     );
@@ -204,7 +203,9 @@ function SyncPartialFailureOverlay({
             <GlassCard className="max-w-md w-full border-yellow-500/30 bg-yellow-950/10 shadow-[0_0_40px_rgba(234,179,8,0.15)]">
                 <div className="flex flex-col items-center text-center p-4">
                     <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4 border border-yellow-500/20">
-                        <AlertCircle className="w-8 h-8 text-yellow-500" />
+                        <svg className="w-8 h-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
                     </div>
 
                     <h2 className="text-xl font-bold text-yellow-200 mb-2">Sync Completed with Errors</h2>
@@ -280,7 +281,9 @@ function ErrorOverlay({ isError, lastError, handleCopyLogs, copied, handleReset,
                 <GlassCard className="max-w-md w-full border-red-500/30 bg-red-950/20 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
                     <div className="flex flex-col items-center text-center p-4">
                         <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
-                            <AlertCircle className="w-8 h-8 text-red-400" />
+                            <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                         </div>
 
                         <h2 className="text-xl font-bold text-red-200 mb-2">{friendlyError.title}</h2>
@@ -333,45 +336,24 @@ function countByType(cards: { model_name?: string }[]): { basic: number; cloze: 
     return { basic, cloze };
 }
 
-
-function isCloze(card: { model_name?: string }): boolean {
-    return (card.model_name || '').toLowerCase().includes('cloze');
-}
-
-// ---------------------------------------------------------------------------
-// Animation Variants (used only for overlays / non-card elements)
-// ---------------------------------------------------------------------------
-
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 export function ProgressView() {
+    // Use atomic selectors instead of full store destructuring
+    const { step, currentPhase, isError, isCancelling, isHistorical, sessionId, totalPages } = useSessionState();
+    const { logs, copied } = useLogsState();
+    const { progress, conceptProgress, setupStepsCompleted } = useProgressState();
+    const { cards, editingIndex, editForm } = useCardsState();
+    const { isSyncing, syncSuccess, syncPartialFailure, syncProgress, syncLogs } = useSyncState();
+    const { sortBy, searchQuery, isMultiSelectMode, selectedCards } = useUIState();
+
+    // Get all actions (stable references)
     const {
-        step,
-        currentPhase,
-        logs,
         handleCopyLogs,
-        copied,
-        isCancelling,
         handleCancel,
-        progress,
-        cards,
         handleReset,
-        sessionId,
-        sortBy,
-        setSortBy,
-        searchQuery,
-        setSearchQuery,
-        isHistorical,
-        isError,
-        editingIndex,
-        editForm,
-        isSyncing,
-        syncSuccess,
-        syncPartialFailure,
-        syncProgress,
-        syncLogs,
         handleDelete,
         handleAnkiDelete,
         startEdit,
@@ -379,56 +361,46 @@ export function ProgressView() {
         saveEdit,
         handleFieldChange,
         handleSync,
-        confirmModal,
         setConfirmModal,
-        // Multi-select
-        isMultiSelectMode,
-        selectedCards,
+        setSortBy,
+        setSearchQuery,
         toggleMultiSelectMode,
         toggleCardSelection,
         selectCardRange,
         selectAllCards,
         clearSelection,
-        batchDeleteSelected
-    } = useLecternStore();
+        batchDeleteSelected,
+    } = useLecternActions();
 
-    // Pull from store state via selector to ensure reactivity
-    const totalPages = useLecternStore(state => state.totalPages);
-
-    const setupStepsCompleted = useLecternStore((s) => s.setupStepsCompleted);
-
-    const conceptProgress = useLecternStore((s) => s.conceptProgress);
-
-    const logsEndRef = useRef<HTMLDivElement>(null);
+    // Local state
     const [activePage, setActivePage] = useState<number | null>(null);
     const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
     const [isFocusMode, setIsFocusMode] = useState(false);
+    const confirmModal = useLecternStore((s) => s.confirmModal);
 
-    // Reset filters when step changes (e.g. from generating to done)
+    // Reset filters when step changes
     const [prevStep, setPrevStep] = useState(step);
     if (prevStep !== step) {
         setPrevStep(step);
         setActivePage(null);
     }
 
-    // Auto-scroll logs
-    useEffect(() => {
-        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [logs.length]);
-
     const lastError = useMemo(() => findLastError(logs, isError), [isError, logs]);
 
     const filteredCards = useMemo(() => {
         let result = filterCards(cards, searchQuery);
         if (activePage !== null) {
-            result = result.filter(c => getCardSlideNumber(c) === activePage);
+            result = result.filter(c => {
+                const slideNum = c.slide_number ?? (c.metadata as { slide_number?: number })?.slide_number;
+                return slideNum === activePage;
+            });
         }
         return result;
     }, [cards, searchQuery, activePage]);
 
     const sortedCards = useMemo(() => sortCards(filteredCards, sortBy), [filteredCards, sortBy]);
 
-    // O(1) lookup: card._uid → original index in cards[]
+    // O(1) lookup: card._uid -> original index in cards[]
     const uidToIndex = useMemo(() => {
         const map = new Map<string, number>();
         cards.forEach((c, i) => { if (c._uid) map.set(c._uid, i); });
@@ -437,57 +409,47 @@ export function ProgressView() {
 
     const typeCounts = useMemo(() => countByType(cards), [cards]);
 
-    // Continuous progress calculation: smooth 1-100% without phase jumps
-    // Weights: concept (10%), generating (85%), reflecting (5%)
+    // Continuous progress calculation
     const rawProgressPct = useMemo(() => {
         if (currentPhase === 'complete' || step === 'done') return 100;
 
-        const conceptWeight = 0.10;     // 10% of total work
-        const generatingWeight = 0.85;  // 85% of total work
-        const reflectingWeight = 0.05;  // 5% of total work
+        const conceptWeight = 0.10;
+        const generatingWeight = 0.85;
+        const reflectingWeight = 0.05;
 
-        // Concept progress (slide analysis)
         const conceptPct = conceptProgress.total > 0
             ? (conceptProgress.current / conceptProgress.total)
             : 0;
 
-        // Generating progress (card creation) - use max of card count or batch progress
         const cardBased = progress.total > 0 ? (cards.length / progress.total) : 0;
         const batchBased = progress.total > 0 ? (progress.current / progress.total) : 0;
         const generatingPct = Math.min(1, Math.max(cardBased, batchBased));
 
-        // Reflection progress
         const reflectPct = progress.total > 0
             ? (progress.current / progress.total)
             : 0;
 
-        // Continuous blend based on current phase
         if (currentPhase === 'concept') {
-            // Concept phase: 0-10%
             return Math.max(1, Math.round(conceptPct * conceptWeight * 100));
         }
         if (currentPhase === 'generating') {
-            // Generating phase: 10-95%
             return Math.round((conceptWeight + generatingPct * generatingWeight) * 100);
         }
         if (currentPhase === 'reflecting') {
-            // Reflecting phase: 95-100%
             return Math.round((conceptWeight + generatingWeight + reflectPct * reflectingWeight) * 100);
         }
 
-        // Idle/setup phase: small progress based on setup steps
         if (setupStepsCompleted > 0) {
             return Math.max(1, Math.round(setupStepsCompleted * 2));
         }
-        return 1; // Start at 1% to show activity has begun
+        return 1;
     }, [currentPhase, progress, step, cards.length, setupStepsCompleted, conceptProgress]);
 
     const progressResult = useTrickleProgress(rawProgressPct);
 
-    // Time estimation using the useTimeEstimate hook with overall progress
     const timeEstimate = useTimeEstimate(
         currentPhase as 'concept' | 'generating' | 'reflecting' | 'complete' | 'idle',
-        rawProgressPct, // Pass overall progress percentage (0-100)
+        rawProgressPct,
         cards.length,
         progress.total
     );
@@ -507,137 +469,29 @@ export function ProgressView() {
             </div>
 
             {/* Activity Log */}
-            <div className="flex-1 flex flex-col min-h-0 p-4">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <Terminal className="w-3.5 h-3.5 text-text-muted" />
-                        <h2 className="text-xs font-bold uppercase tracking-wider text-text-muted">
-                            Activity Log
-                            {isHistorical && sessionId && (
-                                <span className="ml-1 font-mono opacity-60">#{sessionId.slice(0, 8)}</span>
-                            )}
-                        </h2>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {logs.length > 0 && (
-                            <button
-                                onClick={handleCopyLogs}
-                                className="p-1 text-text-muted hover:text-primary transition-colors rounded"
-                                title="Copy logs"
-                            >
-                                {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                <div className="bg-background rounded-lg p-3 font-mono text-[11px] flex-1 overflow-y-auto border border-border min-h-0 scrollbar-thin scrollbar-thumb-border">
-                    {/* Status header */}
-                    <div className="flex items-center justify-between mb-2 border-b border-border pb-2">
-                        <span className="flex items-center gap-1.5 text-primary/70">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                            <span className="font-bold text-[10px] tracking-wide">PROCESSING</span>
-                        </span>
-                        {isCancelling ? (
-                            <div className="flex items-center gap-1.5 text-red-400 text-[10px]">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                <span className="font-bold tracking-wide">CANCELLING...</span>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={handleCancel}
-                                className="text-[10px] text-red-400 hover:text-red-300 border border-red-900/50 bg-red-900/20 px-2 py-0.5 rounded font-bold"
-                            >
-                                CANCEL
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Log entries */}
-                    <div className="space-y-1.5">
-                        {logs.map((log, i) => (
-                            <motion.div
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                key={i}
-                                className={clsx("flex gap-2", {
-                                    "text-blue-400": log.type === 'info',
-                                    "text-yellow-400": log.type === 'warning',
-                                    "text-red-400": log.type === 'error',
-                                    "text-primary": log.type === 'note_created',
-                                    "text-text-muted": log.type === 'status',
-                                    "text-primary font-bold": log.type === 'step_start',
-                                })}
-                            >
-                                <span className="opacity-30 shrink-0 text-text-muted">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
-                                <span className="break-words">{log.message}</span>
-                            </motion.div>
-                        ))}
-                        <div ref={logsEndRef} />
-                    </div>
-                </div>
-            </div>
+            <ActivityLog
+                logs={logs}
+                copied={copied}
+                onCopyLogs={handleCopyLogs}
+                isCancelling={isCancelling}
+                onCancel={handleCancel}
+                isHistorical={isHistorical}
+                sessionId={sessionId}
+                variant="generating"
+            />
 
             {/* Progress footer */}
-            <div className="p-5 border-t border-border bg-surface/30">
-                <div className="flex justify-between items-end mb-2">
-                    <div>
-                        <h3 className="text-xs font-medium text-text-main">Progress</h3>
-                        <div className="text-[10px] text-text-muted mt-0.5 font-mono">
-                            {/* Status indicator with tooltip */}
-                            <span className="flex items-center gap-1.5 group relative">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                {/* Phase-specific text */}
-                                {currentPhase === 'concept' && (
-                                    conceptProgress.total > 0 ? (
-                                        <span>Slide {conceptProgress.current}/{conceptProgress.total}</span>
-                                    ) : (
-                                        <span>Analyzing slides...</span>
-                                    )
-                                )}
-                                {currentPhase === 'generating' && (
-                                    progress.total > 0
-                                        ? <span>{cards.length}/{progress.total} cards</span>
-                                        : <span>{cards.length} cards</span>
-                                )}
-                                {currentPhase === 'reflecting' && <span>Reviewing...</span>}
-                                {currentPhase === 'complete' && <span className="text-primary">Done - {cards.length} cards</span>}
-                                {(!currentPhase || currentPhase === 'idle') && <span>Starting...</span>}
-
-                                {/* Tooltip with time estimate */}
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-0 mb-2 px-3 py-2 bg-zinc-800 text-zinc-200 text-xs rounded-lg whitespace-nowrap pointer-events-none border border-zinc-700 shadow-xl z-50">
-                                    {timeEstimate.formatted || 'Calculating...'}
-                                </div>
-                            </span>
-                        </div>
-                    </div>
-                    <span
-                        className="text-xl font-bold cursor-default text-primary"
-                        title={timeEstimate.formatted || undefined}
-                    >
-                        {progressResult.display}%
-                    </span>
-                </div>
-                <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden">
-                    <div
-                        className="h-full rounded-full bg-primary shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out"
-                        style={{ width: `${Math.min(100, progressResult.display)}%` }}
-                    />
-                </div>
-                {/* Time estimate below progress bar */}
-                {timeEstimate.formatted && currentPhase !== 'complete' && currentPhase !== 'idle' && (
-                    <p className="text-[10px] text-text-muted mt-1.5">
-                        {timeEstimate.formatted}
-                        {timeEstimate.confidence === 'low' && ' (estimating...)'}
-                    </p>
-                )}
-            </div>
+            <ProgressFooter
+                currentPhase={currentPhase as Phase}
+                conceptProgress={conceptProgress}
+                progress={progress}
+                cardsLength={cards.length}
+                progressDisplay={progressResult.display}
+                timeEstimate={timeEstimate}
+            />
         </div>
     );
 
-    // -----------------------------------------------------------------------
-    // Sidebar: Done / Review state
-    // -----------------------------------------------------------------------
     // -----------------------------------------------------------------------
     // Sidebar: Done / Review state
     // -----------------------------------------------------------------------
@@ -700,28 +554,17 @@ export function ProgressView() {
                         </div>
                     }
                 >
-                    <div className="bg-background rounded-lg p-3 font-mono text-[11px] h-40 overflow-y-auto border border-border scrollbar-thin scrollbar-thumb-border">
-                        <div className="space-y-1.5">
-                            {logs.map((log, i) => (
-                                <div
-                                    key={i}
-                                    className={clsx("flex gap-2", {
-                                        "text-blue-400": log.type === 'info',
-                                        "text-yellow-400": log.type === 'warning',
-                                        "text-red-400": log.type === 'error',
-                                        "text-primary": log.type === 'note_created',
-                                        "text-text-muted": log.type === 'status',
-                                        "text-primary font-bold": log.type === 'step_start',
-                                    })}
-                                >
-                                    <span className="opacity-30 shrink-0 text-text-muted">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
-                                    <span className="break-words">{log.message}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <ActivityLog
+                        logs={logs}
+                        copied={copied}
+                        onCopyLogs={handleCopyLogs}
+                        isCancelling={isCancelling}
+                        onCancel={handleCancel}
+                        isHistorical={isHistorical}
+                        sessionId={sessionId}
+                        variant="done"
+                    />
                 </SidebarPane>
-
             </div>
 
             {/* New Session + Sync CTA */}
@@ -762,273 +605,40 @@ export function ProgressView() {
             {/* Right: Cards Area */}
             <div className="flex-1 flex flex-col min-h-0 min-w-0 max-h-[calc(100vh-200px)]">
                 {/* Toolbar */}
-                <div className="h-14 px-6 border-b border-border flex items-center justify-between bg-surface/30 backdrop-blur-sm shrink-0 rounded-tr-2xl">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 text-text-main font-semibold text-sm">
-                            <Layers className="w-4 h-4 text-primary" />
-                            {isHistorical ? (
-                                <span className="flex items-center gap-2">
-                                    Archive View
-                                    <span className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded text-[10px] font-mono text-primary">HISTORICAL</span>
-                                </span>
-                            ) : (
-                                step === 'done' ? 'Review Queue' : 'Live Preview'
-                            )}
-                        </div>
-                        <div className="h-4 w-px bg-border" />
-                        {/* Sort Pills */}
-                        <div className="flex p-0.5 bg-surface/50 rounded-lg border border-border/50 text-[10px] font-bold">
-                            {(['creation', 'topic', 'slide', 'type'] as const).map((opt) => (
-                                <button
-                                    key={opt}
-                                    onClick={() => setSortBy(opt)}
-                                    className={clsx(
-                                        "px-3 py-1 uppercase tracking-wider rounded-md transition-all",
-                                        sortBy === opt
-                                            ? "bg-primary text-background shadow-sm"
-                                            : "text-text-muted hover:text-text-main"
-                                    )}
-                                >
-                                    {opt}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                <CardToolbar
+                    step={step}
+                    isHistorical={isHistorical}
+                    sortBy={sortBy}
+                    onSortChange={setSortBy}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    isMultiSelectMode={isMultiSelectMode}
+                    onToggleMultiSelect={toggleMultiSelectMode}
+                    filteredCount={filteredCards.length}
+                    onFocusMode={() => setIsFocusMode(true)}
+                />
 
-                    <div className="flex items-center gap-3">
-                        {/* Focus Mode Toggle */}
-                        {step === 'done' && (
-                            <button
-                                onClick={() => setIsFocusMode(true)}
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 border border-primary/20 text-primary rounded-lg text-xs font-medium hover:bg-primary/20 transition-all shadow-sm"
-                                title="Enter Focus Mode"
-                            >
-                                <Maximize2 className="w-3.5 h-3.5" />
-                                Focus Mode
-                            </button>
-                        )}
-                        {/* Multi-select toggle (only in done step) */}
-                        {step === 'done' && (
-                            <button
-                                onClick={toggleMultiSelectMode}
-                                className={clsx(
-                                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
-                                    isMultiSelectMode
-                                        ? "bg-primary text-background shadow-sm"
-                                        : "bg-surface/50 border border-border/50 text-text-muted hover:text-text-main hover:border-border"
-                                )}
-                                title={isMultiSelectMode ? "Exit multi-select" : "Multi-select mode"}
-                            >
-                                <CheckSquare className="w-3.5 h-3.5" />
-                                {isMultiSelectMode ? "Done" : "Select"}
-                            </button>
-                        )}
-                        <div className="relative group">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted group-focus-within:text-primary transition-colors" />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search..."
-                                className="pl-8 pr-3 py-1.5 text-xs bg-surface/50 border border-border/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 w-36 focus:w-52 transition-all duration-300 placeholder:text-text-muted/50"
-                            />
-                        </div>
-                        <div className="flex items-center px-2 py-1 bg-surface rounded border border-border text-[10px] font-mono text-text-muted">
-                            <span className="font-bold text-text-main mr-1">{filteredCards.length}</span> CARDS
-                        </div>
-                    </div>
-                </div>
-
-                {/* Cards List */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-border min-h-0">
-                    {/* Select All button (only in multi-select mode with cards) */}
-                    {isMultiSelectMode && sortedCards.length > 0 && (
-                        <div className="flex items-center justify-between px-2 py-2 mb-2">
-                            <button
-                                onClick={selectAllCards}
-                                className="text-xs text-primary hover:text-primary/80 font-medium"
-                            >
-                                Select All ({sortedCards.length})
-                            </button>
-                            {selectedCards.size > 0 && (
-                                <button
-                                    onClick={clearSelection}
-                                    className="text-xs text-text-muted hover:text-text-main"
-                                >
-                                    Clear Selection
-                                </button>
-                            )}
-                        </div>
-                    )}
-                    {/* Loading skeletons - only during initial generation when no cards exist yet */}
-                    {step === 'generating' && cards.length === 0 && (
-                        <div className="space-y-4">
-                            {[1, 2, 3].map((i) => (
-                                <CardSkeleton key={i} />
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Actual cards */}
-                    <div className="space-y-4">
-                        {sortedCards.map((card, i) => {
-                            const stableKey = card._uid || `card-fallback-${i}`;
-                            const originalIndex = card._uid ? (uidToIndex.get(card._uid) ?? -1) : -1;
-                            const isEditing = editingIndex === originalIndex;
-                            const cloze = isCloze(card);
-                            const slideNumber = getCardSlideNumber(card);
-                            const isSelected = card._uid ? selectedCards.has(card._uid) : false;
-
-                            // Handle card click with keyboard modifiers
-                            const handleCardClick = (e: React.MouseEvent) => {
-                                if (!isMultiSelectMode || !card._uid || isEditing) return;
-
-                                // Shift+Click: range selection
-                                if (e.shiftKey) {
-                                    e.preventDefault();
-                                    selectCardRange(card._uid);
-                                }
-                                // Cmd/Ctrl+Click: toggle selection
-                                else if (e.metaKey || e.ctrlKey) {
-                                    e.preventDefault();
-                                    toggleCardSelection(card._uid);
-                                }
-                            };
-
-                            return (
-                                <div
-                                    key={stableKey}
-                                    onClick={handleCardClick}
-                                    className={clsx(
-                                        "bg-surface rounded-xl shadow-sm relative overflow-hidden group transition-colors duration-200",
-                                        isMultiSelectMode && !isEditing && "cursor-pointer",
-                                        isEditing
-                                            ? "border-2 border-primary/50 bg-primary/5"
-                                            : clsx(
-                                                "border hover:border-border/80 hover:shadow-md",
-                                                isSelected
-                                                    ? "border-primary/50 ring-2 ring-primary/20"
-                                                    : "border-border",
-                                                cloze ? "border-l-4 border-l-blue-500/50" : "border-l-4 border-l-primary/50"
-                                            )
-                                    )}
-                                >
-                                    {isEditing && editForm ? (
-                                        /* Edit Mode - Using CardEditor Component */
-                                        <CardEditor
-                                            card={editForm}
-                                            onSave={() => saveEdit(originalIndex)}
-                                            onCancel={cancelEdit}
-                                            onChange={handleFieldChange}
-                                            isSaving={false}
-                                        />
-                                    ) : (
-                                        /* View Mode */
-                                        <>
-                                            {/* Card header */}
-                                            <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
-                                                <div className="flex items-center gap-2">
-                                                    {/* Multi-select checkbox */}
-                                                    {isMultiSelectMode && card._uid && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                // Shift+Click: range selection
-                                                                if (e.shiftKey) {
-                                                                    selectCardRange(card._uid!);
-                                                                } else {
-                                                                    toggleCardSelection(card._uid!);
-                                                                }
-                                                            }}
-                                                            className={clsx(
-                                                                "p-0.5 rounded transition-colors",
-                                                                isSelected
-                                                                    ? "text-primary"
-                                                                    : "text-text-muted hover:text-text-main"
-                                                            )}
-                                                        >
-                                                            {isSelected ? (
-                                                                <CheckSquare className="w-4 h-4" />
-                                                            ) : (
-                                                                <Square className="w-4 h-4" />
-                                                            )}
-                                                        </button>
-                                                    )}
-                                                    <span className={clsx(
-                                                        "text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border",
-                                                        cloze
-                                                            ? "text-blue-400 bg-blue-500/10 border-blue-500/20"
-                                                            : "text-text-muted bg-surface border-border"
-                                                    )}>
-                                                        {card.model_name || 'Basic'}
-                                                    </span>
-                                                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] font-medium text-text-muted">
-                                                        <Layers className="w-3 h-3" />
-                                                        SLIDE {slideNumber ?? '?'}
-                                                    </span>
-                                                    {card.slide_topic && (
-                                                        <span className="text-[10px] text-text-muted truncate max-w-[200px]" title={card.slide_topic}>
-                                                            {card.slide_topic}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                {/* Actions (only when done) */}
-                                                {step === 'done' && (
-                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => startEdit(originalIndex)}
-                                                            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-primary transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setConfirmModal({ isOpen: true, type: 'lectern', index: originalIndex })}
-                                                            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text-main transition-colors"
-                                                            title="Remove"
-                                                        >
-                                                            <Archive className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        {card.anki_note_id && (
-                                                            <button
-                                                                onClick={() => setConfirmModal({ isOpen: true, type: 'anki', index: originalIndex, noteId: card.anki_note_id })}
-                                                                className="p-1.5 hover:bg-red-500/10 rounded text-red-300 hover:text-red-400 transition-colors"
-                                                                title="Delete from Anki"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Card body */}
-                                            <div className="p-5 space-y-5">
-                                                {Object.entries(card.fields || {}).map(([key, value]) => (
-                                                    <div key={key}>
-                                                        <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">{key}</div>
-                                                        <div className="text-sm text-text-main leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: highlightCloze(String(value)) }} />
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Card footer */}
-                                        </>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {/* Empty State - only show when not in active generation */}
-                    {cards.length === 0 && step !== 'generating' && (
-                        <div className="h-full flex flex-col items-center justify-center text-text-muted border-2 border-dashed border-border rounded-xl bg-surface/20 min-h-[300px]">
-                            <AlertCircle className="w-8 h-8 mb-4 opacity-20" />
-                            <p className="font-medium">Waiting for cards…</p>
-                            <p className="text-sm opacity-50 mt-1">Cards will appear here as they are generated</p>
-                        </div>
-                    )}
-                </div>
+                {/* Virtualized Cards List */}
+                <CardList
+                    cards={cards}
+                    sortedCards={sortedCards}
+                    uidToIndex={uidToIndex}
+                    editingIndex={editingIndex}
+                    editForm={editForm}
+                    isMultiSelectMode={isMultiSelectMode}
+                    selectedCards={selectedCards}
+                    step={step}
+                    isGenerating={step === 'generating'}
+                    onStartEdit={startEdit}
+                    onCancelEdit={cancelEdit}
+                    onSaveEdit={saveEdit}
+                    onFieldChange={handleFieldChange}
+                    onSetConfirmModal={setConfirmModal}
+                    onToggleSelection={toggleCardSelection}
+                    onSelectRange={selectCardRange}
+                    onSelectAll={selectAllCards}
+                    onClearSelection={clearSelection}
+                />
             </div>
 
             {/* Confirmation Modal */}
@@ -1074,7 +684,6 @@ export function ProgressView() {
                             cards={sortedCards}
                             onClose={() => setIsFocusMode(false)}
                             onDelete={(idx) => {
-                                // Maps sorted index back to original store index
                                 const card = sortedCards[idx];
                                 const originalIdx = card?._uid ? uidToIndex.get(card._uid) : -1;
                                 if (originalIdx !== undefined && originalIdx !== -1) {
@@ -1086,7 +695,7 @@ export function ProgressView() {
                                 const originalIdx = card?._uid ? uidToIndex.get(card._uid) : -1;
                                 if (originalIdx !== undefined && originalIdx !== -1) {
                                     startEdit(originalIdx);
-                                    setIsFocusMode(false); // Close focus mode to show editor in the list
+                                    setIsFocusMode(false);
                                 }
                             }}
                             onSync={() => {
@@ -1153,4 +762,4 @@ export function ProgressView() {
             </div>
         </ErrorOverlay>
     );
-};
+}

@@ -87,7 +87,7 @@ export const createReviewActions = (
     const { cards } = get();
     setEditSession(set, {
       index,
-      form: JSON.parse(JSON.stringify(cards[index])),
+      form: structuredClone(cards[index]),
     });
   },
   cancelEdit: () => {
