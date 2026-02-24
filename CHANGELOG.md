@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-02-24
+
+### Added
+- **ProgressView**: Comprehensive new view for tracking generation progress with real-time updates
+- **Focus Mode Enhancements**: Swipe gestures, card animations, and refined keyboard shortcuts (`Cmd/Ctrl+Enter` for sync)
+- **Rich Text Editing**: Introduced TipTap-based rich text editing for flashcard fields
+- **Real-time Streaming**: Phase-based progress tracking and time estimation via SSE
+- **Database Schema Versioning**: Migration system and improved connection handling for the SQLite backend
+- **Deck Generation Configuration**: New flow for deck configuration and estimation with dedicated UI
+
+### Changed
+- Reimplemented time estimation using exponential smoothing on progress percentage
+- Migrated session and history management to a dedicated database utility
+- Removed legacy budget limit functionality from settings
+- Refactored frontend tests to use direct Zustand store interaction
+- Synchronized configuration card inputs with global state
+
 ## [1.8.0] - 2026-02-23
 
 ### Added
