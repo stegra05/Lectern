@@ -226,3 +226,6 @@ gui/frontend/coverage/
 history.json
 .lectern_state.json
 _test_thinking.py
+
+# Claude Code
+.claude/settings.local.json
