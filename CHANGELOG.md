@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-02-24
+
+### Added
+- **New Components**: Introduced `ActivityLog`, `CardToolbar`, `ProgressFooter`, `CardList`, and `CardItem` to modularize the progress view
+- **Selectors**: Added `useLecternSelectors` hook for optimized and cleaner state access
+- **UI Architecture**: Major refactor of `ProgressView.tsx` into a more maintainable component-driven structure
+
+### Changed
+- **Performance**: Switched from `JSON.parse(JSON.stringify())` to `structuredClone()` for card cloning in the review slice
+- **UI**: Enhanced the progress tracking layout with better separation of concerns and improved state management
+
 ## [1.9.0] - 2026-02-24
 
 ### Added
