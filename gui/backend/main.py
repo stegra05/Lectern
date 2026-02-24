@@ -580,7 +580,7 @@ async def generate_cards(
                         if event_type == "done":
                             history_mgr.update_entry(
                                 entry_id=entry_id,
-                                status="generated",
+                                status="completed",
                                 card_count=card_count
                             )
                 except Exception:

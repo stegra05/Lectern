@@ -424,8 +424,8 @@ class LecternGenerationService:
             if self._should_stop(cfg.stop_check):
                 return
 
-            yield ServiceEvent("step_start", f"Create {len(all_cards)} notes in Anki")
-            yield ServiceEvent("progress_start", "Exporting", {"total": len(all_cards), "label": "Notes"})
+            yield ServiceEvent("step_start", f"Create {len(all_cards)} notes in Anki", {"phase": "exporting"})
+            yield ServiceEvent("progress_start", "Exporting", {"total": len(all_cards), "label": "Notes", "phase": "exporting"})
             
             created = 0
             failed = 0

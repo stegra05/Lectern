@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
-import { BrainCircuit, Sparkles, Check, FileSearch, Loader2 } from 'lucide-react';
+import { BrainCircuit, Sparkles, Check, FileSearch, Loader2, UploadCloud } from 'lucide-react';
 import { clsx } from 'clsx';
 
-export type Phase = 'concept' | 'generating' | 'reflecting' | 'complete' | 'idle';
+export type Phase = 'concept' | 'generating' | 'reflecting' | 'exporting' | 'complete' | 'idle';
 
 interface PhaseIndicatorProps {
     currentPhase: Phase;
@@ -27,6 +27,12 @@ export function PhaseIndicator({ currentPhase }: PhaseIndicatorProps) {
             label: 'Reflecting',
             description: 'Refining quality',
             icon: BrainCircuit,
+        },
+        {
+            id: 'exporting',
+            label: 'Exporting',
+            description: 'Syncing to Anki',
+            icon: UploadCloud,
         },
     ];
 

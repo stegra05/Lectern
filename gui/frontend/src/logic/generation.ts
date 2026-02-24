@@ -48,7 +48,8 @@ export const processGenerationEvent = (
         if (phase) {
             set(() => ({ currentPhase: phase }));
         } else {
-            // Pre-concept setup step — increment counter for progress tracking
+            // Non-phased step (e.g. Export) — reset phase and increment setup counter for initial trickle
+            set(() => ({ currentPhase: 'idle' }));
             useLecternStore.getState().incrementSetupStep();
         }
         return;
@@ -88,7 +89,7 @@ export const processGenerationEvent = (
 
     if (event.type === 'error') {
         const msg = event.message || 'An error occurred';
-        const isRecoverable = event.data?.recoverable === true;
+        const isRecoverable = (event.data as any)?.recoverable === true;
 
         useLecternStore.getState().addToast('error', msg, 8000);
 
