@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Calculator, FileSearch, Info, Lock, Upload } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -28,14 +29,6 @@ export function ConfigurationCard() {
     const estimationPhase = useEstimationPhase(isEstimating);
     const sliderConfig = computeTargetSliderConfig(estimation?.suggested_card_count);
 
-    // Clamp targetDeckSize into slider range whenever the range changes
-    const { min: sMin, max: sMax, disabled: sDisabled } = sliderConfig;
-    if (!sDisabled && (targetDeckSize < sMin || targetDeckSize > sMax)) {
-        const clamped = Math.min(Math.max(targetDeckSize, sMin), sMax);
-        // Defer to avoid setting state during render
-        queueMicrotask(() => setTargetDeckSize(clamped));
-    }
-
     return (
         <GlassCard className="space-y-6">
             <div className="flex items-center gap-3">
@@ -55,30 +48,26 @@ export function ConfigurationCard() {
                                 </div>
                             )}
                         </div>
-                        <div className="text-right">
-                            <input
-                                type="number"
-                                min={sliderConfig.min}
-                                max={sliderConfig.max}
-                                value={targetDeckSize}
-                                disabled={sliderConfig.disabled}
-                                onChange={(e) => {
-                                    const val = parseInt(e.target.value, 10);
-                                    if (!isNaN(val)) setTargetDeckSize(val);
-                                }}
-                                onBlur={(e) => {
-                                    const val = parseInt(e.target.value, 10);
-                                    if (isNaN(val) || val < sliderConfig.min) setTargetDeckSize(sliderConfig.min);
-                                    else if (val > sliderConfig.max) setTargetDeckSize(sliderConfig.max);
-                                }}
-                                className={clsx(
-                                    "text-right text-xl font-bold bg-transparent border-b-2 outline-none w-16 px-1 transition-colors",
-                                    sliderConfig.disabled
-                                        ? "text-text-muted border-transparent"
-                                        : "text-primary border-primary/30 focus:border-primary focus:bg-primary/10 rounded-t hover:border-primary/50"
-                                )}
-                            />
-                        </div>
+                        <input
+                            type="number"
+                            value={targetDeckSize}
+                            disabled={sliderConfig.disabled}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val) && val >= 1) setTargetDeckSize(val);
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (isNaN(val) || val < 1) setTargetDeckSize(1);
+                            }}
+                            className={clsx(
+                                "text-right text-xl font-bold bg-transparent border-b-2 outline-none w-20 px-2 transition-colors",
+                                sliderConfig.disabled
+                                    ? "text-text-muted border-transparent"
+                                    : "text-primary border-primary/30 focus:border-primary focus:bg-primary/10 rounded-t hover:border-primary/50"
+                            )}
+                        />
                     </div>
 
                     <div className="flex items-center gap-4">

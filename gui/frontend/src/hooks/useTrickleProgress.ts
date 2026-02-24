@@ -16,8 +16,6 @@ export interface TrickleConfig {
     ceilingOffset: number;
     /** Maximum display percentage (to avoid reaching 100%). Default: 99 */
     maxDisplay: number;
-    /** Time without update before considering stalled (ms). Default: 10000 */
-    stallThreshold: number;
 }
 
 export const DEFAULT_CONFIG: TrickleConfig = {
@@ -27,33 +25,24 @@ export const DEFAULT_CONFIG: TrickleConfig = {
     minStep: 0.05,
     ceilingOffset: 5,
     maxDisplay: 99,
-    stallThreshold: 10000,
 };
 
 /**
- * Result of the trickle progress hook.
- */
-export interface TrickleProgressResult {
-    /** The display percentage to show */
-    display: number;
-    /** Whether the progress appears stalled (no backend update for stallThreshold ms) */
-    isStalled: boolean;
-}
-
-/**
- * Smoothly interpolates progress between discrete jumps with stall detection.
+ * Smoothly interpolates progress between discrete jumps.
  *
- * When the real `targetPct` hasn't changed for a while, the hook
+ * When the real `targetPct` hasn't changed, the hook
  * slowly creeps the displayed value forward using a decelerating
  * curve so it never actually reaches the next expected milestone.
  *
- * If the target hasn't updated for longer than stallThreshold, the hook
- * reports a stalled state for UI indication.
- *
  * @param targetPct - The actual progress percentage from the backend
  * @param config - Optional configuration overrides
- * @returns Object with display percentage and stalled state
+ * @returns The display percentage to show
  */
+export interface TrickleProgressResult {
+    display: number;
+    isStalled: boolean;
+}
+
 export function useTrickleProgress(
     targetPct: number,
     config: Partial<TrickleConfig> = {}
@@ -63,7 +52,6 @@ export function useTrickleProgress(
     const [display, setDisplay] = useState(targetPct);
     const [isStalled, setIsStalled] = useState(false);
     const prevTarget = useRef(targetPct);
-    const lastUpdateRef = useRef(Date.now());
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -78,19 +66,17 @@ export function useTrickleProgress(
         }
     }, []);
 
-    // Track when target changes to reset stall detection
+    // Track when target changes to reset display
     useEffect(() => {
         if (targetPct !== prevTarget.current) {
             prevTarget.current = targetPct;
-            lastUpdateRef.current = Date.now();
-            setIsStalled(false);
             stopAllTimers();
             // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate: sync display with new target
             setDisplay(targetPct);
         }
     }, [targetPct, stopAllTimers]);
 
-    // Main trickle effect with consolidated stall detection
+    // Main trickle effect
     useEffect(() => {
         // Don't trickle at boundaries
         if (targetPct >= 100 || targetPct <= 0) {
@@ -101,20 +87,7 @@ export function useTrickleProgress(
 
         timeoutRef.current = setTimeout(() => {
             intervalRef.current = setInterval(() => {
-                const timeSinceUpdate = Date.now() - lastUpdateRef.current;
-                const stalled = timeSinceUpdate > cfg.stallThreshold;
-
-                if (stalled !== isStalled) {
-                    setIsStalled(stalled);
-                }
-
                 setDisplay((prev) => {
-                    if (stalled) {
-                        // Continue trickling but slower when stalled
-                        const stalledStep = (ceiling - prev) * cfg.decayFactor * 0.3;
-                        return prev + Math.max(stalledStep, cfg.minStep * 0.3);
-                    }
-
                     if (prev >= ceiling) {
                         if (intervalRef.current) clearInterval(intervalRef.current);
                         return prev;
@@ -137,13 +110,8 @@ export function useTrickleProgress(
         cfg.minStep,
         cfg.ceilingOffset,
         cfg.maxDisplay,
-        cfg.stallThreshold,
-        isStalled,
         stopAllTimers,
     ]);
 
-    return {
-        display: Math.round(Math.max(display, targetPct)),
-        isStalled,
-    };
+    return { display: Math.round(Math.max(display, targetPct)), isStalled };
 }

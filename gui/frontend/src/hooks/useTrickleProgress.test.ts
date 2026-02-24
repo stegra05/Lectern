@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useTrickleProgress, DEFAULT_CONFIG, type TrickleConfig } from './useTrickleProgress';
 
 describe('useTrickleProgress', () => {
@@ -47,19 +47,6 @@ describe('useTrickleProgress', () => {
             rerender({ target: 25 });
             expect(result.current.display).toBe(25);
         });
-
-        it('resets isStalled when target changes', () => {
-            const { result, rerender } = renderHook(
-                ({ target }: { target: number }) => useTrickleProgress(target),
-                { initialProps: { target: 50 } }
-            );
-
-            expect(result.current.isStalled).toBe(false);
-
-            // Change target
-            rerender({ target: 60 });
-            expect(result.current.isStalled).toBe(false);
-        });
     });
 
     describe('configuration', () => {
@@ -77,7 +64,7 @@ describe('useTrickleProgress', () => {
 
         it('merges custom config with defaults', () => {
             const customConfig: Partial<TrickleConfig> = {
-                stallThreshold: 5000,
+                startDelay: 5000,
             };
 
             const { result } = renderHook(() =>
@@ -85,26 +72,20 @@ describe('useTrickleProgress', () => {
             );
 
             expect(result.current.display).toBe(50);
-            expect(result.current.isStalled).toBe(false);
         });
     });
 
-    describe('stall detection', () => {
-        it('isStalled starts as false', () => {
-            const { result } = renderHook(() => useTrickleProgress(50));
-            expect(result.current.isStalled).toBe(false);
-        });
-
-        it('does not report stalled at 100%', () => {
+    describe('boundaries', () => {
+        it('does not trickle at 100%', () => {
             const { result } = renderHook(() => useTrickleProgress(100));
             vi.advanceTimersByTime(DEFAULT_CONFIG.startDelay + DEFAULT_CONFIG.tickInterval * 5);
-            expect(result.current.isStalled).toBe(false);
+            expect(result.current.display).toBe(100);
         });
 
-        it('does not report stalled at 0%', () => {
+        it('does not trickle at 0%', () => {
             const { result } = renderHook(() => useTrickleProgress(0));
             vi.advanceTimersByTime(DEFAULT_CONFIG.startDelay + DEFAULT_CONFIG.tickInterval * 5);
-            expect(result.current.isStalled).toBe(false);
+            expect(result.current.display).toBe(0);
         });
     });
 

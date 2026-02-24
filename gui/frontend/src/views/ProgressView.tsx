@@ -437,49 +437,59 @@ export function ProgressView() {
 
     const typeCounts = useMemo(() => countByType(cards), [cards]);
 
-    // Synthesize progress percentage from phase + batch progress:
-    //   idle:        0% →  5%   (setup steps: AnkiConnect, examples, session, PDF upload)
-    //   concept:     0% →  5%   (slide analysis progress via conceptProgress)
-    //   generating:  5% → 90%   (per-card progress, driven by cards.length / progress.total)
-    //   reflecting: 90% → 98%   (quality pass, driven by reflection rounds)
-    //   complete:   100%
+    // Continuous progress calculation: smooth 1-100% without phase jumps
+    // Weights: concept (10%), generating (85%), reflecting (5%)
     const rawProgressPct = useMemo(() => {
         if (currentPhase === 'complete' || step === 'done') return 100;
-        if (currentPhase === 'reflecting') {
-            const reflectPct = progress.total > 0
-                ? (progress.current / progress.total)
-                : 0;
-            return Math.round(90 + reflectPct * 8);
+
+        const conceptWeight = 0.10;     // 10% of total work
+        const generatingWeight = 0.85;  // 85% of total work
+        const reflectingWeight = 0.05;  // 5% of total work
+
+        // Concept progress (slide analysis)
+        const conceptPct = conceptProgress.total > 0
+            ? (conceptProgress.current / conceptProgress.total)
+            : 0;
+
+        // Generating progress (card creation) - use max of card count or batch progress
+        const cardBased = progress.total > 0 ? (cards.length / progress.total) : 0;
+        const batchBased = progress.total > 0 ? (progress.current / progress.total) : 0;
+        const generatingPct = Math.min(1, Math.max(cardBased, batchBased));
+
+        // Reflection progress
+        const reflectPct = progress.total > 0
+            ? (progress.current / progress.total)
+            : 0;
+
+        // Continuous blend based on current phase
+        if (currentPhase === 'concept') {
+            // Concept phase: 0-10%
+            return Math.max(1, Math.round(conceptPct * conceptWeight * 100));
         }
         if (currentPhase === 'generating') {
-            // Use the higher of batch-level progress or per-card count
-            const cardBased = progress.total > 0 ? (cards.length / progress.total) : 0;
-            const batchBased = progress.total > 0 ? (progress.current / progress.total) : 0;
-            const batchPct = Math.min(1, Math.max(cardBased, batchBased));
-            return Math.round(5 + batchPct * 85);
+            // Generating phase: 10-95%
+            return Math.round((conceptWeight + generatingPct * generatingWeight) * 100);
         }
-        if (currentPhase === 'concept') {
-            // Dynamic progress during concept phase based on slide analysis
-            const conceptPct = conceptProgress.total > 0
-                ? (conceptProgress.current / conceptProgress.total)
-                : 0;
-            return Math.round(conceptPct * 5);
+        if (currentPhase === 'reflecting') {
+            // Reflecting phase: 95-100%
+            return Math.round((conceptWeight + generatingWeight + reflectPct * reflectingWeight) * 100);
         }
-        // idle: trickle based on setup steps (0 → ~5%)
+
+        // Idle/setup phase: small progress based on setup steps
         if (setupStepsCompleted > 0) {
-            return Math.round(setupStepsCompleted * 1.25);
+            return Math.max(1, Math.round(setupStepsCompleted * 2));
         }
-        return 0;
+        return 1; // Start at 1% to show activity has begun
     }, [currentPhase, progress, step, cards.length, setupStepsCompleted, conceptProgress]);
 
-    const { display: progressPct, isStalled } = useTrickleProgress(rawProgressPct);
+    const { display: progressPct } = useTrickleProgress(rawProgressPct);
 
-    // Time estimation using the useTimeEstimate hook
+    // Time estimation using the useTimeEstimate hook with overall progress
     const timeEstimate = useTimeEstimate(
         currentPhase as 'concept' | 'generating' | 'reflecting' | 'complete' | 'idle',
+        rawProgressPct, // Pass overall progress percentage (0-100)
         cards.length,
-        progress.total,
-        progress.total > 0 ? progress.current / progress.total : 0
+        progress.total
     );
 
     // -----------------------------------------------------------------------
@@ -576,10 +586,7 @@ export function ProgressView() {
                         <p className="text-[10px] text-text-muted mt-0.5 font-mono">
                             {/* Status indicator with tooltip */}
                             <span className="flex items-center gap-1.5 group relative">
-                                <span className={clsx(
-                                    "w-1.5 h-1.5 rounded-full animate-pulse",
-                                    isStalled ? "bg-yellow-400" : "bg-primary"
-                                )} />
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                                 {/* Phase-specific text */}
                                 {currentPhase === 'concept' && (
                                     conceptProgress.total > 0 ? (
@@ -597,32 +604,24 @@ export function ProgressView() {
                                 {currentPhase === 'complete' && <span className="text-primary">Done - {cards.length} cards</span>}
                                 {(!currentPhase || currentPhase === 'idle') && <span>Starting...</span>}
 
-                                {/* Tooltip with time estimate and stall context */}
+                                {/* Tooltip with time estimate */}
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-0 mb-2 px-3 py-2 bg-zinc-800 text-zinc-200 text-xs rounded-lg whitespace-nowrap pointer-events-none border border-zinc-700 shadow-xl z-50">
                                     {timeEstimate.formatted || 'Calculating...'}
-                                    {isStalled && <div className="text-yellow-400 mt-1">AI is processing - this can take 10-30s per batch</div>}
                                 </div>
                             </span>
                         </p>
                     </div>
                     <span
-                        className={clsx(
-                            "text-xl font-bold cursor-default",
-                            isStalled ? "text-yellow-400" : "text-primary"
-                        )}
+                        className="text-xl font-bold cursor-default text-primary"
                         title={timeEstimate.formatted || undefined}
                     >
-                        {progressPct}%
+                        {progressPct.display}%
                     </span>
                 </div>
                 <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden">
                     <div
-                        className={clsx(
-                            "h-full rounded-full shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out",
-                            currentPhase === 'concept' && !isStalled && "animate-pulse",
-                            isStalled ? "bg-yellow-400" : "bg-primary"
-                        )}
-                        style={{ width: `${Math.min(100, progressPct)}%` }}
+                        className="h-full rounded-full bg-primary shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-500 ease-out"
+                        style={{ width: `${Math.min(100, progressPct.display)}%` }}
                     />
                 </div>
                 {/* Time estimate below progress bar */}
@@ -861,8 +860,8 @@ export function ProgressView() {
                             )}
                         </div>
                     )}
-                    {/* Loading skeletons */}
-                    {currentPhase === 'generating' && cards.length === 0 && (
+                    {/* Loading skeletons - only during initial generation when no cards exist yet */}
+                    {step === 'generating' && cards.length === 0 && (
                         <div className="space-y-4">
                             {[1, 2, 3].map((i) => (
                                 <CardSkeleton key={i} />
@@ -1021,8 +1020,8 @@ export function ProgressView() {
                             );
                         })}
                     </div>
-                    {/* Empty State - only show when not generating (skeletons handle that case) */}
-                    {cards.length === 0 && currentPhase !== 'generating' && (
+                    {/* Empty State - only show when not in active generation */}
+                    {cards.length === 0 && step !== 'generating' && (
                         <div className="h-full flex flex-col items-center justify-center text-text-muted border-2 border-dashed border-border rounded-xl bg-surface/20 min-h-[300px]">
                             <AlertCircle className="w-8 h-8 mb-4 opacity-20" />
                             <p className="font-medium">Waiting for cards…</p>
