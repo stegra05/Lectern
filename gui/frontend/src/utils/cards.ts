@@ -1,5 +1,6 @@
 import type { Card, ProgressEvent } from '../api';
 import type { SortOption } from '../hooks/types';
+import { getCardSlideNumber } from './cardMetadata';
 
 export function findLastError(logs: ProgressEvent[], isError: boolean): string | null {
     if (!isError) return null;
@@ -48,7 +49,7 @@ export function sortCards(cards: Card[], sortBy: SortOption): Card[] {
         case 'topic':
             return sorted.sort((a, b) => (a.slide_topic || '').localeCompare(b.slide_topic || ''));
         case 'slide':
-            return sorted.sort((a, b) => (a.slide_number || 0) - (b.slide_number || 0));
+            return sorted.sort((a, b) => (getCardSlideNumber(a) || 0) - (getCardSlideNumber(b) || 0));
         case 'type':
             return sorted.sort((a, b) => (a.model_name || '').localeCompare(b.model_name || ''));
         default:

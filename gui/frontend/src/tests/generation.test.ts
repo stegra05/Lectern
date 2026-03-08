@@ -39,6 +39,20 @@ describe('generation logic', () => {
     });
 
     describe('loadSession', () => {
+        it('prefers persisted total_pages metadata over card max', async () => {
+            vi.mocked(api.getSession).mockResolvedValue({
+                cards: [{ slide_number: 3, front: 'A', back: 'B' }],
+                deck_name: 'Test Deck',
+                total_pages: 12,
+            });
+
+            await loadSession('test-session', setMock);
+
+            expect(setMock).toHaveBeenCalledWith(expect.objectContaining({
+                totalPages: 12,
+            }));
+        });
+
         it('derives totalPages from cards', async () => {
             const mockCards = [
                 { slide_number: 1, front: 'A', back: 'B' },

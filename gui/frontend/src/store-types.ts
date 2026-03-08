@@ -1,4 +1,4 @@
-import type { ProgressEvent, Card, Estimation } from './api';
+import type { ProgressEvent, Card, CoverageData, Estimation } from './api';
 import type { Phase } from './components/PhaseIndicator';
 export type { Phase };
 import type { SortOption } from './hooks/types';
@@ -51,6 +51,7 @@ export type StoreState = {
     isEstimating: boolean;
     estimationError: string | null;
     totalPages: number;
+    coverageData: CoverageData | null;
 
     // Review / Sync
     isHistorical: boolean;

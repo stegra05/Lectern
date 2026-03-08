@@ -14,7 +14,7 @@ from lectern.utils.path_utils import get_app_data_dir
 logger = logging.getLogger(__name__)
 
 # Current database schema version - increment when making schema changes
-DB_SCHEMA_VERSION = 2
+DB_SCHEMA_VERSION = 3
 
 
 def get_db_path() -> Path:
@@ -87,7 +87,9 @@ class DatabaseManager:
                     tags TEXT,
                     model_name TEXT,
                     slide_set_name TEXT,
-                    logs TEXT
+                    logs TEXT,
+                    total_pages INTEGER,
+                    coverage_data TEXT
                 )
             """
             )
@@ -103,16 +105,13 @@ class DatabaseManager:
 
     def _run_migrations(self, conn: sqlite3.Connection, from_version: int) -> None:
         """Run database migrations from the given version to current."""
-        migrations = {
-            # Example for future migrations:
-            # 2: "ALTER TABLE history ADD COLUMN new_field TEXT",
-            2: "ALTER TABLE history ADD COLUMN logs TEXT",
-        }
-
         for version in range(from_version + 1, DB_SCHEMA_VERSION + 1):
-            if version in migrations:
-                logger.info(f"Running database migration to version {version}")
-                conn.execute(migrations[version])
+            logger.info(f"Running database migration to version {version}")
+            if version == 2:
+                self._add_column_if_missing(conn, "history", "logs", "TEXT")
+            elif version == 3:
+                self._add_column_if_missing(conn, "history", "total_pages", "INTEGER")
+                self._add_column_if_missing(conn, "history", "coverage_data", "TEXT")
 
             conn.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
@@ -122,6 +121,32 @@ class DatabaseManager:
         logger.info(
             f"Database migrated from version {from_version} to {DB_SCHEMA_VERSION}"
         )
+
+    def _table_exists(self, conn: sqlite3.Connection, table_name: str) -> bool:
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        )
+        return cursor.fetchone() is not None
+
+    def _column_exists(self, conn: sqlite3.Connection, table_name: str, column_name: str) -> bool:
+        if not self._table_exists(conn, table_name):
+            return False
+        cursor = conn.execute(f"PRAGMA table_info({table_name})")
+        return any(row[1] == column_name for row in cursor.fetchall())
+
+    def _add_column_if_missing(
+        self,
+        conn: sqlite3.Connection,
+        table_name: str,
+        column_name: str,
+        column_type: str,
+    ) -> None:
+        if self._column_exists(conn, table_name, column_name):
+            return
+        if not self._table_exists(conn, table_name):
+            return
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
     def _get_raw_connection(self) -> sqlite3.Connection:
         """Create a new database connection (internal use)."""
@@ -169,6 +194,8 @@ class DatabaseManager:
             "model_name": row[11],
             "slide_set_name": row[12],
             "logs": json.loads(row[13]) if len(row) > 13 and row[13] else [],
+            "total_pages": row[14] if len(row) > 14 else None,
+            "coverage_data": json.loads(row[15]) if len(row) > 15 and row[15] else None,
         }
 
     # History Methods
@@ -306,6 +333,8 @@ class DatabaseManager:
         slide_set_name: Optional[str] = None,
         model_name: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        total_pages: Optional[int] = None,
+        coverage_data: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Update the cards and metadata for a session. Returns True if updated."""
         updates: List[str] = ["cards = ?"]
@@ -323,6 +352,12 @@ class DatabaseManager:
         if tags is not None:
             updates.append("tags = ?")
             params.append(json.dumps(tags))
+        if total_pages is not None:
+            updates.append("total_pages = ?")
+            params.append(total_pages)
+        if coverage_data is not None:
+            updates.append("coverage_data = ?")
+            params.append(json.dumps(coverage_data))
 
         updates.append("last_modified = ?")
         params.append(datetime.now().isoformat())

@@ -16,6 +16,8 @@ class DraftStore:
         self.model_name = ""
         self.tags = []
         self.entry_id: Optional[str] = None
+        self.total_pages: Optional[int] = None
+        self.coverage_data: Optional[Dict[str, Any]] = None
         self._cards: List[Dict[str, Any]] = []
 
     def set_session_id(self, session_id: str) -> None:
@@ -30,11 +32,15 @@ class DraftStore:
         tags: List[str], 
         entry_id: Optional[str] = None,
         slide_set_name: str = "",  # NOTE(Tags): Pass through for hierarchical tagging
+        total_pages: Optional[int] = None,
+        coverage_data: Optional[Dict[str, Any]] = None,
     ):
         self.deck_name = deck_name
         self.slide_set_name = slide_set_name
         self.model_name = model_name
         self.tags = tags
+        self.total_pages = total_pages
+        self.coverage_data = coverage_data
         if entry_id:
             self.entry_id = entry_id
         self._cards = cards
@@ -71,6 +77,8 @@ class DraftStore:
         self.model_name = ""
         self.tags = []
         self.entry_id = None
+        self.total_pages = None
+        self.coverage_data = None
         self._cards = []
 
 class GenerationService:
@@ -162,6 +170,8 @@ class GenerationService:
                         tags,
                         entry_id,
                         slide_set_name=event.data.get("slide_set_name", ""),
+                        total_pages=event.data.get("total_pages"),
+                        coverage_data=event.data.get("coverage_data"),
                     )
             elif event.type == "step_end":
                 # Preserve success/failure in data but make message user-friendly
@@ -170,5 +180,9 @@ class GenerationService:
                 # If slide_set_name was resolved, capture it
                 if "slide_set_name" in event.data:
                     self.draft_store.slide_set_name = event.data["slide_set_name"]
+                if "page_count" in event.data:
+                    self.draft_store.total_pages = event.data["page_count"]
+                if "coverage_data" in event.data:
+                    self.draft_store.coverage_data = event.data["coverage_data"]
 
             yield event

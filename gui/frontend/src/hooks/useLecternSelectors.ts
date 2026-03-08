@@ -68,6 +68,7 @@ export const useSessionState = () => useLecternStore(useShallow((s) => ({
     isHistorical: s.isHistorical,
     sessionId: s.sessionId,
     totalPages: s.totalPages,
+    coverageData: s.coverageData,
 })));
 
 /** State for confirmation modal */
@@ -86,6 +87,7 @@ export const useIsCancelling = () => useLecternStore((s) => s.isCancelling);
 export const useIsHistorical = () => useLecternStore((s) => s.isHistorical);
 export const useSessionId = () => useLecternStore((s) => s.sessionId);
 export const useTotalPages = () => useLecternStore((s) => s.totalPages);
+export const useCoverageData = () => useLecternStore((s) => s.coverageData);
 export const useCards = () => useLecternStore((s) => s.cards);
 export const useIsSyncing = () => useLecternStore((s) => s.isSyncing);
 export const useSyncSuccess = () => useLecternStore((s) => s.syncSuccess);

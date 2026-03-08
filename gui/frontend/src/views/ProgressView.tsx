@@ -15,6 +15,7 @@ import { CardList } from '../components/CardList';
 import { useLecternStore } from '../store';
 import { useLogsState, useProgressState, useSessionState, useCardsState, useSyncState, useUIState, useLecternActions } from '../hooks/useLecternSelectors';
 import { filterCards, findLastError, sortCards } from '../utils/cards';
+import { getCardPageReferences } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
 import { useTimeEstimate } from '../hooks/useTimeEstimate';
 import { type FriendlyError, translateError } from '../utils/errorMessages';
@@ -342,7 +343,7 @@ function countByType(cards: { model_name?: string }[]): { basic: number; cloze: 
 
 export function ProgressView() {
     // Use atomic selectors instead of full store destructuring
-    const { step, currentPhase, isError, isCancelling, isHistorical, sessionId, totalPages } = useSessionState();
+    const { step, currentPhase, isError, isCancelling, isHistorical, sessionId, totalPages, coverageData } = useSessionState();
     const { logs, copied } = useLogsState();
     const { progress, conceptProgress, setupStepsCompleted } = useProgressState();
     const { cards, editingIndex, editForm } = useCardsState();
@@ -388,10 +389,7 @@ export function ProgressView() {
     const filteredCards = useMemo(() => {
         let result = filterCards(cards, searchQuery);
         if (activePage !== null) {
-            result = result.filter(c => {
-                const slideNum = c.slide_number ?? (c.metadata as { slide_number?: number })?.slide_number;
-                return slideNum === activePage;
-            });
+            result = result.filter(c => getCardPageReferences(c).includes(activePage));
         }
         return result;
     }, [cards, searchQuery, activePage]);
@@ -548,6 +546,7 @@ export function ProgressView() {
                     <CoverageGrid
                         totalPages={totalPages}
                         cards={cards}
+                        coverageData={coverageData}
                         activePage={activePage}
                         onPageClick={(page) => {
                             setActivePage(prev => prev === page ? null : page);

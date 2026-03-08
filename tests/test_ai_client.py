@@ -84,6 +84,14 @@ def test_safe_parse_json_normalizes_string_slide_number(ai_client):
     assert result["cards"][0]["slide_number"] == 4
 
 
+def test_safe_parse_json_normalizes_grounding_fields(ai_client):
+    json_str = '{"cards":[{"model_name":"Basic","front":"Q","back":"A","source_pages":["2",4],"concept_ids":["c1"," c2 "]}],"done":false}'
+    result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
+    assert result is not None
+    assert result["cards"][0]["source_pages"] == [2, 4]
+    assert result["cards"][0]["concept_ids"] == ["c1", "c2"]
+
+
 def test_safe_parse_json_rejects_fenced_json(ai_client):
     json_str = '```json\n{"cards":[{"model_name":"Basic","front":"Q","back":"A","slide_number":2,"slide_topic":"Topic"}],"done":false}\n```'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
@@ -125,6 +133,18 @@ def test_generate_more_cards_flow(ai_client):
     ai_client._chat.send_message.assert_called_once()
     assert result["done"] is False
     assert len(result["cards"]) == 1
+
+
+def test_generate_more_cards_includes_examples(ai_client):
+    mock_response = MagicMock()
+    mock_response.text = '{"cards":[], "done": true}'
+    ai_client._chat.send_message.return_value = mock_response
+
+    ai_client.generate_more_cards(limit=2, examples="Basic: sample")
+
+    sent_prompt = ai_client._chat.send_message.call_args.kwargs["message"]
+    assert "Style anchor from the user's deck" in sent_prompt
+    assert "Basic: sample" in sent_prompt
 
 
 def test_generate_more_cards_parse_failure_returns_empty(ai_client):

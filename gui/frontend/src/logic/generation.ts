@@ -1,12 +1,12 @@
-import { api, type ProgressEvent, type Card } from '../api';
+import { api, type ProgressEvent, type Card, type CoverageData, type SessionData } from '../api';
 import type { StoreState, LecternStore, Phase } from '../store-types';
 import { processStreamEvent } from './stream';
 import { stampUid, stampUids, reconcileCardUids } from '../utils/uid';
 import { useLecternStore } from '../store';
 import { deriveMaxSlideNumber, normalizeCardMetadata, normalizeCardsMetadata } from '../utils/cardMetadata';
 
-const deriveTotalPages = (cards: Card[]): number => {
-    return deriveMaxSlideNumber(cards);
+const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
+    return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
 };
 
 const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
@@ -37,7 +37,7 @@ export const processGenerationEvent = (
             const nextCards = [...prev.cards, stampUid(normalizedCard)];
             return {
                 cards: nextCards,
-                totalPages: Math.max(prev.totalPages, deriveTotalPages(nextCards)),
+                totalPages: deriveTotalPages(nextCards, prev.totalPages),
             };
         });
         return;
@@ -45,11 +45,13 @@ export const processGenerationEvent = (
 
     if (event.type === 'cards_replaced') {
         set((prev) => {
-            const normalized = normalizeCardsMetadata((event.data as any).cards || []);
+            const payload = (event.data as { cards?: Card[]; coverage_data?: CoverageData } | undefined) || undefined;
+            const normalized = normalizeCardsMetadata(payload?.cards || []);
             const reconciled = reconcileCardUids(prev.cards, normalized);
             return {
                 cards: reconciled,
-                totalPages: Math.max(prev.totalPages, deriveTotalPages(reconciled)),
+                totalPages: deriveTotalPages(reconciled, prev.totalPages),
+                coverageData: payload?.coverage_data ?? prev.coverageData,
             };
         });
         return;
@@ -63,6 +65,17 @@ export const processGenerationEvent = (
             // Non-phased step (e.g. Export) — reset phase and increment setup counter for initial trickle
             set(() => ({ currentPhase: 'idle' }));
             useLecternStore.getState().incrementSetupStep();
+        }
+        return;
+    }
+
+    if (event.type === 'step_end') {
+        const data = (event.data as { page_count?: number; coverage_data?: CoverageData } | undefined) || undefined;
+        if (data?.page_count || data?.coverage_data) {
+            set((prev) => ({
+                totalPages: data.page_count ?? prev.totalPages,
+                coverageData: data.coverage_data ?? prev.coverageData,
+            }));
         }
         return;
     }
@@ -86,6 +99,8 @@ export const processGenerationEvent = (
             currentPhase: 'complete',
             isCancelling: false,
             progress: { ...prev.progress, current: prev.progress.total },
+            totalPages: (event.data as { total_pages?: number } | undefined)?.total_pages ?? prev.totalPages,
+            coverageData: (event.data as { coverage_data?: CoverageData } | undefined)?.coverage_data ?? prev.coverageData,
         }));
         return;
     }
@@ -136,6 +151,7 @@ export const handleGenerate = async (
         isHistorical: false,
         currentPhase: 'idle',
         setupStepsCompleted: 0,
+        coverageData: null,
     });
     if (typeof window !== 'undefined') {
         localStorage.removeItem(ACTIVE_SESSION_KEY);
@@ -178,13 +194,14 @@ export const loadSession = async (
 ) => {
     try {
         set({ step: 'generating' });
-        const session = await api.getSession(sessionId);
+        const session: SessionData = await api.getSession(sessionId);
         const cards = stampUids(normalizeCardsMetadata(session.cards || []));
         set({
             cards,
             logs: session.logs || [],
-            totalPages: deriveTotalPages(cards),
-            deckName: session.deck_name || '',
+            totalPages: deriveTotalPages(cards, session.total_pages),
+            coverageData: session.coverage_data || null,
+            deckName: session.deck_name || session.deck || '',
             sessionId,
             isHistorical: true,
             step: 'done',
@@ -205,14 +222,15 @@ export const recoverSessionOnRefresh = async (
 
     try {
         const status = await api.getSessionStatus(sessionId);
-        const snapshot = await api.getSession(sessionId);
+        const snapshot: SessionData = await api.getSession(sessionId);
         if (status.active) {
             const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
             set({
                 sessionId,
                 cards,
-                totalPages: deriveTotalPages(cards),
-                deckName: snapshot.deck_name || '',
+                totalPages: deriveTotalPages(cards, snapshot.total_pages),
+                coverageData: snapshot.coverage_data || null,
+                deckName: snapshot.deck_name || snapshot.deck || '',
                 step: 'generating',
                 currentPhase: 'generating',
                 isHistorical: false,
@@ -223,8 +241,9 @@ export const recoverSessionOnRefresh = async (
             set({
                 sessionId,
                 cards,
-                totalPages: deriveTotalPages(cards),
-                deckName: snapshot.deck_name || '',
+                totalPages: deriveTotalPages(cards, snapshot.total_pages),
+                coverageData: snapshot.coverage_data || null,
+                deckName: snapshot.deck_name || snapshot.deck || '',
                 step: 'done',
                 currentPhase: 'complete',
                 isHistorical: true,

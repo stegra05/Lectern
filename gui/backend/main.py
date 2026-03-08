@@ -593,8 +593,14 @@ async def generate_cards(
                             # If slide_set_name was resolved, capture it
                             if event.data and "slide_set_name" in event.data:
                                 draft_store.slide_set_name = event.data["slide_set_name"]
+                            if event.data and "total_pages" in event.data:
+                                draft_store.total_pages = event.data["total_pages"]
+                            if event.data and "coverage_data" in event.data:
+                                draft_store.coverage_data = event.data["coverage_data"]
 
                             if current_cards:
+                                total_pages = draft_store.total_pages if isinstance(draft_store.total_pages, int) else None
+                                coverage_data = draft_store.coverage_data if isinstance(draft_store.coverage_data, dict) else None
                                 # Persist to database via manager (handles metadata updates too)
                                 history_mgr.sync_session_state(
                                     session_id=session.session_id,
@@ -603,7 +609,9 @@ async def generate_cards(
                                     deck_name=deck_name,
                                     slide_set_name=draft_store.slide_set_name,
                                     model_name=model_name,
-                                    tags=tags_list
+                                    tags=tags_list,
+                                    total_pages=total_pages,
+                                    coverage_data=coverage_data,
                                 )
                 except Exception:
                     pass
@@ -627,7 +635,12 @@ async def stop_generation(session_id: Optional[str] = None):
 async def get_drafts(session_id: Optional[str] = None):
     session = _get_session_or_404(session_id, require_session_id=True)
     runtime = _get_runtime_or_404(session.session_id, session=session)
-    return {"cards": runtime.draft_store.get_drafts(), "session_id": session.session_id}
+    return {
+        "cards": runtime.draft_store.get_drafts(),
+        "session_id": session.session_id,
+        "total_pages": runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
+        "coverage_data": runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
+    }
 
 class DraftsUpdate(BaseModel):
     cards: List[dict]
@@ -645,7 +658,9 @@ async def update_drafts(update: DraftsUpdate, session_id: Optional[str] = None):
         cards=update.cards,
         deck_name=runtime.draft_store.deck_name,
         model_name=runtime.draft_store.model_name,
-        tags=runtime.draft_store.tags
+        tags=runtime.draft_store.tags,
+        total_pages=runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
+        coverage_data=runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
     )
 
     return {"status": "updated", "session_id": session.session_id}
@@ -664,12 +679,14 @@ async def update_draft(index: int, update: DraftUpdate, session_id: Optional[str
     # Persist to DB via manager
     cards = runtime.draft_store.get_drafts()
     history_mgr = HistoryManager()
-    history_mgr.save_session_cards(
+    history_mgr.sync_session_state(
         session_id=session.session_id,
         cards=cards,
         deck_name=runtime.draft_store.deck_name,
         model_name=runtime.draft_store.model_name,
-        tags=runtime.draft_store.tags
+        tags=runtime.draft_store.tags,
+        total_pages=runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
+        coverage_data=runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
     )
     
     return {"status": "updated", "session_id": session.session_id}
@@ -690,7 +707,9 @@ async def delete_draft(index: int, session_id: Optional[str] = None):
         cards=cards,
         deck_name=runtime.draft_store.deck_name,
         model_name=runtime.draft_store.model_name,
-        tags=runtime.draft_store.tags
+        tags=runtime.draft_store.tags,
+        total_pages=runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
+        coverage_data=runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
     )
         
     return {"status": "deleted", "session_id": session.session_id}
@@ -719,7 +738,9 @@ async def sync_drafts(session_id: Optional[str] = None):
             deck_name=deck_name,
             slide_set_name=slide_set_name,
             model_name=model_name,
-            tags=tags
+            tags=tags,
+            total_pages=store.total_pages if isinstance(store.total_pages, int) else None,
+            coverage_data=store.coverage_data if isinstance(store.coverage_data, dict) else None,
         )
 
         if entry_id:

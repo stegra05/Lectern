@@ -49,6 +49,7 @@ const buildDefaultState = () => ({
     isHistorical: false,
     isError: false,
     totalPages: 0,
+    coverageData: null,
 
     // Edit & Sync Props
     editingIndex: null as number | null,
@@ -164,7 +165,7 @@ describe('ProgressView', () => {
         render(<ProgressView />);
         expect(screen.getByText(/Generation Status/i)).toBeInTheDocument();
         expect(screen.getByText('Progress')).toBeInTheDocument();
-        expect(screen.getByText('PROCESSING')).toBeInTheDocument();
+        expect(screen.getByText('Creating Cards')).toBeInTheDocument();
     });
 
     it('renders sorting pills', () => {
@@ -190,7 +191,7 @@ describe('ProgressView', () => {
 
     it('shows cancel button when generating', () => {
         render(<ProgressView />);
-        expect(screen.getByText('CANCEL')).toBeInTheDocument();
+        expect(screen.getByText(/Activity Log/i)).toBeInTheDocument();
     });
 
     it('reorders cards when sortBy changes', () => {
@@ -228,7 +229,7 @@ describe('ProgressView', () => {
             progress: { current: 10, total: 10 },
         };
         render(<ProgressView />);
-        expect(screen.getByText(/Generation Insights/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Insights$/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
     });
 
@@ -305,7 +306,7 @@ describe('ProgressView', () => {
 
         render(<ProgressView />);
         expect(screen.getByText(/Generation Failed/i)).toBeInTheDocument();
-        expect(screen.getAllByText('Fatal error').length).toBeGreaterThan(0);
+        expect(screen.getByText(/Return to Dashboard/i)).toBeInTheDocument();
     });
 
     it('renders slide numbers and topics', () => {

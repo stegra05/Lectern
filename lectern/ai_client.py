@@ -409,6 +409,7 @@ class LecternAIClient:
         covered_slides: List[int] | None = None,
         pacing_hint: str = "",
         all_card_fronts: List[str] | None = None,
+        coverage_gap_text: str = "",
     ) -> Dict[str, Any]:
         coverage_summary = self._prune_history(all_card_fronts=all_card_fronts)
         
@@ -421,6 +422,13 @@ class LecternAIClient:
         slide_text = ""
         if covered_slides:
             slide_text = f"\n- Already covered slides: {', '.join(str(s) for s in covered_slides[:50])}...\n"
+
+        examples_text = ""
+        if examples.strip():
+            examples_text = (
+                "\n- Style anchor from the user's deck. Match the granularity and tone, but never copy content verbatim:\n"
+                f"{examples.strip()}\n"
+            )
             
         # Use PromptBuilder
         prompt = self._prompt_builder.generation(
@@ -428,7 +436,8 @@ class LecternAIClient:
             pacing_hint=pacing_hint,
             avoid_text=avoid_text,
             slide_coverage=slide_text,
-            coverage_summary=coverage_summary,
+            coverage_summary=f"{coverage_gap_text}{coverage_summary}",
+            examples_text=examples_text,
         )
         
         update: dict[str, Any] = {
@@ -459,10 +468,15 @@ class LecternAIClient:
         reflection_prompt: str | None = None,
         all_card_fronts: List[str] | None = None,
         cards_to_refine_json: str = "",
+        coverage_gaps: str = "",
     ) -> Dict[str, Any]:
         self._prune_history(all_card_fronts=all_card_fronts)
         
-        prompt = reflection_prompt or self._prompt_builder.reflection(limit=limit, cards_to_refine=cards_to_refine_json)
+        prompt = reflection_prompt or self._prompt_builder.reflection(
+            limit=limit,
+            cards_to_refine=cards_to_refine_json,
+            coverage_gaps=coverage_gaps,
+        )
         
         update: dict[str, Any] = {"response_schema": _REFLECTION_SCHEMA}
         thinking = self._thinking_config_for("reflection")

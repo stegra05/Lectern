@@ -51,10 +51,50 @@ export interface Card {
     fields?: Record<string, string>;
     model_name?: string;
     slide_number?: number;
+    source_pages?: number[];
+    concept_ids?: string[];
     slide_topic?: string;
     tag?: string;
     /** Client-only stable identity — stamped on ingestion, never sent to backend */
     _uid?: string;
+    [key: string]: unknown;
+}
+
+export interface CoverageConcept {
+    id: string;
+    name: string;
+    importance: string;
+    difficulty?: string;
+    page_references?: number[];
+}
+
+export interface CoverageData {
+    total_pages: number;
+    document_type?: string | null;
+    concept_catalog?: CoverageConcept[];
+    relation_catalog?: Array<Record<string, unknown>>;
+    covered_pages?: number[];
+    uncovered_pages?: number[];
+    covered_page_count?: number;
+    page_coverage_pct?: number;
+    covered_concept_ids?: string[];
+    covered_concept_count?: number;
+    total_concepts?: number;
+    concept_coverage_pct?: number;
+    high_priority_total?: number;
+    high_priority_covered?: number;
+    missing_high_priority?: CoverageConcept[];
+    uncovered_concepts?: CoverageConcept[];
+}
+
+export interface SessionData {
+    cards: Card[];
+    session_id: string;
+    deck_name?: string;
+    deck?: string;
+    slide_set_name?: string;
+    total_pages?: number | null;
+    coverage_data?: CoverageData | null;
     [key: string]: unknown;
 }
 
@@ -411,7 +451,7 @@ export const api = {
         await parseNDJSONStream(res, onEvent);
     },
 
-    getSession: async (sessionId: string) => {
+    getSession: async (sessionId: string): Promise<SessionData> => {
         const res = await fetch(`${API_URL}/session/${sessionId}`);
         if (!res.ok) throw new Error("Failed to load session");
         return res.json();

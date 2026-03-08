@@ -40,11 +40,19 @@ export const processSyncEvent = async (
       if (isHistorical && sessionId) {
         const session = await api.getSession(sessionId);
         const normalized = normalizeCardsMetadata(session.cards || []);
-        set(() => ({ cards: reconcileCardUids(existingCards, normalized) }));
+        set(() => ({
+          cards: reconcileCardUids(existingCards, normalized),
+          coverageData: session.coverage_data || null,
+          totalPages: session.total_pages ?? get().totalPages,
+        }));
       } else if (sessionId) {
         const drafts = await api.getDrafts(sessionId);
         const normalized = normalizeCardsMetadata(drafts.cards || []);
-        set(() => ({ cards: reconcileCardUids(existingCards, normalized) }));
+        set(() => ({
+          cards: reconcileCardUids(existingCards, normalized),
+          coverageData: drafts.coverage_data || null,
+          totalPages: drafts.total_pages ?? get().totalPages,
+        }));
       }
     } catch (refreshErr) {
       console.error('Failed to refresh cards after sync:', refreshErr);

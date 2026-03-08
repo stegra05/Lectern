@@ -18,6 +18,7 @@ from lectern.cost_estimator import (
     estimate_cost_with_base as estimate_cost_with_base_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
 )
+from lectern.coverage import compute_coverage_data
 from lectern.generation_loop import (
     GenerationLoopConfig,
     GenerationLoopContext,
@@ -256,7 +257,20 @@ class LecternGenerationService:
                 # Emit final progress to indicate concept phase completion
                 yield ServiceEvent("progress_update", "", {"current": metadata_pages, "total": metadata_pages, "phase": "concept"})
 
-                yield ServiceEvent("step_end", "Concept Map Built", {"success": True, "page_count": metadata_pages})
+                initial_coverage = compute_coverage_data(
+                    cards=[],
+                    concept_map=concept_map,
+                    total_pages=metadata_pages,
+                )
+                yield ServiceEvent(
+                    "step_end",
+                    "Concept Map Built",
+                    {
+                        "success": True,
+                        "page_count": metadata_pages,
+                        "coverage_data": initial_coverage,
+                    },
+                )
                 yield ServiceEvent("info", "Concept Map built", {"map": concept_map})
                 for w in ai.drain_warnings():
                     yield ServiceEvent("warning", w)
@@ -405,6 +419,12 @@ class LecternGenerationService:
                 history_mgr.update_entry(history_id, status="error")
                 return
 
+            final_coverage = compute_coverage_data(
+                cards=all_cards,
+                concept_map=concept_map,
+                total_pages=len(pages),
+            )
+
             # 8. Creation in Anki
             if cfg.skip_export:
                  # Draft Mode: Save state but don't export
@@ -418,7 +438,9 @@ class LecternGenerationService:
                      deck_name=cfg.deck_name,
                      slide_set_name=slide_set_name,
                      model_name=cfg.model_name,
-                     tags=cfg.tags
+                     tags=cfg.tags,
+                     total_pages=len(pages),
+                     coverage_data=final_coverage,
                  )
                  
                  yield ServiceEvent("done", "Draft Generation Complete", {
@@ -428,6 +450,8 @@ class LecternGenerationService:
                     "elapsed": time.perf_counter() - start_time,
                     "cards": all_cards,  # Return cards for draft store
                     "slide_set_name": slide_set_name,  # NOTE(Tags): Include for GUI draft sync
+                    "total_pages": len(pages),
+                    "coverage_data": final_coverage,
                 })
                  return
 
@@ -468,7 +492,9 @@ class LecternGenerationService:
                 deck_name=cfg.deck_name,
                 slide_set_name=slide_set_name,
                 model_name=cfg.model_name,
-                tags=cfg.tags
+                tags=cfg.tags,
+                total_pages=len(pages),
+                coverage_data=final_coverage,
             )
             
             elapsed = time.perf_counter() - start_time
@@ -478,6 +504,8 @@ class LecternGenerationService:
                 "total": len(all_cards),
                 "elapsed": elapsed,
                 "slide_set_name": slide_set_name,  # NOTE(Tags): Include for GUI draft sync
+                "total_pages": len(pages),
+                "coverage_data": final_coverage,
             })
 
         except Exception as e:

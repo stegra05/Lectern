@@ -14,9 +14,25 @@ const buildFieldsFromCanonical = (card: Card): Record<string, string> => {
 };
 
 export const getCardSlideNumber = (card: Card): number | null => {
-    return typeof card.slide_number === 'number' && Number.isInteger(card.slide_number) && card.slide_number > 0
-        ? card.slide_number
-        : null;
+    if (typeof card.slide_number === 'number' && Number.isInteger(card.slide_number) && card.slide_number > 0) {
+        return card.slide_number;
+    }
+    if (Array.isArray(card.source_pages)) {
+        const first = card.source_pages.find((page): page is number => Number.isInteger(page) && page > 0);
+        return first ?? null;
+    }
+    return null;
+};
+
+export const getCardPageReferences = (card: Card): number[] => {
+    if (Array.isArray(card.source_pages)) {
+        const pages = card.source_pages.filter((page): page is number => Number.isInteger(page) && page > 0);
+        if (pages.length > 0) {
+            return [...new Set(pages)].sort((a, b) => a - b);
+        }
+    }
+    const slideNumber = getCardSlideNumber(card);
+    return slideNumber !== null ? [slideNumber] : [];
 };
 
 export const normalizeCardMetadata = (card: Card): Card => {

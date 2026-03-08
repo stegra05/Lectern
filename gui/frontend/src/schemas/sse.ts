@@ -38,6 +38,8 @@ export const CardDataSchema = z.object({
   fields: z.record(z.string()).optional(),
   model_name: z.string().optional(),
   slide_number: z.number().optional(),
+  source_pages: z.array(z.number()).optional(),
+  concept_ids: z.array(z.string()).optional(),
   slide_topic: z.string().optional(),
   tag: z.string().optional(),
   _uid: z.string().optional(),

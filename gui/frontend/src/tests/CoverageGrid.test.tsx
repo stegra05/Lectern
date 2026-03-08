@@ -110,4 +110,23 @@ describe('CoverageGrid', () => {
         fireEvent.click(clearBtn);
         expect(onPageClick).toHaveBeenCalledWith(1); // Clicking clear calls with current page (toggle logic in parent)
     });
+
+    it('shows separate concept coverage when catalog metadata exists', () => {
+        render(
+            <CoverageGrid
+                totalPages={3}
+                cards={[{ front: 'A', back: 'B', source_pages: [1], concept_ids: ['c1'], _uid: '1' }]}
+                coverageData={{
+                    total_pages: 3,
+                    concept_catalog: [
+                        { id: 'c1', name: 'Concept 1', importance: 'high', page_references: [1] },
+                        { id: 'c2', name: 'Concept 2', importance: 'medium', page_references: [2] },
+                    ],
+                }}
+            />
+        );
+
+        expect(screen.getByText(/Concepts 1\/2 \(50%\)/)).toBeInTheDocument();
+        expect(screen.getByText(/High Priority 1\/1/)).toBeInTheDocument();
+    });
 });

@@ -35,7 +35,9 @@ class HistoryManager:
                            deck_name: Optional[str] = None,
                            slide_set_name: Optional[str] = None,
                            model_name: Optional[str] = None,
-                           tags: Optional[List[str]] = None) -> bool:
+                           tags: Optional[List[str]] = None,
+                           total_pages: Optional[int] = None,
+                           coverage_data: Optional[Dict[str, Any]] = None) -> bool:
         """Persist session cards, status, and metadata in one transaction."""
         if not session_id:
             return False
@@ -47,7 +49,9 @@ class HistoryManager:
             deck_name=deck_name,
             slide_set_name=slide_set_name,
             model_name=model_name,
-            tags=tags
+            tags=tags,
+            total_pages=total_pages,
+            coverage_data=coverage_data,
         )
         
         # If status or card_count provided, update core record

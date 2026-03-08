@@ -30,6 +30,8 @@ class TestPromptStructure:
         assert "expert educator" in prompt
         assert "JSON" in prompt
         assert "objectives, concepts, relations" in prompt
+        assert "document_type" in prompt
+        assert "page_references" in prompt
 
     def test_concept_map_with_focus(self):
         config = PromptConfig(focus_prompt="Deep Learning")
@@ -55,6 +57,8 @@ class TestPromptStructure:
         assert "de" in prompt
         assert "Global Concept Map" in prompt
         assert "slide_number" in prompt
+        assert "concept_ids" in prompt
+        assert "source_pages" in prompt
 
     def test_reflection_prompt(self):
         config = PromptConfig()

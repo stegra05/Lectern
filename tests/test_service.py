@@ -1014,7 +1014,7 @@ class TestLoopInternals:
             )
         )
 
-        assert ai.generate_more_cards.call_count == 1
+        assert ai.generate_more_cards.call_count == 2
         assert any(e.type == "status" for e in events)
         assert any(e.type == "progress_update" for e in events)
 

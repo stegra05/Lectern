@@ -1,0 +1,60 @@
+[1970-01-21T12:29:55.091Z] [SESSION_START] Session started
+  Data: {
+  "session_id": "1d3ca848a2de4f23860078cdac3fcb09"
+}
+
+[1970-01-21T12:29:55.091Z] [INFO] Processing file: lectern_q_aklsfu.pdf (865004 bytes)
+  Data: {}
+
+[1970-01-21T12:29:55.091Z] [STEP_START] Check AnkiConnect
+  Data: {}
+
+[1970-01-21T12:29:55.091Z] [STEP_END] ✔ AnkiConnect Connected
+  Data: {
+  "success": true
+}
+
+[1970-01-21T12:29:55.091Z] [STEP_START] Sample examples from deck
+  Data: {}
+
+[1970-01-21T12:29:55.091Z] [INFO] Loaded style examples from Anki
+  Data: {}
+
+[1970-01-21T12:29:55.091Z] [STEP_END] ✔ Examples Loaded
+  Data: {
+  "success": true
+}
+
+[1970-01-21T12:29:55.091Z] [STEP_START] Start AI session
+  Data: {}
+
+[1970-01-21T12:29:55.091Z] [STEP_END] ✔ Session Started
+  Data: {
+  "success": true
+}
+
+[1970-01-21T12:29:55.091Z] [STEP_START] Upload PDF to Gemini
+  Data: {}
+
+[1970-01-21T12:29:55.093Z] [STEP_END] ✔ PDF Uploaded
+  Data: {
+  "success": true
+}
+
+[1970-01-21T12:29:55.093Z] [STEP_START] Build global concept map
+  Data: {
+  "phase": "concept"
+}
+
+[1970-01-21T12:29:55.093Z] [PROGRESS_START] Analyzing slides
+  Data: {
+  "total": 10,
+  "phase": "concept"
+}
+
+[1970-01-21T12:29:55.093Z] [PROGRESS_UPDATE] 
+  Data: {
+  "current": 0,
+  "total": 10,
+  "phase": "concept"
+}

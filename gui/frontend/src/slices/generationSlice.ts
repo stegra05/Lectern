@@ -20,6 +20,7 @@ export const getGenerationState = () => ({
   isEstimating: false,
   estimationError: null as string | null,
   totalPages: 0,
+  coverageData: null as import("../api").CoverageData | null,
   setupStepsCompleted: 0,
   conceptProgress: { current: 0, total: 0 },
 });
@@ -80,7 +81,7 @@ export const createGenerationActions = (
   setEstimationError: (error) => set({ estimationError: error }),
   setTotalPages: (n) => set({ totalPages: n }),
   recommendTargetDeckSize: (est) => {
-    set({ totalPages: est.pages });
+    set({ totalPages: est.pages, coverageData: null });
 
     const pageCount = est.pages || 1;
     const textChars = est.text_chars || 0;

@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generator, Iterable, List, Optional
 
 from lectern.ai_pacing import PacingState
+from lectern.coverage import (
+    build_generation_gap_text,
+    build_reflection_gap_text,
+    compute_coverage_data,
+)
 from lectern.utils.error_handling import capture_exception
 
 logger = logging.getLogger(__name__)
@@ -107,6 +112,8 @@ def run_generation_loop(
     event_factory: Callable[..., Any],
     should_stop: Callable[[Optional[Callable[[], bool]]], bool],
 ) -> Generator[Any, None, None]:
+    targeted_retry_budget = 1
+
     while len(state.all_cards) < config.total_cards_cap:
         remaining = config.total_cards_cap - len(state.all_cards)
         limit = min(config.actual_batch_size, remaining)
@@ -124,13 +131,12 @@ def run_generation_loop(
                 key = get_card_key(card)
                 if key:
                     recent_keys.append(key[:120])
-            covered_slides = sorted(
-                {
-                    int(card.get("slide_number"))
-                    for card in state.all_cards
-                    if isinstance(card, dict) and str(card.get("slide_number", "")).isdigit()
-                }
+            coverage_data = compute_coverage_data(
+                cards=state.all_cards,
+                concept_map=context.concept_map,
+                total_pages=len(state.pages),
             )
+            covered_slides = coverage_data.get("covered_pages", [])
 
             # NOTE(Pacing): Calculate real-time feedback using PacingState.
             pacing_hint = PacingState(
@@ -148,6 +154,7 @@ def run_generation_loop(
                 covered_slides=covered_slides,
                 pacing_hint=pacing_hint,
                 all_card_fronts=collect_card_fronts(state.all_cards)[-200:],
+                coverage_gap_text=build_generation_gap_text(coverage_data),
             )
             for w in context.ai.drain_warnings():
                 yield event_factory("warning", w)
@@ -169,6 +176,18 @@ def run_generation_loop(
                         "warning",
                         "Batch returned cards, but all were duplicates.",
                     )
+                has_coverage_gaps = bool(
+                    coverage_data.get("missing_high_priority")
+                    or coverage_data.get("uncovered_concepts")
+                    or coverage_data.get("uncovered_pages")
+                )
+                if has_coverage_gaps and targeted_retry_budget > 0:
+                    targeted_retry_budget -= 1
+                    yield event_factory(
+                        "warning",
+                        "Retrying generation with an explicit coverage-gap prompt before stopping.",
+                    )
+                    continue
                 break
 
             # Checkpoint was here, now handled by HistoryManager/DatabaseManager in service layer on completion or sync.
@@ -206,12 +225,17 @@ def run_reflection_loop(
             return
 
         try:
-            # Select the most recent batch of cards to refine
-            batch_size = min(config.actual_batch_size, len(state.all_cards), remaining)
+            # Review the whole deck within the reflection cap so the model can rebalance coverage globally.
+            batch_size = min(len(state.all_cards), remaining)
             if batch_size == 0:
                 break
-                
-            cards_to_refine = state.all_cards[-batch_size:]
+
+            cards_to_refine = state.all_cards[:batch_size]
+            coverage_data = compute_coverage_data(
+                cards=state.all_cards,
+                concept_map=context.concept_map,
+                total_pages=len(state.pages),
+            )
             import json
             cards_to_refine_json = json.dumps(cards_to_refine, ensure_ascii=False)
 
@@ -219,6 +243,7 @@ def run_reflection_loop(
                 limit=batch_size,
                 all_card_fronts=collect_card_fronts(state.all_cards)[-200:],
                 cards_to_refine_json=cards_to_refine_json,
+                coverage_gaps=build_reflection_gap_text(coverage_data),
             )
             for w in context.ai.drain_warnings():
                 yield event_factory("warning", w)
@@ -227,7 +252,7 @@ def run_reflection_loop(
             # We are replacing the batch we sent in.
             # Pop old ones from state to prevent duplicates in seen_keys, though seen_keys won't perfectly forget unless we manually remove them.
             # To be clean, just pop them from all_cards.
-            state.all_cards = state.all_cards[:-batch_size]
+            state.all_cards = state.all_cards[batch_size:]
             
             # Note: seen_keys still contains the old keys, which might prevent slightly-modified duplicates. 
             # This is acceptable to prevent global duplicates, but to allow refining the exact SAME text (e.g. if LLM returns the card unmodified), 
@@ -245,8 +270,20 @@ def run_reflection_loop(
                 event_factory=event_factory,
             )
 
+            updated_coverage = compute_coverage_data(
+                cards=state.all_cards,
+                concept_map=context.concept_map,
+                total_pages=len(state.pages),
+            )
             # Signal frontend to replace the whole deck
-            yield event_factory("cards_replaced", "Applied reflection batch", {"cards": state.all_cards})
+            yield event_factory(
+                "cards_replaced",
+                "Applied reflection batch",
+                {
+                    "cards": state.all_cards,
+                    "coverage_data": updated_coverage,
+                },
+            )
 
             yield event_factory("progress_update", "", {"current": round_idx + 1})
 

@@ -37,6 +37,8 @@ def test_concept_map_prompt():
     prompt = builder.concept_map()
     assert "construct a comprehensive global concept map" in prompt
     assert "ISO 639-1 code" in prompt
+    assert "page_references" in prompt
+    assert "document_type" in prompt
     assert "language (string)" in prompt or "language" in prompt  # Schema key present
 
 import json

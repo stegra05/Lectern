@@ -1,17 +1,18 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
-import type { Card } from '../api';
-import { deriveMaxSlideNumber, getCardSlideNumber } from '../utils/cardMetadata';
+import type { Card, CoverageData } from '../api';
+import { deriveMaxSlideNumber, getCardPageReferences } from '../utils/cardMetadata';
 
 interface CoverageGridProps {
     totalPages: number;
     cards: Card[];
+    coverageData?: CoverageData | null;
     activePage?: number | null;
     onPageClick?: (page: number) => void;
 }
 
-export function CoverageGrid({ totalPages, cards, activePage, onPageClick }: CoverageGridProps) {
+export function CoverageGrid({ totalPages, cards, coverageData, activePage, onPageClick }: CoverageGridProps) {
     const effectiveTotalPages = useMemo(
         () => Math.max(totalPages, deriveMaxSlideNumber(cards)),
         [cards, totalPages]
@@ -21,10 +22,9 @@ export function CoverageGrid({ totalPages, cards, activePage, onPageClick }: Cov
     const coverageMap = useMemo(() => {
         const map = new Map<number, number>();
         cards.forEach(card => {
-            const slideNumber = getCardSlideNumber(card);
-            if (slideNumber !== null) {
-                map.set(slideNumber, (map.get(slideNumber) || 0) + 1);
-            }
+            getCardPageReferences(card).forEach(page => {
+                map.set(page, (map.get(page) || 0) + 1);
+            });
         });
         return map;
     }, [cards]);
@@ -39,6 +39,49 @@ export function CoverageGrid({ totalPages, cards, activePage, onPageClick }: Cov
     }, [coverageMap, effectiveTotalPages]);
 
     const coveragePct = effectiveTotalPages > 0 ? Math.round((coveredCount / effectiveTotalPages) * 100) : 0;
+    const conceptSummary = useMemo(() => {
+        const concepts = coverageData?.concept_catalog || [];
+        if (!concepts.length) {
+            return null;
+        }
+
+        const coveredPagesByCard = cards.map(getCardPageReferences);
+        const explicitConceptIds = new Set<string>();
+        const coveredConceptIds = new Set<string>();
+
+        cards.forEach(card => {
+            (card.concept_ids || []).forEach(id => {
+                if (typeof id === 'string' && id.trim()) {
+                    explicitConceptIds.add(id.trim());
+                }
+            });
+        });
+
+        concepts.forEach(concept => {
+            if (explicitConceptIds.has(concept.id)) {
+                coveredConceptIds.add(concept.id);
+                return;
+            }
+            const conceptPages = new Set((concept.page_references || []).filter(page => Number.isInteger(page) && page > 0));
+            if (conceptPages.size === 0) {
+                return;
+            }
+            const hasOverlap = coveredPagesByCard.some(cardPages => cardPages.some(page => conceptPages.has(page)));
+            if (hasOverlap) {
+                coveredConceptIds.add(concept.id);
+            }
+        });
+
+        const highPriority = concepts.filter(concept => concept.importance === 'high');
+        const highPriorityCovered = highPriority.filter(concept => coveredConceptIds.has(concept.id)).length;
+        return {
+            total: concepts.length,
+            covered: coveredConceptIds.size,
+            pct: Math.round((coveredConceptIds.size / concepts.length) * 100),
+            highPriorityTotal: highPriority.length,
+            highPriorityCovered,
+        };
+    }, [cards, coverageData]);
 
     if (effectiveTotalPages === 0) return null;
 
@@ -49,6 +92,11 @@ export function CoverageGrid({ totalPages, cards, activePage, onPageClick }: Cov
                     Page Coverage
                 </h3>
                 <div className="flex items-center gap-2">
+                    {conceptSummary && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border bg-surface text-text-muted border-border">
+                            Concepts {conceptSummary.covered}/{conceptSummary.total} ({conceptSummary.pct}%)
+                        </span>
+                    )}
                     {activePage && onPageClick && (
                         <button
                             onClick={() => onPageClick(activePage)} // Click again to clear
@@ -67,6 +115,15 @@ export function CoverageGrid({ totalPages, cards, activePage, onPageClick }: Cov
                     </span>
                 </div>
             </div>
+
+            {conceptSummary && (
+                <div className="flex items-center justify-between rounded border border-border bg-surface/60 px-2 py-1 text-[10px] text-text-muted">
+                    <span>Concept Coverage</span>
+                    <span className="font-mono">
+                        High Priority {conceptSummary.highPriorityCovered}/{conceptSummary.highPriorityTotal}
+                    </span>
+                </div>
+            )}
 
             <div className="grid grid-cols-10 gap-1">
                 {Array.from({ length: effectiveTotalPages }, (_, i) => i + 1).map((page, i) => {

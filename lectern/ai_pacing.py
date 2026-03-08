@@ -17,17 +17,16 @@ class PacingState:
         if not self.covered_slides or self.current_cards < 5:
             return ""
 
-        last_slide = max(self.covered_slides)
-        # Avoid division by zero
-        if last_slide == 0:
+        covered_count = len(set(self.covered_slides))
+        if covered_count == 0:
             return ""
-            
-        actual_density = self.current_cards / last_slide
-        
-        # provide factual status and a clean instruction
-        # rather than "ADVICE: SCREAMING"
+
+        actual_density = self.current_cards / covered_count
+        uncovered_count = max(self.total_pages - covered_count, 0)
+
         return (
-            f"\n- CURRENT PROGRESS: Slide {last_slide} of {self.total_pages}.\n"
-            f"- GENERATION DENSITY: {self.current_cards} cards for {last_slide} slides (~{actual_density:.1f} per slide).\n"
-            f"- TARGET GOAL: ~{self.target_density:.1f} cards per slide. Please adjust your selectivity to match this target.\n"
+            f"\n- CURRENT PROGRESS: {covered_count} covered slides out of {self.total_pages}.\n"
+            f"- UNTOUCHED SLIDES: {uncovered_count}.\n"
+            f"- GENERATION DENSITY: {self.current_cards} cards for {covered_count} covered slides (~{actual_density:.1f} per covered slide).\n"
+            f"- TARGET GOAL: ~{self.target_density:.1f} cards per slide while spreading coverage across the deck.\n"
         )

@@ -4,6 +4,8 @@ from functools import lru_cache
 from typing import Any, Dict, List, Literal, Optional, Type
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from lectern.coverage import normalize_page_references, normalize_string_list
+
 
 class Concept(BaseModel):
     id: str
@@ -12,6 +14,12 @@ class Concept(BaseModel):
     category: str
     importance: Literal["high", "medium", "low"]
     difficulty: Literal["foundational", "intermediate", "advanced"]
+    page_references: List[int] = Field(default_factory=list)
+
+    @field_validator("page_references", mode="before")
+    @classmethod
+    def normalize_page_refs(cls, value: Any) -> Any:
+        return normalize_page_references(value)
 
 
 class Relation(BaseModel):
@@ -19,6 +27,12 @@ class Relation(BaseModel):
     target: str
     type: str
     page_reference: Optional[str] = None
+    page_references: List[int] = Field(default_factory=list)
+
+    @field_validator("page_references", mode="before")
+    @classmethod
+    def normalize_page_refs(cls, value: Any) -> Any:
+        return normalize_page_references(value)
 
 
 class ConceptMapResponse(BaseModel):
@@ -42,6 +56,8 @@ class AnkiCard(BaseModel):
     fields: List[FieldPair] = Field(default_factory=list)
     slide_topic: Optional[str] = None
     slide_number: Optional[str] = None
+    source_pages: List[int] = Field(default_factory=list)
+    concept_ids: List[str] = Field(default_factory=list)
     rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
 
     @field_validator("model_name", mode="before")
@@ -67,6 +83,16 @@ class AnkiCard(BaseModel):
                 return v_strip
             return None
         return v
+
+    @field_validator("source_pages", mode="before")
+    @classmethod
+    def normalize_source_pages(cls, value: Any) -> Any:
+        return normalize_page_references(value)
+
+    @field_validator("concept_ids", mode="before")
+    @classmethod
+    def normalize_concept_ids(cls, value: Any) -> Any:
+        return normalize_string_list(value)
     
     @model_validator(mode="before")
     @classmethod

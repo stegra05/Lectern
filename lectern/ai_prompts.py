@@ -115,13 +115,15 @@ class PromptBuilder:
             "- For each concept add:\n"
             "    - `importance`: one of `high`, `medium`, `low` based on lecture objectives.\n"
             "    - `difficulty`: one of `foundational`, `intermediate`, `advanced` based on cognitive load.\n"
-            "- Relations: Map the *semantic structure* (e.g., `is_a`, `part_of`, `causes`, `contrasts_with`). Note page references.\n"
+            "    - `page_references`: integer slide/page numbers where the concept is taught or illustrated.\n"
+            "- Relations: Map the *semantic structure* (e.g., `is_a`, `part_of`, `causes`, `contrasts_with`). Note page references using `page_references`.\n"
             "- Language: Detect the primary language of the slides (e.g. 'en', 'de', 'fr'). Return the ISO 639-1 code.\n"
             "- Slide Set Name: Generate a semantic name for this slide set (e.g., 'Lecture 2 Introduction To Machine Learning'). "
             "Use Title Case, max 8 words. Include lecture/week number if present.\n"
             "- Metadata: Estimate `page_count` (integer) and `estimated_text_chars` (integer) for pacing calculations.\n"
+            "- Metadata: Return `document_type` as one of `slides`, `script`, or `mixed`.\n"
             "- Formatting: STRICTLY AVOID Markdown in text fields. Use HTML.\n"
-            "Return ONLY a JSON object with keys: objectives, concepts, relations, language, slide_set_name, page_count, estimated_text_chars. No prose.\n"
+            "Return ONLY a JSON object with keys: objectives, concepts, relations, language, slide_set_name, page_count, estimated_text_chars, document_type. No prose.\n"
         )
 
     def generation(
@@ -131,6 +133,7 @@ class PromptBuilder:
         avoid_text: str = "",
         slide_coverage: str = "",
         coverage_summary: str = "",
+        examples_text: str = "",
     ) -> str:
         """Build the card generation prompt."""
         
@@ -146,10 +149,13 @@ class PromptBuilder:
             "CRITICAL: Consult the Global Concept Map. Cover the 'Relations' identified there.\n"
             f"Language: Ensure all content is in {self.cfg.language}.\n"
             f"{pacing_hint}"
+            f"{examples_text}"
             "- Principles:\n"
             "    - Atomicity: One idea per card.\n"
             "    - Variety: Mix Definitions, Comparisons, Applications.\n"
-            "- Important: Continue generating cards to cover ALL concepts. Do NOT set 'done' to true until exhausted.\n"
+            "    - Breadth-first coverage: cover every HIGH importance concept before deepening already-covered clusters.\n"
+            "    - Anti-clustering: do not spend more than 2 cards on one slide/topic while higher-priority gaps remain elsewhere.\n"
+            "- Important: Continue generating cards to close coverage gaps. Do NOT set 'done' to true until the important concepts and pages are exhausted.\n"
             f"{focus_instruction}\n"
             "- Format:\n"
             "    - Prefer Cloze for definitions/lists. Basic for open-ended questions.\n"
@@ -165,12 +171,14 @@ class PromptBuilder:
             f"{slide_coverage}"
             f"{coverage_summary}"
             "    - Include `slide_topic` (short section/topic label, Title Case).\n"
-            "    - Include `slide_number` when clear from context (integer page number).\n"
+            "    - Include `slide_number` when confident (integer page number).\n"
+            "    - Include `source_pages` as an array of grounded page numbers for the card.\n"
+            "    - Include `concept_ids` as an array of concept IDs from the concept map that this card covers.\n"
             "    - Keep `slide_topic` concise (ideally <= 8 words).\n"
             "    - Do not include `rationale`.\n"
         )
 
-    def reflection(self, limit: int, cards_to_refine: str = "") -> str:
+    def reflection(self, limit: int, cards_to_refine: str = "", coverage_gaps: str = "") -> str:
         """Build the reflection prompt."""
         focus_context = ""
         if self.cfg.focus_prompt:
@@ -186,7 +194,10 @@ class PromptBuilder:
             "    - Redundancy: Duplicate/overlapping? Merge them.\n"
             "    - Vagueness: Ambiguous? Clarify them.\n"
             "    - Complexity: Too long? Split them.\n"
+            "    - Distribution: If coverage is clustered, replace low-value cards with missing high-priority coverage.\n"
+            "    - Grounding: Preserve or improve `source_pages`, `slide_number`, and `concept_ids`.\n"
             f"{focus_context}"
+            f"{coverage_gaps}\n"
             "Action:\n"
             "    - Write a concise `reflection` on the quality of these cards.\n"
             "    - Rewrite the cards applying your critique. Add gap-filling cards if necessary.\n"
