@@ -192,7 +192,6 @@ export const CardList = memo(function CardList({
                     /* Virtualized rendering for production */
                     <div
                         ref={parentRef}
-                        className="space-y-4"
                         style={{
                             height: virtualizer.getTotalSize() > 0 ? `${virtualizer.getTotalSize()}px` : 'auto',
                             position: 'relative',
@@ -208,14 +207,16 @@ export const CardList = memo(function CardList({
                             return (
                                 <div
                                     key={stableKey}
+                                    data-index={virtualItem.index}
+                                    ref={virtualizer.measureElement}
                                     style={{
                                         position: 'absolute',
                                         top: 0,
                                         left: 0,
                                         width: '100%',
-                                        height: `${virtualItem.size}px`,
                                         transform: `translateY(${virtualItem.start}px)`,
                                     }}
+                                    className="pb-4"
                                 >
                                     <CardItem
                                         card={card}
