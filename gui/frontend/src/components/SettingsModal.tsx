@@ -227,7 +227,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                     value={editedConfig.gemini_model}
                                                     onChange={(e) => updateField('gemini_model', e.target.value)}
                                                     aria-label="AI Model selection"
-                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none appearance-none cursor-pointer"
+                                                    className="w-full bg-background/50 border-0 rounded-lg py-2.5 px-4 text-text-main focus:ring-1 focus:ring-primary/50 outline-none appearance-none cursor-pointer"
                                                 >
                                                     <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast)</option>
                                                     <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Smart)</option>
@@ -246,7 +246,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                         onChange={(e) => setNewKey(e.target.value)}
                                                         placeholder="Enter new Gemini API Key"
                                                         aria-label="Gemini API Key"
-                                                        className="flex-1 bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none placeholder:text-text-muted"
+                                                        className="flex-1 bg-background/50 border-0 rounded-lg py-2.5 px-4 text-text-main focus:ring-1 focus:ring-primary/50 outline-none placeholder:text-text-muted"
                                                     />
                                                 </div>
                                                 <p className="text-[10px] text-text-muted">Leave blank to keep current key.</p>
@@ -288,7 +288,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                                 aria-label="Anki Connect URL"
                                                                 aria-invalid={ankiUrlError ? 'true' : 'false'}
                                                                 aria-describedby={ankiUrlError ? 'anki-url-error' : undefined}
-                                                                className={`w-full bg-background border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none font-mono text-sm ${ankiUrlError ? 'border-red-500' : 'border-border'}`}
+                                                                className={`w-full bg-background/50 rounded-lg py-2.5 px-4 text-text-main focus:ring-1 focus:ring-primary/50 outline-none font-mono text-sm ${ankiUrlError ? 'border border-red-500' : 'border-0'}`}
                                                             />
                                                             {ankiUrlError && (
                                                                 <p id="anki-url-error" className="text-xs text-red-500 mt-1" role="alert">{ankiUrlError}</p>
@@ -306,7 +306,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                                 onChange={(e) => updateField('tag_template', e.target.value)}
                                                                 placeholder="{{deck}}::{{slide_set}}::{{topic}}"
                                                                 aria-label="Hierarchical Tag Template"
-                                                                className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none font-mono text-sm"
+                                                                className="w-full bg-background/50 border-0 rounded-lg py-2.5 px-4 text-text-main focus:ring-1 focus:ring-primary/50 outline-none font-mono text-sm"
                                                             />
                                                             <p className="text-[10px] text-text-muted mt-1 leading-tight">
                                                                 Example: <code className="text-primary">{'{{deck}}::Lectures::{{topic}}'}</code>
@@ -324,7 +324,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                                     value={editedConfig.basic_model}
                                                                     onChange={(e) => updateField('basic_model', e.target.value)}
                                                                     aria-label="Basic Note Type"
-                                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
+                                                                    className="w-full bg-background/50 border-0 rounded-lg py-2.5 px-4 text-text-main focus:ring-1 focus:ring-primary/50 outline-none"
                                                                 />
                                                             </div>
                                                             <div className="space-y-2">
@@ -337,7 +337,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                                     value={editedConfig.cloze_model}
                                                                     onChange={(e) => updateField('cloze_model', e.target.value)}
                                                                     aria-label="Cloze Note Type"
-                                                                    className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none"
+                                                                    className="w-full bg-background/50 border-0 rounded-lg py-2.5 px-4 text-text-main focus:ring-1 focus:ring-primary/50 outline-none"
                                                                 />
                                                             </div>
                                                         </div>

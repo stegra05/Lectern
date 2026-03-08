@@ -29,6 +29,14 @@ export const getSessionState = () => ({
   isHistorical: false,
 });
 
+const preservePersistedState = (state: StoreState) => ({
+  densityPreferences: state.densityPreferences,
+  deckName: state.deckName,
+  availableDecks: state.availableDecks,
+  sortBy: state.sortBy,
+  totalSessionSpend: state.totalSessionSpend,
+});
+
 export const createGenerationActions = (
   getInitialState: () => StoreState,
 
@@ -129,10 +137,16 @@ export const createGenerationActions = (
     set((state) => ({
       cards: [...state.cards, stampUid(card)],
     })),
-  reset: () => set(getInitialState()),
+  reset: () => {
+    const currentState = get();
+    set({ ...getInitialState(), ...preservePersistedState(currentState) });
+  },
   handleGenerate: () => generationLogic.handleGenerate(set, get),
   handleCancel: () => generationLogic.handleCancel(set, get),
-  handleReset: () => set(getInitialState()),
+  handleReset: () => {
+    const currentState = get();
+    set({ ...getInitialState(), ...preservePersistedState(currentState) });
+  },
   handleCopyLogs: () => {
     const { logs } = get();
     const text = logs

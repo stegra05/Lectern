@@ -156,9 +156,9 @@ export function HistoryModal({
                                             role="tab"
                                             aria-selected={isActive}
                                             aria-label={`Filter by ${FILTER_LABELS[filterId]}`}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${isActive
-                                                ? 'bg-primary/20 border-primary/50 text-primary'
-                                                : 'bg-surface/50 border-border/50 text-text-muted hover:border-primary/30'
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive
+                                                ? 'bg-primary/20 text-primary'
+                                                : 'bg-surface/50 text-text-muted hover:bg-surface/80 hover:text-text-main'
                                                 }`}
                                         >
                                             {FILTER_LABELS[filterId]}
@@ -251,7 +251,7 @@ export function HistoryModal({
                                                     onClose();
                                                 }}
                                                 aria-label={`Load session: ${entry.filename}, ${entry.card_count} cards, ${new Date(entry.date).toLocaleDateString()}`}
-                                                className="w-full text-left p-4 rounded-xl bg-surface/50 border border-border hover:border-primary/50 hover:bg-surface/80 transition-all flex items-center justify-between group/item"
+                                                className="w-full text-left p-4 rounded-xl bg-surface/50 border border-transparent hover:border-primary/30 hover:bg-surface/80 transition-all flex items-center justify-between group/item"
                                             >
                                                 <div className="flex-1 min-w-0 pr-4">
                                                     <div className="flex justify-between items-start mb-1">

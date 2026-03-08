@@ -124,21 +124,23 @@ export const CardItem = memo(function CardItem({
                                 </button>
                             )}
                             <span className={clsx(
-                                "text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border",
-                                cloze
-                                    ? "text-blue-400 bg-blue-500/10 border-blue-500/20"
-                                    : "text-text-muted bg-surface border-border"
+                                "text-[10px] font-bold tracking-widest uppercase",
+                                cloze ? "text-blue-400" : "text-primary"
                             )}>
                                 {card.model_name || 'Basic'}
                             </span>
-                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] font-medium text-text-muted">
-                                <Layers className="w-3 h-3" />
+                            <span className="text-text-muted/30">•</span>
+                            <span className="flex items-center gap-1 text-[10px] font-medium text-text-muted">
+                                <Layers className="w-3 h-3 opacity-50" />
                                 SLIDE {slideNumber ?? '?'}
                             </span>
                             {card.slide_topic && (
-                                <span className="text-[10px] text-text-muted truncate max-w-[200px]" title={card.slide_topic}>
-                                    {card.slide_topic}
-                                </span>
+                                <>
+                                    <span className="text-text-muted/30">•</span>
+                                    <span className="text-[10px] text-text-muted truncate max-w-[200px]" title={card.slide_topic}>
+                                        {card.slide_topic}
+                                    </span>
+                                </>
                             )}
                         </div>
 

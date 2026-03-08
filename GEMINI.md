@@ -116,12 +116,15 @@ Real-time progress is streamed from backend to frontend via **Server-Sent Events
 
 ---
 
-## Design System
+## Design Philosophy & System
 
+Lectern follows a strict **Functional Minimalism ("Anti-Slop")** design philosophy. The UI must feel like a premium, quiet, and focused space.
+
+- **Read the full manifesto:** `docs/DESIGN_PHILOSOPHY.md`
 - **Fonts:** Manrope (sans), JetBrains Mono (mono)
-- **Palette:** Zinc + Lime. Dark mode is the default. CSS custom properties via `--background`, `--surface`, `--primary`, `--secondary`, `--text-main`, `--text-muted`, `--border` in `index.css`.
-- **Components:** Glassmorphism cards, Framer Motion transitions, lucide-react icons.
-- **No Bootstrap blue.** `#007bff` and default Tailwind colors are banned.
+- **Palette:** Zinc (moody surfaces) + Lime (vibrant accents). Dark mode is default.
+- **Rule of Thumb:** Borderless by default. Use typography, subtle backgrounds (`bg-surface/50`), and negative space instead of explicit outlines or nested boxes.
+- **Banned:** Bootstrap blue (`#007bff`), generic Tailwind colors, heavy nested borders, and cluttered technical logs in the main view.
 
 ---
 

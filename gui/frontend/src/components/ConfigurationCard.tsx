@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Calculator, FileSearch, Info, Lock, Upload } from 'lucide-react';
 import { clsx } from 'clsx';
-import { GlassCard } from './GlassCard';
 import { useLecternStore } from '../store';
 import { computeTargetSliderConfig } from '../utils/density';
 import { translateError } from '../utils/errorMessages';
@@ -37,21 +36,18 @@ export function ConfigurationCard() {
     const sliderConfig = computeTargetSliderConfig(estimation?.suggested_card_count);
 
     return (
-        <GlassCard className="space-y-6">
-            <div className="flex items-center gap-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-surface text-text-muted font-mono text-sm">02</span>
-                <h2 className="text-xl font-semibold">Configuration</h2>
-            </div>
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold tracking-tight text-text-main">Configuration</h2>
 
             <div className="space-y-6">
-                <div className="pt-4 border-t border-border/30">
+                <div>
                     <div className="flex justify-between items-end mb-4">
                         <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium text-text-muted uppercase tracking-wider">Total Cards</label>
+                            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Total Cards</label>
                             {sliderConfig.disabled && (
-                                <div className="flex items-center gap-1 text-[10px] text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                <div className="flex items-center gap-1 text-[10px] text-amber-400/80">
                                     <Lock className="w-3 h-3" />
-                                    <span>Limited by length</span>
+                                    <span>Limited</span>
                                 </div>
                             )}
                         </div>
@@ -68,10 +64,10 @@ export function ConfigurationCard() {
                                 setInputValue(String(finalVal));
                             }}
                             className={clsx(
-                                "text-right text-xl font-bold bg-transparent border-b-2 outline-none w-20 px-2 transition-colors",
+                                "text-right text-2xl font-bold bg-transparent border-b-2 outline-none w-20 px-2 transition-colors",
                                 sliderConfig.disabled
                                     ? "text-text-muted border-transparent"
-                                    : "text-primary border-primary/30 focus:border-primary focus:bg-primary/10 rounded-t hover:border-primary/50"
+                                    : "text-primary border-primary/30 focus:border-primary focus:bg-primary/5 hover:border-primary/50"
                             )}
                         />
                     </div>
@@ -85,7 +81,7 @@ export function ConfigurationCard() {
                             value={targetDeckSize}
                             disabled={sliderConfig.disabled}
                             onChange={(e) => setTargetDeckSize(parseInt(e.target.value, 10))}
-                            className="flex-1 h-1.5 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
+                            className="flex-1 h-1 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
                         />
                     </div>
                     <div className="flex justify-between text-[10px] text-text-muted mt-2 px-1 font-medium">
@@ -102,7 +98,7 @@ export function ConfigurationCard() {
                                     {estimationPhase === 'analyzing' && <FileSearch className="w-2.5 h-2.5" />}
                                     {estimationPhase === 'calculating' && <Calculator className="w-2.5 h-2.5" />}
                                     {(estimationPhase === 'idle' || estimationPhase === 'done') && <Upload className="w-2.5 h-2.5" />}
-                                    {PHASE_CONFIG[estimationPhase].label || 'ESTIMATING...'}
+                                    {PHASE_CONFIG[estimationPhase].label || 'Estimating...'}
                                 </motion.span>
                             ) : (
                                 <span>{sliderConfig.disabled ? '' : estimation?.suggested_card_count}</span>
@@ -123,11 +119,6 @@ export function ConfigurationCard() {
                                         {friendlyErr.action && (
                                             <p className="text-xs text-primary mt-1">{friendlyErr.action}</p>
                                         )}
-                                        {friendlyErr.errorCode && (
-                                            <p className="text-[10px] text-red-300/50 font-mono mt-2">
-                                                Error: {friendlyErr.errorCode}
-                                            </p>
-                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -135,32 +126,25 @@ export function ConfigurationCard() {
                     })()}
 
                     {estimation?.suggested_card_count !== undefined && (
-                        <div className="mt-4 p-3 rounded-lg bg-surface/30 border border-border/30 flex items-center gap-3">
-                            <Info className="w-4 h-4 text-primary shrink-0" />
-                            <div className="flex justify-between items-center w-full">
-                                <span className="text-xs text-text-muted">
-                                    AI recommendation based on document analysis.
-                                    {estimation.document_type === 'script' && ' (Detected text-dense script)'}
-                                    {estimation.document_type === 'slides' && ' (Detected visual-heavy material)'}
-                                </span>
-                                <span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold">
-                                    SUGGESTED {estimation.suggested_card_count}
-                                </span>
-                            </div>
+                        <div className="mt-2 flex items-center gap-2 text-[11px] text-text-muted">
+                            <Info className="w-3 h-3 text-primary" />
+                            <span>
+                                AI suggests <strong className="text-primary">{estimation.suggested_card_count}</strong> based on {estimation.document_type === 'script' ? 'text density' : 'slide count'}.
+                            </span>
                         </div>
                     )}
                 </div>
 
-                <div className="pt-4 border-t border-border/30">
-                    <label className="block text-sm font-medium text-text-muted mb-2 uppercase tracking-wider">Focus Guidance (Optional)</label>
+                <div className="pt-6">
+                    <label className="block text-xs font-semibold text-text-muted mb-3 uppercase tracking-wider">Focus Guidance <span className="opacity-50 lowercase tracking-normal font-normal">(Optional)</span></label>
                     <textarea
                         value={focusPrompt}
                         onChange={(e) => setFocusPrompt(e.target.value)}
                         placeholder="E.g. 'Focus on clinical formulas' or 'Prioritize case studies'"
-                        className="w-full bg-surface/50 border border-border rounded-xl p-4 text-sm min-h-[100px] outline-none transition-all focus:ring-2 focus:ring-primary/50 placeholder:text-text-muted resize-none leading-relaxed"
+                        className="w-full bg-surface/30 border-0 rounded-lg p-4 text-sm min-h-[100px] outline-none transition-all focus:ring-1 focus:ring-primary/50 focus:bg-surface/50 placeholder:text-text-muted/50 resize-none leading-relaxed"
                     />
                 </div>
             </div>
-        </GlassCard>
+        </div>
     );
 }

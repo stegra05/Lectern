@@ -51,7 +51,7 @@ export function PhaseIndicator({ currentPhase }: PhaseIndicatorProps) {
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 key={currentPhase}
-                className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20"
+                className="flex items-center gap-3 p-3 rounded-lg bg-primary/5"
             >
                 <div className="relative">
                     <motion.div

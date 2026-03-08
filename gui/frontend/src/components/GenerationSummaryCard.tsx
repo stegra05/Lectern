@@ -148,11 +148,11 @@ export function GenerationSummaryCard({ handleGenerate, health }: GenerationSumm
                                 className="w-full flex items-center justify-between mb-3 border-b border-border/30 pb-2 group/cost"
                             >
                                 <div className="flex flex-col text-left">
-                                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider group-hover/cost:text-primary transition-colors">Estimated Cost</span>
+                                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider group-hover/cost:text-text-main transition-colors">Estimated Cost</span>
                                     {isEstimating ? (
-                                        <div className="h-7 w-20 bg-surface animate-pulse rounded mt-1" />
+                                        <div className="h-5 w-16 bg-surface animate-pulse rounded mt-1" />
                                     ) : (
-                                        <span className="text-2xl font-bold text-primary">${estimation?.cost.toFixed(3)}</span>
+                                        <span className="text-lg font-medium text-text-main">${estimation?.cost.toFixed(3)}</span>
                                     )}
                                 </div>
                                 <div className="flex flex-col items-end">

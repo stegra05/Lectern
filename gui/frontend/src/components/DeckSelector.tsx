@@ -330,7 +330,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                     onKeyDown={handleKeyDown}
                     disabled={disabled}
                     placeholder="University::Subject::Topic"
-                    className="w-full bg-surface/50 border border-border rounded-xl py-4 px-5 pl-12 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-text-muted"
+                    className="w-full bg-surface/50 border-0 rounded-xl py-4 px-5 pl-12 text-lg focus:ring-2 focus:ring-primary/50 outline-none transition-all placeholder:text-text-muted"
                 />
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                     <Folder className="w-5 h-5" />

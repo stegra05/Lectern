@@ -487,18 +487,23 @@ export function ProgressView() {
                 {currentPhase && <PhaseIndicator currentPhase={currentPhase as Phase} />}
             </div>
 
-            {/* Activity Log */}
-            <ActivityLog
-                logs={logs}
-                copied={copied}
-                onCopyLogs={handleCopyLogs}
-                onExportLogs={handleExportLogs}
-                isCancelling={isCancelling}
-                onCancel={handleCancel}
-                isHistorical={isHistorical}
-                sessionId={sessionId}
-                variant="generating"
-            />
+            <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-border">
+                <SidebarPane title="Activity Log" icon={Terminal} defaultOpen={false}>
+                    <div className="h-64">
+                        <ActivityLog
+                            logs={logs}
+                            copied={copied}
+                            onCopyLogs={handleCopyLogs}
+                            onExportLogs={handleExportLogs}
+                            isCancelling={isCancelling}
+                            onCancel={handleCancel}
+                            isHistorical={isHistorical}
+                            sessionId={sessionId}
+                            variant="generating"
+                        />
+                    </div>
+                </SidebarPane>
+            </div>
 
             {/* Progress footer */}
             <ProgressFooter
@@ -519,25 +524,27 @@ export function ProgressView() {
         <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-border">
                 {/* Generation Insights */}
-                <SidebarPane title="Generation Insights" icon={Layers} defaultOpen={true}>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-background p-3 rounded-lg border border-border">
-                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Cards</div>
-                            <div className="text-xl font-bold text-text-main mt-1">{cards.length}</div>
+                <SidebarPane title="Insights" icon={Layers} defaultOpen={true}>
+                    <div className="flex items-center justify-between px-2 py-1">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cards</span>
+                            <span className="text-xl font-bold text-text-main">{cards.length}</span>
                         </div>
-                        <div className="bg-background p-3 rounded-lg border border-border">
-                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Basic</div>
-                            <div className="text-xl font-bold text-text-main mt-1">{typeCounts.basic}</div>
+                        <div className="w-px h-8 bg-border/50 mx-2"></div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Basic</span>
+                            <span className="text-xl font-bold text-text-main">{typeCounts.basic}</span>
                         </div>
-                        <div className="bg-background p-3 rounded-lg border border-border">
-                            <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Cloze</div>
-                            <div className="text-xl font-bold text-blue-400 mt-1">{typeCounts.cloze}</div>
+                        <div className="w-px h-8 bg-border/50 mx-2"></div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cloze</span>
+                            <span className="text-xl font-bold text-blue-400">{typeCounts.cloze}</span>
                         </div>
                     </div>
                 </SidebarPane>
 
                 {/* Page Coverage */}
-                <SidebarPane title="Page Coverage" icon={Layers} defaultOpen={step === 'done'}>
+                <SidebarPane title="Page Coverage" icon={Layers} defaultOpen={false}>
                     <CoverageGrid
                         totalPages={totalPages}
                         cards={cards}
@@ -579,24 +586,26 @@ export function ProgressView() {
                                     </button>
                                 </>
                             )}
-                            <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
+                            <div className="flex items-center gap-1.5 text-[10px] text-green-400 font-bold tracking-wide">
                                 <CheckCircle2 className="w-3 h-3" />
-                                <span className="font-bold text-[10px] tracking-wide">COMPLETE</span>
+                                DONE
                             </div>
                         </div>
                     }
                 >
-                    <ActivityLog
-                        logs={logs}
-                        copied={copied}
-                        onCopyLogs={handleCopyLogs}
-                        onExportLogs={handleExportLogs}
-                        isCancelling={isCancelling}
-                        onCancel={handleCancel}
-                        isHistorical={isHistorical}
-                        sessionId={sessionId}
-                        variant="done"
-                    />
+                    <div className="h-64">
+                        <ActivityLog
+                            logs={logs}
+                            copied={copied}
+                            onCopyLogs={handleCopyLogs}
+                            onExportLogs={handleExportLogs}
+                            isCancelling={isCancelling}
+                            onCancel={handleCancel}
+                            isHistorical={isHistorical}
+                            sessionId={sessionId}
+                            variant="done"
+                        />
+                    </div>
                 </SidebarPane>
             </div>
 
