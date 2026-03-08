@@ -59,6 +59,9 @@ class TestPromptStructure:
         assert "slide_number" in prompt
         assert "concept_ids" in prompt
         assert "source_pages" in prompt
+        assert "relation_keys" in prompt
+        assert "source_excerpt" in prompt
+        assert "rationale" in prompt
 
     def test_reflection_prompt(self):
         config = PromptConfig()
@@ -68,6 +71,8 @@ class TestPromptStructure:
         assert "Quality Assurance Specialist" in prompt
         assert "Critique Criteria" in prompt
         assert "Limit 3 cards" in prompt
+        assert "quality_score" in prompt
+        assert "quality_flags" in prompt
 
     def test_card_examples_formatting(self):
         """Ensure examples are valid JSON-like structures in the prompt."""

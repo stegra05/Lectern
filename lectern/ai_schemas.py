@@ -58,7 +58,11 @@ class AnkiCard(BaseModel):
     slide_number: Optional[str] = None
     source_pages: List[int] = Field(default_factory=list)
     concept_ids: List[str] = Field(default_factory=list)
+    relation_keys: List[str] = Field(default_factory=list)
     rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
+    source_excerpt: Optional[str] = Field(None, description="Short grounded excerpt or paraphrase from the source slide")
+    quality_score: Optional[float] = Field(None, description="Estimated quality score from 0 to 100")
+    quality_flags: List[str] = Field(default_factory=list)
 
     @field_validator("model_name", mode="before")
     @classmethod
@@ -93,6 +97,34 @@ class AnkiCard(BaseModel):
     @classmethod
     def normalize_concept_ids(cls, value: Any) -> Any:
         return normalize_string_list(value)
+
+    @field_validator("relation_keys", mode="before")
+    @classmethod
+    def normalize_relation_keys(cls, value: Any) -> Any:
+        return normalize_string_list(value)
+
+    @field_validator("quality_flags", mode="before")
+    @classmethod
+    def normalize_quality_flags(cls, value: Any) -> Any:
+        return normalize_string_list(value)
+
+    @field_validator("quality_score", mode="before")
+    @classmethod
+    def normalize_quality_score(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+        elif isinstance(value, str):
+            try:
+                numeric = float(value.strip())
+            except ValueError:
+                return None
+        else:
+            return None
+        return max(0.0, min(100.0, numeric))
     
     @model_validator(mode="before")
     @classmethod

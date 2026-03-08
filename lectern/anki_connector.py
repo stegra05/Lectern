@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import functools
 import logging
+import random
 import time
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
@@ -416,7 +417,10 @@ def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
         ids = find_notes(query)
         if not ids:
             return ""
-        ids = ids[:sample_size]
+        if len(ids) > sample_size:
+            ids = random.sample(ids, sample_size)
+        else:
+            ids = ids[:sample_size]
         infos = notes_info(ids)
         if not infos:
             return ""
@@ -424,15 +428,20 @@ def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
         lines: List[str] = []
         for idx, info in enumerate(infos, start=1):
             fields_obj = info.get("fields", {}) if isinstance(info, dict) else {}
-            # fields_obj is a dict: { fieldName: { "value": str, ... }, ... }
-            values = [
-                str(field.get("value", ""))
-                for field in fields_obj.values()
-                if isinstance(field, dict) and isinstance(field.get("value", ""), str)
-            ]
-            lines.append(f"Example {idx}:")
-            for f_idx, value in enumerate(values, start=1):
-                lines.append(f"  Field {f_idx}: {value}")
+            model_name = str(info.get("modelName") or "Card").strip()
+            field_lines: List[str] = []
+            for field_name, field in fields_obj.items():
+                if not isinstance(field, dict):
+                    continue
+                value = str(field.get("value", "") or "").strip()
+                if not value:
+                    continue
+                compact_value = " ".join(value.split())
+                field_lines.append(f"  {field_name}: {compact_value[:180]}")
+            if not field_lines:
+                continue
+            lines.append(f"Example {idx} ({model_name}):")
+            lines.extend(field_lines[:4])
             lines.append("")
         return "\n".join(lines).strip()
     except Exception as exc:

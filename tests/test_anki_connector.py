@@ -87,7 +87,7 @@ def test_sample_examples_from_deck(mock_requests_post):
     mock_response_info = MagicMock()
     mock_response_info.json.return_value = {
         "result": [
-            {"fields": {"Front": {"value": "Q1"}, "Back": {"value": "A1"}}}
+            {"modelName": "Basic", "fields": {"Front": {"value": "Q1"}, "Back": {"value": "A1"}}}
         ],
         "error": None
     }
@@ -95,7 +95,8 @@ def test_sample_examples_from_deck(mock_requests_post):
     mock_requests_post.side_effect = [mock_response_find, mock_response_info]
     
     examples = anki_connector.sample_examples_from_deck("Test")
-    assert "Example 1:" in examples
+    assert "Example 1 (Basic):" in examples
+    assert "Front: Q1" in examples
     assert "Q1" in examples
     assert "A1" in examples
 

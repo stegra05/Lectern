@@ -14,7 +14,7 @@ def ndjson_event(event_type: str, message: str = "", data: Dict[str, Any] | None
             "type": event_type,
             "message": message,
             "data": data or {},
-            "timestamp": time.time(),
+            "timestamp": int(time.time() * 1000),
         }
     ) + "\n"
 

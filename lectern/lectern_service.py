@@ -165,26 +165,48 @@ class LecternGenerationService:
             pages = []
             total_text_chars = 0
 
+            yield ServiceEvent(
+                "info",
+                "Generation run started",
+                {
+                    "pdf_name": os.path.basename(cfg.pdf_path),
+                    "deck_name": cfg.deck_name,
+                    "skip_export": cfg.skip_export,
+                    "target_card_count": cfg.target_card_count,
+                },
+            )
 
             if self._should_stop(cfg.stop_check):
+                history_mgr.update_entry(history_id, status="cancelled")
+                yield self._cancelled_event("setup", start_time)
                 return
 
             # 3. Sample Examples
             if self._should_stop(cfg.stop_check):
+                history_mgr.update_entry(history_id, status="cancelled")
+                yield self._cancelled_event("setup", start_time)
                 return
 
             examples = ""
             yield ServiceEvent("step_start", "Sample examples from deck")
+            examples_started_at = time.perf_counter()
             try:
                 deck_for_examples = (cfg.context_deck or cfg.deck_name)
                 examples = sample_examples_from_deck(deck_name=deck_for_examples, sample_size=5)
                 if examples.strip():
                     yield ServiceEvent("info", "Loaded style examples from Anki")
-                yield ServiceEvent("step_end", "Examples Loaded", {"success": True})
+                yield ServiceEvent("step_end", "Examples Loaded", {
+                    "success": True,
+                    "duration_ms": self._elapsed_ms(examples_started_at),
+                    "example_count_hint": examples.count("Example "),
+                })
             except Exception as e:
                  user_msg, _ = capture_exception(e, "Sample examples")
                  yield ServiceEvent("error", f"Failed to sample examples: {user_msg}", {"recoverable": True})
-                 yield ServiceEvent("step_end", "Examples Failed", {"success": False})
+                 yield ServiceEvent("step_end", "Examples Failed", {
+                     "success": False,
+                     "duration_ms": self._elapsed_ms(examples_started_at),
+                 })
 
             # 3b. Native flow: PDF title resolved via concept map; fallback uses filename.
             pdf_filename = os.path.splitext(os.path.basename(cfg.pdf_path))[0]
@@ -194,33 +216,55 @@ class LecternGenerationService:
 
             # 4. AI Session Init
             if self._should_stop(cfg.stop_check):
+                history_mgr.update_entry(history_id, status="cancelled")
+                yield self._cancelled_event("ai_session_init", start_time)
                 return
 
             yield ServiceEvent("step_start", "Start AI session")
+            session_started_at = time.perf_counter()
             # NOTE: slide_set_context is set after concept map for the slide_set_name
             ai = LecternAIClient(
                 model_name=cfg.model_name,
                 focus_prompt=cfg.focus_prompt,
                 slide_set_context=None,
             )
-            yield ServiceEvent("step_end", "Session Started", {"success": True})
+            yield ServiceEvent("step_end", "Session Started", {
+                "success": True,
+                "duration_ms": self._elapsed_ms(session_started_at),
+                "ai_log_path": getattr(ai, "log_path", ""),
+            })
 
             # 4b. Native PDF upload
             uploaded_pdf: Dict[str, str] = {}
             yield ServiceEvent("step_start", "Upload PDF to Gemini")
+            upload_started_at = time.perf_counter()
             try:
                 uploaded_pdf = ai.upload_pdf(cfg.pdf_path)
-                yield ServiceEvent("step_end", "PDF Uploaded", {"success": True})
+                yield ServiceEvent("step_end", "PDF Uploaded", {
+                    "success": True,
+                    "duration_ms": self._elapsed_ms(upload_started_at),
+                    "mime_type": uploaded_pdf.get("mime_type", "application/pdf"),
+                })
             except Exception as e:
                 user_msg, _ = capture_exception(e, "PDF upload")
-                yield ServiceEvent("step_end", "PDF Upload Failed", {"success": False})
-                yield ServiceEvent("error", f"Native PDF upload failed: {user_msg}", {"recoverable": False})
+                yield ServiceEvent("step_end", "PDF Upload Failed", {
+                    "success": False,
+                    "duration_ms": self._elapsed_ms(upload_started_at),
+                })
+                yield ServiceEvent("error", f"Native PDF upload failed: {user_msg}", {
+                    "recoverable": False,
+                    "terminal": True,
+                    "stage": "upload",
+                    "elapsed_ms": self._elapsed_ms(start_time),
+                })
                 history_mgr.update_entry(history_id, status="error")
                 return
             
             # 5. Concept Map
             concept_map = {}
             if self._should_stop(cfg.stop_check):
+                history_mgr.update_entry(history_id, status="cancelled")
+                yield self._cancelled_event("concept_map", start_time)
                 return
 
             # Estimate page count from file size for initial progress display
@@ -228,6 +272,7 @@ class LecternGenerationService:
 
             yield ServiceEvent("step_start", "Build global concept map", {"phase": "concept"})
             yield ServiceEvent("progress_start", "Analyzing slides", {"total": estimated_pages, "phase": "concept"})
+            concept_started_at = time.perf_counter()
 
             # Emit initial progress to show activity
             yield ServiceEvent("progress_update", "", {"current": 0, "total": estimated_pages, "phase": "concept"})
@@ -269,6 +314,9 @@ class LecternGenerationService:
                         "success": True,
                         "page_count": metadata_pages,
                         "coverage_data": initial_coverage,
+                        "duration_ms": self._elapsed_ms(concept_started_at),
+                        "concept_count": len(concept_map.get("concepts") or []),
+                        "relation_count": len(concept_map.get("relations") or []),
                     },
                 )
                 yield ServiceEvent("info", "Concept Map built", {"map": concept_map})
@@ -276,8 +324,14 @@ class LecternGenerationService:
                     yield ServiceEvent("warning", w)
             except Exception as e:
                 user_msg, _ = capture_exception(e, "Concept map")
-                yield ServiceEvent("error", f"Concept map failed: {user_msg}", {"recoverable": True})
-                yield ServiceEvent("step_end", "Concept Map Failed", {"success": False})
+                yield ServiceEvent("error", f"Concept map failed: {user_msg}", {
+                    "recoverable": True,
+                    "stage": "concept_map",
+                })
+                yield ServiceEvent("step_end", "Concept Map Failed", {
+                    "success": False,
+                    "duration_ms": self._elapsed_ms(concept_started_at),
+                })
                 metadata_pages = max(1, int(file_size / 80000))
                 pages = [{} for _ in range(metadata_pages)]
                 total_text_chars = metadata_pages * 800
@@ -346,6 +400,7 @@ class LecternGenerationService:
             yield ServiceEvent("progress_start", "Generating Cards", {"total": total_cards_cap, "label": "Generation"})
 
             yield ServiceEvent("step_start", "Generate cards", {"phase": "generating"})
+            generation_started_at = time.perf_counter()
             
             loop_context = GenerationLoopContext(
                 ai=ai,
@@ -380,11 +435,21 @@ class LecternGenerationService:
                 config=loop_config,
             )
             
-            yield ServiceEvent("step_end", "Generation Phase Complete", {"success": True, "count": len(all_cards)})
+            post_generation_coverage = compute_coverage_data(
+                cards=all_cards,
+                concept_map=concept_map,
+                total_pages=len(pages),
+            )
+            yield ServiceEvent("step_end", "Generation Phase Complete", {
+                "success": True,
+                "count": len(all_cards),
+                "duration_ms": self._elapsed_ms(generation_started_at),
+                "coverage_data": post_generation_coverage,
+            })
 
             # 7. Reflection Phase
             card_count = len(all_cards)
-            if card_count < 25:
+            if card_count == 0:
                 dynamic_rounds = 0
             elif card_count < 50:
                 dynamic_rounds = 1
@@ -394,7 +459,7 @@ class LecternGenerationService:
 
             if rounds > 0:
                 yield ServiceEvent("step_start", "Reflection and improvement", {"phase": "reflecting"})
-                
+                reflection_started_at = time.perf_counter()
                 yield ServiceEvent("progress_start", "Reflection", {"total": rounds, "label": "Reflection Rounds"})
                 
                 reflection_config = ReflectionLoopConfig(
@@ -412,11 +477,25 @@ class LecternGenerationService:
                     config=reflection_config,
                 )
 
-                yield ServiceEvent("step_end", "Reflection Phase Complete", {"success": True})
+                reflected_coverage = compute_coverage_data(
+                    cards=all_cards,
+                    concept_map=concept_map,
+                    total_pages=len(pages),
+                )
+                yield ServiceEvent("step_end", "Reflection Phase Complete", {
+                    "success": True,
+                    "duration_ms": self._elapsed_ms(reflection_started_at),
+                    "coverage_data": reflected_coverage,
+                })
 
             if not all_cards:
                 yield ServiceEvent("warning", "No cards were generated.")
                 history_mgr.update_entry(history_id, status="error")
+                yield ServiceEvent("error", "Generation completed without any usable cards.", {
+                    "terminal": True,
+                    "stage": "generation",
+                    "elapsed_ms": self._elapsed_ms(start_time),
+                })
                 return
 
             final_coverage = compute_coverage_data(
@@ -448,18 +527,23 @@ class LecternGenerationService:
                     "failed": 0, 
                     "total": len(all_cards),
                     "elapsed": time.perf_counter() - start_time,
+                    "elapsed_ms": self._elapsed_ms(start_time),
                     "cards": all_cards,  # Return cards for draft store
                     "slide_set_name": slide_set_name,  # NOTE(Tags): Include for GUI draft sync
                     "total_pages": len(pages),
                     "coverage_data": final_coverage,
+                    "terminal": True,
                 })
                  return
 
             if self._should_stop(cfg.stop_check):
+                history_mgr.update_entry(history_id, status="cancelled")
+                yield self._cancelled_event("export", start_time, {"generated_cards": len(all_cards)})
                 return
 
             yield ServiceEvent("step_start", f"Create {len(all_cards)} notes in Anki", {"phase": "exporting"})
             yield ServiceEvent("progress_start", "Exporting", {"total": len(all_cards), "label": "Notes", "phase": "exporting"})
+            export_started_at = time.perf_counter()
             
             created = 0
             failed = 0
@@ -482,7 +566,12 @@ class LecternGenerationService:
                 
                 yield ServiceEvent("progress_update", "", {"current": created + failed})
 
-            yield ServiceEvent("step_end", "Export Complete", {"success": True, "created": created, "failed": failed})
+            yield ServiceEvent("step_end", "Export Complete", {
+                "success": True,
+                "created": created,
+                "failed": failed,
+                "duration_ms": self._elapsed_ms(export_started_at),
+            })
             
             # Persist final state (including any note IDs created)
             history_mgr.sync_session_state(
@@ -503,16 +592,23 @@ class LecternGenerationService:
                 "failed": failed, 
                 "total": len(all_cards),
                 "elapsed": elapsed,
+                "elapsed_ms": self._elapsed_ms(start_time),
                 "slide_set_name": slide_set_name,  # NOTE(Tags): Include for GUI draft sync
                 "total_pages": len(pages),
                 "coverage_data": final_coverage,
+                "terminal": True,
             })
 
         except Exception as e:
             user_msg, _ = capture_exception(e, "Generation run")
             if history_id:
                 history_mgr.update_entry(history_id, status="error")
-            yield ServiceEvent("error", f"Critical error: {user_msg}", {"recoverable": False})
+            yield ServiceEvent("error", f"Critical error: {user_msg}", {
+                "recoverable": False,
+                "terminal": True,
+                "stage": "run",
+                "elapsed_ms": self._elapsed_ms(start_time),
+            })
             # Do not raise; let the generator exit gracefully so the frontend sees the error event
             return
 
@@ -554,6 +650,24 @@ class LecternGenerationService:
 
     def _should_stop(self, stop_check: Optional[Callable[[], bool]]) -> bool:
         return bool(stop_check and stop_check())
+
+    def _elapsed_ms(self, started_at: float) -> int:
+        return int((time.perf_counter() - started_at) * 1000)
+
+    def _cancelled_event(
+        self,
+        stage: str,
+        started_at: float,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> ServiceEvent:
+        payload: Dict[str, Any] = {
+            "terminal": True,
+            "stage": stage,
+            "elapsed_ms": self._elapsed_ms(started_at),
+        }
+        if extra_data:
+            payload.update(extra_data)
+        return ServiceEvent("cancelled", f"Generation cancelled during {stage}.", payload)
 
 
 

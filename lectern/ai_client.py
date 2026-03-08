@@ -459,8 +459,18 @@ class LecternAIClient:
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", len(cards) == 0))
-            return {"cards": cards, "done": done}
-        return {"cards": [], "done": True}
+            return {
+                "cards": cards,
+                "done": done,
+                "parse_error": "",
+                "response_chars": len(text),
+            }
+        return {
+            "cards": [],
+            "done": True,
+            "parse_error": self._last_parse_error,
+            "response_chars": len(text),
+        }
 
     def reflect(
         self,
@@ -495,8 +505,20 @@ class LecternAIClient:
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", False)) or (len(cards) == 0)
-            return {"reflection": str(data.get("reflection", "")), "cards": cards, "done": done}
-        return {"reflection": "", "cards": [], "done": True}
+            return {
+                "reflection": str(data.get("reflection", "")),
+                "cards": cards,
+                "done": done,
+                "parse_error": "",
+                "response_chars": len(text),
+            }
+        return {
+            "reflection": "",
+            "cards": [],
+            "done": True,
+            "parse_error": self._last_parse_error,
+            "response_chars": len(text),
+        }
 
     def _safe_parse_json(self, text: str, model_class: Any) -> Dict[str, Any] | None:
         """Parse JSON response from AI using strict canonical schema."""

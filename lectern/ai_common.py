@@ -137,10 +137,12 @@ def _append_session_log(
             exchanges = payload.get("exchanges", [])
             exchanges.append(
                 {
+                    "timestamp_utc": datetime.now(UTC).isoformat(),
                     "stage": stage,
                     "schema_used": schema_used,
                     "request": {"role": "user", "parts": _build_loggable_parts(parts)},
                     "response_text": truncated_response,
+                    "response_length": len(response_text or ""),
                 }
             )
             payload["exchanges"] = exchanges

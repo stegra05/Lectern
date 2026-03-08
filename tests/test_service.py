@@ -215,6 +215,7 @@ class TestStopCheck:
         
         # Should not have continued past the stop point
         assert len(remaining) < 10  # Some cleanup events are OK
+        assert any(e.type == "cancelled" for e in remaining)
 
 
 # --- Tests for _get_card_key ---
@@ -228,7 +229,7 @@ class TestCardDeduplication:
             "back": "An optimization algorithm.",
         }
         key = service._get_card_key(card)
-        assert key == "what is gradient descent?"
+        assert key == "what is gradient descent"
     
     def test_get_card_key_cloze(self, service):
         """Test card key extraction for Cloze cards."""
@@ -238,7 +239,7 @@ class TestCardDeduplication:
         }
         key = service._get_card_key(card)
         assert "derivative" in key
-        assert "{{c1::x^n}}" in key
+        assert "x n" in key
     
     def test_get_card_key_normalizes_whitespace(self, service):
         """Test that card keys normalize whitespace."""
@@ -291,6 +292,8 @@ class TestServiceIntegration:
 
         assert events[-1].type == "done"
         assert events[-1].data["total"] >= 1
+        assert events[-1].data["terminal"] is True
+        assert events[-1].data["elapsed_ms"] >= 0
 
     def test_focus_prompt_passed_to_ai_client(self, service, generation_env):
         """Test that focus_prompt is correctly passed to LecternAIClient."""
@@ -1056,6 +1059,72 @@ class TestLoopInternals:
         ai.generate_more_cards.assert_not_called()
         assert any(e.type == "warning" and "stopped" in e.message.lower() for e in events)
 
+    def test_generation_loop_stops_when_model_done_and_coverage_is_sufficient(self, service):
+        ai = MagicMock()
+        ai.generate_more_cards.return_value = {
+            "cards": [
+                {
+                    "fields": {"Front": "Q1", "Back": "A1"},
+                    "source_pages": [1],
+                    "concept_ids": ["c1"],
+                    "rationale": "Covers the first key concept.",
+                    "source_excerpt": "Concept c1 appears on slide 1.",
+                },
+                {
+                    "fields": {"Front": "Q2", "Back": "A2"},
+                    "source_pages": [2],
+                    "concept_ids": ["c2"],
+                    "relation_keys": ["c1|causes|c2"],
+                    "rationale": "Covers the key relation.",
+                    "source_excerpt": "C1 causes C2 on slide 2.",
+                },
+            ],
+            "done": True,
+        }
+
+        context = GenerationLoopContext(
+            ai=ai,
+            examples="",
+            concept_map={
+                "concepts": [
+                    {"id": "c1", "name": "One", "importance": "high", "page_references": [1]},
+                    {"id": "c2", "name": "Two", "importance": "high", "page_references": [2]},
+                ],
+                "relations": [
+                    {"source": "c1", "type": "causes", "target": "c2", "page_references": [2]},
+                ],
+            },
+            slide_set_name="Slides",
+            model_name="gemini",
+            tags=[],
+            pdf_path="/tmp/mock.pdf",
+            deck_name="Deck",
+            history_id="h1",
+            session_id="s1",
+        )
+        state = GenerationLoopState(
+            all_cards=[],
+            seen_keys=set(),
+            pages=[MagicMock(), MagicMock()],
+        )
+        config = GenerationLoopConfig(
+            total_cards_cap=10,
+            actual_batch_size=5,
+            focus_prompt=None,
+            effective_target=1.0,
+            stop_check=None,
+        )
+        events = list(
+            service._run_generation_loop(
+                context=context,
+                state=state,
+                config=config,
+            )
+        )
+
+        assert ai.generate_more_cards.call_count == 1
+        assert any("coverage threshold satisfied" in e.message.lower() for e in events if e.type == "info")
+
     def test_reflection_loop_checkpoints_per_round_until_no_new_cards(self, service):
         ai = MagicMock()
         ai.reflect.side_effect = [
@@ -1261,7 +1330,7 @@ class TestLoopInternals:
     @patch('lectern.lectern_service.LecternAIClient')
     @patch('lectern.lectern_service.os.path.exists')
     @patch('lectern.lectern_service.os.path.getsize')
-    def test_dynamic_rounds_skipped_below_25(
+    def test_dynamic_rounds_runs_lightweight_review_below_25(
         self,
         mock_getsize,
         mock_exists,
@@ -1269,7 +1338,7 @@ class TestLoopInternals:
         mock_check,
         service
     ):
-        """Test that reflection is skipped when fewer than 25 cards are generated."""
+        """Test that small decks still receive one reflection round."""
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         mock_check.return_value = True
@@ -1288,9 +1357,8 @@ class TestLoopInternals:
             skip_export=True
         ))
         
-        # 10 cards after generation -> dynamic_rounds = 0, no reflection
-        assert not any("Reflection" in e.message for e in events if e.type == "step_start")
-        assert not any("Reflection Round" in e.message for e in events if e.type == "status")
+        assert any("Reflection" in e.message for e in events if e.type == "step_start")
+        assert any("Reflection Round 1/1" in e.message for e in events if e.type == "status")
 
     @patch('lectern.lectern_service.check_connection')
     @patch('lectern.lectern_service.LecternAIClient')

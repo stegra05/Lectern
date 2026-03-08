@@ -40,7 +40,12 @@ export const CardDataSchema = z.object({
   slide_number: z.number().optional(),
   source_pages: z.array(z.number()).optional(),
   concept_ids: z.array(z.string()).optional(),
+  relation_keys: z.array(z.string()).optional(),
   slide_topic: z.string().optional(),
+  rationale: z.string().optional(),
+  source_excerpt: z.string().optional(),
+  quality_score: z.number().optional(),
+  quality_flags: z.array(z.string()).optional(),
   tag: z.string().optional(),
   _uid: z.string().optional(),
 }).strict();

@@ -29,6 +29,8 @@ def test_prompt_builder_language():
     
     reflect = builder.reflection(10)
     assert "Ensure all content is in de" in reflect
+    assert "quality_score" in reflect
+    assert "quality_flags" in reflect
 
 def test_concept_map_prompt():
     cfg = PromptConfig()
@@ -40,6 +42,16 @@ def test_concept_map_prompt():
     assert "page_references" in prompt
     assert "document_type" in prompt
     assert "language (string)" in prompt or "language" in prompt  # Schema key present
+
+
+def test_generation_prompt_requests_grounding_metadata():
+    cfg = PromptConfig()
+    builder = PromptBuilder(cfg)
+
+    prompt = builder.generation(5)
+    assert "relation_keys" in prompt
+    assert "rationale" in prompt
+    assert "source_excerpt" in prompt
 
 import json
 from lectern.ai_prompts import CARD_EXAMPLES
