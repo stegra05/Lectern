@@ -541,8 +541,18 @@ async def generate_cards(
     }
 
     async def event_generator():
+        import time
+        import json
+        session_logs = []
+        def emit_event(evt_type: str, message: str, data: Any = None):
+            evt = {"type": evt_type, "message": message, "timestamp": int(time.time() * 1000)}
+            if data is not None:
+                evt["data"] = data
+            session_logs.append(evt)
+            return json.dumps(evt) + "\n"
+
         card_count: int = 0  # Track number of cards generated
-        yield ndjson_event(
+        yield emit_event(
             "session_start",
             "Session started",
             {"session_id": session.session_id},
@@ -559,7 +569,7 @@ async def generate_cards(
                 target_card_count=target_card_count,
                 session_id=session.session_id,
             ):
-                yield ndjson_event(event.type, event.message, event.data)
+                yield emit_event(event.type, event.message, event.data)
                 try:
                     event_type = event.type
                     # Track card count
@@ -570,6 +580,11 @@ async def generate_cards(
                         session_manager.mark_status(session.session_id, status)
                         if cleanup:
                             session_manager.cleanup_temp_file(session.session_id)
+                            
+                        # Save logs when generation terminates
+                        if event_type in ("done", "cancelled", "error"):
+                            history_mgr.update_session_logs(session.session_id, session_logs)
+                            
                         # Persistent state: update cards when a phase ends or job is done
                         if event_type == "done" or event_type == "step_end" or event_type == "cards_replaced":
                             # Get latest cards from draft store (updated incrementally by service)
@@ -594,7 +609,8 @@ async def generate_cards(
                     pass
         except Exception as e:
             session_manager.mark_status(session.session_id, "error")
-            yield ndjson_event("error", f"Generation failed: {str(e)}")
+            yield emit_event("error", f"Generation failed: {str(e)}")
+            history_mgr.update_session_logs(session.session_id, session_logs)
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 

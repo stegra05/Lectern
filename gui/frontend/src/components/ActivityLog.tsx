@@ -1,6 +1,6 @@
 import { memo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Terminal, Copy, Check, Loader2 } from 'lucide-react';
+import { Terminal, Copy, Check, Loader2, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { ProgressEvent } from '../api';
 
@@ -8,6 +8,7 @@ interface ActivityLogProps {
     logs: ProgressEvent[];
     copied: boolean;
     onCopyLogs: () => void;
+    onExportLogs?: () => void;
     isCancelling: boolean;
     onCancel: () => void;
     isHistorical: boolean;
@@ -23,6 +24,7 @@ export const ActivityLog = memo(function ActivityLog({
     logs,
     copied,
     onCopyLogs,
+    onExportLogs,
     isCancelling,
     onCancel,
     isHistorical,
@@ -77,13 +79,24 @@ export const ActivityLog = memo(function ActivityLog({
                 </div>
                 <div className="flex items-center gap-2">
                     {logs.length > 0 && (
-                        <button
-                            onClick={onCopyLogs}
-                            className="p-1 text-text-muted hover:text-primary transition-colors rounded"
-                            title="Copy logs"
-                        >
-                            {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
+                        <>
+                            {onExportLogs && (
+                                <button
+                                    onClick={onExportLogs}
+                                    className="p-1 text-text-muted hover:text-primary transition-colors rounded"
+                                    title="Export logs"
+                                >
+                                    <Download className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                            <button
+                                onClick={onCopyLogs}
+                                className="p-1 text-text-muted hover:text-primary transition-colors rounded"
+                                title="Copy logs"
+                            >
+                                {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                        </>
                     )}
                 </div>
             </div>

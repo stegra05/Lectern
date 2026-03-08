@@ -240,6 +240,7 @@ LOG_MAX_RESPONSE_CHARS: int = int(os.getenv("LOG_MAX_RESPONSE_CHARS", "20000"))
 
 # Pricing dictionary (per million tokens: input, output)
 GEMINI_PRICING: Dict[str, tuple[float, float]] = {
+    "gemini-3.1-pro-preview": (2.00, 12.00),
     "gemini-3-pro-preview": (2.00, 12.00),
     "gemini-3-flash-preview": (0.50, 3.00),
     "gemini-3-pro": (2.00, 12.00),

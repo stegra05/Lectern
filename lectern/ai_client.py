@@ -106,7 +106,6 @@ class LecternAIClient:
 
         self._generation_config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=config.GEMINI_TEMPERATURE,
             max_output_tokens=_MAX_OUTPUT_TOKENS,
             system_instruction=system_inst,
             safety_settings=[
@@ -434,7 +433,6 @@ class LecternAIClient:
         
         update: dict[str, Any] = {
             "response_schema": _CARD_GENERATION_SCHEMA,
-            "temperature": config.GEMINI_TEMPERATURE,
         }
         thinking = self._thinking_config_for("generation")
         if thinking is not None:

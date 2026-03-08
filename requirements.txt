@@ -1,7 +1,7 @@
 # Core dependencies for Lectern
 
 # Google Gemini API client
-google-genai>=1.0.0
+google-genai>=1.51.0
 
 # PDF metadata extraction (text, images, page count)
 pypdf>=4.0.0

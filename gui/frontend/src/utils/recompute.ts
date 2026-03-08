@@ -8,7 +8,7 @@ const TOKENS_PER_CARD = 100;
 
 // Gemini pricing per million tokens: [input, output]
 const PRICING: Record<string, [number, number]> = {
-    'gemini-3-pro': [2.00, 12.00],
+    'gemini-3.1-pro-preview': [2.00, 12.00],
     'gemini-3-flash': [0.50, 3.00],
     'gemini-2.5-pro': [1.25, 10.00],
     'gemini-2.5-flash': [0.30, 2.50],

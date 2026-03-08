@@ -181,6 +181,7 @@ export const loadSession = async (
         const cards = stampUids(normalizeCardsMetadata(session.cards || []));
         set({
             cards,
+            logs: session.logs || [],
             totalPages: deriveTotalPages(cards),
             deckName: session.deck_name || '',
             sessionId,

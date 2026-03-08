@@ -230,7 +230,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                     className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-main focus:ring-2 focus:ring-primary/50 outline-none appearance-none cursor-pointer"
                                                 >
                                                     <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast)</option>
-                                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Smart)</option>
+                                                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Smart)</option>
                                                 </select>
                                             </div>
 

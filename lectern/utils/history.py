@@ -85,3 +85,7 @@ class HistoryManager:
     def clear_all(self) -> None:
         """Clear all history entries."""
         self.db.clear_all()
+
+    def update_session_logs(self, session_id: str, logs: List[Dict[str, Any]]) -> bool:
+        """Update logs for a session."""
+        return self.db.update_session_logs(session_id, logs)

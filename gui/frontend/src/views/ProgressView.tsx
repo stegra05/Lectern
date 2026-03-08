@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Terminal, Copy, Check, CheckCircle2, RotateCcw, UploadCloud } from 'lucide-react';
+import { Layers, Terminal, Copy, Check, CheckCircle2, RotateCcw, UploadCloud, Download } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { PhaseIndicator } from '../components/PhaseIndicator';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -452,6 +452,27 @@ export function ProgressView() {
         progress.total
     );
 
+    const handleExportLogs = useCallback(() => {
+        const text = logs
+            .map(
+                (log) => {
+                    const dataStr = log.data ? `\n  Data: ${JSON.stringify(log.data, null, 2)}` : '';
+                    return `[${new Date(log.timestamp).toISOString()}] [${log.type.toUpperCase()}] ${log.message}${dataStr}`;
+                }
+            )
+            .join('\n\n');
+        
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `lectern-log-${sessionId || 'export'}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, [logs, sessionId]);
+
     // -----------------------------------------------------------------------
     // Sidebar: Generating state
     // -----------------------------------------------------------------------
@@ -471,6 +492,7 @@ export function ProgressView() {
                 logs={logs}
                 copied={copied}
                 onCopyLogs={handleCopyLogs}
+                onExportLogs={handleExportLogs}
                 isCancelling={isCancelling}
                 onCancel={handleCancel}
                 isHistorical={isHistorical}
@@ -534,16 +556,28 @@ export function ProgressView() {
                     rightElement={
                         <div className="flex items-center gap-2">
                             {logs.length > 0 && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleCopyLogs();
-                                    }}
-                                    className="p-1 text-text-muted hover:text-primary transition-colors rounded"
-                                    title="Copy logs"
-                                >
-                                    {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                </button>
+                                <>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleExportLogs();
+                                        }}
+                                        className="p-1 text-text-muted hover:text-primary transition-colors rounded"
+                                        title="Export logs"
+                                    >
+                                        <Download className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopyLogs();
+                                        }}
+                                        className="p-1 text-text-muted hover:text-primary transition-colors rounded"
+                                        title="Copy logs"
+                                    >
+                                        {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                </>
                             )}
                             <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
                                 <CheckCircle2 className="w-3 h-3" />
@@ -556,6 +590,7 @@ export function ProgressView() {
                         logs={logs}
                         copied={copied}
                         onCopyLogs={handleCopyLogs}
+                        onExportLogs={handleExportLogs}
                         isCancelling={isCancelling}
                         onCancel={handleCancel}
                         isHistorical={isHistorical}

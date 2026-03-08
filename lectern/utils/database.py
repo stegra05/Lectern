@@ -14,7 +14,7 @@ from lectern.utils.path_utils import get_app_data_dir
 logger = logging.getLogger(__name__)
 
 # Current database schema version - increment when making schema changes
-DB_SCHEMA_VERSION = 1
+DB_SCHEMA_VERSION = 2
 
 
 def get_db_path() -> Path:
@@ -86,7 +86,8 @@ class DatabaseManager:
                     cards TEXT,
                     tags TEXT,
                     model_name TEXT,
-                    slide_set_name TEXT
+                    slide_set_name TEXT,
+                    logs TEXT
                 )
             """
             )
@@ -105,6 +106,7 @@ class DatabaseManager:
         migrations = {
             # Example for future migrations:
             # 2: "ALTER TABLE history ADD COLUMN new_field TEXT",
+            2: "ALTER TABLE history ADD COLUMN logs TEXT",
         }
 
         for version in range(from_version + 1, DB_SCHEMA_VERSION + 1):
@@ -166,6 +168,7 @@ class DatabaseManager:
             "tags": json.loads(row[10]) if row[10] else [],
             "model_name": row[11],
             "slide_set_name": row[12],
+            "logs": json.loads(row[13]) if len(row) > 13 and row[13] else [],
         }
 
     # History Methods
@@ -328,6 +331,16 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.execute(
                 f'UPDATE history SET {", ".join(updates)} WHERE session_id = ?', params
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_session_logs(self, session_id: str, logs: List[Dict[str, Any]]) -> bool:
+        """Update the logs for a session. Returns True if updated."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE history SET logs = ?, last_modified = ? WHERE session_id = ?",
+                (json.dumps(logs), datetime.now().isoformat(), session_id)
             )
             conn.commit()
             return cursor.rowcount > 0
