@@ -162,7 +162,6 @@ export const createGenerationActions = (
   },
   loadSession: (sessionId) => generationLogic.loadSession(sessionId, set),
   recoverSessionOnRefresh: () => generationLogic.recoverSessionOnRefresh(set),
-  refreshRecoveredSession: () => generationLogic.refreshRecoveredSession(set, get),
 });
 
 export const createProgressTrackingActions = (

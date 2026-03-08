@@ -99,7 +99,6 @@ function App() {
   const handleReset = useLecternStore((s) => s.handleReset);
   const loadSession = useLecternStore((s) => s.loadSession);
   const recoverSessionOnRefresh = useLecternStore((s) => s.recoverSessionOnRefresh);
-  const refreshRecoveredSession = useLecternStore((s) => s.refreshRecoveredSession);
 
   // Budget actions and state for settings
   const totalSessionSpend = useLecternStore((s) => s.totalSessionSpend);
@@ -158,13 +157,9 @@ function App() {
     recoverSessionOnRefresh();
   }, [recoverSessionOnRefresh]);
 
-  useEffect(() => {
-    if (step !== 'generating' || !sessionId) return undefined;
-    const interval = window.setInterval(() => {
-      refreshRecoveredSession();
-    }, 2500);
-    return () => window.clearInterval(interval);
-  }, [refreshRecoveredSession, sessionId, step]);
+  // NOTE: No polling during active generation. The NDJSON stream is the single authoritative
+  // writer for cards. refreshRecoveredSession was removed to prevent racing with the stream
+  // and overwriting live state with stale persisted snapshots.
 
   // Check if there are unsynced cards (cards exist but haven't been synced)
   const hasUnsyncedCards = cards.length > 0 && !syncSuccess;

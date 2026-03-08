@@ -115,14 +115,15 @@ export const CardList = memo(function CardList({
     onSelectAll,
     onClearSelection,
 }: CardListProps) {
-    const parentRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const [canVirtualize, setCanVirtualize] = useState(!isTestEnvironment);
 
     const virtualizer = useVirtualizer({
         count: sortedCards.length,
-        getScrollElement: () => parentRef.current,
+        getScrollElement: () => scrollRef.current,
         estimateSize: () => 200,
         overscan: 5,
+        getItemKey: (index) => sortedCards[index]?._uid ?? `card-${index}`,
     });
 
     const items = virtualizer.getVirtualItems();
@@ -135,8 +136,8 @@ export const CardList = memo(function CardList({
         }
 
         const checkHeight = () => {
-            if (parentRef.current) {
-                const height = parentRef.current.clientHeight;
+            if (scrollRef.current) {
+                const height = scrollRef.current.clientHeight;
                 setCanVirtualize(height > 0);
             }
         };
@@ -145,18 +146,24 @@ export const CardList = memo(function CardList({
 
         // Re-check on resize
         const observer = new ResizeObserver(checkHeight);
-        if (parentRef.current) {
-            observer.observe(parentRef.current);
+        if (scrollRef.current) {
+            observer.observe(scrollRef.current);
         }
 
         return () => observer.disconnect();
     }, []);
 
-    // In test environments or when virtualization isn't possible, render all cards directly
-    const shouldVirtualize = canVirtualize && items.length > 0;
+    // During generation with few cards, skip virtualization for stability. Enable after done or 50+ cards.
+    const shouldVirtualize =
+        canVirtualize &&
+        items.length > 0 &&
+        (step === 'done' || sortedCards.length >= 50);
 
     return (
-        <div className="flex-1 overflow-y-auto p-6 min-h-0 scrollbar-thin scrollbar-thumb-border">
+        <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto p-6 min-h-0 scrollbar-thin scrollbar-thumb-border"
+        >
             {/* Select All button (only in multi-select mode with cards) */}
             {isMultiSelectMode && sortedCards.length > 0 && (
                 <div className="flex items-center justify-between px-2 py-2 mb-2">
@@ -191,7 +198,6 @@ export const CardList = memo(function CardList({
                 shouldVirtualize ? (
                     /* Virtualized rendering for production */
                     <div
-                        ref={parentRef}
                         style={{
                             height: virtualizer.getTotalSize() > 0 ? `${virtualizer.getTotalSize()}px` : 'auto',
                             position: 'relative',
@@ -240,7 +246,7 @@ export const CardList = memo(function CardList({
                     </div>
                 ) : (
                     /* Direct rendering for tests/fallback */
-                    <div ref={parentRef} className="space-y-4">
+                    <div className="space-y-4">
                         {sortedCards.map((card, index) => (
                             <RenderCardItem
                                 key={card._uid || `card-fallback-${index}`}

@@ -11,7 +11,7 @@ export function Skeleton({ className, variant = 'text', ...props }: SkeletonProp
     <div
       className={twMerge(
         clsx(
-          "animate-pulse bg-surface/80",
+          "animate-pulse bg-border/60",
           {
             'rounded-md': variant === 'text',
             'rounded-full': variant === 'circular',

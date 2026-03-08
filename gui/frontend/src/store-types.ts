@@ -114,7 +114,6 @@ export type GenerationActions = {
     handleCopyLogs: () => void;
     loadSession: (sessionId: string) => Promise<void>;
     recoverSessionOnRefresh: () => Promise<void>;
-    refreshRecoveredSession: () => Promise<void>;
     recommendTargetDeckSize: (est: Estimation) => void;
     reset: () => void;
 };

@@ -1,7 +1,8 @@
 import { api, type ProgressEvent } from "../api";
 import type { StoreState, LecternStore, ReviewActions, BatchActions } from "../store-types";
 import { processStreamEvent } from "../logic/stream";
-import { stampUids } from "../utils/uid";
+import { reconcileCardUids } from "../utils/uid";
+import { normalizeCardsMetadata } from "../utils/cardMetadata";
 
 export const getReviewState = () => ({
   cards: [] as import("../api").Card[],
@@ -35,12 +36,15 @@ export const processSyncEvent = async (
     const created = data.created || 0;
 
     try {
+      const existingCards = get().cards;
       if (isHistorical && sessionId) {
         const session = await api.getSession(sessionId);
-        set(() => ({ cards: stampUids(session.cards || []) }));
+        const normalized = normalizeCardsMetadata(session.cards || []);
+        set(() => ({ cards: reconcileCardUids(existingCards, normalized) }));
       } else if (sessionId) {
         const drafts = await api.getDrafts(sessionId);
-        set(() => ({ cards: stampUids(drafts.cards || []) }));
+        const normalized = normalizeCardsMetadata(drafts.cards || []);
+        set(() => ({ cards: reconcileCardUids(existingCards, normalized) }));
       }
     } catch (refreshErr) {
       console.error('Failed to refresh cards after sync:', refreshErr);

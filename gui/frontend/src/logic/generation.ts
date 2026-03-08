@@ -1,7 +1,7 @@
 import { api, type ProgressEvent, type Card } from '../api';
 import type { StoreState, LecternStore, Phase } from '../store-types';
 import { processStreamEvent } from './stream';
-import { stampUid, stampUids } from '../utils/uid';
+import { stampUid, stampUids, reconcileCardUids } from '../utils/uid';
 import { useLecternStore } from '../store';
 import { deriveMaxSlideNumber, normalizeCardMetadata, normalizeCardsMetadata } from '../utils/cardMetadata';
 
@@ -45,10 +45,11 @@ export const processGenerationEvent = (
 
     if (event.type === 'cards_replaced') {
         set((prev) => {
-            const newCards = stampUids(normalizeCardsMetadata((event.data as any).cards || []));
+            const normalized = normalizeCardsMetadata((event.data as any).cards || []);
+            const reconciled = reconcileCardUids(prev.cards, normalized);
             return {
-                cards: newCards,
-                totalPages: Math.max(prev.totalPages, deriveTotalPages(newCards)),
+                cards: reconciled,
+                totalPages: Math.max(prev.totalPages, deriveTotalPages(reconciled)),
             };
         });
         return;
@@ -236,29 +237,3 @@ export const recoverSessionOnRefresh = async (
     }
 };
 
-export const refreshRecoveredSession = async (
-    set: (partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
-    get: () => LecternStore
-) => {
-    const { sessionId, step } = get();
-    if (!sessionId || step !== 'generating') return;
-    try {
-        const status = await api.getSessionStatus(sessionId);
-        if (!status.active) {
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem(ACTIVE_SESSION_KEY);
-            }
-            set({ step: 'done', currentPhase: 'complete', isHistorical: true });
-            return;
-        }
-        const snapshot = await api.getSession(sessionId);
-        const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
-        set({
-            cards,
-            totalPages: deriveTotalPages(cards),
-            deckName: snapshot.deck_name || '',
-        });
-    } catch (error) {
-        console.warn('Failed to refresh recovered session:', error);
-    }
-};

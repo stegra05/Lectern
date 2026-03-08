@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { loadSession, recoverSessionOnRefresh } from '../logic/generation';
+import { loadSession, recoverSessionOnRefresh, processGenerationEvent } from '../logic/generation';
 import { api } from '../api';
 
 // Mock dependencies
@@ -22,8 +22,10 @@ vi.mock('../store', () => ({
 }));
 
 vi.mock('../utils/uid', () => ({
-    stampUid: (card: Record<string, unknown>) => ({ ...card, _uid: 'mock-uid' }),
-    stampUids: (cards: Record<string, unknown>[]) => cards.map(c => ({ ...c, _uid: 'mock-uid' })),
+    stampUid: (card: Record<string, unknown>) => ({ ...card, _uid: (card as { _uid?: string })._uid ?? 'mock-uid' }),
+    stampUids: (cards: Record<string, unknown>[]) => cards.map(c => ({ ...c, _uid: (c as { _uid?: string })._uid ?? 'mock-uid' })),
+    reconcileCardUids: (_existing: Record<string, unknown>[], incoming: Record<string, unknown>[]) =>
+        incoming.map(c => ({ ...c, _uid: (c as { _uid?: string })._uid ?? 'mock-uid' })),
 }));
 
 describe('generation logic', () => {
@@ -87,6 +89,35 @@ describe('generation logic', () => {
                 totalPages: 10,
                 isHistorical: false,
             }));
+        });
+    });
+
+    describe('processGenerationEvent cards_replaced', () => {
+        it('reconciles cards and preserves totalPages when higher', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'cards_replaced',
+                    message: 'Applied reflection batch',
+                    data: { cards: [{ front: 'A', back: 'B', fields: { Front: 'A', Back: 'B' } }] },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+            expect(setFn).toHaveBeenCalled();
+            // processStreamEvent appends to logs first; cards_replaced handler is a subsequent call
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            expect(typeof update).toBe('function');
+            const prevState = {
+                cards: [{ front: 'X', back: 'Y', _uid: 'old' }],
+                totalPages: 10,
+                progress: { current: 0, total: 10 },
+            };
+            const result = update(prevState);
+            expect(result).toHaveProperty('cards');
+            expect(result).toHaveProperty('totalPages');
+            expect((result as { cards: unknown[] }).cards).toHaveLength(1);
+            expect((result as { totalPages: number }).totalPages).toBe(10);
         });
     });
 });
