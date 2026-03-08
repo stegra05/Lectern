@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] - 2026-03-08
+
+### Fixed
+- **Live Preview**: Stabilized card list; removed redundant 2.5s polling that raced with NDJSON stream and caused flicker between skeletons and cards
+- **Live Preview**: Fixed virtualization (scroll ref on outer container, stable `getItemKey`); disabled virtualization during streaming for stability
+- **Live Preview**: Added `reconcileCardUids` to preserve card identity across `cards_replaced` and sync refresh
+- **Skeleton**: Improved visibility with `bg-border/60` for perceptible pulse animation
+
 ## [1.9.2] - 2026-02-24
 
 ### Fixed
