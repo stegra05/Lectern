@@ -165,23 +165,6 @@ class LecternGenerationService:
             pages = []
             total_text_chars = 0
 
-            yield ServiceEvent(
-                "info",
-                "Generation run started",
-                {
-                    "pdf_name": os.path.basename(cfg.pdf_path),
-                    "deck_name": cfg.deck_name,
-                    "skip_export": cfg.skip_export,
-                    "target_card_count": cfg.target_card_count,
-                },
-            )
-
-            if self._should_stop(cfg.stop_check):
-                history_mgr.update_entry(history_id, status="cancelled")
-                yield self._cancelled_event("setup", start_time)
-                return
-
-            # 3. Sample Examples
             if self._should_stop(cfg.stop_check):
                 history_mgr.update_entry(history_id, status="cancelled")
                 yield self._cancelled_event("setup", start_time)
@@ -198,7 +181,6 @@ class LecternGenerationService:
                 yield ServiceEvent("step_end", "Examples Loaded", {
                     "success": True,
                     "duration_ms": self._elapsed_ms(examples_started_at),
-                    "example_count_hint": examples.count("Example "),
                 })
             except Exception as e:
                  user_msg, _ = capture_exception(e, "Sample examples")
@@ -243,7 +225,6 @@ class LecternGenerationService:
                 yield ServiceEvent("step_end", "PDF Uploaded", {
                     "success": True,
                     "duration_ms": self._elapsed_ms(upload_started_at),
-                    "mime_type": uploaded_pdf.get("mime_type", "application/pdf"),
                 })
             except Exception as e:
                 user_msg, _ = capture_exception(e, "PDF upload")
@@ -435,16 +416,10 @@ class LecternGenerationService:
                 config=loop_config,
             )
             
-            post_generation_coverage = compute_coverage_data(
-                cards=all_cards,
-                concept_map=concept_map,
-                total_pages=len(pages),
-            )
             yield ServiceEvent("step_end", "Generation Phase Complete", {
                 "success": True,
                 "count": len(all_cards),
                 "duration_ms": self._elapsed_ms(generation_started_at),
-                "coverage_data": post_generation_coverage,
             })
 
             # 7. Reflection Phase

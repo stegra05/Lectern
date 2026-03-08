@@ -57,8 +57,6 @@ export interface Card {
     slide_topic?: string;
     rationale?: string;
     source_excerpt?: string;
-    quality_score?: number;
-    quality_flags?: string[];
     tag?: string;
     /** Client-only stable identity — stamped on ingestion, never sent to backend */
     _uid?: string;
@@ -82,23 +80,14 @@ export interface CoverageData {
     uncovered_pages?: number[];
     covered_page_count?: number;
     page_coverage_pct?: number;
-    cards_per_page?: Record<string, number>;
     saturated_pages?: number[];
-    explicit_concept_ids?: string[];
     explicit_concept_count?: number;
     explicit_concept_coverage_pct?: number;
-    inferred_concept_ids?: string[];
-    inferred_concept_count?: number;
     covered_concept_ids?: string[];
     covered_concept_count?: number;
     total_concepts?: number;
     concept_coverage_pct?: number;
-    explicit_relation_keys?: string[];
     explicit_relation_count?: number;
-    explicit_relation_coverage_pct?: number;
-    inferred_relation_keys?: string[];
-    inferred_relation_count?: number;
-    covered_relation_keys?: string[];
     covered_relation_count?: number;
     total_relations?: number;
     relation_coverage_pct?: number;

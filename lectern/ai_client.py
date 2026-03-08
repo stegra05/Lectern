@@ -459,18 +459,8 @@ class LecternAIClient:
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", len(cards) == 0))
-            return {
-                "cards": cards,
-                "done": done,
-                "parse_error": "",
-                "response_chars": len(text),
-            }
-        return {
-            "cards": [],
-            "done": True,
-            "parse_error": self._last_parse_error,
-            "response_chars": len(text),
-        }
+            return {"cards": cards, "done": done, "parse_error": ""}
+        return {"cards": [], "done": True, "parse_error": self._last_parse_error}
 
     def reflect(
         self,
@@ -510,14 +500,12 @@ class LecternAIClient:
                 "cards": cards,
                 "done": done,
                 "parse_error": "",
-                "response_chars": len(text),
             }
         return {
             "reflection": "",
             "cards": [],
             "done": True,
             "parse_error": self._last_parse_error,
-            "response_chars": len(text),
         }
 
     def _safe_parse_json(self, text: str, model_class: Any) -> Dict[str, Any] | None:

@@ -71,8 +71,7 @@ class TestPromptStructure:
         assert "Quality Assurance Specialist" in prompt
         assert "Critique Criteria" in prompt
         assert "Limit 3 cards" in prompt
-        assert "quality_score" in prompt
-        assert "quality_flags" in prompt
+        assert "Provenance" in prompt
 
     def test_card_examples_formatting(self):
         """Ensure examples are valid JSON-like structures in the prompt."""

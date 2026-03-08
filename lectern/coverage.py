@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Dict, Iterable, List, Set
+from typing import Any, Dict, List, Set
 
 
 def normalize_positive_int(value: Any) -> int | None:
@@ -166,9 +166,8 @@ def compute_coverage_data(
                 if relation_key and relation_pages and page_ref_set.intersection(relation_pages):
                     covered_relations_by_page.add(relation_key)
 
-    explicit_concept_ids_sorted = sorted(explicit_concept_ids)
-    inferred_concept_ids = sorted(covered_concepts_by_page.difference(explicit_concept_ids))
-    covered_concept_ids = sorted(explicit_concept_ids.union(covered_concepts_by_page))
+    covered_concept_ids_set = explicit_concept_ids.union(covered_concepts_by_page)
+    covered_concept_ids = sorted(covered_concept_ids_set)
     concept_ids = [str(concept.get("id") or "").strip() for concept in concept_catalog if concept.get("id")]
     high_priority_ids = [
         str(concept.get("id") or "").strip()
@@ -176,9 +175,7 @@ def compute_coverage_data(
         if str(concept.get("importance") or "").strip() == "high" and concept.get("id")
     ]
     relation_keys = [str(relation.get("key") or "").strip() for relation in relation_catalog if relation.get("key")]
-    explicit_relation_keys_sorted = sorted(explicit_relation_keys)
-    inferred_relation_keys = sorted(covered_relations_by_page.difference(explicit_relation_keys))
-    covered_relation_keys = sorted(explicit_relation_keys.union(covered_relations_by_page))
+    covered_relation_keys_set = explicit_relation_keys.union(covered_relations_by_page)
 
     uncovered_pages = [
         page for page in range(1, int(total_pages) + 1) if page not in covered_pages
@@ -191,7 +188,7 @@ def compute_coverage_data(
             "page_references": normalize_page_references(concept.get("page_references")),
         }
         for concept in concept_catalog
-        if str(concept.get("id") or "").strip() not in covered_concept_ids
+        if str(concept.get("id") or "").strip() not in covered_concept_ids_set
     ]
     missing_high_priority = [
         concept for concept in uncovered_concepts if concept.get("importance") == "high"
@@ -205,11 +202,8 @@ def compute_coverage_data(
             "page_references": normalize_page_references(relation.get("page_references")),
         }
         for relation in relation_catalog
-        if str(relation.get("key") or "").strip() not in covered_relation_keys
+        if str(relation.get("key") or "").strip() not in covered_relation_keys_set
     ]
-    cards_per_page_dict = {
-        str(page): count for page, count in sorted(cards_per_page.items())
-    }
     saturated_pages = [
         page for page, count in sorted(cards_per_page.items()) if count > 2
     ]
@@ -220,36 +214,25 @@ def compute_coverage_data(
         "uncovered_pages": uncovered_pages,
         "covered_page_count": len(covered_pages),
         "page_coverage_pct": round((len(covered_pages) / total_pages) * 100) if total_pages > 0 else 0,
-        "cards_per_page": cards_per_page_dict,
         "saturated_pages": saturated_pages,
-        "explicit_concept_ids": explicit_concept_ids_sorted,
-        "explicit_concept_count": len(explicit_concept_ids_sorted),
-        "explicit_concept_coverage_pct": round((len(explicit_concept_ids_sorted) / len(concept_ids)) * 100)
+        "explicit_concept_count": len(explicit_concept_ids),
+        "explicit_concept_coverage_pct": round((len(explicit_concept_ids) / len(concept_ids)) * 100)
         if concept_ids
         else 0,
-        "inferred_concept_ids": inferred_concept_ids,
-        "inferred_concept_count": len(inferred_concept_ids),
         "covered_concept_ids": covered_concept_ids,
         "covered_concept_count": len(covered_concept_ids),
         "total_concepts": len(concept_ids),
         "concept_coverage_pct": round((len(covered_concept_ids) / len(concept_ids)) * 100)
         if concept_ids
         else 0,
-        "explicit_relation_keys": explicit_relation_keys_sorted,
-        "explicit_relation_count": len(explicit_relation_keys_sorted),
-        "inferred_relation_keys": inferred_relation_keys,
-        "inferred_relation_count": len(inferred_relation_keys),
-        "covered_relation_keys": covered_relation_keys,
-        "covered_relation_count": len(covered_relation_keys),
+        "explicit_relation_count": len(explicit_relation_keys),
+        "covered_relation_count": len(covered_relation_keys_set),
         "total_relations": len(relation_keys),
-        "relation_coverage_pct": round((len(covered_relation_keys) / len(relation_keys)) * 100)
-        if relation_keys
-        else 0,
-        "explicit_relation_coverage_pct": round((len(explicit_relation_keys_sorted) / len(relation_keys)) * 100)
+        "relation_coverage_pct": round((len(covered_relation_keys_set) / len(relation_keys)) * 100)
         if relation_keys
         else 0,
         "high_priority_total": len(high_priority_ids),
-        "high_priority_covered": len([concept_id for concept_id in high_priority_ids if concept_id in covered_concept_ids]),
+        "high_priority_covered": len([cid for cid in high_priority_ids if cid in covered_concept_ids_set]),
         "missing_high_priority": missing_high_priority,
         "uncovered_concepts": uncovered_concepts,
         "uncovered_relations": uncovered_relations,

@@ -28,8 +28,7 @@ export const ProgressUpdateDataSchema = z.object({
   phase: z.string().optional(),
 });
 
-// Schema for card event data
-// Note: Using strict() to catch typos in field names - extra fields will cause validation to fail
+// Schema for card event data — passthrough allows internal metadata (quality_score, etc.)
 export const CardDataSchema = z.object({
   front: z.string().optional(),
   back: z.string().optional(),
@@ -44,11 +43,9 @@ export const CardDataSchema = z.object({
   slide_topic: z.string().optional(),
   rationale: z.string().optional(),
   source_excerpt: z.string().optional(),
-  quality_score: z.number().optional(),
-  quality_flags: z.array(z.string()).optional(),
   tag: z.string().optional(),
   _uid: z.string().optional(),
-}).strict();
+}).passthrough();
 
 // Schema for note_created/note_updated/note_recreated event data
 export const NoteEventDataSchema = z.object({

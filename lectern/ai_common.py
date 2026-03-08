@@ -142,7 +142,6 @@ def _append_session_log(
                     "schema_used": schema_used,
                     "request": {"role": "user", "parts": _build_loggable_parts(parts)},
                     "response_text": truncated_response,
-                    "response_length": len(response_text or ""),
                 }
             )
             payload["exchanges"] = exchanges

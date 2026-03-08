@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-03-08
+
+### Added
+- **Grounding Metadata**: Cards now carry `rationale`, `source_excerpt`, and `relation_keys` for auditable provenance
+- **Relation Coverage**: Coverage ledger tracks concept-map relations alongside pages and concepts
+- **Early Stopping**: Generation loop exits when the model signals completion and coverage thresholds are met
+- **Selective Reflection**: Reflection replaces coarse batch-swap with scored card selection that maximises coverage diversity
+
+### Changed
+- **Coverage Dict**: Trimmed bloated coverage payload — removed full ID/key lists, kept counts and percentages
+- **Card Deduplication**: `get_card_key` strips HTML, cloze syntax, and punctuation for better duplicate detection
+- **Prompts**: Generation prompt requests grounding fields; reflection prompt no longer asks model to self-score
+- **SSE Schema**: Relaxed `.strict()` to `.passthrough()` on `CardDataSchema` to tolerate internal metadata
+
+### Removed
+- `response_chars` from AI client returns, `response_length` from session logs
+- `quality_score`/`quality_flags` from Pydantic schema (local scoring is more reliable than LLM self-assessment)
+- Redundant service events (`"Generation run started"`, `example_count_hint`, `mime_type` on step_end)
+- `coverage_data` payloads from per-batch and post-generation events (final coverage at `done` is sufficient)
+
 ## [1.10.1] - 2026-03-08
 
 ### Fixed

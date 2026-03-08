@@ -29,8 +29,7 @@ def test_prompt_builder_language():
     
     reflect = builder.reflection(10)
     assert "Ensure all content is in de" in reflect
-    assert "quality_score" in reflect
-    assert "quality_flags" in reflect
+    assert "Provenance" in reflect
 
 def test_concept_map_prompt():
     cfg = PromptConfig()

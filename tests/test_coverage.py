@@ -26,10 +26,10 @@ def test_compute_coverage_data_tracks_explicit_and_inferred_coverage():
 
     coverage = compute_coverage_data(cards=cards, concept_map=concept_map, total_pages=3)
 
-    assert coverage["explicit_concept_ids"] == ["c1"]
+    assert coverage["explicit_concept_count"] == 1
     assert coverage["covered_concept_ids"] == ["c1", "c2"]
-    assert coverage["inferred_concept_ids"] == ["c2"]
-    assert coverage["explicit_relation_keys"] == ["c1|contrasts_with|c2"]
+    assert coverage["covered_concept_count"] == 2
+    assert coverage["explicit_relation_count"] == 1
     assert coverage["covered_relation_count"] == 1
     assert coverage["saturated_pages"] == []
 

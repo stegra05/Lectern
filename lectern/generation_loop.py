@@ -107,26 +107,6 @@ def _get_card_back(card: Dict[str, Any]) -> str:
     return str(card.get("back") or _get_card_field(card, "Back") or "")
 
 
-def _coerce_score(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, bool):
-        return None
-    try:
-        score = float(value)
-    except (TypeError, ValueError):
-        return None
-    return max(0.0, min(100.0, score))
-
-
-def _normalize_flags(flags: Any) -> List[str]:
-    if isinstance(flags, list):
-        return [str(flag).strip() for flag in flags if str(flag).strip()]
-    if isinstance(flags, str) and flags.strip():
-        return [flag.strip() for flag in flags.split(",") if flag.strip()]
-    return []
-
-
 def _estimate_card_quality(
     card: Dict[str, Any],
     *,
@@ -209,15 +189,9 @@ def _annotate_card_quality(
     high_priority_ids: set[str] | None = None,
 ) -> Dict[str, Any]:
     annotated = dict(card)
-    local_score, local_flags = _estimate_card_quality(annotated, high_priority_ids=high_priority_ids)
-    model_score = _coerce_score(annotated.get("quality_score"))
-    if model_score is None:
-        final_score = local_score
-    else:
-        final_score = round((model_score + local_score) / 2.0, 1)
-    merged_flags = sorted(set(_normalize_flags(annotated.get("quality_flags"))) | set(local_flags))
-    annotated["quality_score"] = round(final_score, 1)
-    annotated["quality_flags"] = merged_flags
+    score, flags = _estimate_card_quality(annotated, high_priority_ids=high_priority_ids)
+    annotated["quality_score"] = round(score, 1)
+    annotated["quality_flags"] = flags
     return annotated
 
 
@@ -455,22 +429,14 @@ def run_generation_loop(
                     f"{updated_coverage.get('page_coverage_pct', 0)}% pages, "
                     f"{updated_coverage.get('explicit_concept_coverage_pct', 0)}% explicit concepts."
                 ),
-                {
-                    "batch": batch_index,
-                    "added": added_count,
-                    "model_done": model_done,
-                    "coverage_data": updated_coverage,
-                },
+                {"batch": batch_index, "added": added_count, "model_done": model_done},
             )
 
             if model_done and _coverage_is_sufficient(updated_coverage):
                 yield event_factory(
                     "info",
                     f"Model marked generation complete after batch {batch_index}; coverage threshold satisfied.",
-                    {
-                        "batch": batch_index,
-                        "coverage_data": updated_coverage,
-                    },
+                    {"batch": batch_index},
                 )
                 break
 

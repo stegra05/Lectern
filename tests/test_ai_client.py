@@ -85,14 +85,12 @@ def test_safe_parse_json_normalizes_string_slide_number(ai_client):
 
 
 def test_safe_parse_json_normalizes_grounding_fields(ai_client):
-    json_str = '{"cards":[{"model_name":"Basic","front":"Q","back":"A","source_pages":["2",4],"concept_ids":["c1"," c2 "],"relation_keys":["c1|causes|c2"],"quality_score":"88","quality_flags":[" grounded "]}],"done":false}'
+    json_str = '{"cards":[{"model_name":"Basic","front":"Q","back":"A","source_pages":["2",4],"concept_ids":["c1"," c2 "],"relation_keys":["c1|causes|c2"]}],"done":false}'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
     assert result is not None
     assert result["cards"][0]["source_pages"] == [2, 4]
     assert result["cards"][0]["concept_ids"] == ["c1", "c2"]
     assert result["cards"][0]["relation_keys"] == ["c1|causes|c2"]
-    assert result["cards"][0]["quality_score"] == 88.0
-    assert result["cards"][0]["quality_flags"] == ["grounded"]
 
 
 def test_safe_parse_json_rejects_fenced_json(ai_client):
@@ -137,7 +135,6 @@ def test_generate_more_cards_flow(ai_client):
     assert result["done"] is False
     assert len(result["cards"]) == 1
     assert result["parse_error"] == ""
-    assert result["response_chars"] > 0
 
 
 def test_generate_more_cards_includes_examples(ai_client):
