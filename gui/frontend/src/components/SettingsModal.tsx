@@ -56,9 +56,9 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
     }, [isOpen]);
 
     const Tooltip = ({ text }: { text: string }) => (
-        <div className="group relative inline-block ml-2">
-            <HelpCircle className="w-4 h-4 text-text-muted hover:text-text-main cursor-help" />
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-zinc-800 text-zinc-200 text-xs rounded-lg whitespace-nowrap pointer-events-none border border-zinc-700 shadow-xl z-50">
+        <div className="group relative inline-block ml-2 shrink-0">
+            <HelpCircle className="w-4 h-4 text-text-muted hover:text-text-main cursor-help transition-colors" />
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-zinc-800 text-zinc-200 text-xs rounded-lg w-64 whitespace-normal leading-relaxed pointer-events-none border border-zinc-700 shadow-xl z-50 text-center">
                 {text}
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-800" />
             </div>
@@ -273,7 +273,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: 'auto', opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        className="space-y-4 overflow-hidden"
+                                                        className="space-y-4"
                                                     >
                                                         <div className="space-y-2 pt-2">
                                                             <label className="text-sm font-medium text-text-muted flex items-center">
@@ -367,7 +367,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: 'auto', opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        className="space-y-4 overflow-hidden"
+                                                        className="space-y-4"
                                                     >
                                                         {/* Session Spend */}
                                                         <div className="p-4 rounded-xl border border-border bg-background space-y-3">

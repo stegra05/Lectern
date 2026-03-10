@@ -91,7 +91,7 @@ function SyncOverlay({ cardsCount, syncProgress, syncLogs }: SyncOverlayProps) {
                             animate={{ opacity: 1, x: 0 }}
                             className="text-text-muted"
                         >
-                            <span className="opacity-50 mr-2">{new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}</span>
+                            <span className="opacity-50 mr-2">{new Date(log.timestamp).toLocaleTimeString().split(' ')[0]}</span>
                             {log.message}
                         </motion.div>
                     ))}
@@ -186,7 +186,7 @@ function SyncPartialFailureOverlay({
         const text = syncLogs
             .map(
                 (log) =>
-                    `[${new Date(log.timestamp * 1000).toLocaleTimeString()}] ${log.type.toUpperCase()}: ${log.message}`
+                    `[${new Date(log.timestamp).toLocaleTimeString()}] ${log.type.toUpperCase()}: ${log.message}`
             )
             .join('\n');
         navigator.clipboard.writeText(text);

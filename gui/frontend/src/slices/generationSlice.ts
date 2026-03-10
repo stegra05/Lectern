@@ -153,7 +153,7 @@ export const createGenerationActions = (
     const text = logs
       .map(
         (log) =>
-          `[${new Date(log.timestamp * 1000).toLocaleTimeString()}] ${log.type.toUpperCase()}: ${log.message}`
+          `[${new Date(log.timestamp).toLocaleTimeString()}] ${log.type.toUpperCase()}: ${log.message}`
       )
       .join('\n');
     navigator.clipboard.writeText(text);

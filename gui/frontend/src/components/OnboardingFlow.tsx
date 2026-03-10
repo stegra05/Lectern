@@ -232,7 +232,21 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         >
                           <RefreshCw className="w-3 h-3" aria-hidden="true" /> Retry Connection
                         </button>
-                      </motion.div>
+                        <button
+                          onClick={async () => {
+                            setAnkiStatus('success');
+                            const health = await api.checkHealth();
+                            if (health.gemini_configured) {
+                              setGeminiStatus('success');
+                              completeOnboarding();
+                            } else {
+                              setGeminiStatus('active');
+                            }
+                          }}
+                          className="mt-2 w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs font-medium transition-colors border border-zinc-700/50"
+                        >
+                          Continue Offline (Save as Drafts)
+                        </button>                      </motion.div>
                     )}
                   </div>
                 </div>

@@ -111,7 +111,6 @@ export function GenerationSummaryCard({ handleGenerate, health }: GenerationSumm
                         <DeckSelector
                             value={deckName}
                             onChange={setDeckName}
-                            disabled={!health?.anki_connected}
                         />
                         {attemptedSubmit && !deckName && (
                             <div className="absolute -bottom-5 left-0 text-xs text-red-400 flex items-center gap-1">

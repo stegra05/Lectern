@@ -55,7 +55,7 @@ export const ActivityLog = memo(function ActivityLog({
                             })}
                         >
                             <span className="opacity-30 shrink-0 text-text-muted">
-                                {new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}
+                                {new Date(log.timestamp).toLocaleTimeString().split(' ')[0]}
                             </span>
                             <span className="break-words">{log.message}</span>
                         </div>
@@ -140,7 +140,7 @@ export const ActivityLog = memo(function ActivityLog({
                             })}
                         >
                             <span className="opacity-30 shrink-0 text-text-muted">
-                                {new Date(log.timestamp * 1000).toLocaleTimeString().split(' ')[0]}
+                                {new Date(log.timestamp).toLocaleTimeString().split(' ')[0]}
                             </span>
                             <span className="break-words">{log.message}</span>
                         </motion.div>

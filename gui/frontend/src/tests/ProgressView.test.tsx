@@ -274,7 +274,7 @@ describe('ProgressView', () => {
             ...storeState,
             isSyncing: true,
             syncProgress: { current: 1, total: 2 },
-            syncLogs: [{ type: 'status' as const, message: 'Uploading...', timestamp: Date.now() / 1000 }],
+            syncLogs: [{ type: 'status' as const, message: 'Uploading...', timestamp: Date.now() }],
         };
         render(<ProgressView />);
         expect(screen.getByText(/Syncing to Anki/i)).toBeInTheDocument();

@@ -411,6 +411,11 @@ export const api = {
             body: formData,
         });
 
+        if (!res.ok) {
+            const errBody = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errBody}`);
+        }
+
         await parseNDJSONStream(res, onEvent);
     },
 
@@ -459,6 +464,11 @@ export const api = {
             method: "POST",
         });
 
+        if (!res.ok) {
+            const errBody = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errBody}`);
+        }
+
         await parseNDJSONStream(res, onEvent);
     },
 
@@ -488,6 +498,11 @@ export const api = {
         const res = await fetch(`${API_URL}/session/${sessionId}/sync`, {
             method: "POST",
         });
+
+        if (!res.ok) {
+            const errBody = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errBody}`);
+        }
 
         await parseNDJSONStream(res, onEvent);
     },
