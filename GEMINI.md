@@ -22,7 +22,7 @@ User → PyWebView (native window)
          └── FastAPI Backend (Python)
                ├── LecternService  — orchestrator
                ├── LecternAIClient — Gemini SDK wrapper
-               ├── PDFParser       — pypdf + pypdfium2
+               ├── PDFParser       — pypdf
                └── AnkiConnector   — REST client → AnkiConnect
 ```
 
@@ -108,7 +108,7 @@ Real-time progress is streamed from backend to frontend via **Server-Sent Events
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS 3, Framer Motion |
 | State | Zustand (frontend), dataclasses + JSON (backend) |
 | Desktop | PyWebView (Cocoa/WebKit on macOS) |
-| PDF | pypdf + pypdfium2 |
+| PDF | pypdf |
 | Security | `keyring` (system keychain for API keys) |
 | Testing | pytest (backend), vitest + testing-library (frontend) |
 | Packaging | PyInstaller |
@@ -235,14 +235,12 @@ All cards get tags in 4-level format: `Deck::SlideSet::Topic::Tag`.
 
 1. **Never write to Anki's SQLite directly.** All operations go through AnkiConnect REST API.
 2. **API keys live in the system keychain** (`keyring`), never in config files or git.
-3. **PyInstaller specs include `pypdfium2` as a directory** (not a single file) to preserve its dynamic library structure.
 
 ---
 
 ## Common Pitfalls
 
 - The `ai_schemas.py` Pydantic model uses a **list of key-value pairs** for card fields (not a dict) to satisfy Gemini's structured output constraint against `additionalProperties`.
-- `pypdfium2` requires special handling in PyInstaller — its `.dylib`/`.so` must be bundled as a directory, not collected as data files.
 - The frontend expects SSE events with specific `type` strings. Adding a new event type requires updating both `EventType` in `lectern_service.py` and `processGenerationEvent()` in `store.ts`.
 - `config.py` loads at import time. Use `_get_config()` for values that should respect the priority chain (env > user_config.json > default).
 
@@ -262,8 +260,7 @@ This section captures critical "tribal knowledge" and architectural decisions de
 
 ### Packaging & Distribution (PyInstaller)
 
-6.  **PDFium Binary Cache:** `pypdfium2` requires its dynamic libraries (`.dylib`, `.so`, `.dll`) to be in a specific directory structure. In PyInstaller `.spec` files, always bundle the package as a directory, not as individual data files, to avoid `KERN_INVALID_ADDRESS` crashes.
-7.  **Hidden Imports:** Root-level modules like `ai_client` and `pdf_parser` often need to be explicitly listed in `hiddenimports` if they aren't caught by PyInstaller's static analysis (especially when running via a script wrapper).
+6.  **Hidden Imports:** Root-level modules like `ai_client` and `pdf_parser` often need to be explicitly listed in `hiddenimports` if they aren't caught by PyInstaller's static analysis (especially when running via a script wrapper).
 8.  **Spec File Tracking:** Never gitignore `.spec` files. They are static and critical for cross-platform CI/CD builds (macOS, Windows, Linux).
 
 ### Generation Logic

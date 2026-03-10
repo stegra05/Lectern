@@ -52,7 +52,7 @@ Choose between **Slides** (visual), **Script** (dense text), or **Auto** mode to
 Dynamically adjusts generation speed and detail based on content density, ensuring no concept is skipped.
 
 ### Multimodal Analysis
-Extracts text and images from slides using `pypdf` + `pypdfium2`, preserving context for accurate generation.
+Extracts text and images from slides using `pypdf`, preserving context for accurate generation.
 
 ### Smart Generation
 Leverages **Gemini 3.0 Flash** to create atomic, well-structured cards that adhere to learning best practices.
@@ -108,7 +108,7 @@ Contents: Request/response snapshots for concept map, generation, and reflection
 - **Backend:** Python, FastAPI, Uvicorn
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion
 - **Desktop Wrapper:** PyWebView (Cocoa/WebKit)
-- **PDF Engine:** pypdf + pypdfium2
+- **PDF Engine:** pypdf
 - **Security:** Keyring
 
 ### Build from Source

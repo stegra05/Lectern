@@ -78,7 +78,7 @@ powershell scripts/build_windows.ps1  # Windows .exe
 - `tests/` — Python test suite
 
 ### Data Flow
-1. PDF upload → Parse with pypdf/pypdfium2
+1. PDF upload → Parse with pypdf
 2. AI Session → Build concept map, generate cards via Gemini
 3. Live Preview → User reviews/edits cards
 4. Sync → Push to Anki via AnkiConnect API

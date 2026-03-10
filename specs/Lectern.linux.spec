@@ -17,6 +17,7 @@ a = Analysis(
         (os.path.join(PROJECT_ROOT, 'lectern'), 'lectern'),
     ] + datas,
     hiddenimports=['webview', 'uvicorn', 'PIL', 'PIL.Image',
+                   'multipart', 'python_multipart', 'pypdf', 'httpx',
                    'lectern', 'lectern.lectern_service', 'lectern.config'] + hiddenimports,
     hookspath=[],
     hooksconfig={},

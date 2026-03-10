@@ -18,6 +18,7 @@ a = Analysis(
     ] + datas,
     hiddenimports=[
         'webview', 'uvicorn', 'PIL', 'PIL.Image',
+        'multipart', 'python_multipart', 'pypdf', 'httpx',
         # NOTE(Windows): pywebview loads platform backends dynamically; PyInstaller
         # won't find them via static analysis. Include both so the edgechromium
         # path is bundled and the winforms fallback doesn't silently fail.
