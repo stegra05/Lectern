@@ -4,6 +4,12 @@ datas: list = []
 binaries: list = []
 hiddenimports: list = []
 
+for pkg in ['multipart', 'python_multipart', 'google.genai']:
+    tmp_ret = collect_all(pkg)
+    datas += tmp_ret[0]
+    binaries += tmp_ret[1]
+    hiddenimports += tmp_ret[2]
+
 import os
 PROJECT_ROOT = os.path.abspath(os.getcwd())
 
@@ -18,7 +24,7 @@ a = Analysis(
     ] + datas,
     hiddenimports=[
         'webview', 'uvicorn', 'PIL', 'PIL.Image',
-        'multipart', 'python_multipart', 'pypdf', 'httpx',
+        'pypdf', 'httpx',
         # NOTE(Windows): pywebview loads platform backends dynamically; PyInstaller
         # won't find them via static analysis. Include both so the edgechromium
         # path is bundled and the winforms fallback doesn't silently fail.
