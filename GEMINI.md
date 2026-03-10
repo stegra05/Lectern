@@ -54,7 +54,7 @@ Real-time progress is streamed from backend to frontend via **Server-Sent Events
 | File | Purpose |
 |------|---------|
 | `state.py` | Generation state persistence (checkpoint/resume). |
-| `history.py` | Session history manager (`history.json`). |
+| `history.py` | Session history manager (database-backed). |
 | `note_export.py` | Card → AnkiConnect note format conversion. |
 | `tags.py` | Hierarchical tag assembly (`Deck::SlideSet::Topic::Tag`). |
 | `keychain_manager.py` | System keychain integration for API key storage. |

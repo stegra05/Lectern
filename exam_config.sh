@@ -1,6 +1,6 @@
 # IML Exam-Optimized Configuration
 # Source this before running Lectern for IML lectures:
-#   source .env.iml && python main.py ...
+#   source exam_config.sh && python main.py ...
 
 # Enable exam preparation mode - prioritizes comparison/application cards
 EXAM_MODE=true
