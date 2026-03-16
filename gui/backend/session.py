@@ -8,8 +8,6 @@ from typing import Dict, Optional
 
 from fastapi import HTTPException
 
-from service import DraftStore, GenerationService
-
 LECTERN_TEMP_PREFIX = "lectern_"
 LECTERN_TEMP_SUFFIX = ".pdf"
 
@@ -22,14 +20,10 @@ class SessionState:
     last_accessed: float = field(default_factory=time.time)
     status: str = "active"
     completed_at: Optional[float] = None
+    stop_requested: bool = False
 
     def touch(self) -> None:
         self.last_accessed = time.time()
-
-@dataclass
-class SessionRuntime:
-    generation_service: GenerationService
-    draft_store: DraftStore
 
 
 class SessionManager:
@@ -37,17 +31,11 @@ class SessionManager:
 
     def __init__(self):
         self._sessions: Dict[str, SessionState] = {}
-        self._runtime: Dict[str, SessionRuntime] = {}
         self._lock = threading.Lock()
         self._latest_session_id: Optional[str] = None
         self.sweep_orphan_temp_files()
 
-    def create_session(
-        self,
-        pdf_path: str,
-        generation_service: GenerationService,
-        draft_store: DraftStore,
-    ) -> SessionState:
+    def create_session(self, pdf_path: str) -> SessionState:
         from uuid import uuid4
 
         session_id = uuid4().hex
@@ -55,14 +43,8 @@ class SessionManager:
             session_id=session_id,
             pdf_path=pdf_path,
         )
-        runtime = SessionRuntime(
-            generation_service=generation_service,
-            draft_store=draft_store,
-        )
-        draft_store.set_session_id(session_id)
         with self._lock:
             self._sessions[session_id] = session
-            self._runtime[session_id] = runtime
             self._latest_session_id = session_id
         return session
 
@@ -72,10 +54,6 @@ class SessionManager:
             if session:
                 session.touch()
             return session
-
-    def get_runtime(self, session_id: str) -> Optional[SessionRuntime]:
-        with self._lock:
-            return self._runtime.get(session_id)
 
     def get_latest_session(self) -> Optional[SessionState]:
         if not self._latest_session_id:
@@ -96,15 +74,12 @@ class SessionManager:
             self._cleanup_session_files(session)
             with self._lock:
                 self._sessions.pop(session_id, None)
-                self._runtime.pop(session_id, None)
 
     def stop_session(self, session_id: str) -> None:
         session = self.get_session(session_id)
-        runtime = self.get_runtime(session_id)
         if not session:
             return
-        if runtime:
-            runtime.generation_service.stop()
+        session.stop_requested = True
         self.mark_status(session_id, "cancelled")
 
     def cleanup_session(self, session_id: str) -> None:
@@ -114,7 +89,6 @@ class SessionManager:
         self._cleanup_session_files(session)
         with self._lock:
             self._sessions.pop(session_id, None)
-            self._runtime.pop(session_id, None)
 
     def prune(self) -> None:
         # Legacy no-op kept for compatibility with existing call sites.
@@ -136,7 +110,6 @@ class SessionManager:
         with self._lock:
             sessions = list(self._sessions.values())
             self._sessions.clear()
-            self._runtime.clear()
             self._latest_session_id = None
         for session in sessions:
             self._cleanup_session_files(session)
@@ -172,10 +145,3 @@ def _get_session_or_404(session_id: Optional[str], *, require_session_id: bool =
     if not session:
         raise HTTPException(status_code=404, detail="No active session")
     return session
-
-def _get_runtime_or_404(session_id: str, session: Optional[SessionState] = None) -> SessionRuntime:
-    runtime = session_manager.get_runtime(session_id)
-    if not runtime:
-        raise HTTPException(status_code=404, detail="No active session")
-    return runtime
-

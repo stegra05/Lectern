@@ -426,103 +426,23 @@ export const api = {
         return res.json();
     },
 
-    getDrafts: async (sessionId?: string) => {
-        const res = await fetch(withSessionId(`${API_URL}/drafts`, sessionId));
-        return res.json();
-    },
-
-    updateDrafts: async (cards: Card[], sessionId?: string) => {
-        const res = await fetch(withSessionId(`${API_URL}/drafts`, sessionId), {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cards }),
-        });
-        if (!res.ok) throw new Error("Failed to update drafts");
-        return res.json();
-    },
-
-    updateDraft: async (index: number, card: Card, sessionId?: string) => {
-        const res = await fetch(withSessionId(`${API_URL}/drafts/${index}`, sessionId), {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ card }),
-        });
-        if (!res.ok) throw new Error("Failed to update draft");
-        return res.json();
-    },
-
-    deleteDraft: async (index: number, sessionId?: string) => {
-        const res = await fetch(withSessionId(`${API_URL}/drafts/${index}`, sessionId), {
-            method: "DELETE",
-        });
-        if (!res.ok) throw new Error("Failed to delete draft");
-        return res.json();
-    },
-
-    syncDrafts: async (onEvent: (event: ProgressEvent) => void, sessionId?: string) => {
-        const res = await fetch(withSessionId(`${API_URL}/drafts/sync`, sessionId), {
-            method: "POST",
-        });
-
-        if (!res.ok) {
-            const errBody = await res.text();
-            throw new Error(`HTTP ${res.status}: ${errBody}`);
-        }
-
-        await parseNDJSONStream(res, onEvent);
-    },
-
     getSession: async (sessionId: string): Promise<SessionData> => {
         const res = await fetch(`${API_URL}/session/${sessionId}`);
         if (!res.ok) throw new Error("Failed to load session");
         return res.json();
     },
 
-    getSessionStatus: async (sessionId: string): Promise<SessionStatus> => {
-        const res = await fetch(`${API_URL}/session/${sessionId}/status`);
-        if (!res.ok) throw new Error("Failed to load session status");
-        return res.json();
-    },
-
-    updateSessionCards: async (sessionId: string, cards: Card[]) => {
-        const res = await fetch(`${API_URL}/session/${sessionId}/cards`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cards }),
-        });
-        if (!res.ok) throw new Error("Failed to update session cards");
-        return res.json();
-    },
-
-    syncSessionToAnki: async (sessionId: string, onEvent: (event: ProgressEvent) => void) => {
-        const res = await fetch(`${API_URL}/session/${sessionId}/sync`, {
+    syncCardsToAnki: async (
+        payload: { cards: Card[]; deck_name: string; tags: string[]; slide_set_name: string; allow_updates: boolean },
+        onEvent: (event: ProgressEvent) => void
+    ) => {
+        const res = await fetch(`${API_URL}/sync`, {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
         });
-
-        if (!res.ok) {
-            const errBody = await res.text();
-            throw new Error(`HTTP ${res.status}: ${errBody}`);
-        }
-
+        if (!res.ok) throw new Error("Sync failed");
         await parseNDJSONStream(res, onEvent);
-    },
-
-    deleteSessionCard: async (sessionId: string, cardIndex: number) => {
-        const res = await fetchWithTimeout(`${API_URL}/session/${sessionId}/cards/${cardIndex}`, {
-            method: 'DELETE',
-        });
-        if (!res.ok) throw new Error('Failed to delete card from session');
-        return res.json();
-    },
-
-    batchDeleteSessionCards: async (sessionId: string, indices: number[]) => {
-        const res = await fetchWithTimeout(`${API_URL}/session/${sessionId}/cards/batch-delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ indices }),
-        });
-        if (!res.ok) throw new Error('Failed to batch delete cards');
-        return res.json();
     },
 
     deleteAnkiNotes: async (noteIds: number[]) => {

@@ -222,34 +222,19 @@ export const recoverSessionOnRefresh = async (
     if (!sessionId) return;
 
     try {
-        const status = await api.getSessionStatus(sessionId);
         const snapshot: SessionData = await api.getSession(sessionId);
-        if (status.active) {
-            const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
-            set({
-                sessionId,
-                cards,
-                totalPages: deriveTotalPages(cards, snapshot.total_pages),
-                coverageData: snapshot.coverage_data || null,
-                deckName: snapshot.deck_name || snapshot.deck || '',
-                step: 'generating',
-                currentPhase: 'generating',
-                isHistorical: false,
-            });
-        } else {
-            localStorage.removeItem(ACTIVE_SESSION_KEY);
-            const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
-            set({
-                sessionId,
-                cards,
-                totalPages: deriveTotalPages(cards, snapshot.total_pages),
-                coverageData: snapshot.coverage_data || null,
-                deckName: snapshot.deck_name || snapshot.deck || '',
-                step: 'done',
-                currentPhase: 'complete',
-                isHistorical: true,
-            });
-        }
+        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
+        set({
+            sessionId,
+            cards,
+            totalPages: deriveTotalPages(cards, snapshot.total_pages),
+            coverageData: snapshot.coverage_data || null,
+            deckName: snapshot.deck_name || snapshot.deck || '',
+            step: 'done',
+            currentPhase: 'complete',
+            isHistorical: true,
+        });
     } catch (error) {
         console.warn('Session recovery failed:', error);
         localStorage.removeItem(ACTIVE_SESSION_KEY);

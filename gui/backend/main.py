@@ -35,7 +35,6 @@ from starlette.concurrency import run_in_threadpool
 from lectern.anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes, get_connection_info
 from lectern import config
 from lectern.config import ConfigManager
-from service import GenerationService, DraftStore
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.history import HistoryManager
@@ -47,7 +46,6 @@ from session import (
     LECTERN_TEMP_PREFIX,
     session_manager,
     _get_session_or_404,
-    _get_runtime_or_404,
 )
 from streaming import ndjson_event
 
@@ -512,22 +510,16 @@ async def generate_cards(
     focus_prompt: str = Form(""),  # Optional user focus
     target_card_count: Optional[int] = Form(None),
 ):
-    draft_store = DraftStore()
-    service = GenerationService(draft_store)
+    service = LecternGenerationService()
     
-    # NOTE(Exam-Mode): exam_mode is removed in favor of focus_prompt.
     if focus_prompt:
         logger.info(f"User focus: '{focus_prompt}'")
     
-    # Parse tags from JSON string
     try:
         tags_list = json.loads(tags)
     except:
         tags_list = []
 
-    # Save uploaded file to temp
-    # We use delete=False so it persists for thumbnail generation
-    # Run in threadpool to avoid blocking
     def save_generate_temp():
         with tempfile.NamedTemporaryFile(
             delete=False,
@@ -539,22 +531,16 @@ async def generate_cards(
             
     tmp_path = await run_in_threadpool(save_generate_temp)
     
-    # Debug: Check file sizes
     try:
         uploaded_size = os.fstat(pdf_file.file.fileno()).st_size
     except:
-        uploaded_size = -1 # Cannot determine
+        uploaded_size = -1
         
     temp_size = os.path.getsize(tmp_path)
     logger.info(f"Uploaded file size: {uploaded_size} bytes. Temp file size: {temp_size} bytes. Path: {tmp_path}")
         
-    session = session_manager.create_session(
-        pdf_path=tmp_path,
-        generation_service=service,
-        draft_store=draft_store,
-    )
+    session = session_manager.create_session(pdf_path=tmp_path)
 
-    # Create history entry
     history_mgr = HistoryManager()
     entry_id = history_mgr.add_entry(
         filename=pdf_file.filename,
@@ -562,8 +548,6 @@ async def generate_cards(
         session_id=session.session_id,
         status="draft"
     )
-    # Set entry_id in draft_store for later use in sync
-    draft_store.entry_id = entry_id
 
     status_handlers = {
         "done": ("completed", True),
@@ -574,234 +558,111 @@ async def generate_cards(
     async def event_generator():
         import time
         import json
+        import threading
+        import queue
         session_logs = []
         def emit_event(evt_type: str, message: str, data: Any = None):
             evt = {"type": evt_type, "message": message, "timestamp": int(time.time() * 1000)}
             if data is not None:
                 evt["data"] = data
             session_logs.append(evt)
-            return json.dumps(evt) + "\n"
+            return json.dumps(evt) + "\\n"
 
-        card_count: int = 0  # Track number of cards generated
-        yield emit_event(
-            "session_start",
-            "Session started",
-            {"session_id": session.session_id},
-        )
-        try:
-            async for event in service.run_generation(
-                pdf_path=tmp_path,
-                deck_name=deck_name,
-                model_name=model_name,
-                tags=tags_list,
-                context_deck=context_deck,
-                entry_id=entry_id,
-                focus_prompt=focus_prompt,
-                target_card_count=target_card_count,
-                session_id=session.session_id,
-            ):
-                yield emit_event(event.type, event.message, event.data)
-                try:
-                    event_type = event.type
-                    # Track card count
-                    if event_type == "card":
-                        card_count += 1
-                    if event_type in status_handlers:
-                        status, cleanup = status_handlers[event_type]
-                        session_manager.mark_status(session.session_id, status)
-                        if cleanup:
-                            session_manager.cleanup_temp_file(session.session_id)
-                            
-                        # Save logs when generation terminates
-                        if event_type in ("done", "cancelled", "error"):
-                            history_mgr.update_session_logs(session.session_id, session_logs)
-                            
-                        # Persistent state: update cards when a phase ends or job is done
-                        if event_type == "done" or event_type == "step_end" or event_type == "cards_replaced":
-                            # Get latest cards from draft store (updated incrementally by service)
-                            current_cards = draft_store.get_drafts()
-                            
-                            # If slide_set_name was resolved, capture it
-                            if event.data and "slide_set_name" in event.data:
-                                draft_store.slide_set_name = event.data["slide_set_name"]
-                            if event.data and "total_pages" in event.data:
-                                draft_store.total_pages = event.data["total_pages"]
-                            if event.data and "coverage_data" in event.data:
-                                draft_store.coverage_data = event.data["coverage_data"]
-
-                            if current_cards:
-                                total_pages = draft_store.total_pages if isinstance(draft_store.total_pages, int) else None
-                                coverage_data = draft_store.coverage_data if isinstance(draft_store.coverage_data, dict) else None
-                                # Persist to database via manager (handles metadata updates too)
-                                history_mgr.sync_session_state(
-                                    session_id=session.session_id,
-                                    cards=current_cards,
-                                    status="completed" if event_type == "done" else None,
-                                    deck_name=deck_name,
-                                    slide_set_name=draft_store.slide_set_name,
-                                    model_name=model_name,
-                                    tags=tags_list,
-                                    total_pages=total_pages,
-                                    coverage_data=coverage_data,
-                                )
-                except Exception:
-                    pass
-        except Exception as e:
-            session_manager.mark_status(session.session_id, "error")
-            yield emit_event("error", f"Generation failed: {str(e)}")
-            history_mgr.update_session_logs(session.session_id, session_logs)
+        yield emit_event("session_start", "Session started", {"session_id": session.session_id})
+        
+        q = queue.Queue()
+        final_cards = []
+        final_slide_set_name = "Generation"
+        final_total_pages = None
+        final_coverage_data = None
+        
+        def worker():
+            try:
+                for event in service.run(
+                    pdf_path=tmp_path,
+                    deck_name=deck_name,
+                    model_name=model_name,
+                    tags=tags_list,
+                    context_deck=context_deck,
+                    focus_prompt=focus_prompt,
+                    target_card_count=target_card_count,
+                    skip_export=True,
+                    stop_check=lambda: session_manager.get_session(session.session_id).stop_requested if session_manager.get_session(session.session_id) else True
+                ):
+                    q.put(event)
+            except Exception as e:
+                q.put(e)
+            finally:
+                q.put(None)
+                
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        
+        while True:
+            import asyncio
+            # Non-blocking pull from queue to allow async event loop
+            try:
+                event = q.get_nowait()
+            except queue.Empty:
+                await asyncio.sleep(0.1)
+                continue
+                
+            if event is None:
+                break
+                
+            if isinstance(event, Exception):
+                session_manager.mark_status(session.session_id, "error")
+                yield emit_event("error", f"Generation failed: {str(event)}")
+                history_mgr.update_session_logs(session.session_id, session_logs)
+                break
+                
+            yield emit_event(event.type, event.message, event.data)
+            
+            try:
+                event_type = event.type
+                
+                if event.data:
+                    if "slide_set_name" in event.data:
+                        final_slide_set_name = event.data["slide_set_name"]
+                    if "total_pages" in event.data:
+                        final_total_pages = event.data["total_pages"]
+                    if "coverage_data" in event.data:
+                        final_coverage_data = event.data["coverage_data"]
+                    if "cards" in event.data:
+                        final_cards = event.data["cards"]
+                        
+                if event_type in status_handlers:
+                    status, cleanup = status_handlers[event_type]
+                    session_manager.mark_status(session.session_id, status)
+                    if cleanup:
+                        session_manager.cleanup_temp_file(session.session_id)
+                        
+                    if event_type in ("done", "cancelled", "error"):
+                        history_mgr.update_session_logs(session.session_id, session_logs)
+                        
+                    if event_type == "done" or event_type == "step_end" or event_type == "cards_replaced":
+                        history_mgr.sync_session_state(
+                            session_id=session.session_id,
+                            cards=final_cards,
+                            status="completed" if event_type == "done" else None,
+                            deck_name=deck_name,
+                            slide_set_name=final_slide_set_name,
+                            model_name=model_name,
+                            tags=tags_list,
+                            total_pages=final_total_pages,
+                            coverage_data=final_coverage_data,
+                        )
+            except Exception as e:
+                logger.error(f"Error processing event: {e}")
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 @app.post("/stop")
-async def stop_generation(session_id: Optional[str] = None):
+async def stop_generation(session_id: str | None = None):
     session = _get_session_or_404(session_id)
-    runtime = _get_runtime_or_404(session.session_id, session=session)
-    runtime.draft_store.clear()
     session_manager.stop_session(session.session_id)
     return {"status": "stopped", "session_id": session.session_id}
 
-# Draft API
-@app.get("/drafts")
-async def get_drafts(session_id: Optional[str] = None):
-    session = _get_session_or_404(session_id, require_session_id=True)
-    runtime = _get_runtime_or_404(session.session_id, session=session)
-    return {
-        "cards": runtime.draft_store.get_drafts(),
-        "session_id": session.session_id,
-        "total_pages": runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
-        "coverage_data": runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
-    }
-
-class DraftsUpdate(BaseModel):
-    cards: List[dict]
-
-@app.put("/drafts")
-async def update_drafts(update: DraftsUpdate, session_id: Optional[str] = None):
-    session = _get_session_or_404(session_id, require_session_id=True)
-    runtime = _get_runtime_or_404(session.session_id, session=session)
-    runtime.draft_store.replace_drafts(update.cards)
-    
-    # Persist to DB via manager
-    history_mgr = HistoryManager()
-    history_mgr.sync_session_state(
-        session_id=session.session_id,
-        cards=update.cards,
-        deck_name=runtime.draft_store.deck_name,
-        model_name=runtime.draft_store.model_name,
-        tags=runtime.draft_store.tags,
-        total_pages=runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
-        coverage_data=runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
-    )
-
-    return {"status": "updated", "session_id": session.session_id}
-
-class DraftUpdate(BaseModel):
-    card: dict
-
-@app.put("/drafts/{index}")
-async def update_draft(index: int, update: DraftUpdate, session_id: Optional[str] = None):
-    session = _get_session_or_404(session_id, require_session_id=True)
-    runtime = _get_runtime_or_404(session.session_id, session=session)
-    success = runtime.draft_store.update_draft(index, update.card)
-    if not success:
-        raise HTTPException(status_code=404, detail="Draft not found")
-        
-    # Persist to DB via manager
-    cards = runtime.draft_store.get_drafts()
-    history_mgr = HistoryManager()
-    history_mgr.sync_session_state(
-        session_id=session.session_id,
-        cards=cards,
-        deck_name=runtime.draft_store.deck_name,
-        model_name=runtime.draft_store.model_name,
-        tags=runtime.draft_store.tags,
-        total_pages=runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
-        coverage_data=runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
-    )
-    
-    return {"status": "updated", "session_id": session.session_id}
-
-@app.delete("/drafts/{index}")
-async def delete_draft(index: int, session_id: Optional[str] = None):
-    session = _get_session_or_404(session_id, require_session_id=True)
-    runtime = _get_runtime_or_404(session.session_id, session=session)
-    success = runtime.draft_store.delete_draft(index)
-    if not success:
-        raise HTTPException(status_code=404, detail="Draft not found")
-        
-    # Persist to DB via manager
-    cards = runtime.draft_store.get_drafts()
-    history_mgr = HistoryManager()
-    history_mgr.sync_session_state(
-        session_id=session.session_id,
-        cards=cards,
-        deck_name=runtime.draft_store.deck_name,
-        model_name=runtime.draft_store.model_name,
-        tags=runtime.draft_store.tags,
-        total_pages=runtime.draft_store.total_pages if isinstance(runtime.draft_store.total_pages, int) else None,
-        coverage_data=runtime.draft_store.coverage_data if isinstance(runtime.draft_store.coverage_data, dict) else None,
-    )
-        
-    return {"status": "deleted", "session_id": session.session_id}
-
-@app.post("/drafts/sync")
-async def sync_drafts(session_id: Optional[str] = None):
-    session = _get_session_or_404(session_id, require_session_id=True)
-    runtime = _get_runtime_or_404(session.session_id, session=session)
-    store = runtime.draft_store
-    db = DatabaseManager()
-
-    cards = store.get_drafts()
-    deck_name = store.deck_name
-    model_name = store.model_name
-    tags = store.tags
-    slide_set_name = store.slide_set_name
-    entry_id = store.entry_id
-
-    if not cards:
-        return {"created": 0, "failed": 0, "session_id": session.session_id}
-
-    def on_complete(updated_cards: List[dict], created: int, updated: int, failed: int) -> None:
-        db.update_session_cards(
-            session_id=session.session_id,
-            cards=updated_cards,
-            deck_name=deck_name,
-            slide_set_name=slide_set_name,
-            model_name=model_name,
-            tags=tags,
-            total_pages=store.total_pages if isinstance(store.total_pages, int) else None,
-            coverage_data=store.coverage_data if isinstance(store.coverage_data, dict) else None,
-        )
-
-        if entry_id:
-            history_mgr = HistoryManager()
-            history_mgr.update_entry(
-                entry_id=entry_id,
-                status="completed" if failed == 0 else "error",
-                card_count=created + updated,
-            )
-
-        store.clear()
-        if failed == 0:
-            session_manager.mark_status(session.session_id, "completed")
-            session_manager.cleanup_session(session.session_id)
-        else:
-            session_manager.mark_status(session.session_id, "error")
-
-    async def sync_generator():
-        async for payload in stream_sync_cards(
-            cards=cards,
-            deck_name=deck_name,
-            tags=tags or [],
-            entry_id=entry_id,
-            slide_set_name=slide_set_name or "Draft Sync",
-            allow_updates=False,
-            on_complete=on_complete,
-        ):
-            yield payload
-
-    return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 
 # Session API (View/Edit Past Sessions)
 
@@ -815,52 +676,6 @@ async def get_session(session_id: str):
     if not entry:
         return {"cards": [], "session_id": session_id, "not_found": True}
     return entry
-
-@app.get("/session/{session_id}/status")
-async def get_session_status(session_id: str):
-    session = session_manager.get_session(session_id)
-    if not session:
-        return {"active": False, "status": "missing"}
-    is_active = session.status == "active"
-    return {"active": is_active, "status": session.status}
-
-@app.put("/session/{session_id}/cards")
-async def update_session_cards(session_id: str, update: SessionCardsUpdate):
-    db = DatabaseManager()
-    entry = db.get_entry_by_session_id(session_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Save the updated cards back to the session state
-    db.update_session_cards(session_id, update.cards)
-    return {"status": "ok", "session_id": session_id}
-
-@app.delete("/session/{session_id}/cards/{card_index}")
-async def delete_session_card(session_id: str, card_index: int):
-    db = DatabaseManager()
-    entry = db.get_entry_by_session_id(session_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    cards = entry.get("cards") or []
-    if card_index < 0 or card_index >= len(cards):
-        raise HTTPException(status_code=404, detail="Card not found")
-    
-    cards.pop(card_index)
-    db.update_session_cards(session_id, cards)
-
-    # Persist via manager
-    history_mgr = HistoryManager()
-    history_mgr.sync_session_state(
-        session_id=session_id,
-        cards=cards,
-        deck_name=entry.get("deck"),
-        slide_set_name=entry.get("slide_set_name"),
-        model_name=entry.get("model_name"),
-        tags=entry.get("tags")
-    )
-
-    return {"status": "ok", "remaining": len(cards)}
 
 class AnkiDeleteRequest(BaseModel):
     note_ids: List[int]
@@ -877,43 +692,6 @@ async def delete_anki_notes(req: AnkiDeleteRequest):
 class AnkiUpdateRequest(BaseModel):
     fields: Dict[str, str]
 
-class SessionBatchDeleteRequest(BaseModel):
-    indices: List[int]
-
-@app.post("/session/{session_id}/cards/batch-delete")
-async def batch_delete_session_cards(session_id: str, req: SessionBatchDeleteRequest):
-    db = DatabaseManager()
-    entry = db.get_entry_by_session_id(session_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    cards = entry.get("cards") or []
-    if not cards:
-        return {"status": "ok", "deleted": 0, "remaining": 0}
-        
-    indices_to_delete = sorted(set(req.indices), reverse=True)
-    deleted_count = 0
-    
-    for idx in indices_to_delete:
-        if 0 <= idx < len(cards):
-            cards.pop(idx)
-            deleted_count += 1
-
-    db.update_session_cards(session_id, cards)
-    
-    # Persist via manager
-    history_mgr = HistoryManager()
-    history_mgr.sync_session_state(
-        session_id=session_id,
-        cards=cards,
-        deck_name=entry.get("deck"),
-        slide_set_name=entry.get("slide_set_name"),
-        model_name=entry.get("model_name"),
-        tags=entry.get("tags")
-    )
-
-    return {"status": "ok", "deleted": deleted_count, "remaining": len(cards)}
-
 @app.put("/anki/notes/{note_id}")
 async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
     """Update fields on an existing Anki note."""
@@ -926,40 +704,27 @@ async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/session/{session_id}/sync")
-async def sync_session_to_anki(session_id: str):
-    db = DatabaseManager()
-    entry = db.get_entry_by_session_id(session_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Session not found")
+class SyncRequest(BaseModel):
+    cards: List[dict]
+    deck_name: str
+    tags: List[str]
+    slide_set_name: str
+    allow_updates: bool = False
 
-    cards = entry.get("cards") or []
-    if not cards:
-        return {"created": 0, "updated": 0, "failed": 0, "session_id": session_id}
-        
-    deck_name = entry.get("deck", "")
-    slide_set_name = entry.get("slide_set_name") or "Session Sync"
-
-    def on_complete(updated_cards: List[dict], created: int, updated: int, failed: int) -> None:
-        history_mgr = HistoryManager()
-        history_mgr.sync_session_state(
-            session_id=session_id,
-            cards=updated_cards,
-            status="completed" if failed == 0 else "error"
-        )
-
+@app.post("/sync")
+async def sync_cards(req: SyncRequest):
     async def sync_generator():
         async for payload in stream_sync_cards(
-            cards=cards,
-            deck_name=deck_name,
-            tags=[],
-            slide_set_name=slide_set_name,
-            allow_updates=True,
-            on_complete=on_complete,
+            cards=req.cards,
+            deck_name=req.deck_name,
+            tags=req.tags,
+            slide_set_name=req.slide_set_name,
+            allow_updates=req.allow_updates,
         ):
-            yield f"{payload}\n"
+            yield f"{payload}\\n"
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
+
 
 
 

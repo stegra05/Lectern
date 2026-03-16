@@ -8,7 +8,7 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { Toast, ToastContainer } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import { ConfirmDialog } from './components/ConfirmDialog';
+import { ConfirmModal } from './components/ConfirmModal';
 import { AnkiHealthPanel } from './components/AnkiHealthPanel';
 
 import { useAppState } from './hooks/useAppState';
@@ -329,15 +329,15 @@ function App() {
           shortcuts={shortcuts}
         />
 
-        <ConfirmDialog
+        <ConfirmModal
           isOpen={isUnsyncedConfirmOpen}
           title="Unsynced Cards"
-          message={`You have ${cards.length} card${cards.length !== 1 ? 's' : ''} that haven't been synced to Anki. Starting a new session will discard these cards. Continue anyway?`}
-          confirmLabel="Start New Session"
-          cancelLabel="Cancel"
-          variant="warning"
+          description={`You have ${cards.length} card${cards.length !== 1 ? 's' : ''} that haven't been synced to Anki. Starting a new session will discard these cards. Continue anyway?`}
+          confirmText="Start New Session"
+          cancelText="Cancel"
+          variant="destructive"
           onConfirm={handleConfirmGenerate}
-          onCancel={handleCancelGenerate}
+          onClose={handleCancelGenerate}
         />
 
         <AnkiHealthPanel

@@ -150,7 +150,7 @@ def test_export_card_to_anki_success(mock_build_tags, mock_add_note, mock_get_mo
 
 @patch("lectern.utils.note_export.add_note")
 @patch("lectern.utils.note_export.build_hierarchical_tags")
-def test_export_card_to_anki_no_media(mock_build_tags, mock_add_note):
+def test_export_card_to_anki_minimal(mock_build_tags, mock_add_note):
     """Test export without optional fields."""
     mock_add_note.return_value = 12345
     

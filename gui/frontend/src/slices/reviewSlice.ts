@@ -30,32 +30,16 @@ export const processSyncEvent = async (
   }
 
   if (event.type === 'done') {
-    const { isHistorical, sessionId } = get();
-    const data = (event.data || {}) as { failed?: number; created?: number };
+    const data = (event.data || {}) as { failed?: number; created?: number; cards?: import("../api").Card[] };
     const failed = data.failed || 0;
     const created = data.created || 0;
 
-    try {
+    if (data.cards) {
       const existingCards = get().cards;
-      if (isHistorical && sessionId) {
-        const session = await api.getSession(sessionId);
-        const normalized = normalizeCardsMetadata(session.cards || []);
-        set(() => ({
-          cards: reconcileCardUids(existingCards, normalized),
-          coverageData: session.coverage_data || null,
-          totalPages: session.total_pages ?? get().totalPages,
-        }));
-      } else if (sessionId) {
-        const drafts = await api.getDrafts(sessionId);
-        const normalized = normalizeCardsMetadata(drafts.cards || []);
-        set(() => ({
-          cards: reconcileCardUids(existingCards, normalized),
-          coverageData: drafts.coverage_data || null,
-          totalPages: drafts.total_pages ?? get().totalPages,
-        }));
-      }
-    } catch (refreshErr) {
-      console.error('Failed to refresh cards after sync:', refreshErr);
+      const normalized = normalizeCardsMetadata(data.cards);
+      set(() => ({
+        cards: reconcileCardUids(existingCards, normalized),
+      }));
     }
 
     if (failed > 0) {
@@ -82,8 +66,6 @@ export const setEditSession = (
   }
 };
 
-export const resolveSessionId = (get: () => LecternStore) => get().sessionId ?? undefined;
-
 
 export const createReviewActions = (
   set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
@@ -106,19 +88,12 @@ export const createReviewActions = (
     setEditSession(set, null);
   },
   saveEdit: async (index) => {
-    const { editForm, cards, isHistorical } = get();
-    const sessionId = resolveSessionId(get);
+    const { editForm, cards } = get();
     if (!editForm) return;
 
     try {
       const newCards = [...cards];
       newCards[index] = editForm;
-
-      if (isHistorical && sessionId) {
-        await api.updateSessionCards(sessionId, newCards);
-      } else {
-        await api.updateDraft(index, editForm, sessionId);
-      }
 
       if (editForm.anki_note_id && editForm.fields) {
         const stringFields: Record<string, string> = {};
@@ -150,20 +125,13 @@ export const createReviewActions = (
     });
   },
   handleDelete: async (index) => {
-    const { cards, isHistorical, deletedCards } = get();
-    const sessionId = resolveSessionId(get);
+    const { cards, deletedCards } = get();
     const card = cards[index];
     if (!card) return;
 
     try {
       const newCards = [...cards];
       newCards.splice(index, 1);
-
-      if (isHistorical && sessionId) {
-        await api.deleteSessionCard(sessionId, index);
-      } else {
-        await api.deleteDraft(index, sessionId);
-      }
 
       // Add to undo buffer with 30s timeout
       const cardUid = card._uid || '';
@@ -222,20 +190,7 @@ export const createReviewActions = (
       deletedCards: state.deletedCards.filter((e) => e.card._uid !== cardUid),
     }));
 
-    // Sync to backend
-    const sessionId = resolveSessionId(get);
-    const { isHistorical } = get();
-    try {
-      if (isHistorical && sessionId) {
-        await api.updateSessionCards(sessionId, newCards);
-      } else {
-        await api.updateDrafts(newCards, sessionId);
-      }
-      get().addToast('success', 'Card restored');
-    } catch (e) {
-      console.error('Failed to restore card on backend', e);
-      get().addToast('error', 'Failed to restore card on server');
-    }
+    get().addToast('success', 'Card restored');
   },
   clearDeletedCard: (cardUid: string) => {
     const { deletedCards } = get();
@@ -253,18 +208,12 @@ export const createReviewActions = (
     }));
   },
   handleAnkiDelete: async (noteId, index) => {
-    const { cards, isHistorical } = get();
-    const sessionId = resolveSessionId(get);
+    const { cards } = get();
     try {
       await api.deleteAnkiNotes([noteId]);
       const newCards = [...cards];
       if (newCards[index] && newCards[index].anki_note_id === noteId) {
         delete newCards[index].anki_note_id;
-        if (isHistorical && sessionId) {
-          await api.updateSessionCards(sessionId, newCards);
-        } else {
-          await api.updateDraft(index, newCards[index], sessionId);
-        }
         set({ cards: newCards });
       }
       set((state) => ({
@@ -277,17 +226,13 @@ export const createReviewActions = (
     }
   },
   handleSync: async () => {
-    const { isHistorical } = get();
-    const sessionId = resolveSessionId(get);
+    const { cards, deckName } = get();
     set({ isSyncing: true, syncSuccess: false, syncLogs: [] });
     try {
-      const syncFn =
-        isHistorical && sessionId
-          ? (cb: (event: ProgressEvent) => void) => api.syncSessionToAnki(sessionId, cb)
-          : (cb: (event: ProgressEvent) => void) =>
-            api.syncDrafts(cb, sessionId);
-
-      await syncFn((event: ProgressEvent) => processSyncEvent(event, set, get));
+      await api.syncCardsToAnki(
+        { cards, deck_name: deckName, tags: [], slide_set_name: deckName, allow_updates: true },
+        (event: ProgressEvent) => processSyncEvent(event, set, get)
+      );
     } catch (e) {
       console.error('Sync failed', e);
       get().addToast('error', 'Sync failed');
@@ -371,7 +316,6 @@ export const createBatchActions = (
   },
   batchDeleteSelected: async () => {
     const { cards, selectedCards, batchDeletedCards } = get();
-    const sessionId = resolveSessionId(get);
 
     if (selectedCards.size === 0) return;
 
@@ -388,18 +332,6 @@ export const createBatchActions = (
       .sort((a, b) => b - a);
 
     try {
-      if (sessionId) {
-        // Use batch delete endpoint for efficiency and atomic operation
-        await api.batchDeleteSessionCards(sessionId, indicesToDelete);
-      } else {
-        // Fallback for no session ID (shouldn't happen in valid state)
-        for (const index of indicesToDelete) {
-          // This path is likely unreachable if sessionId is required for API
-          console.warn('No session ID for batch delete, falling back to sequential draft delete');
-          await api.deleteDraft(index);
-        }
-      }
-
       // Store deleted cards in buffer for undo
       const deletedCardsBuffer: import('./store-types').DeletedCardBuffer[] = indicesToDelete.map(index => {
         const card = cards[index];

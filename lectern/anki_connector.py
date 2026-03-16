@@ -239,22 +239,7 @@ def delete_notes(note_ids: List[int]) -> None:
     _invoke("deleteNotes", {"notes": note_ids})
 
 
-def store_media_file(filename: str, data: bytes) -> str:
-    """Upload an image or other binary to Anki's media collection.
 
-    Parameters:
-        filename: Desired filename in Anki media folder.
-        data: Raw bytes to upload. Will be base64-encoded for transport.
-
-    Returns:
-        The stored filename as returned by AnkiConnect.
-    """
-
-    b64 = base64.b64encode(data).decode("utf-8")
-    result = _invoke("storeMediaFile", {"filename": filename, "data": b64})
-    if not isinstance(result, str):
-        raise AnkiApiError(f"Unexpected storeMediaFile result: {result}")
-    return result
 
 
 def _escape_query_value(value: str) -> str:

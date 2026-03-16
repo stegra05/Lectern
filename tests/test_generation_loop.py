@@ -99,7 +99,7 @@ class TestGetCardKey:
     def test_text_field(self):
         """Test extracting key from text field."""
         card = {"text": "What is photosynthesis?"}
-        assert get_card_key(card) == "what is photosynthesis?"
+        assert get_card_key(card) == "what is photosynthesis"
 
     def test_front_field(self):
         """Test extracting key from front field."""

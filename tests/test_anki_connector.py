@@ -60,14 +60,6 @@ def test_add_note_error(mock_requests_post):
     with pytest.raises(AnkiApiError, match="Deck not found"):
         anki_connector.add_note("Bad Deck", "Basic", {}, [])
 
-def test_store_media_file(mock_requests_post):
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"result": "image.jpg", "error": None}
-    mock_requests_post.return_value = mock_response
-    
-    filename = anki_connector.store_media_file("image.jpg", b"123")
-    assert filename == "image.jpg"
-    mock_requests_post.assert_called_once()
 
 def test_get_deck_names(mock_requests_post):
     mock_response = MagicMock()

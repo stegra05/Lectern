@@ -6,7 +6,6 @@ import { api } from '../api';
 vi.mock('../api', () => ({
     api: {
         getSession: vi.fn(),
-        getSessionStatus: vi.fn(),
         stopGeneration: vi.fn(),
     },
 }));
@@ -91,7 +90,6 @@ describe('generation logic', () => {
     describe('recoverSessionOnRefresh', () => {
         it('derives totalPages for active session', async () => {
             localStorage.setItem('lectern_active_session_id', 'active-session');
-            vi.mocked(api.getSessionStatus).mockResolvedValue({ active: true, status: 'generating' });
             vi.mocked(api.getSession).mockResolvedValue({
                 cards: [{ slide_number: 10 }],
                 deck_name: 'Active Deck',
@@ -101,7 +99,7 @@ describe('generation logic', () => {
 
             expect(setMock).toHaveBeenCalledWith(expect.objectContaining({
                 totalPages: 10,
-                isHistorical: false,
+                isHistorical: true,
             }));
         });
     });
