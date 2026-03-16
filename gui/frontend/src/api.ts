@@ -38,7 +38,6 @@ export interface GenerateRequest {
     context_deck?: string;
     focus_prompt?: string;
     target_card_count?: number;
-    page_range?: string;
 }
 
 // ... (omitting ProgressEvent and others for brevity)
@@ -380,7 +379,6 @@ export const api = {
         file: File,
         modelName?: string,
         targetCardCount?: number,
-        pageRange?: string,
         signal?: AbortSignal
     ) => {
         const formData = new FormData();
@@ -389,7 +387,6 @@ export const api = {
         if (targetCardCount !== undefined) {
             formData.append("target_card_count", String(targetCardCount));
         }
-        if (pageRange) formData.append("page_range", pageRange);
 
         try {
             const url = `${API_URL}/estimate`;
@@ -435,7 +432,6 @@ export const api = {
         if (req.target_card_count !== undefined) {
             formData.append("target_card_count", String(req.target_card_count));
         }
-        if (req.page_range) formData.append("page_range", req.page_range);
 
         const res = await fetch(`${API_URL}/generate`, {
             method: "POST",

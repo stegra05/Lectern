@@ -486,7 +486,6 @@ async def estimate_cost(
     pdf_file: UploadFile = File(...),
     model_name: Optional[str] = Form(None),
     target_card_count: Optional[int] = Form(None),
-    page_range: Optional[str] = Form(""),
 ):
 
     model = model_name or config.DEFAULT_GEMINI_MODEL
@@ -504,28 +503,6 @@ async def estimate_cost(
     tmp_path = await run_in_threadpool(save_to_temp)
 
     try:
-        if page_range:
-            from lectern.utils.pdf_utils import parse_page_range, extract_pages
-            from pypdf import PdfReader
-
-            def extract_for_estimate():
-                reader = PdfReader(tmp_path)
-                max_pages = len(reader.pages)
-                pages_to_extract = parse_page_range(page_range, max_pages)
-                if pages_to_extract and len(pages_to_extract) < max_pages:
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=".pdf"
-                    ) as ext_tmp:
-                        extract_path = ext_tmp.name
-                    extract_pages(tmp_path, extract_path, pages_to_extract)
-                    return extract_path
-                return None
-
-            extracted_path = await run_in_threadpool(extract_for_estimate)
-            if extracted_path:
-                os.remove(tmp_path)
-                tmp_path = extracted_path
-
         cache_key = _estimate_cache_key(tmp_path, model)
         base_data = _estimate_base_cache.get(cache_key)
 
@@ -567,7 +544,6 @@ async def generate_cards(
     context_deck: str = Form(""),
     focus_prompt: str = Form(""),  # Optional user focus
     target_card_count: Optional[int] = Form(None),
-    page_range: Optional[str] = Form(""),
 ):
     service = LecternGenerationService()
 
@@ -661,7 +637,6 @@ async def generate_cards(
                     focus_prompt=focus_prompt,
                     target_card_count=target_card_count,
                     skip_export=True,
-                    page_range=page_range,
                     stop_check=lambda: (
                         session_manager.get_session(session.session_id).stop_requested
                         if session_manager.get_session(session.session_id)

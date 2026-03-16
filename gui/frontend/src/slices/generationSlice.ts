@@ -10,7 +10,6 @@ export const getGenerationState = () => ({
   availableDecks: [] as string[],
   focusPrompt: "",
   targetDeckSize: 1,
-  pageRange: "",
   densityPreferences: { per1k: null as number | null, perSlide: null as number | null },
   logs: [] as import("../api").ProgressEvent[],
   progress: { current: 0, total: 0 },
@@ -58,30 +57,28 @@ export const createGenerationActions = (
   setAvailableDecks: (decks) => set({ availableDecks: decks }),
   setFocusPrompt: (prompt) => set({ focusPrompt: prompt }),
   setTargetDeckSize: (target) => {
-    const { estimation } = get();
     set({ targetDeckSize: target });
-
-    // Persist preference if we have an estimation context
-    if (estimation) {
-      const pageCount = estimation.pages || 1;
-      const textChars = estimation.text_chars || 0;
+    
+    // Update density preferences when user manually adjusts target size
+    const state = get();
+    if (state.estimation) {
+      const pageCount = state.estimation.pages || 1;
+      const textChars = state.estimation.text_chars || 0;
       const avgChars = textChars / pageCount;
       const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
 
-      if (isScript) {
-        // Preference: cards per 1k chars
-        const per1k = (target / textChars) * 1000;
-        set((state) => ({ densityPreferences: { ...state.densityPreferences, per1k } }));
-      } else {
-        // Preference: cards per slide
+      if (isScript && textChars > 0) {
+        const per1k = (target * 1000) / textChars;
+        set((s) => ({
+          densityPreferences: { ...s.densityPreferences, per1k }
+        }));
+      } else if (!isScript && pageCount > 0) {
         const perSlide = target / pageCount;
-        set((state) => ({ densityPreferences: { ...state.densityPreferences, perSlide } }));
+        set((s) => ({
+          densityPreferences: { ...s.densityPreferences, perSlide }
+        }));
       }
     }
-  },
-  setPageRange: (range) => {
-    // Also reset estimation when page range changes
-    set({ pageRange: range, estimation: null, estimationError: null, isEstimating: false });
   },
   setEstimation: (est) => set({ estimation: est, estimationError: null }),
   setEstimationError: (error) => set({ estimationError: error }),

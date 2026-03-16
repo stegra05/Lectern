@@ -39,7 +39,6 @@ export type StoreState = {
     availableDecks: string[];
     focusPrompt: string;
     targetDeckSize: number;
-    pageRange: string;
     densityPreferences: { per1k: number | null; perSlide: number | null };
     logs: ProgressEvent[];
     cards: Card[];
@@ -102,7 +101,6 @@ export type GenerationActions = {
     setAvailableDecks: (decks: string[]) => void;
     setFocusPrompt: (prompt: string) => void;
     setTargetDeckSize: (target: number) => void;
-    setPageRange: (range: string) => void;
     setEstimation: (est: Estimation | null) => void;
     setIsEstimating: (value: boolean) => void;
     setEstimationError: (error: string | null) => void;

@@ -18,9 +18,6 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
-from lectern.generation_loop import (
-    ReflectionLoopConfig,
-)
 
 
 # --- Fixtures ---
@@ -180,7 +177,7 @@ class TestServiceValidation:
 
         error_events = [e for e in events if e.type == "error"]
         assert len(error_events) >= 1
-        assert "ankiconnect" in error_events[0].message.lower()
+        assert "could not connect to ankiconnect" in error_events[0].message.lower()
 
 
 # --- Tests for stop_check ---
@@ -300,7 +297,7 @@ class TestServiceIntegration:
             )
         )
 
-        event_types = [e.type for e in events]
+        event_types = [e.type for e in events if e.type != "control_snapshot"]
 
         assert "step_start" in event_types
         assert "step_end" in event_types
@@ -308,10 +305,12 @@ class TestServiceIntegration:
         card_events = [e for e in events if e.type == "card"]
         assert len(card_events) >= 1
 
-        assert events[-1].type == "done"
-        assert events[-1].data["total"] >= 1
-        assert events[-1].data["terminal"] is True
-        assert events[-1].data["elapsed_ms"] >= 0
+        # The last event might be a control_snapshot or done, so we find the last non-control one
+        last_non_control = [e for e in events if e.type != "control_snapshot"][-1]
+        assert last_non_control.type == "done"
+        assert last_non_control.data["total"] >= 1
+        assert last_non_control.data["terminal"] is True
+        assert last_non_control.data["elapsed_ms"] >= 0
 
     def test_focus_prompt_passed_to_ai_client(self, service, generation_env):
         """Test that focus_prompt is correctly passed to LecternAIClient."""
