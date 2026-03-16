@@ -509,10 +509,39 @@ class LecternAIClient:
         }
 
     def _safe_parse_json(self, text: str, model_class: Any) -> Dict[str, Any] | None:
-        """Parse JSON response from AI using strict canonical schema."""
+        """Parse JSON response from AI using strict canonical schema.
+        Handles partial/truncated JSON by attempting to close open brackets.
+        """
         self._last_parse_error = ""
+
+        # Pre-process text to handle common truncation patterns
+        clean_text = text.strip()
+        
+        # Simple heuristic to close truncated JSON:
+        # If the last character is not '}' and looks like it was inside an array of objects
+        if clean_text and not clean_text.endswith("}"):
+            # Try to backtrack to the last complete object or array element
+            # This is a basic approach; more sophisticated parsers exist, 
+            # but for our card schema, this often suffices to recover partial batches.
+            if clean_text.count("[") > clean_text.count("]"):
+                # We are likely inside a list of cards
+                last_comma = clean_text.rfind("},")
+                if last_comma != -1:
+                    clean_text = clean_text[:last_comma+1] + "]}"
+                else:
+                    last_obj_end = clean_text.rfind("}")
+                    if last_obj_end != -1:
+                         clean_text = clean_text[:last_obj_end+1] + "]}"
+            elif clean_text.count("{") > clean_text.count("}"):
+                # We are likely inside a single object
+                last_comma = clean_text.rfind("\",")
+                if last_comma != -1:
+                    clean_text = clean_text[:last_comma] + "\"}"
+                else:
+                    clean_text += "}"
+
         try:
-            raw = json.loads(text)
+            raw = json.loads(clean_text)
             data_obj = model_class.model_validate(raw)
             result = data_obj.model_dump()
             if "cards" in result:

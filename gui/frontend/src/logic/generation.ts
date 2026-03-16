@@ -18,6 +18,13 @@ export const processGenerationEvent = (
     if (processStreamEvent(event, set, { logKey: 'logs', progressKey: 'progress' })) {
         return;
     }
+
+    // Generic phase detection from event data
+    const phase = (event.data as { phase?: Phase } | undefined)?.phase;
+    if (phase) {
+        set(() => ({ currentPhase: phase }));
+    }
+
     if (event.type === 'session_start') {
         const sid =
             event.data && typeof event.data === 'object' && 'session_id' in event.data
@@ -58,10 +65,8 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'step_start') {
-        const phase = (event.data as { phase?: Phase } | undefined)?.phase;
-        if (phase) {
-            set(() => ({ currentPhase: phase }));
-        } else {
+        const data = (event.data as { phase?: Phase } | undefined)?.phase;
+        if (!data) {
             // Non-phased step (e.g. Export) — reset phase and increment setup counter for initial trickle
             set(() => ({ currentPhase: 'idle' }));
             useLecternStore.getState().incrementSetupStep();

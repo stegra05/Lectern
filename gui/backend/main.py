@@ -556,6 +556,7 @@ async def generate_cards(
     }
 
     async def event_generator():
+        from typing import Any
         import time
         import json
         import threading
@@ -566,7 +567,7 @@ async def generate_cards(
             if data is not None:
                 evt["data"] = data
             session_logs.append(evt)
-            return json.dumps(evt) + "\\n"
+            return json.dumps(evt) + "\n"
 
         yield emit_event("session_start", "Session started", {"session_id": session.session_id})
         
@@ -721,7 +722,7 @@ async def sync_cards(req: SyncRequest):
             slide_set_name=req.slide_set_name,
             allow_updates=req.allow_updates,
         ):
-            yield f"{payload}\\n"
+            yield f"{payload}\n"
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 

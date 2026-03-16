@@ -39,7 +39,7 @@ def test_sync_session_updates_existing_note(
     
     # Check streaming response content
     events = []
-    for line in response.text.replace("\\n", "\n").splitlines():
+    for line in response.text.splitlines():
         line = line.strip()
         if line:
             events.append(json.loads(line))
@@ -67,7 +67,7 @@ def test_sync_session_recreates_deleted_note(
     assert response.status_code == 200
     
     events = []
-    for line in response.text.replace("\\n", "\n").splitlines():
+    for line in response.text.splitlines():
         line = line.strip()
         if line:
             events.append(json.loads(line))
