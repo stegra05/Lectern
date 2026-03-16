@@ -52,8 +52,39 @@ from session import (
 from streaming import ndjson_event
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+from lectern.utils.path_utils import get_app_data_dir, ensure_app_dirs
+
+ensure_app_dirs()
+log_file = get_app_data_dir() / "logs" / "backend.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger("lectern.backend")
+
+# Redirect stdout and stderr to capture crashes in PyInstaller
+class StreamToLogger:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.log(self.level, line.rstrip())
+
+    def flush(self):
+        pass
+
+    def isatty(self):
+        return False
+
+sys.stdout = StreamToLogger(logging.getLogger("STDOUT"), logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger("STDERR"), logging.ERROR)
 
 
 

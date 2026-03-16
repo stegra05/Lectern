@@ -167,12 +167,13 @@ export const handleGenerate = async (
             },
             (event) => processGenerationEvent(event, set)
         );
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
+        const errorMessage = e?.message || 'Network error';
         set((prev) => ({
             logs: [
                 ...prev.logs,
-                { type: 'error', message: 'Network error', timestamp: Date.now() },
+                { type: 'error', message: errorMessage, timestamp: Date.now() },
             ],
             isError: true,
         }));
