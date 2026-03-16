@@ -1,6 +1,7 @@
-import { api, type ProgressEvent, type Card, type CoverageData, type SessionData } from '../api';
+import { api, type ProgressEvent, type Card, type CoverageData, type SessionData, type ControlSnapshot } from '../api';
 import type { StoreState, LecternStore, Phase } from '../store-types';
 import { processStreamEvent } from './stream';
+import { applyControlSnapshot } from './snapshot';
 import { stampUid, stampUids, reconcileCardUids } from '../utils/uid';
 import { useLecternStore } from '../store';
 import { deriveMaxSlideNumber, normalizeCardMetadata, normalizeCardsMetadata } from '../utils/cardMetadata';
@@ -19,11 +20,6 @@ export const processGenerationEvent = (
         return;
     }
 
-    // Generic phase detection from event data
-    const phase = (event.data as { phase?: Phase } | undefined)?.phase;
-    if (phase) {
-        set(() => ({ currentPhase: phase }));
-    }
 
     if (event.type === 'session_start') {
         const sid =
@@ -38,10 +34,28 @@ export const processGenerationEvent = (
         return;
     }
 
+    // CONTROL PLANE: snapshot drives phase/progress authoritatively
+    if (event.type === 'control_snapshot') {
+        const snapshot = event.data as ControlSnapshot;
+        set((state) => {
+            // Reject stale snapshots
+            if (state.lastSnapshotTimestamp && snapshot.timestamp <= state.lastSnapshotTimestamp) {
+                return state;
+            }
+            return applyControlSnapshot(snapshot);
+        });
+        return;
+    }
+
     if (event.type === 'card') {
         set((prev) => {
-            const normalizedCard = normalizeCardMetadata((event.data as { card: Card }).card);
-            const nextCards = [...prev.cards, stampUid(normalizedCard)];
+            const raw = (event.data as { card: Card }).card;
+            const normalizedCard = normalizeCardMetadata(raw);
+            // Prefer backend uid; fall back to client stampUid for legacy compatibility
+            const cardWithUid = normalizedCard.uid
+                ? { ...normalizedCard, _uid: normalizedCard.uid }
+                : stampUid(normalizedCard);
+            const nextCards = [...prev.cards, cardWithUid];
             return {
                 cards: nextCards,
                 totalPages: deriveTotalPages(nextCards, prev.totalPages),
@@ -67,8 +81,7 @@ export const processGenerationEvent = (
     if (event.type === 'step_start') {
         const data = (event.data as { phase?: Phase } | undefined)?.phase;
         if (!data) {
-            // Non-phased step (e.g. Export) — reset phase and increment setup counter for initial trickle
-            set(() => ({ currentPhase: 'idle' }));
+            // Non-phased step (e.g. Export) — increment setup counter for initial trickle
             useLecternStore.getState().incrementSetupStep();
         }
         return;
@@ -101,9 +114,7 @@ export const processGenerationEvent = (
         store.addToast('success', `Generation complete — ${cardCount} cards`);
         set((prev) => ({
             step: 'done',
-            currentPhase: 'complete',
             isCancelling: false,
-            progress: { ...prev.progress, current: prev.progress.total },
             totalPages: (event.data as { total_pages?: number } | undefined)?.total_pages ?? prev.totalPages,
             coverageData: (event.data as { coverage_data?: CoverageData } | undefined)?.coverage_data ?? prev.coverageData,
         }));
@@ -121,7 +132,7 @@ export const processGenerationEvent = (
 
     if (event.type === 'error') {
         const msg = event.message || 'An error occurred';
-        const isRecoverable = (event.data as any)?.recoverable === true;
+        const isRecoverable = (event.data as Record<string, unknown>)?.recoverable === true;
 
         useLecternStore.getState().addToast('error', msg, 8000);
 
@@ -157,6 +168,7 @@ export const handleGenerate = async (
         currentPhase: 'idle',
         setupStepsCompleted: 0,
         coverageData: null,
+        lastSnapshotTimestamp: null,
     });
     if (typeof window !== 'undefined') {
         localStorage.removeItem(ACTIVE_SESSION_KEY);
@@ -173,9 +185,42 @@ export const handleGenerate = async (
             },
             (event) => processGenerationEvent(event, set)
         );
-    } catch (e: any) {
-        console.error(e);
-        const errorMessage = e?.message || 'Network error';
+    } catch (e: unknown) {
+        const error = e as Error;
+        console.error("Network error or disconnect:", error);
+        const { sessionId, currentPhase, deckName } = get();
+
+        // Control Plane Self-Healing: If we disconnected mid-flight, the backend is authoritative.
+        // Try recovering the final state from the REST API.
+        if (sessionId && currentPhase !== 'complete' && currentPhase !== 'idle') {
+            try {
+                const session: SessionData = await api.getSession(sessionId);
+                if (session && !session.not_found) {
+                    const cards = stampUids(normalizeCardsMetadata(session.cards || []));
+                    const isErrorState = session.status === 'error';
+                    
+                    set({
+                        cards,
+                        logs: (session.logs as import('../api').ProgressEvent[]) || [],
+                        totalPages: deriveTotalPages(cards, session.total_pages),
+                        coverageData: session.coverage_data || null,
+                        deckName: session.deck_name || session.deck || deckName,
+                        isHistorical: true, // It's no longer a live streaming session
+                        step: isErrorState ? 'generating' : 'done',
+                        currentPhase: isErrorState ? 'idle' : 'complete',
+                        isError: isErrorState,
+                    });
+                    
+                    if (!isErrorState) {
+                        return; // Successfully healed with authoritative backend state
+                    }
+                }
+            } catch (recoveryError) {
+                console.error("Failed to recover session state from REST API:", recoveryError);
+            }
+        }
+
+        const errorMessage = (e as { message?: string })?.message || 'Network error';
         set((prev) => ({
             logs: [
                 ...prev.logs,
@@ -205,7 +250,7 @@ export const loadSession = async (
         const cards = stampUids(normalizeCardsMetadata(session.cards || []));
         set({
             cards,
-            logs: session.logs || [],
+            logs: (session.logs as import('../api').ProgressEvent[]) || [],
             totalPages: deriveTotalPages(cards, session.total_pages),
             coverageData: session.coverage_data || null,
             deckName: session.deck_name || session.deck || '',

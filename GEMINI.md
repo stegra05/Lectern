@@ -13,6 +13,60 @@ Lectern is a **single-user desktop application** (not a web service). It ships a
 
 ---
 
+## Development Philosophy
+
+Lectern was vibe-coded—built fast with heavy AI assistance, trading structural integrity for momentum. The MVP works, but the codebase resists change in places: tightly coupled files, duplicated logic, God components. The mandate now is **not** to over-engineer a rigid enterprise architecture. It is to stop the bleeding, tame the entropy, and make the system predictable. Every change to this codebase must follow these four laws.
+
+### Law 1: Safety Net Before Surgery
+
+Never refactor without a verification mechanism. Before touching any internal logic, write (or confirm the existence of) high-level integration tests that cover the affected user journey. These are black-box tests—they verify the current behavior works end-to-end, not the implementation details. Do not chase 100% unit coverage on messy code; cover the critical path first.
+
+**The critical paths:**
+- PDF → Parse → Concept Map → Card Generation → Reflection → Export (the full pipeline)
+- Settings persistence across app restarts
+- SSE event stream from backend to frontend
+
+*The trade-off:* Writing tests for tightly coupled code is slow and unglamorous. You are giving up immediate visible progress to buy insurance against regression.
+
+### Law 2: Strict Separation of Concerns
+
+Vibe coding breeds God components—files where UI rendering, business logic, state management, and data fetching are smashed together. Aggressively decouple:
+
+| Layer | Responsibility | Example |
+|-------|---------------|---------|
+| **UI** | Takes data in, renders it | React components in `components/`, `views/` |
+| **State** | Owns and transforms client state | Zustand store (`store.ts`) |
+| **Service** | Business rules, orchestration | `lectern_service.py`, `gui/backend/service.py` |
+| **Client** | Data fetching, external APIs | `ai_client.py`, `anki_connector.py`, `api.ts` |
+
+If a file does more than one of these jobs, it must be split. The known violator is `lectern_service.py` (identified monolith—cost estimation and media-upload logic should be extracted).
+
+### Law 3: Single Source of Truth
+
+Audit for duplicated logic before adding new code. If a core business rule or data structure changes tomorrow, you should only have to update it in exactly one place.
+
+**Current sources of truth (do not duplicate):**
+- Prompts → `ai_prompts.py`
+- Card schema → `ai_schemas.py`
+- Config chain → `config.py` (env > `user_config.json` > defaults)
+- Client state → `store.ts`
+- SSE event types → `EventType` enum in `lectern_service.py` + `processGenerationEvent()` in `store.ts`
+- Tags → `utils/tags.py`
+
+### Law 4: Boy Scout Rule (No Big Bang Rewrites)
+
+Do not halt progress to rewrite the app from scratch. The application's needs will evolve while you are stuck rewriting what already exists. Instead:
+
+1. Pick a specific vertical slice (one route, one domain, one module).
+2. Wrap it in integration tests.
+3. Clean up the separation of concerns within that slice.
+4. Merge to main.
+5. Move on.
+
+Leave every file better than you found it. Feature velocity will flatline short-term—this is the correct trade-off. Unpaid tech debt eventually makes trivial changes take weeks.
+
+---
+
 ## Architecture Overview
 
 ```

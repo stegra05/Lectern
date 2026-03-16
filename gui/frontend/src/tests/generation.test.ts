@@ -132,4 +132,31 @@ describe('generation logic', () => {
             expect((result as { totalPages: number }).totalPages).toBe(10);
         });
     });
+
+    describe('processGenerationEvent done', () => {
+        it('does not set currentPhase (Fix 2: Authority moved to snapshots)', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'done',
+                    message: 'Generation complete',
+                    data: { total_pages: 5 },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+            
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const prevState = {
+                step: 'generating' as Step,
+                currentPhase: 'generating' as Phase,
+                progress: { current: 5, total: 10 },
+            };
+            
+            const result = update(prevState);
+            expect(result).toHaveProperty('step', 'done');
+            expect(result).not.toHaveProperty('currentPhase');
+            expect(result).not.toHaveProperty('progress');
+        });
+    });
 });

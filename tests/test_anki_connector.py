@@ -5,6 +5,7 @@ from lectern.anki_connector import AnkiTransportError, AnkiApiError
 
 # --- Fixtures ---
 
+
 @pytest.fixture
 def mock_requests_post():
     with patch("requests.post") as mock_post:
@@ -21,35 +22,39 @@ def clear_model_caches():
 
 # --- Tests ---
 
+
 def test_check_connection_success(mock_requests_post):
     # Mock successful version response
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": 6, "error": None}
     mock_requests_post.return_value = mock_response
-    
+
     assert anki_connector.check_connection() is True
+
 
 def test_check_connection_failure(mock_requests_post):
     # Mock connection error
     mock_requests_post.side_effect = Exception("Connection refused")
-    
+
     assert anki_connector.check_connection() is False
+
 
 def test_add_note_success(mock_requests_post):
     # Mock addNote response
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": 12345, "error": None}
     mock_requests_post.return_value = mock_response
-    
+
     note_id = anki_connector.add_note(
         deck_name="Test Deck",
         model_name="Basic",
         fields={"Front": "Q", "Back": "A"},
-        tags=["test"]
+        tags=["test"],
     )
-    
+
     assert note_id == 12345
     mock_requests_post.assert_called_once()
+
 
 def test_add_note_error(mock_requests_post):
     # Mock API error
@@ -65,69 +70,78 @@ def test_get_deck_names(mock_requests_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": ["Default", "Math"], "error": None}
     mock_requests_post.return_value = mock_response
-    
+
     decks = anki_connector.get_deck_names()
     assert "Math" in decks
     assert len(decks) == 2
 
+
 def test_sample_examples_from_deck(mock_requests_post):
     # This function makes two calls: findNotes then notesInfo
-    
+
     mock_response_find = MagicMock()
     mock_response_find.json.return_value = {"result": [101], "error": None}
-    
+
     mock_response_info = MagicMock()
     mock_response_info.json.return_value = {
         "result": [
-            {"modelName": "Basic", "fields": {"Front": {"value": "Q1"}, "Back": {"value": "A1"}}}
+            {
+                "modelName": "Basic",
+                "fields": {"Front": {"value": "Q1"}, "Back": {"value": "A1"}},
+            }
         ],
-        "error": None
+        "error": None,
     }
-    
+
     mock_requests_post.side_effect = [mock_response_find, mock_response_info]
-    
+
     examples = anki_connector.sample_examples_from_deck("Test")
     assert "Example 1 (Basic):" in examples
     assert "Front: Q1" in examples
     assert "Q1" in examples
     assert "A1" in examples
 
+
 def test_create_deck(mock_requests_post):
     mock_response = MagicMock()
     # Success: returns deck ID
     mock_response.json.return_value = {"result": 12345, "error": None}
     mock_requests_post.return_value = mock_response
-    
+
     success = anki_connector.create_deck("New Deck")
     assert success is True
-    
+
     # Error case: result is None (or _invoke raises RuntimeError)
     mock_response.json.return_value = {"result": None, "error": "Already exists"}
     assert anki_connector.create_deck("New Deck") is False
+
 
 def test_delete_notes(mock_requests_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": None, "error": None}
     mock_requests_post.return_value = mock_response
-    
+
     anki_connector.delete_notes([1, 2, 3])
     mock_requests_post.assert_called_once()
+
 
 def test_update_note_fields(mock_requests_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": None, "error": None}
     mock_requests_post.return_value = mock_response
-    
+
     anki_connector.update_note_fields(123, {"Front": "New Q"})
     mock_requests_post.assert_called_once()
+
 
 def test_get_model_field_names(mock_requests_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": ["Front", "Back"], "error": None}
     mock_requests_post.return_value = mock_response
-    
+
     fields = anki_connector.get_model_field_names("Basic")
     assert fields == ["Front", "Back"]
+
 
 @patch("lectern.anki_connector.get_model_names")
 @patch("lectern.anki_connector.get_model_field_names")
@@ -151,12 +165,14 @@ def test_detect_builtin_models_localized(mock_get_fields, mock_get_names):
 
 # --- Error Handling Tests ---
 
+
 class TestNetworkTimeout:
     """Tests for network timeout handling."""
 
     def test_invoke_timeout_on_connect(self, mock_requests_post):
         """Test that connection timeout raises AnkiTransportError."""
         import requests
+
         mock_requests_post.side_effect = requests.Timeout("Connection timed out")
 
         with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
@@ -165,6 +181,7 @@ class TestNetworkTimeout:
     def test_invoke_timeout_on_read(self, mock_requests_post):
         """Test that read timeout raises AnkiTransportError."""
         import requests
+
         mock_requests_post.side_effect = requests.ReadTimeout("Read timed out")
 
         with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
@@ -173,6 +190,7 @@ class TestNetworkTimeout:
     def test_check_connection_handles_timeout(self, mock_requests_post):
         """Test that check_connection returns False on timeout."""
         import requests
+
         mock_requests_post.side_effect = requests.Timeout("Timeout")
 
         assert anki_connector.check_connection() is False
@@ -220,7 +238,7 @@ class TestPartialResponse:
                 None,
                 {"noteId": 2, "fields": {"Front": {"value": "Q2"}}},
             ],
-            "error": None
+            "error": None,
         }
         mock_requests_post.return_value = mock_response
 
@@ -256,6 +274,7 @@ class TestRetryLogic:
     def test_retry_exhausted_raises_last_error(self, mock_requests_post):
         """Test that exhausted retries raise the last error."""
         import requests
+
         mock_requests_post.side_effect = requests.ConnectionError("Connection refused")
 
         with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
@@ -435,6 +454,7 @@ class TestExceptionHierarchy:
     def test_transport_error_inheritance_catch(self, mock_requests_post):
         """Test that AnkiTransportError can be caught as AnkiConnectError."""
         import requests
+
         mock_requests_post.side_effect = requests.ConnectionError("Connection refused")
 
         with pytest.raises(anki_connector.AnkiConnectError):

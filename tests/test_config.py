@@ -217,10 +217,11 @@ class TestConfigPersistence:
     def test_load_reads_existing_config(self, temp_config_dir: Path) -> None:
         """ConfigManager loads existing config file on init."""
         config_path = temp_config_dir / "user_config.json"
-        config_path.write_text(json.dumps({
-            "anki_url": "http://preexisting:8765",
-            "custom_key": "custom_value"
-        }))
+        config_path.write_text(
+            json.dumps(
+                {"anki_url": "http://preexisting:8765", "custom_key": "custom_value"}
+            )
+        )
 
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
             ConfigManager._reset_instance()
@@ -310,6 +311,7 @@ class TestDynamicAttributeAccess:
 
         # Access via module attribute
         import lectern.config as config_module
+
         assert config_module.DEFAULT_GEMINI_MODEL == "dynamic-model"
 
     def test_module_attribute_for_anki_url(self) -> None:
@@ -318,6 +320,7 @@ class TestDynamicAttributeAccess:
         ConfigManager.instance().set("anki_url", "http://module:8765")
 
         import lectern.config as config_module
+
         assert config_module.ANKI_CONNECT_URL == "http://module:8765"
 
     def test_invalid_attribute_raises(self) -> None:
@@ -336,10 +339,9 @@ class TestSaveUserConfigHelper:
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
             ConfigManager._reset_instance()
 
-            save_user_config({
-                "anki_url": "http://helper:8765",
-                "basic_model": "HelperBasic"
-            })
+            save_user_config(
+                {"anki_url": "http://helper:8765", "basic_model": "HelperBasic"}
+            )
 
             config = ConfigManager.instance()
             assert config.get("anki_url") == "http://helper:8765"

@@ -1,4 +1,3 @@
-
 import json
 import time
 import os
@@ -9,7 +8,8 @@ import sys
 from pathlib import Path
 
 # Add project root to sys.path to allow imports if needed
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 def generate_large_state(num_cards=10000):
     """Generates a large dummy state dictionary with num_cards."""
@@ -26,17 +26,20 @@ def generate_large_state(num_cards=10000):
     chars = string.ascii_letters + string.digits
     for i in range(num_cards):
         card = {
-            "front": "".join(random.choices(chars, k=200)), # Simulate content
+            "front": "".join(random.choices(chars, k=200)),  # Simulate content
             "back": "".join(random.choices(chars, k=300)),
             "tags": ["tag1", "tag2", "tag3", f"slide-{i}"],
             "id": i,
             "slide_number": i % 100,
-            "image": None # Could add dummy base64 here if needed
+            "image": None,  # Could add dummy base64 here if needed
         }
         state["cards"].append(card)
-        state["history"].append({"action": "add_card", "card_id": card["id"], "timestamp": time.time()})
+        state["history"].append(
+            {"action": "add_card", "card_id": card["id"], "timestamp": time.time()}
+        )
 
     return state
+
 
 def benchmark_save(state, indent=None):
     with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as tmp:
@@ -49,6 +52,7 @@ def benchmark_save(state, indent=None):
     os.remove(tmp_path)
     return end_time - start_time, file_size
 
+
 if __name__ == "__main__":
     print("Generating large state object (approx 50k cards)...")
     # 50000 cards to make it noticeable
@@ -56,6 +60,7 @@ if __name__ == "__main__":
 
     # Measure initial size in memory (rough estimate)
     import sys
+
     print(f"State object generated.")
 
     print(f"Benchmarking with indent=2 (Current Implementation)...")

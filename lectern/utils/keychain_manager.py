@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Cache the key in memory to avoid repeated keychain prompts/access
 _cached_key: str | None = None
 
+
 def get_gemini_key() -> str | None:
     """Retrieve the Gemini API key from the system keyring."""
     global _cached_key
@@ -34,6 +35,7 @@ def get_gemini_key() -> str | None:
         logger.warning(f"Unexpected error accessing keyring: {e}")
         return None
 
+
 def set_gemini_key(key: str) -> None:
     """Securely store the Gemini API key in the system keyring."""
     global _cached_key
@@ -46,6 +48,7 @@ def set_gemini_key(key: str) -> None:
     except Exception as e:
         logger.error(f"Unexpected error saving to keyring: {e}")
         raise
+
 
 def delete_gemini_key() -> None:
     """Remove the Gemini API key from the system keyring."""

@@ -71,7 +71,9 @@ def normalize_relation_key(value: Any) -> str:
 
 
 def make_relation_key(source: Any, rel_type: Any, target: Any) -> str:
-    return normalize_relation_key(f"{str(source or '').strip()}|{str(rel_type or '').strip()}|{str(target or '').strip()}")
+    return normalize_relation_key(
+        f"{str(source or '').strip()}|{str(rel_type or '').strip()}|{str(target or '').strip()}"
+    )
 
 
 def get_card_relation_keys(card: Dict[str, Any]) -> List[str]:
@@ -80,7 +82,9 @@ def get_card_relation_keys(card: Dict[str, Any]) -> List[str]:
     return [value for value in normalized if value]
 
 
-def build_coverage_catalog(concept_map: Dict[str, Any], total_pages: int) -> Dict[str, Any]:
+def build_coverage_catalog(
+    concept_map: Dict[str, Any], total_pages: int
+) -> Dict[str, Any]:
     concepts = concept_map.get("concepts") if isinstance(concept_map, dict) else []
     relations = concept_map.get("relations") if isinstance(concept_map, dict) else []
 
@@ -94,7 +98,9 @@ def build_coverage_catalog(concept_map: Dict[str, Any], total_pages: int) -> Dic
                 "name": str(concept.get("name") or "").strip(),
                 "importance": str(concept.get("importance") or "medium"),
                 "difficulty": str(concept.get("difficulty") or "intermediate"),
-                "page_references": normalize_page_references(concept.get("page_references")),
+                "page_references": normalize_page_references(
+                    concept.get("page_references")
+                ),
             }
         )
 
@@ -120,7 +126,9 @@ def build_coverage_catalog(concept_map: Dict[str, Any], total_pages: int) -> Dic
 
     return {
         "total_pages": int(total_pages),
-        "document_type": concept_map.get("document_type") if isinstance(concept_map, dict) else None,
+        "document_type": (
+            concept_map.get("document_type") if isinstance(concept_map, dict) else None
+        ),
         "concept_catalog": concept_catalog,
         "relation_catalog": relation_catalog,
     }
@@ -157,24 +165,44 @@ def compute_coverage_data(
             page_ref_set = set(page_refs)
             for concept in concept_catalog:
                 concept_id = str(concept.get("id") or "").strip()
-                concept_pages = set(normalize_page_references(concept.get("page_references")))
-                if concept_id and concept_pages and page_ref_set.intersection(concept_pages):
+                concept_pages = set(
+                    normalize_page_references(concept.get("page_references"))
+                )
+                if (
+                    concept_id
+                    and concept_pages
+                    and page_ref_set.intersection(concept_pages)
+                ):
                     covered_concepts_by_page.add(concept_id)
             for relation in relation_catalog:
                 relation_key = str(relation.get("key") or "").strip()
-                relation_pages = set(normalize_page_references(relation.get("page_references")))
-                if relation_key and relation_pages and page_ref_set.intersection(relation_pages):
+                relation_pages = set(
+                    normalize_page_references(relation.get("page_references"))
+                )
+                if (
+                    relation_key
+                    and relation_pages
+                    and page_ref_set.intersection(relation_pages)
+                ):
                     covered_relations_by_page.add(relation_key)
 
     covered_concept_ids_set = explicit_concept_ids.union(covered_concepts_by_page)
     covered_concept_ids = sorted(covered_concept_ids_set)
-    concept_ids = [str(concept.get("id") or "").strip() for concept in concept_catalog if concept.get("id")]
+    concept_ids = [
+        str(concept.get("id") or "").strip()
+        for concept in concept_catalog
+        if concept.get("id")
+    ]
     high_priority_ids = [
         str(concept.get("id") or "").strip()
         for concept in concept_catalog
         if str(concept.get("importance") or "").strip() == "high" and concept.get("id")
     ]
-    relation_keys = [str(relation.get("key") or "").strip() for relation in relation_catalog if relation.get("key")]
+    relation_keys = [
+        str(relation.get("key") or "").strip()
+        for relation in relation_catalog
+        if relation.get("key")
+    ]
     covered_relation_keys_set = explicit_relation_keys.union(covered_relations_by_page)
 
     uncovered_pages = [
@@ -185,7 +213,9 @@ def compute_coverage_data(
             "id": str(concept.get("id") or "").strip(),
             "name": str(concept.get("name") or "").strip(),
             "importance": str(concept.get("importance") or "medium"),
-            "page_references": normalize_page_references(concept.get("page_references")),
+            "page_references": normalize_page_references(
+                concept.get("page_references")
+            ),
         }
         for concept in concept_catalog
         if str(concept.get("id") or "").strip() not in covered_concept_ids_set
@@ -199,7 +229,9 @@ def compute_coverage_data(
             "source": str(relation.get("source") or "").strip(),
             "target": str(relation.get("target") or "").strip(),
             "type": str(relation.get("type") or "").strip(),
-            "page_references": normalize_page_references(relation.get("page_references")),
+            "page_references": normalize_page_references(
+                relation.get("page_references")
+            ),
         }
         for relation in relation_catalog
         if str(relation.get("key") or "").strip() not in covered_relation_keys_set
@@ -213,26 +245,36 @@ def compute_coverage_data(
         "covered_pages": sorted(covered_pages),
         "uncovered_pages": uncovered_pages,
         "covered_page_count": len(covered_pages),
-        "page_coverage_pct": round((len(covered_pages) / total_pages) * 100) if total_pages > 0 else 0,
+        "page_coverage_pct": (
+            round((len(covered_pages) / total_pages) * 100) if total_pages > 0 else 0
+        ),
         "saturated_pages": saturated_pages,
         "explicit_concept_count": len(explicit_concept_ids),
-        "explicit_concept_coverage_pct": round((len(explicit_concept_ids) / len(concept_ids)) * 100)
-        if concept_ids
-        else 0,
+        "explicit_concept_coverage_pct": (
+            round((len(explicit_concept_ids) / len(concept_ids)) * 100)
+            if concept_ids
+            else 0
+        ),
         "covered_concept_ids": covered_concept_ids,
         "covered_concept_count": len(covered_concept_ids),
         "total_concepts": len(concept_ids),
-        "concept_coverage_pct": round((len(covered_concept_ids) / len(concept_ids)) * 100)
-        if concept_ids
-        else 0,
+        "concept_coverage_pct": (
+            round((len(covered_concept_ids) / len(concept_ids)) * 100)
+            if concept_ids
+            else 0
+        ),
         "explicit_relation_count": len(explicit_relation_keys),
         "covered_relation_count": len(covered_relation_keys_set),
         "total_relations": len(relation_keys),
-        "relation_coverage_pct": round((len(covered_relation_keys_set) / len(relation_keys)) * 100)
-        if relation_keys
-        else 0,
+        "relation_coverage_pct": (
+            round((len(covered_relation_keys_set) / len(relation_keys)) * 100)
+            if relation_keys
+            else 0
+        ),
         "high_priority_total": len(high_priority_ids),
-        "high_priority_covered": len([cid for cid in high_priority_ids if cid in covered_concept_ids_set]),
+        "high_priority_covered": len(
+            [cid for cid in high_priority_ids if cid in covered_concept_ids_set]
+        ),
         "missing_high_priority": missing_high_priority,
         "uncovered_concepts": uncovered_concepts,
         "uncovered_relations": uncovered_relations,
@@ -311,7 +353,10 @@ def build_reflection_gap_text(coverage_data: Dict[str, Any]) -> str:
     if missing_high_priority:
         lines.append(
             "- Missing high-priority concepts: "
-            + ", ".join(str(item.get("name") or item.get("id")) for item in missing_high_priority[:10])
+            + ", ".join(
+                str(item.get("name") or item.get("id"))
+                for item in missing_high_priority[:10]
+            )
             + ("..." if len(missing_high_priority) > 10 else "")
         )
     if uncovered_relations:

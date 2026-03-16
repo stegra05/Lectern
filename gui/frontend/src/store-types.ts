@@ -90,6 +90,9 @@ export type StoreState = {
 
     // Budget tracking
     totalSessionSpend: number;
+
+    // Control-plane: timestamp (Unix ms) of last applied ControlSnapshot
+    lastSnapshotTimestamp: number | null;
 };
 
 export type GenerationActions = {
@@ -107,7 +110,6 @@ export type GenerationActions = {
     setIsError: (value: boolean) => void;
     setIsCancelling: (value: boolean) => void;
     setSessionId: (id: string | null) => void;
-    setPhaseFromEvent: (event: ProgressEvent) => void;
     setProgress: (update: { current?: number; total?: number }) => void;
     appendLog: (event: ProgressEvent) => void;
     appendCard: (card: Card) => void;
@@ -139,6 +141,10 @@ export type ReviewActions = {
     undoDelete: (cardUid: string) => void;
     /** Clear a deleted card from the buffer (called after timeout) */
     clearDeletedCard: (cardUid: string) => void;
+    /** Dismiss the sync success overlay */
+    dismissSyncSuccess: () => void;
+    /** Dismiss the sync partial failure overlay */
+    dismissSyncPartialFailure: () => void;
 };
 
 export type UiActions = {

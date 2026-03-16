@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 from lectern.ai_client import LecternAIClient
 from lectern.ai_schemas import CardGenerationResponse, card_generation_schema
 
+
 @pytest.fixture
 def mock_genai_client():
     with patch("google.genai.Client") as MockClient:
@@ -13,16 +14,19 @@ def mock_genai_client():
         instance.chats.create.return_value = mock_chat
         yield instance
 
+
 @pytest.fixture
 def ai_client(mock_genai_client):
     with patch("lectern.config.GEMINI_API_KEY", "fake_key"):
         client = LecternAIClient(model_name="test-model")
         return client
 
+
 def test_initialization(ai_client, mock_genai_client):
     mock_genai_client.chats.create.assert_called_once()
     call_args = mock_genai_client.chats.create.call_args
     assert call_args.kwargs["model"] == "test-model"
+
 
 def test_update_language(ai_client):
     ai_client.update_language("de")
@@ -37,10 +41,11 @@ def test_update_language(ai_client):
     assert "Language" in sent_prompt
     assert "de" in sent_prompt
 
+
 def test_safe_parse_json_valid(ai_client):
     json_str = '{"cards":[{"model_name":"Basic","front":"What is ML?","back":"Study of learning systems","slide_number":7,"slide_topic":"Intro"}],"done":false}'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
-    
+
     assert result is not None
     assert len(result["cards"]) == 1
     card = result["cards"][0]
@@ -48,10 +53,12 @@ def test_safe_parse_json_valid(ai_client):
     assert card["back"] == "Study of learning systems"
     assert card["slide_number"] == 7
 
+
 def test_safe_parse_json_invalid(ai_client):
     json_str = '{"cards": ... invalid json ...'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
     assert result is None
+
 
 def test_safe_parse_json_accepts_fields_dict_shape(ai_client):
     json_str = '{"cards":[{"model_name":"basic","fields":{"Front":"A"}}],"done":false}'
@@ -105,17 +112,21 @@ def test_gemini_generation_schema_avoids_union_keywords():
     assert "oneOf" not in items
     assert "discriminator" not in items
 
+
 def test_history_pruning(ai_client):
     # Mock chat history
-    mock_history = [MagicMock(model_dump=lambda **k: {"role": "user", "parts": []}) for _ in range(30)]
+    mock_history = [
+        MagicMock(model_dump=lambda **k: {"role": "user", "parts": []})
+        for _ in range(30)
+    ]
     ai_client._chat.history = mock_history
-    
+
     # Trick the get_history to return list of dicts
     history = [{"role": "u", "index": i} for i in range(30)]
     with patch.object(ai_client, "get_history", return_value=history):
         with patch.object(ai_client, "restore_history") as mock_restore:
             ai_client._prune_history()
-            
+
             # verify it called restore
             mock_restore.assert_called_once()
             args = mock_restore.call_args[0][0]
@@ -123,14 +134,15 @@ def test_history_pruning(ai_client):
             assert args[0]["index"] == 0
             assert args[-1]["index"] == 29
 
+
 def test_generate_more_cards_flow(ai_client):
     # Mock send_message response
     mock_response = MagicMock()
     mock_response.text = '{"cards":[{"model_name":"Basic","front":"Q","back":"A","slide_number":1,"slide_topic":"Topic"}], "done": false}'
     ai_client._chat.send_message.return_value = mock_response
-    
+
     result = ai_client.generate_more_cards(limit=5)
-    
+
     ai_client._chat.send_message.assert_called_once()
     assert result["done"] is False
     assert len(result["cards"]) == 1
@@ -159,40 +171,44 @@ def test_generate_more_cards_parse_failure_returns_empty(ai_client):
     assert result["done"] is True
     assert result["parse_error"]
 
+
 def test_restore_history(ai_client, mock_genai_client):
     history = [{"role": "user", "parts": [{"text": "Hello"}]}]
     ai_client.restore_history(history)
-    
+
     # Verify new chat was created with history
     mock_genai_client.chats.create.assert_called()
     call_args = mock_genai_client.chats.create.call_args_list[-1]
     assert "history" in call_args.kwargs
     assert len(call_args.kwargs["history"]) == 1
 
+
 def test_count_tokens(ai_client, mock_genai_client):
     mock_response = MagicMock()
     mock_response.total_tokens = 42
     mock_genai_client.models.count_tokens.return_value = mock_response
-    
+
     content = [{"role": "user", "parts": [{"text": "Hello"}]}]
     tokens = ai_client.count_tokens(content)
-    
+
     assert tokens == 42
     mock_genai_client.models.count_tokens.assert_called_once()
 
+
 def test_count_tokens_failure(ai_client, mock_genai_client):
     mock_genai_client.models.count_tokens.side_effect = Exception("API error")
-    
+
     content = [{"role": "user", "parts": [{"text": "Hello"}]}]
     tokens = ai_client.count_tokens(content)
-    
+
     assert tokens == 0
+
 
 def test_concept_map(ai_client, mock_genai_client):
     mock_response = MagicMock()
     mock_response.text = '{"objectives": ["O1"], "concepts": [], "relations": [], "language": "en", "slide_set_name": "Test", "page_count": 10, "estimated_text_chars": 5000}'
     ai_client._chat.send_message.return_value = mock_response
-    
+
     with patch("lectern.ai_client._compose_multimodal_content", return_value=[]):
         result = ai_client.concept_map([])
         assert result["slide_set_name"] == "Test"
@@ -213,19 +229,24 @@ def test_upload_pdf_retries_then_succeeds(ai_client, mock_genai_client):
 
 
 def test_count_tokens_for_pdf_retries_then_succeeds(ai_client):
-    with patch.object(ai_client, "count_tokens", side_effect=[Exception("transient"), 123]) as mock_count:
+    with patch.object(
+        ai_client, "count_tokens", side_effect=[Exception("transient"), 123]
+    ) as mock_count:
         with patch("lectern.ai_client.time.sleep") as mock_sleep:
-            result = ai_client.count_tokens_for_pdf(file_uri="gs://file.pdf", prompt="Analyze", retries=2)
+            result = ai_client.count_tokens_for_pdf(
+                file_uri="gs://file.pdf", prompt="Analyze", retries=2
+            )
 
     assert result == 123
     assert mock_count.call_count == 2
     mock_sleep.assert_called_once()
 
+
 def test_reflect(ai_client, mock_genai_client):
     mock_response = MagicMock()
     mock_response.text = '{"reflection": "Better cards", "cards": [], "done": true}'
     ai_client._chat.send_message.return_value = mock_response
-    
+
     result = ai_client.reflect(limit=5)
     assert result["reflection"] == "Better cards"
     assert result["done"] is True

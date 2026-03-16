@@ -1,5 +1,4 @@
 
-import { clsx } from 'clsx';
 import { FilePicker } from './FilePicker';
 import { useLecternStore } from '../store';
 

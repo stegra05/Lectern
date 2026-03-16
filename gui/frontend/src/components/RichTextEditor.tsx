@@ -56,16 +56,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         },
     });
 
-    // Sync external value changes (e.g. when switching cards)
-    useEffect(() => {
-        if (editor && value !== internalValue) {
-            // Check if value is substantially different to avoid cursor jumps
-            // DOMPurify just to ensure safety if external HTML is weird
+    // Sync external value changes (e.g. when switching cards) - using render-time check to avoid cascading renders
+    const [prevValue, setPrevValue] = useState(value);
+    if (value !== prevValue) {
+        setPrevValue(value);
+        if (value !== internalValue) {
             const sanitized = DOMPurify.sanitize(value);
-            editor.commands.setContent(sanitized, { emitUpdate: false });
+            editor?.commands.setContent(sanitized, { emitUpdate: false });
             setInternalValue(sanitized);
         }
-    }, [editor, value, internalValue]);
+    }
 
     useEffect(() => {
         if (editor) {

@@ -9,7 +9,6 @@ type StreamKeys = {
   progressKey: 'progress' | 'syncProgress';
 };
 
-type ProgressState = { current: number; total: number };
 
 /**
  * Type-safe log append helper.

@@ -51,6 +51,7 @@ class AnkiApiError(AnkiConnectError):
     def __init__(self, message: str) -> None:
         super().__init__(message, retriable=False)
 
+
 # Caches for model field detection (lifecycle of the app)
 _MODEL_FIELD_CACHE: Dict[str, List[str]] = {}
 _MODEL_DETECTION_CACHE: Optional[Dict[str, str]] = None
@@ -75,12 +76,15 @@ MAX_RETRY_DELAY = 4.0  # seconds
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def _with_retry(max_retries: int = MAX_RETRIES, initial_delay: float = INITIAL_RETRY_DELAY) -> Callable[[F], F]:
+def _with_retry(
+    max_retries: int = MAX_RETRIES, initial_delay: float = INITIAL_RETRY_DELAY
+) -> Callable[[F], F]:
     """Decorator that adds exponential backoff retry logic for transport errors.
 
     Only retries on AnkiTransportError (connection-level errors).
     AnkiApiError and other exceptions fail immediately.
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -96,7 +100,10 @@ def _with_retry(max_retries: int = MAX_RETRIES, initial_delay: float = INITIAL_R
                     if attempt < max_retries:
                         logger.warning(
                             "AnkiConnect connection failed (attempt %d/%d), retrying in %.1fs: %s",
-                            attempt + 1, max_retries + 1, delay, e
+                            attempt + 1,
+                            max_retries + 1,
+                            delay,
+                            e,
                         )
                         time.sleep(delay)
                         delay = min(delay * 2, MAX_RETRY_DELAY)
@@ -111,11 +118,14 @@ def _with_retry(max_retries: int = MAX_RETRIES, initial_delay: float = INITIAL_R
             raise last_exception
 
         return wrapper  # type: ignore
+
     return decorator
 
 
 @_with_retry()
-def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15) -> Any:
+def _invoke(
+    action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15
+) -> Any:
     """Invoke an AnkiConnect action with the given parameters.
 
     Raises:
@@ -130,12 +140,16 @@ def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int =
     try:
         response = requests.post(url, json=payload, timeout=timeout)
     except requests.RequestException as exc:
-        raise AnkiTransportError(f"Failed to reach AnkiConnect at {url}: {exc}") from exc
+        raise AnkiTransportError(
+            f"Failed to reach AnkiConnect at {url}: {exc}"
+        ) from exc
 
     try:
         data = response.json()
     except ValueError as exc:
-        raise AnkiTransportError(f"AnkiConnect returned non-JSON response: {exc}") from exc
+        raise AnkiTransportError(
+            f"AnkiConnect returned non-JSON response: {exc}"
+        ) from exc
 
     if data.get("error") is not None:
         raise AnkiApiError(f"AnkiConnect error for {action}: {data['error']}")
@@ -186,11 +200,15 @@ def get_connection_info() -> Dict[str, Any]:
 
         version = data.get("result")
         result["version"] = version
-        result["version_ok"] = isinstance(version, int) and version >= MIN_ANKICONNECT_VERSION
+        result["version_ok"] = (
+            isinstance(version, int) and version >= MIN_ANKICONNECT_VERSION
+        )
         result["connected"] = True
 
         if not result["version_ok"]:
-            result["error"] = f"AnkiConnect version {version} is too old. Minimum required: {MIN_ANKICONNECT_VERSION}"
+            result["error"] = (
+                f"AnkiConnect version {version} is too old. Minimum required: {MIN_ANKICONNECT_VERSION}"
+            )
 
     except requests.RequestException as e:
         result["error"] = f"Cannot reach AnkiConnect at {url}: {e}"
@@ -202,7 +220,9 @@ def get_connection_info() -> Dict[str, Any]:
     return result
 
 
-def add_note(deck_name: str, model_name: str, fields: Dict[str, str], tags: List[str]) -> int:
+def add_note(
+    deck_name: str, model_name: str, fields: Dict[str, str], tags: List[str]
+) -> int:
     """Add a single note to Anki via AnkiConnect.
 
     Parameters:
@@ -239,9 +259,6 @@ def delete_notes(note_ids: List[int]) -> None:
     _invoke("deleteNotes", {"notes": note_ids})
 
 
-
-
-
 def _escape_query_value(value: str) -> str:
     """Escape a value for inclusion in an AnkiConnect search query string."""
 
@@ -254,7 +271,11 @@ def find_notes(query: str) -> List[int]:
     result = _invoke("findNotes", {"query": query})
     if not isinstance(result, list):
         return []
-    return [int(nid) for nid in result if isinstance(nid, int) or (isinstance(nid, str) and str(nid).isdigit())]
+    return [
+        int(nid)
+        for nid in result
+        if isinstance(nid, int) or (isinstance(nid, str) and str(nid).isdigit())
+    ]
 
 
 def notes_info(note_ids: List[int]) -> List[Dict[str, Any]]:
@@ -377,7 +398,7 @@ def detect_builtin_models() -> Dict[str, str]:
 
 def create_deck(deck_name: str) -> bool:
     """Create a new deck in Anki via AnkiConnect.
-    
+
     Returns:
         True if successful, False otherwise.
     """

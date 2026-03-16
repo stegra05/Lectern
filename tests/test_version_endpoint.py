@@ -5,15 +5,16 @@ import unittest.mock as mock
 
 client = TestClient(app)
 
+
 def test_version_endpoint_success():
     # Mock requests.get to simulate GitHub API
     with mock.patch("requests.get") as mock_get:
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
             "tag_name": "v9.9.9",
-            "html_url": "https://github.com/stegra05/Lectern/releases/tag/v9.9.9"
+            "html_url": "https://github.com/stegra05/Lectern/releases/tag/v9.9.9",
         }
-        
+
         response = client.get("/version")
         assert response.status_code == 200
         data = response.json()
@@ -22,11 +23,12 @@ def test_version_endpoint_success():
         assert data["update_available"] is True
         assert "release_url" in data
 
+
 def test_version_endpoint_failure():
     # Mock requests.get to simulate failure
     with mock.patch("requests.get") as mock_get:
         mock_get.side_effect = Exception("Network error")
-        
+
         response = client.get("/version")
         assert response.status_code == 200
         data = response.json()

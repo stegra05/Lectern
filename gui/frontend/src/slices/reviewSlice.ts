@@ -240,6 +240,8 @@ export const createReviewActions = (
       set({ isSyncing: false });
     }
   },
+  dismissSyncSuccess: () => set({ syncSuccess: false }),
+  dismissSyncPartialFailure: () => set({ syncPartialFailure: null }),
 });
 
 export const createBatchActions = (

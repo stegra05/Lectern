@@ -80,7 +80,10 @@ export const FocusMode: React.FC<FocusModeProps> = ({
     const opacity = useTransform(x, [-300, -100, 0, 100, 300], [0, 1, 1, 1, 0]);
     const scale = useTransform(x, [-300, 0, 300], [0.8, 1, 0.8]);
 
-    const handleDragEnd = (_event: any, info: any) => {
+    const handleDragEnd = (
+        _event: MouseEvent | TouchEvent | PointerEvent, 
+        info: { offset: { x: number; y: number } }
+    ) => {
         if (info.offset.x < -100) {
             handleDelete();
         } else if (info.offset.x > 100) {

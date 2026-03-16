@@ -95,7 +95,11 @@ class SessionManager:
         return
 
     def _cleanup_session_files(self, session: SessionState) -> None:
-        if session.pdf_path and self._is_lectern_temp_pdf(session.pdf_path) and os.path.exists(session.pdf_path):
+        if (
+            session.pdf_path
+            and self._is_lectern_temp_pdf(session.pdf_path)
+            and os.path.exists(session.pdf_path)
+        ):
             try:
                 os.remove(session.pdf_path)
             except Exception as e:  # pragma: no cover - best-effort cleanup
@@ -117,7 +121,9 @@ class SessionManager:
     @staticmethod
     def _is_lectern_temp_pdf(path: str) -> bool:
         base = os.path.basename(path)
-        return base.startswith(LECTERN_TEMP_PREFIX) and base.endswith(LECTERN_TEMP_SUFFIX)
+        return base.startswith(LECTERN_TEMP_PREFIX) and base.endswith(
+            LECTERN_TEMP_SUFFIX
+        )
 
     def sweep_orphan_temp_files(self) -> int:
         temp_dir = tempfile.gettempdir()
@@ -138,10 +144,16 @@ class SessionManager:
 session_manager = SessionManager()
 
 
-def _get_session_or_404(session_id: Optional[str], *, require_session_id: bool = False) -> SessionState:
+def _get_session_or_404(
+    session_id: Optional[str], *, require_session_id: bool = False
+) -> SessionState:
     if require_session_id and not session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
-    session = session_manager.get_session(session_id) if session_id else session_manager.get_latest_session()
+    session = (
+        session_manager.get_session(session_id)
+        if session_id
+        else session_manager.get_latest_session()
+    )
     if not session:
         raise HTTPException(status_code=404, detail="No active session")
     return session

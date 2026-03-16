@@ -85,7 +85,9 @@ class ConceptPhaseHandler:
         }
         try:
             deck_for_examples = context_deck or self.deck_name
-            examples = sample_examples_from_deck(deck_name=deck_for_examples, sample_size=5)
+            examples = sample_examples_from_deck(
+                deck_name=deck_for_examples, sample_size=5
+            )
             if examples.strip():
                 yield {
                     "type": "info",
@@ -216,7 +218,11 @@ class ConceptPhaseHandler:
             yield {
                 "type": "progress_update",
                 "message": "",
-                "data": {"current": metadata_pages, "total": metadata_pages, "phase": "concept"},
+                "data": {
+                    "current": metadata_pages,
+                    "total": metadata_pages,
+                    "phase": "concept",
+                },
             }
             yield {
                 "type": "step_end",

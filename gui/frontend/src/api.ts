@@ -59,7 +59,9 @@ export interface Card {
     rationale?: string;
     source_excerpt?: string;
     tag?: string;
-    /** Client-only stable identity — stamped on ingestion, never sent to backend */
+    /** Backend-assigned stable identity — set by server, used as React key */
+    uid?: string;
+    /** Legacy client-only uid — kept for backward compat during transition */
     _uid?: string;
     [key: string]: unknown;
 }
@@ -110,6 +112,30 @@ export interface SessionData {
     [key: string]: unknown;
 }
 
+export type SnapshotStatus =
+    | 'idle'
+    | 'concept'
+    | 'generating'
+    | 'reflecting'
+    | 'exporting'
+    | 'complete'
+    | 'error'
+    | 'cancelled';
+
+export interface ControlSnapshot {
+    session_id: string;
+    timestamp: number;
+    status: SnapshotStatus;
+    progress: { current: number; total: number };
+    concept_progress: { current: number; total: number };
+    /** Count only — NOT the full cards array */
+    card_count: number;
+    total_pages: number;
+    coverage_data: CoverageData | null;
+    is_error: boolean;
+    error_message: string | null;
+}
+
 export interface ProgressEvent {
     type:
     | "session_start"
@@ -128,7 +154,8 @@ export interface ProgressEvent {
     | "done"
     | "cancelled"
     | "step_start"
-    | "step_end";
+    | "step_end"
+    | "control_snapshot";
     message: string;
     data?: unknown;
     timestamp: number;

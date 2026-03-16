@@ -1,6 +1,10 @@
-
 import pytest
-from lectern.utils.tags import build_hierarchical_tags, infer_slide_set_name, _clean_tag_part
+from lectern.utils.tags import (
+    build_hierarchical_tags,
+    infer_slide_set_name,
+    _clean_tag_part,
+)
+
 
 class TestTags:
     def test_clean_tag_part_basic(self):
@@ -14,7 +18,9 @@ class TestTags:
     def test_clean_tag_part_title_case(self):
         """Test title case normalization."""
         assert _clean_tag_part("hello world", title_case=True) == "Hello-World"
-        assert _clean_tag_part("ML basics", title_case=True) == "ML-Basics"  # Preserve acronyms
+        assert (
+            _clean_tag_part("ML basics", title_case=True) == "ML-Basics"
+        )  # Preserve acronyms
         assert _clean_tag_part("lecture 1", title_case=True) == "Lecture-1"
 
     def test_clean_tag_part_slug(self):
@@ -74,10 +80,7 @@ class TestTags:
         assert name == "Introduction-To-Python"
 
     def test_infer_slide_set_name_filename_fallback(self):
-        name = infer_slide_set_name(
-            pdf_title="",
-            pdf_filename="Advanced_Algorithms"
-        )
+        name = infer_slide_set_name(pdf_title="", pdf_filename="Advanced_Algorithms")
         # Underscores replaced with spaces, then title cased
         assert name == "Advanced-Algorithms"
 

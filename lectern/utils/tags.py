@@ -17,9 +17,9 @@ from lectern import config
 
 def _clean_tag_part(value: str, title_case: bool = False, slug: bool = False) -> str:
     """Clean a string for use in Anki hierarchical tags.
-    
+
     Single unified normalization function replacing the previous 4 functions.
-    
+
     Args:
         value: Raw string to normalize
         title_case: If True, capitalize each word (preserving acronyms)
@@ -27,18 +27,18 @@ def _clean_tag_part(value: str, title_case: bool = False, slug: bool = False) ->
     """
     if not value:
         return ""
-    
+
     # Clean: keep letters, digits, underscore, hyphen, spaces
     s = re.sub(r"[^a-zA-Z0-9_\-\s]+", "-", value).strip("- ")
     # Collapse multiple dashes/spaces
     s = re.sub(r"[-\s]{2,}", " ", s)
-    
+
     if slug:
         s = s.lower()
     elif title_case:
         words = s.split()
         s = " ".join(w if w.isupper() or w.isdigit() else w.capitalize() for w in words)
-    
+
     # Replace spaces with hyphens for tag format
     return s.replace(" ", "-")
 
@@ -50,20 +50,26 @@ def build_hierarchical_tag(
 ) -> str:
     """Build a single hierarchical tag based on the TAG_TEMPLATE."""
     template = config.TAG_TEMPLATE
-    
+
     # Pre-clean parts
-    c_deck = "::".join(_clean_tag_part(p) for p in deck_name.split("::") if p.strip()) if deck_name else ""
-    c_slide_set = _clean_tag_part(slide_set_name, title_case=True) if slide_set_name else ""
+    c_deck = (
+        "::".join(_clean_tag_part(p) for p in deck_name.split("::") if p.strip())
+        if deck_name
+        else ""
+    )
+    c_slide_set = (
+        _clean_tag_part(slide_set_name, title_case=True) if slide_set_name else ""
+    )
     c_topic = _clean_tag_part(topic, title_case=True) if topic else ""
-    
+
     tag = template.replace("{{deck}}", c_deck)
     tag = tag.replace("{{slide_set}}", c_slide_set)
     tag = tag.replace("{{topic}}", c_topic)
-    
+
     # Clean up any empty separators resulting from missing placeholders
     tag = re.sub(r":{3,}", "::", tag)
     tag = tag.strip(":")
-    
+
     return tag
 
 
@@ -75,35 +81,35 @@ def build_hierarchical_tags(
 ) -> List[str]:
     """Build hierarchical tags: one Deck::SlideSet::Topic tag plus any additional flat tags."""
     result: List[str] = []
-    
+
     # Primary hierarchical tag (3-level)
     primary = build_hierarchical_tag(deck_name, slide_set_name, topic)
     if primary:
         result.append(primary)
-    
+
     # Additional flat tags (user-provided, default tag)
     for t in additional_tags:
         tag_str = str(t).strip()
         if tag_str and tag_str not in result:
             result.append(tag_str)
-    
+
     return result
 
 
 def infer_slide_set_name(pdf_title: str, pdf_filename: str = "") -> str:
     """Infer slide set name from PDF title or filename.
-    
+
     Note: The AI now returns slide_set_name in the concept map response,
     so this function is only used as a fallback.
     """
     # Use PDF title if it looks reasonable
     if pdf_title and len(pdf_title) < 80 and len(pdf_title.split()) <= 10:
         return _clean_tag_part(pdf_title, title_case=True)
-    
+
     # Fallback: clean up filename
     if pdf_filename:
-        clean_name = pdf_filename.replace('_', ' ').replace('-', ' ').strip()
+        clean_name = pdf_filename.replace("_", " ").replace("-", " ").strip()
         if clean_name and len(clean_name) > 3:
             return _clean_tag_part(clean_name, title_case=True)
-    
+
     return ""

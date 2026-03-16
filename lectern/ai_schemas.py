@@ -43,7 +43,10 @@ class ConceptMapResponse(BaseModel):
     slide_set_name: Optional[str] = None
     page_count: Optional[int] = None
     estimated_text_chars: Optional[int] = None
-    document_type: Optional[Literal["script", "slides", "mixed"]] = Field(None, description="Classify the document's density and structure: 'script' for text-dense books/papers, 'slides' for visual-heavy presentations.")
+    document_type: Optional[Literal["script", "slides", "mixed"]] = Field(
+        None,
+        description="Classify the document's density and structure: 'script' for text-dense books/papers, 'slides' for visual-heavy presentations.",
+    )
 
 
 class FieldPair(BaseModel):
@@ -59,16 +62,22 @@ class AnkiCard(BaseModel):
     source_pages: List[int] = Field(default_factory=list)
     concept_ids: List[str] = Field(default_factory=list)
     relation_keys: List[str] = Field(default_factory=list)
-    rationale: Optional[str] = Field(None, description="Brief explanation of why this card is valuable")
-    source_excerpt: Optional[str] = Field(None, description="Short grounded excerpt or paraphrase from the source slide")
+    rationale: Optional[str] = Field(
+        None, description="Brief explanation of why this card is valuable"
+    )
+    source_excerpt: Optional[str] = Field(
+        None, description="Short grounded excerpt or paraphrase from the source slide"
+    )
 
     @field_validator("model_name", mode="before")
     @classmethod
     def titleize_model_name(cls, v: Any) -> Any:
         if isinstance(v, str):
             v_lower = v.strip().lower()
-            if v_lower == "basic": return "Basic"
-            if v_lower == "cloze": return "Cloze"
+            if v_lower == "basic":
+                return "Basic"
+            if v_lower == "cloze":
+                return "Cloze"
             return v.strip().title()
         return v
 
@@ -106,10 +115,13 @@ class AnkiCard(BaseModel):
     def coerce_fields(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
-        
+
         fields = data.get("fields")
         if isinstance(fields, dict):
-            data["fields"] = [{"name": str(k), "value": (None if v is None else str(v))} for k, v in fields.items()]
+            data["fields"] = [
+                {"name": str(k), "value": (None if v is None else str(v))}
+                for k, v in fields.items()
+            ]
         elif not isinstance(fields, list):
             model_name = str(data.get("model_name", "")).lower()
             if model_name == "cloze":
@@ -120,8 +132,10 @@ class AnkiCard(BaseModel):
                 front = str(data.get("front") or "").strip()
                 back = str(data.get("back") or "").strip()
                 gen_fields = []
-                if front: gen_fields.append({"name": "Front", "value": front})
-                if back: gen_fields.append({"name": "Back", "value": back})
+                if front:
+                    gen_fields.append({"name": "Front", "value": front})
+                if back:
+                    gen_fields.append({"name": "Back", "value": back})
                 if gen_fields:
                     data["fields"] = gen_fields
         return data

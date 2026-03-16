@@ -24,6 +24,7 @@ export const getGenerationState = () => ({
   coverageData: null as import("../api").CoverageData | null,
   setupStepsCompleted: 0,
   conceptProgress: { current: 0, total: 0 },
+  lastSnapshotTimestamp: null as number | null,
 });
 
 export const getSessionState = () => ({
@@ -118,15 +119,6 @@ export const createGenerationActions = (
   setIsError: (value) => set({ isError: value }),
   setIsCancelling: (value) => set({ isCancelling: value }),
   setSessionId: (id) => set({ sessionId: id }),
-  setPhaseFromEvent: (event) =>
-    set((state) => {
-      if (event.type !== 'step_start') return state;
-      const data = event.data as { phase?: Phase } | undefined;
-      if (data?.phase) {
-        return { ...state, currentPhase: data.phase };
-      }
-      return state;
-    }),
   setProgress: (update) =>
     set((state) => ({
       progress: {
@@ -141,7 +133,8 @@ export const createGenerationActions = (
     })),
   appendCard: (card) =>
     set((state) => ({
-      cards: [...state.cards, stampUid(card)],
+      // Prefer backend uid; fall back to client stampUid
+      cards: [...state.cards, card.uid ? { ...card, _uid: card.uid } : stampUid(card)],
     })),
   reset: () => {
     const currentState = get();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { stampUid, stampUids, getCardContentKey, reconcileCardUids } from '../utils/uid';
+import { stampUid, getCardContentKey, reconcileCardUids } from '../utils/uid';
 import type { Card } from '../api';
 
 describe('uid utils', () => {

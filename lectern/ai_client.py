@@ -26,6 +26,7 @@ from lectern.ai_schemas import (
     reflection_schema,
 )
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Rate limiting configuration
@@ -52,6 +53,7 @@ def _model_supports_thinking(model_name: str) -> bool:
     name = model_name.lower()
     return not any(pat in name for pat in _THINKING_BLOCKED_PATTERNS)
 
+
 _CONCEPT_MAP_SCHEMA = concept_map_schema()
 _CARD_GENERATION_SCHEMA = card_generation_schema()
 _REFLECTION_SCHEMA = reflection_schema()
@@ -62,6 +64,7 @@ _HISTORY_PRUNE_HEAD = 2
 _HISTORY_PRUNE_TAIL = 6
 _ROLLING_SUMMARY_MAX_FRONTS = 200
 _ROLLING_SUMMARY_FRONT_TRUNC = 120
+
 
 class LecternAIClient:
     def __init__(
@@ -82,7 +85,9 @@ class LecternAIClient:
         """
         self._api_key = config.GEMINI_API_KEY
         if not self._api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables or keychain.")
+            raise ValueError(
+                "GEMINI_API_KEY not found in environment variables or keychain."
+            )
 
         self._model_name = model_name or config.DEFAULT_GEMINI_MODEL
         self._client = genai.Client(api_key=self._api_key)
@@ -109,25 +114,34 @@ class LecternAIClient:
             max_output_tokens=_MAX_OUTPUT_TOKENS,
             system_instruction=system_inst,
             safety_settings=[
-                types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
-                types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
-                types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
-                types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE'),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"
+                ),
             ],
         )
-        
+
         self._chat = self._client.chats.create(
-            model=self._model_name,
-            config=self._generation_config
+            model=self._model_name, config=self._generation_config
         )
         self._thinking_supported: bool = _model_supports_thinking(self._model_name)
         self._warnings: list[str] = []
         self._last_parse_error: str = ""
-        
+
         self._log_path = _start_session_log()
         logger.info(
             "[AI] Session init: model=%s, thinking=%s, genai=%s",
-            self._model_name, self._thinking_supported, genai.__version__,
+            self._model_name,
+            self._thinking_supported,
+            genai.__version__,
         )
 
     @property
@@ -139,13 +153,13 @@ class LecternAIClient:
         if language and language != self._prompt_config.language:
             logger.info(f"[AI] Updating output language to: {language}")
             self._prompt_config.language = language
-            # We can't easily update the system instruction of an active chat in 
+            # We can't easily update the system instruction of an active chat in
             # google-genai without creating a new chat or sending it as a new message.
             # However, for the *next* turns, we can rely on the repetitive nature of our prompts
             # which now include the language instruction in generation/reflection methods too.
-            # 
+            #
             # Ideally, we would recreate the chat, but that loses history.
-            # For now, we rely on the per-turn prompts in PromptBuilder to enforce it 
+            # For now, we rely on the per-turn prompts in PromptBuilder to enforce it
             # if session was already started.
 
     def _thinking_config_for(self, phase: str) -> types.ThinkingConfig | None:
@@ -172,7 +186,8 @@ class LecternAIClient:
         has_thinking = call_config.thinking_config is not None
         logger.debug(
             "[AI] send_message: model=%s, thinking=%s, config_keys=%s",
-            self._model_name, has_thinking,
+            self._model_name,
+            has_thinking,
             [k for k, v in call_config.model_dump(exclude_none=True).items()],
         )
         try:
@@ -180,12 +195,16 @@ class LecternAIClient:
         except Exception as exc:
             err_text = str(exc).lower()
             # Catch known "thinking parameter not supported" or INVALID_ARGUMENT related to it
-            is_thinking_error = "thinking" in err_text and ("not supported" in err_text or "invalid_argument" in err_text)
-            
+            is_thinking_error = "thinking" in err_text and (
+                "not supported" in err_text or "invalid_argument" in err_text
+            )
+
             if is_thinking_error:
                 logger.warning(
                     "[AI] thinking_level rejected (model=%s, genai=%s): %s",
-                    self._model_name, genai.__version__, err_text[:200],
+                    self._model_name,
+                    genai.__version__,
+                    err_text[:200],
                 )
                 self._thinking_supported = False
                 self._warnings.append(
@@ -203,7 +222,11 @@ class LecternAIClient:
         }
 
     def _build_rolling_card_summary(self, all_card_fronts: List[str]) -> str:
-        cleaned_fronts = [" ".join(str(front).split()) for front in all_card_fronts if str(front).strip()]
+        cleaned_fronts = [
+            " ".join(str(front).split())
+            for front in all_card_fronts
+            if str(front).strip()
+        ]
         if not cleaned_fronts:
             return ""
 
@@ -228,7 +251,7 @@ class LecternAIClient:
 
     def _prune_history(self, all_card_fronts: List[str] | None = None) -> str:
         """Prune chat history to manage token usage (sliding window).
-        
+
         Returns a rolling coverage summary string to be injected into the next prompt.
         """
         try:
@@ -237,14 +260,17 @@ class LecternAIClient:
                 return ""
 
             summary_text = self._build_rolling_card_summary(all_card_fronts or [])
-            
-            new_history = (
-                history[:_HISTORY_PRUNE_HEAD]
-                + history[-_HISTORY_PRUNE_TAIL:]
-            )
+
+            new_history = history[:_HISTORY_PRUNE_HEAD] + history[-_HISTORY_PRUNE_TAIL:]
             self.restore_history(new_history)
-            logger.debug(f"[AI] Pruned history: {len(history)} -> {len(new_history)} items")
-            return f"\n- GENERATION PROGRESS SO FAR:\n{summary_text}\n" if summary_text else ""
+            logger.debug(
+                f"[AI] Pruned history: {len(history)} -> {len(new_history)} items"
+            )
+            return (
+                f"\n- GENERATION PROGRESS SO FAR:\n{summary_text}\n"
+                if summary_text
+                else ""
+            )
         except Exception as e:
             logger.debug(f"[AI] History pruning failed: {e}")
             return ""
@@ -268,11 +294,15 @@ class LecternAIClient:
         """Extract Retry-After value from exception if available."""
         err_text = str(exc)
         # Try to find retry_after in the error message
-        match = re.search(r'retry_after["\'\s:=]+(\d+(?:\.\d+)?)', err_text, re.IGNORECASE)
+        match = re.search(
+            r'retry_after["\'\s:=]+(\d+(?:\.\d+)?)', err_text, re.IGNORECASE
+        )
         if match:
             return float(match.group(1))
         # Try to find "retry in X seconds" pattern
-        match = re.search(r"retry\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*s", err_text, re.IGNORECASE)
+        match = re.search(
+            r"retry\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*s", err_text, re.IGNORECASE
+        )
         if match:
             return float(match.group(1))
         return None
@@ -320,7 +350,9 @@ class LecternAIClient:
                     if retry_after:
                         sleep_seconds = retry_after
                     else:
-                        sleep_seconds = self._calculate_backoff_with_jitter(base_delay_s, attempt)
+                        sleep_seconds = self._calculate_backoff_with_jitter(
+                            base_delay_s, attempt
+                        )
                     logger.warning(
                         "[AI] %s rate limited (attempt %d/%d); waiting %.1fs before retry: %s",
                         operation_name,
@@ -348,6 +380,7 @@ class LecternAIClient:
 
     def upload_pdf(self, pdf_path: str, retries: int = 3) -> Dict[str, str]:
         """Upload a PDF to Gemini Files API and return metadata."""
+
         def _upload() -> Any:
             return self._client.files.upload(file=pdf_path)
 
@@ -368,7 +401,7 @@ class LecternAIClient:
         response = self._send_with_thinking_fallback(parts, call_config)
 
         text = response.text or ""
-        text_snippet = text[:200].replace('\n', ' ')
+        text_snippet = text[:200].replace("\n", " ")
         logger.debug(f"[Chat/ConceptMap] Response snippet: {text_snippet}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
 
@@ -380,21 +413,36 @@ class LecternAIClient:
             return data
         return {"concepts": []}
 
-    def concept_map_from_file(self, file_uri: str, mime_type: str = "application/pdf") -> Dict[str, Any]:
+    def concept_map_from_file(
+        self, file_uri: str, mime_type: str = "application/pdf"
+    ) -> Dict[str, Any]:
         prompt = self._prompt_builder.concept_map()
-        parts = _compose_native_file_content(file_uri=file_uri, prompt=prompt, mime_type=mime_type)
-        logger.debug(f"[Chat/ConceptMap] native parts={len(parts)} prompt_len={len(prompt)}")
+        parts = _compose_native_file_content(
+            file_uri=file_uri, prompt=prompt, mime_type=mime_type
+        )
+        logger.debug(
+            f"[Chat/ConceptMap] native parts={len(parts)} prompt_len={len(prompt)}"
+        )
         return self._concept_map_for_parts(parts)
 
     def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         prompt = self._prompt_builder.concept_map()
-        
+
         parts = _compose_multimodal_content(pdf_content, prompt)
         logger.debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
         return self._concept_map_for_parts(parts)
 
-    def count_tokens_for_pdf(self, *, file_uri: str, prompt: str, mime_type: str = "application/pdf", retries: int = 3) -> int:
-        content = _compose_native_file_content(file_uri=file_uri, prompt=prompt, mime_type=mime_type)
+    def count_tokens_for_pdf(
+        self,
+        *,
+        file_uri: str,
+        prompt: str,
+        mime_type: str = "application/pdf",
+        retries: int = 3,
+    ) -> int:
+        content = _compose_native_file_content(
+            file_uri=file_uri, prompt=prompt, mime_type=mime_type
+        )
 
         def _count() -> int:
             return self.count_tokens(content)
@@ -412,13 +460,13 @@ class LecternAIClient:
         coverage_gap_text: str = "",
     ) -> Dict[str, Any]:
         coverage_summary = self._prune_history(all_card_fronts=all_card_fronts)
-        
+
         # Build context strings
         avoid_text = ""
         if avoid_fronts:
             trimmed = [f"- {front[:100]}" for front in avoid_fronts[:20]]
             avoid_text = "\n- Avoid re-generating:\n" + "\n".join(trimmed) + "\n"
-            
+
         slide_text = ""
         if covered_slides:
             slide_text = f"\n- Already covered slides: {', '.join(str(s) for s in covered_slides[:50])}...\n"
@@ -429,7 +477,7 @@ class LecternAIClient:
                 "\n- Style anchor from the user's deck. Match the granularity and tone, but never copy content verbatim:\n"
                 f"{examples.strip()}\n"
             )
-            
+
         # Use PromptBuilder
         prompt = self._prompt_builder.generation(
             limit=limit,
@@ -439,7 +487,7 @@ class LecternAIClient:
             coverage_summary=f"{coverage_gap_text}{coverage_summary}",
             examples_text=examples_text,
         )
-        
+
         update: dict[str, Any] = {
             "response_schema": _CARD_GENERATION_SCHEMA,
         }
@@ -449,12 +497,14 @@ class LecternAIClient:
         call_config = self._generation_config.model_copy(update=update)
 
         response = self._send_with_thinking_fallback(prompt, call_config)
-        
+
         text = response.text or ""
-        text_snippet = text[:200].replace('\n', ' ')
+        text_snippet = text[:200].replace("\n", " ")
         logger.debug(f"[Chat/Gen] Response snippet: {text_snippet}...")
-        _append_session_log(self._log_path, "generation", [{"text": prompt}], text, True)
-        
+        _append_session_log(
+            self._log_path, "generation", [{"text": prompt}], text, True
+        )
+
         data = self._safe_parse_json(text, CardGenerationResponse)
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
@@ -471,13 +521,13 @@ class LecternAIClient:
         coverage_gaps: str = "",
     ) -> Dict[str, Any]:
         self._prune_history(all_card_fronts=all_card_fronts)
-        
+
         prompt = reflection_prompt or self._prompt_builder.reflection(
             limit=limit,
             cards_to_refine=cards_to_refine_json,
             coverage_gaps=coverage_gaps,
         )
-        
+
         update: dict[str, Any] = {"response_schema": _REFLECTION_SCHEMA}
         thinking = self._thinking_config_for("reflection")
         if thinking is not None:
@@ -485,11 +535,13 @@ class LecternAIClient:
         call_config = self._generation_config.model_copy(update=update)
 
         response = self._send_with_thinking_fallback(prompt, call_config)
-        
+
         text = response.text or ""
-        text_snippet = text[:200].replace('\n', ' ')
+        text_snippet = text[:200].replace("\n", " ")
         logger.debug(f"[Chat/Reflect] Response snippet: {text_snippet}...")
-        _append_session_log(self._log_path, "reflection", [{"text": prompt}], text, True)
+        _append_session_log(
+            self._log_path, "reflection", [{"text": prompt}], text, True
+        )
 
         data = self._safe_parse_json(text, ReflectionResponse)
         if isinstance(data, dict):
@@ -516,27 +568,27 @@ class LecternAIClient:
 
         # Pre-process text to handle common truncation patterns
         clean_text = text.strip()
-        
+
         # Simple heuristic to close truncated JSON:
         # If the last character is not '}' and looks like it was inside an array of objects
         if clean_text and not clean_text.endswith("}"):
             # Try to backtrack to the last complete object or array element
-            # This is a basic approach; more sophisticated parsers exist, 
+            # This is a basic approach; more sophisticated parsers exist,
             # but for our card schema, this often suffices to recover partial batches.
             if clean_text.count("[") > clean_text.count("]"):
                 # We are likely inside a list of cards
                 last_comma = clean_text.rfind("},")
                 if last_comma != -1:
-                    clean_text = clean_text[:last_comma+1] + "]}"
+                    clean_text = clean_text[: last_comma + 1] + "]}"
                 else:
                     last_obj_end = clean_text.rfind("}")
                     if last_obj_end != -1:
-                         clean_text = clean_text[:last_obj_end+1] + "]}"
+                        clean_text = clean_text[: last_obj_end + 1] + "]}"
             elif clean_text.count("{") > clean_text.count("}"):
                 # We are likely inside a single object
-                last_comma = clean_text.rfind("\",")
+                last_comma = clean_text.rfind('",')
                 if last_comma != -1:
-                    clean_text = clean_text[:last_comma] + "\"}"
+                    clean_text = clean_text[:last_comma] + '"}'
                 else:
                     clean_text += "}"
 
@@ -577,7 +629,6 @@ class LecternAIClient:
             logger.warning("[AI] JSON parsing failed: %s", e)
             return None
 
-
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""
         serialized = []
@@ -596,7 +647,7 @@ class LecternAIClient:
             self._chat = self._client.chats.create(
                 model=self._model_name,
                 config=self._generation_config,
-                history=parsed_history
+                history=parsed_history,
             )
             logger.debug(f"[AI] Restored history with {len(history)} turns")
         except Exception as e:
@@ -605,7 +656,9 @@ class LecternAIClient:
     def count_tokens(self, content: List[Any]) -> int:
         """Count tokens for a given content list."""
         try:
-            parsed_content = [types.Content(**c) if isinstance(c, dict) else c for c in content]
+            parsed_content = [
+                types.Content(**c) if isinstance(c, dict) else c for c in content
+            ]
             response = self._client.models.count_tokens(
                 model=self._model_name,
                 contents=parsed_content,

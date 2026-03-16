@@ -2,22 +2,35 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
 
+interface MockProps {
+    children?: React.ReactNode;
+    [key: string]: unknown;
+}
+
+const filterMotionProps = (props: Record<string, unknown>) => {
+    const forbidden = ['initial', 'animate', 'exit', 'variants', 'transition', 'layout', 'layoutId'];
+    return Object.fromEntries(
+        Object.entries(props).filter(([key]) => !forbidden.includes(key))
+    );
+};
+
 vi.mock('framer-motion', () => ({
     motion: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        div: ({ children, ...props }: any) => {
-
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { initial, animate, exit, variants, transition, layout, layoutId, ...validProps } = props;
-            return React.createElement('div', validProps, children);
+        div: ({ children, ...props }: MockProps) => {
+            return React.createElement('div', filterMotionProps(props), children);
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        span: ({ children, ...props }: any) => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { initial, animate, exit, variants, transition, layout, layoutId, ...validProps } = props;
-            return React.createElement('span', validProps, children);
+        span: ({ children, ...props }: MockProps) => {
+            return React.createElement('span', filterMotionProps(props), children);
+        },
+        circle: ({ children, ...props }: MockProps) => {
+            return React.createElement('circle', filterMotionProps(props), children);
+        },
+        path: ({ children, ...props }: MockProps) => {
+            return React.createElement('path', filterMotionProps(props), children);
+        },
+        svg: ({ children, ...props }: MockProps) => {
+            return React.createElement('svg', filterMotionProps(props), children);
         },
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
 }));

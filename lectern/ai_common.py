@@ -8,26 +8,25 @@ from typing import Any, Dict, Iterable, List
 
 from lectern import config
 
+
 def _infer_mime_type(image_bytes: bytes) -> str:
     """Best-effort inference of image MIME type from raw bytes.
 
     Falls back to application/octet-stream when type is unknown.
     """
-    if image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
-    if image_bytes.startswith(b'\xff\xd8\xff'):
+    if image_bytes.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
-    if image_bytes.startswith(b'GIF87a') or image_bytes.startswith(b'GIF89a'):
+    if image_bytes.startswith(b"GIF87a") or image_bytes.startswith(b"GIF89a"):
         return "image/gif"
-    if image_bytes.startswith(b'RIFF') and image_bytes[8:12] == b'WEBP':
+    if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
         return "image/webp"
     return "application/octet-stream"
 
 
+from google.genai import types  # type: ignore
 
-
-
-from google.genai import types # type: ignore
 
 def _compose_multimodal_content(
     pdf_content: Iterable[Dict[str, Any]], prompt: str
@@ -45,16 +44,13 @@ def _compose_multimodal_content(
         for image_bytes in page.get("images", []) or []:
             mime = _infer_mime_type(image_bytes)
             # Use Part.from_bytes for google-genai
-            parts.append(
-                types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type=mime
-                )
-            )
+            parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime))
     return parts
 
 
-def _compose_native_file_content(file_uri: str, prompt: str, mime_type: str = "application/pdf") -> List[Any]:
+def _compose_native_file_content(
+    file_uri: str, prompt: str, mime_type: str = "application/pdf"
+) -> List[Any]:
     """Compose Gemini content parts from an uploaded file URI."""
     return [
         prompt,
@@ -95,7 +91,14 @@ def _build_loggable_parts(parts: List[Any]) -> List[Dict[str, Any]]:
                 snapshot.append({"text": part["text"][:20000]})
             elif "inline_data" in part:
                 inline = part["inline_data"]
-                snapshot.append({"inline_data": {"mime_type": inline.get("mime_type"), "data_len": len(inline.get("data", ""))}})
+                snapshot.append(
+                    {
+                        "inline_data": {
+                            "mime_type": inline.get("mime_type"),
+                            "data_len": len(inline.get("data", "")),
+                        }
+                    }
+                )
     return snapshot
 
 
@@ -104,6 +107,7 @@ def _start_session_log() -> str:
         return ""
     try:
         from lectern.utils.path_utils import get_app_data_dir
+
         logs_dir = get_app_data_dir() / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
@@ -120,7 +124,11 @@ def _start_session_log() -> str:
 
 
 def _append_session_log(
-    log_path: str, stage: str, parts: List[Dict[str, Any]], response_text: str, schema_used: bool
+    log_path: str,
+    stage: str,
+    parts: List[Dict[str, Any]],
+    response_text: str,
+    schema_used: bool,
 ) -> None:
     if not log_path:
         return
@@ -150,7 +158,3 @@ def _append_session_log(
             f.truncate()
     except Exception:
         pass
-
-
-
-

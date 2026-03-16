@@ -18,6 +18,7 @@ FORMATTING_RULES = (
     "- JSON must escape backslashes (e.g., \\\\frac, \\\\alpha).\n"
 )
 
+
 def _make_example_str(examples_data: List[Dict[str, Any]], title: str) -> str:
     """Build example string for prompts. Uses 'fields' as native object."""
     lines = [title]
@@ -26,46 +27,67 @@ def _make_example_str(examples_data: List[Dict[str, Any]], title: str) -> str:
         lines.append(f"  {ex.get('model_name', 'Card')}: {json_str}")
     return "\n".join(lines) + "\n"
 
+
 # Unified Card Examples (Definitions, Comparisons, Applications)
 _CARD_DATA = [
     {
         "model_name": "Basic",
         "fields": [
             {"name": "Front", "value": "State the quadratic formula."},
-            {"name": "Back", "value": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\)."},
+            {
+                "name": "Back",
+                "value": r"Key idea: <b>roots</b>. Formula: \(x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}\).",
+            },
         ],
         "slide_topic": "Quadratic Equations",
     },
     {
         "model_name": "Cloze",
         "fields": [
-            {"name": "Text", "value": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}."},
+            {
+                "name": "Text",
+                "value": r"The derivative of \(x^n\) is {{c1::\(n x^{n-1}\)}}.",
+            },
         ],
         "slide_topic": "Differentiation Rules",
     },
     {
         "model_name": "Basic",
         "fields": [
-            {"name": "Front", "value": "Loss oscillates wildly during training. What is the most likely cause?"},
-            {"name": "Back", "value": "<b>Learning rate is too high</b>. The steps overshoot the minimum."},
+            {
+                "name": "Front",
+                "value": "Loss oscillates wildly during training. What is the most likely cause?",
+            },
+            {
+                "name": "Back",
+                "value": "<b>Learning rate is too high</b>. The steps overshoot the minimum.",
+            },
         ],
         "slide_topic": "Optimization Dynamics",
     },
     {
         "model_name": "Basic",
         "fields": [
-            {"name": "Front", "value": "Compare <b>L1</b> and <b>L2</b> regularization effects."},
-            {"name": "Back", "value": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting)."},
+            {
+                "name": "Front",
+                "value": "Compare <b>L1</b> and <b>L2</b> regularization effects.",
+            },
+            {
+                "name": "Back",
+                "value": "<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting).",
+            },
         ],
         "slide_topic": "Regularization",
-    }
+    },
 ]
 CARD_EXAMPLES = _make_example_str(_CARD_DATA, "Examples:")
+
 
 @dataclass
 class PromptConfig:
     language: str = "en"
     focus_prompt: Optional[str] = None
+
 
 class PromptBuilder:
     def __init__(self, config: PromptConfig):
@@ -75,20 +97,20 @@ class PromptBuilder:
     def system(self) -> str:
         """Build the system instruction."""
         lang_instruction = f"Output language: {self.cfg.language}"
-        
+
         focus_context = ""
         if self.cfg.focus_prompt:
             focus_context = (
-                f"USER FOCUS: \"{self.cfg.focus_prompt}\"\n"
+                f'USER FOCUS: "{self.cfg.focus_prompt}"\n'
                 "Instruction: Prioritize concepts related to this focus. "
                 "Adjust card styles (e.g. more definitions vs. comparisons) to match the user's intent.\n"
             )
-        
+
         context = (
             "Goal: Create a comprehensive spaced repetition deck.\n"
             "Principles: Atomicity, Minimum Information Principle, Variety (Definitions, Comparisons, Applications)."
         )
-        
+
         return (
             f"You are an expert educator creating Anki flashcards.\n"
             f"{lang_instruction}\n"
@@ -103,7 +125,7 @@ class PromptBuilder:
         focus_context = ""
         if self.cfg.focus_prompt:
             focus_context = (
-                f"- Focus: USER REQUESTED \"{self.cfg.focus_prompt}\". "
+                f'- Focus: USER REQUESTED "{self.cfg.focus_prompt}". '
                 "Ensure concepts relevant to this focus are prioritized and detailed.\n"
             )
 
@@ -136,11 +158,11 @@ class PromptBuilder:
         examples_text: str = "",
     ) -> str:
         """Build the card generation prompt."""
-        
+
         focus_instruction = ""
         if self.cfg.focus_prompt:
             focus_instruction = (
-                f"- User Focus: \"{self.cfg.focus_prompt}\". "
+                f'- User Focus: "{self.cfg.focus_prompt}". '
                 "Ensure generated cards align with this goal (e.g. if asking for definitions, prefer Cloze/Basic defs)."
             )
 
@@ -181,11 +203,15 @@ class PromptBuilder:
             "    - If grounding is weak, emit fewer cards rather than inventing unsupported details.\n"
         )
 
-    def reflection(self, limit: int, cards_to_refine: str = "", coverage_gaps: str = "") -> str:
+    def reflection(
+        self, limit: int, cards_to_refine: str = "", coverage_gaps: str = ""
+    ) -> str:
         """Build the reflection prompt."""
         focus_context = ""
         if self.cfg.focus_prompt:
-            focus_context = f"- Check alignment with user focus: \"{self.cfg.focus_prompt}\"\n"
+            focus_context = (
+                f'- Check alignment with user focus: "{self.cfg.focus_prompt}"\n'
+            )
 
         cards_context = ""
         if cards_to_refine:

@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProgressView } from '../views/ProgressView';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from '../store-types';
@@ -11,6 +10,11 @@ import type { SortOption } from '../hooks/types';
 // Mock useTrickleProgress to skip animation
 vi.mock('../hooks/useTrickleProgress', () => ({
     useTrickleProgress: (val: number) => ({ display: val, isStalled: false })
+}));
+
+// Mock useTimeEstimate
+vi.mock('../hooks/useTimeEstimate', () => ({
+    useTimeEstimate: () => ({ formatted: null, confidence: 'low' })
 }));
 
 vi.mock('../components/RichTextEditor', () => ({
@@ -29,61 +33,62 @@ vi.mock('../components/RichTextEditor', () => ({
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-const buildDefaultState = () => ({
-    step: 'generating' as Step,
-    setStep: vi.fn(),
-    currentPhase: 'generating' as Phase,
-    logs: [] as any[],
-    handleCopyLogs: vi.fn(),
-    copied: false,
-    isCancelling: false,
-    handleCancel: vi.fn(),
-    progress: { current: 5, total: 10 },
-    cards: [] as any[],
-    handleReset: vi.fn(),
-    sessionId: null,
-    sortBy: 'creation' as SortOption,
-    setSortBy: vi.fn(),
-    searchQuery: '',
-    setSearchQuery: vi.fn(),
-    isHistorical: false,
-    isError: false,
-    totalPages: 0,
-    coverageData: null,
-
-    // Edit & Sync Props
-    editingIndex: null as number | null,
-    editForm: null as any | null,
-    isSyncing: false,
-    syncSuccess: false,
-    syncProgress: { current: 0, total: 0 },
-    syncLogs: [] as any[],
-    handleDelete: vi.fn(),
-    handleAnkiDelete: vi.fn(),
-    startEdit: vi.fn(),
-    cancelEdit: vi.fn(),
-    saveEdit: vi.fn(),
-    handleFieldChange: vi.fn(),
-    handleSync: vi.fn(),
-    confirmModal: { isOpen: false, type: 'lectern' as const, index: -1 } as any,
-    setConfirmModal: vi.fn(),
-
-    // Batch selection props
-    isMultiSelectMode: false,
-    selectedCards: new Set<string>(),
-    toggleMultiSelectMode: vi.fn(),
-    toggleCardSelection: vi.fn(),
-    selectAllCards: vi.fn(),
-    clearSelection: vi.fn(),
-    batchDeleteSelected: vi.fn(),
-
-    // Concept progress
-    conceptProgress: { current: 0, total: 0 },
+const { defaultState, storeState } = vi.hoisted(() => {
+    const defaultStateObj = {
+        step: 'generating' as Step,
+        currentPhase: 'generating' as Phase,
+        logs: [] as any[],
+        cards: [] as any[],
+        progress: { current: 0, total: 10 },
+        isError: false,
+        isCancelling: false,
+        handleCopyLogs: vi.fn(),
+        handleCancel: vi.fn(),
+        handleReset: vi.fn(),
+        sortBy: 'creation' as SortOption,
+        searchQuery: '',
+        isHistorical: false,
+        editingIndex: null as number | null,
+        editForm: null as any | null,
+        isSyncing: false,
+        syncSuccess: false,
+        syncPartialFailure: null as { failed: number; created: number } | null,
+        syncProgress: { current: 0, total: 0 },
+        syncLogs: [] as any[],
+        confirmModal: { isOpen: false, type: 'lectern' as const, index: -1, noteId: undefined as number | undefined },
+        isMultiSelectMode: false,
+        selectedCards: new Set<string>(),
+        setupStepsCompleted: 0,
+        conceptProgress: { current: 0, total: 0 },
+        handleDelete: vi.fn(),
+        handleAnkiDelete: vi.fn(),
+        startEdit: vi.fn(),
+        cancelEdit: vi.fn(),
+        saveEdit: vi.fn(),
+        handleFieldChange: vi.fn(),
+        handleSync: vi.fn(),
+        setConfirmModal: vi.fn(),
+        toggleMultiSelectMode: vi.fn(),
+        toggleCardSelection: vi.fn(),
+        selectAllCards: vi.fn(),
+        clearSelection: vi.fn(),
+        batchDeleteSelected: vi.fn(),
+        setStep: vi.fn(),
+        setSortBy: vi.fn(),
+        setSearchQuery: vi.fn(),
+        totalPages: 0,
+        coverageData: null,
+        copied: false,
+        sessionId: null as string | null,
+    };
+    
+    return {
+        defaultState: defaultStateObj,
+        storeState: { ...defaultStateObj }
+    };
 });
 
-let storeState: ReturnType<typeof buildDefaultState>;
-
-const mockUseLecternStore = vi.fn((selector) => {
+const mockUseLecternStore = vi.fn((selector: any) => {
     return selector ? selector(storeState) : storeState;
 });
 
@@ -91,71 +96,83 @@ vi.mock('../store', () => ({
     useLecternStore: (selector: any) => mockUseLecternStore(selector),
 }));
 
-vi.mock('framer-motion', () => {
-    const MockComponent = ({ children, ...props }: any) => {
-        const { initial, animate, exit, variants, transition, layoutId, layout, ...validProps } = props;
-        return React.createElement('div', validProps, children);
-    };
-
+// Mock the new view model directly and map our storeState mock to its expected output shape dynamically
+vi.mock('../hooks/useProgressViewModel', () => {
     return {
-        motion: {
-            div: MockComponent,
-            circle: MockComponent,
-            path: MockComponent,
-        },
-        AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
+        useProgressViewModel: () => {
+            // This hook is called per render in the tests.
+            // We need to return an object built from the CURRENT storeState, not the initial one.
+            return {
+                state: {
+                    session: {
+                        step: storeState.step,
+                        currentPhase: storeState.currentPhase,
+                        isCancelling: storeState.isCancelling,
+                        isHistorical: storeState.isHistorical,
+                        sessionId: storeState.sessionId,
+                        totalPages: storeState.totalPages,
+                        coverageData: storeState.coverageData,
+                        isError: storeState.isError,
+                    },
+                    logs: {
+                        logs: storeState.logs,
+                        copied: storeState.copied,
+                    },
+                    progress: {
+                        progress: storeState.progress,
+                        conceptProgress: storeState.conceptProgress,
+                        setupStepsCompleted: storeState.setupStepsCompleted,
+                    },
+                    cards: {
+                        cards: storeState.cards,
+                        editingIndex: storeState.editingIndex,
+                        editForm: storeState.editForm,
+                    },
+                    sync: {
+                        isSyncing: storeState.isSyncing,
+                        syncSuccess: storeState.syncSuccess,
+                        syncPartialFailure: storeState.syncPartialFailure,
+                        syncProgress: storeState.syncProgress,
+                        syncLogs: storeState.syncLogs,
+                    },
+                    ui: {
+                        sortBy: storeState.sortBy,
+                        searchQuery: storeState.searchQuery,
+                        isMultiSelectMode: storeState.isMultiSelectMode,
+                        selectedCards: storeState.selectedCards,
+                        confirmModal: storeState.confirmModal,
+                    }
+                },
+                actions: {
+                    handleCopyLogs: storeState.handleCopyLogs,
+                    handleCancel: storeState.handleCancel,
+                    handleReset: storeState.handleReset,
+                    setSortBy: storeState.setSortBy,
+                    setSearchQuery: storeState.setSearchQuery,
+                    startEdit: storeState.startEdit,
+                    cancelEdit: storeState.cancelEdit,
+                    saveEdit: storeState.saveEdit,
+                    handleFieldChange: storeState.handleFieldChange,
+                    handleSync: storeState.handleSync,
+                    dismissSyncSuccess: vi.fn(),
+                    dismissSyncPartialFailure: vi.fn(),
+                    handleDelete: storeState.handleDelete,
+                    handleAnkiDelete: storeState.handleAnkiDelete,
+                    setConfirmModal: storeState.setConfirmModal,
+                    toggleMultiSelectMode: storeState.toggleMultiSelectMode,
+                    toggleCardSelection: storeState.toggleCardSelection,
+                    selectAllCards: storeState.selectAllCards,
+                    clearSelection: storeState.clearSelection,
+                    batchDeleteSelected: storeState.batchDeleteSelected,
+                }
+            };
+        }
     };
 });
 
-const defaultState = {
-    step: 'generating',
-    currentPhase: 'generating',
-    logs: [],
-    cards: [],
-    progress: { current: 0, total: 10 },
-    isError: false,
-    isCancelling: false,
-    handleCopyLogs: vi.fn(),
-    handleCancel: vi.fn(),
-    handleReset: vi.fn(),
-    sortBy: 'creation',
-    searchQuery: '',
-    isHistorical: false,
-    editingIndex: null,
-    editForm: null,
-    isSyncing: false,
-    syncSuccess: false,
-    syncPartialFailure: null,
-    syncProgress: { current: 0, total: 0 },
-    syncLogs: [],
-    confirmModal: { isOpen: false, type: 'lectern', index: -1 },
-    isMultiSelectMode: false,
-    selectedCards: new Set(),
-    setupStepsCompleted: 0,
-    conceptProgress: { current: 0, total: 0 },
-    handleDelete: vi.fn(),
-    handleAnkiDelete: vi.fn(),
-    startEdit: vi.fn(),
-    cancelEdit: vi.fn(),
-    saveEdit: vi.fn(),
-    handleFieldChange: vi.fn(),
-    handleSync: vi.fn(),
-    setConfirmModal: vi.fn(),
-    toggleMultiSelectMode: vi.fn(),
-    toggleCardSelection: vi.fn(),
-    selectAllCards: vi.fn(),
-    clearSelection: vi.fn(),
-    batchDeleteSelected: vi.fn(),
-};
-
 describe('ProgressView', () => {
-    let storeState: any;
-
     beforeEach(() => {
-        storeState = { ...defaultState };
-        (mockUseLecternStore as unknown as Mock).mockImplementation((selector) => {
-            return selector ? selector(storeState) : storeState;
-        });
+        Object.assign(storeState, defaultState);
     });
 
     // ... tests ...
@@ -177,16 +194,12 @@ describe('ProgressView', () => {
     });
 
     it('calls setSortBy when a pill is clicked', () => {
-        const mockState: any = {
-            ...defaultState,
-            setSortBy: vi.fn(),
-        };
-        storeState = mockState;
+        Object.assign(storeState, { setSortBy: vi.fn() });
 
         render(<ProgressView />);
         const topicPill = screen.getByText('topic');
         topicPill.click();
-        expect(mockState.setSortBy).toHaveBeenCalledWith('topic');
+        expect(storeState.setSortBy).toHaveBeenCalledWith('topic');
     });
 
     it('shows cancel button when generating', () => {
@@ -201,20 +214,20 @@ describe('ProgressView', () => {
         ];
 
         // Test slide sorting
-        storeState = { ...storeState, cards, sortBy: 'slide' };
+        Object.assign(storeState, { cards, sortBy: 'slide' });
         const { rerender } = render(<ProgressView />);
         const slideTexts = screen.getAllByText(/SLIDE \d/i).map(el => el.textContent);
         expect(slideTexts).toEqual(['SLIDE 1', 'SLIDE 2']);
 
         // Test topic sorting
-        storeState = { ...storeState, cards, sortBy: 'topic' };
+        Object.assign(storeState, { cards, sortBy: 'topic' });
         rerender(<ProgressView />);
         let cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'SPAN').map(el => el.textContent);
         // Topic 'A' has model 'Basic', Topic 'Z' has model 'Cloze' -> Order should be Basic, Cloze
         expect(cardTypes).toEqual(['Basic', 'Cloze']);
 
         // Test type sorting
-        storeState = { ...storeState, cards, sortBy: 'type' };
+        Object.assign(storeState, { cards, sortBy: 'type' });
         rerender(<ProgressView />);
         cardTypes = screen.getAllByText(/Basic|Cloze/i).filter(el => el.tagName === 'SPAN').map(el => el.textContent);
         // Basic < Cloze -> Order should be Basic, Cloze
@@ -222,12 +235,11 @@ describe('ProgressView', () => {
     });
 
     it('shows completion state correctly', () => {
-        storeState = {
-            ...storeState,
+        Object.assign(storeState, {
             step: 'done' as const,
             currentPhase: 'complete' as Phase,
             progress: { current: 10, total: 10 },
-        };
+        });
         render(<ProgressView />);
         expect(screen.getByText(/^Insights$/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
@@ -241,14 +253,14 @@ describe('ProgressView', () => {
         ];
 
         // Match "Apple"
-        storeState = { ...storeState, cards, searchQuery: 'Apple' };
+        Object.assign(storeState, { cards, searchQuery: 'Apple' });
         const { rerender } = render(<ProgressView />);
         expect(screen.getByText('Apple')).toBeInTheDocument();
         expect(screen.queryByText('Banana')).not.toBeInTheDocument();
         expect(screen.queryByText('Carrot')).not.toBeInTheDocument();
 
         // Match "fruit" (case insensitive)
-        storeState = { ...storeState, cards, searchQuery: 'fruit' };
+        Object.assign(storeState, { cards, searchQuery: 'fruit' });
         rerender(<ProgressView />);
         expect(screen.getByText('Apple')).toBeInTheDocument(); // Back is Fruit
         expect(screen.getByText('Banana')).toBeInTheDocument(); // Back is Fruit
@@ -263,19 +275,18 @@ describe('ProgressView', () => {
         ];
 
         // Regex /^[CB]at/ -> Cat, Bat
-        storeState = { ...storeState, cards, searchQuery: '/^[CB]at/' };
+        Object.assign(storeState, { cards, searchQuery: '/^[CB]at/' });
         render(<ProgressView />);
         expect(screen.getByText('Cat')).toBeInTheDocument();
         expect(screen.getByText('Bat')).toBeInTheDocument();
         expect(screen.queryByText('Rat')).not.toBeInTheDocument();
     });
     it('shows sync overlay when isSyncing is true', () => {
-        storeState = {
-            ...storeState,
+        Object.assign(storeState, {
             isSyncing: true,
             syncProgress: { current: 1, total: 2 },
             syncLogs: [{ type: 'status' as const, message: 'Uploading...', timestamp: Date.now() }],
-        };
+        });
         render(<ProgressView />);
         expect(screen.getByText(/Syncing to Anki/i)).toBeInTheDocument();
         expect(screen.getByText('50%')).toBeInTheDocument();
@@ -283,17 +294,13 @@ describe('ProgressView', () => {
     });
 
     it('shows success overlay when syncSuccess is true', () => {
-        storeState = {
-            ...storeState,
-            syncSuccess: true,
-        };
+        Object.assign(storeState, { syncSuccess: true });
         render(<ProgressView />);
         expect(screen.getByText(/Sync Complete/i)).toBeInTheDocument();
     });
 
     it('shows error overlay when isError is true', () => {
-        const mockState: any = {
-            ...defaultState,
+        Object.assign(storeState, {
             step: 'generating',
             currentPhase: 'generating',
             logs: [{ type: 'error', message: 'Fatal error', timestamp: Date.now() }],
@@ -301,8 +308,7 @@ describe('ProgressView', () => {
             progress: { current: 0, total: 10 },
             isError: true,
             isCancelling: false,
-        };
-        storeState = mockState;
+        });
 
         render(<ProgressView />);
         expect(screen.getByText(/Generation Failed/i)).toBeInTheDocument();
@@ -318,12 +324,10 @@ describe('ProgressView', () => {
             _uid: '123'
         }];
 
-        const mockState: any = {
-            ...defaultState,
+        Object.assign(storeState, {
             cards,
             step: 'done' // Ensure we are in a state where cards are rendered in list
-        };
-        storeState = mockState;
+        });
 
         render(<ProgressView />);
         expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
@@ -332,31 +336,28 @@ describe('ProgressView', () => {
     });
 
     it('handles card actions: edit, archive, delete', () => {
-        const mockState: any = {
-            ...defaultState,
+        Object.assign(storeState, {
             step: 'done',
             cards: [{ Front: 'A', Back: 'B', _uid: '123' }],
             startEdit: vi.fn(),
             setConfirmModal: vi.fn(),
-        };
-        storeState = mockState;
+        });
 
         render(<ProgressView />);
 
         // Edit
         const editBtn = screen.getByTitle('Edit');
         editBtn.click();
-        expect(mockState.startEdit).toHaveBeenCalledWith(0);
+        expect(storeState.startEdit).toHaveBeenCalledWith(0);
 
         // Remove (Lectern only)
         const removeBtn = screen.getByTitle('Remove');
         removeBtn.click();
-        expect(mockState.setConfirmModal).toHaveBeenCalledWith({ isOpen: true, type: 'lectern', index: 0 });
+        expect(storeState.setConfirmModal).toHaveBeenCalledWith({ isOpen: true, type: 'lectern', index: 0 });
     });
 
     it('renders Edit mode correctly', () => {
-        const mockState: any = {
-            ...defaultState,
+        Object.assign(storeState, {
             step: 'done',
             cards: [{ fields: { Front: 'A', Back: 'B' }, _uid: '123' }],
             editingIndex: 0,
@@ -364,8 +365,7 @@ describe('ProgressView', () => {
             saveEdit: vi.fn(),
             cancelEdit: vi.fn(),
             handleFieldChange: vi.fn()
-        };
-        storeState = mockState;
+        });
 
         render(<ProgressView />);
         expect(screen.getByText(/Editing Card/i)).toBeInTheDocument();
@@ -374,19 +374,17 @@ describe('ProgressView', () => {
         // Save
         const saveBtn = screen.getByText('Save');
         saveBtn.click();
-        expect(mockState.saveEdit).toHaveBeenCalledWith(0); // Using the original index from uidToIndex map
+        expect(storeState.saveEdit).toHaveBeenCalledWith(0); // Using the original index from uidToIndex map
     });
 
     it('handles confirm modal callbacks', () => {
-        const mockState: any = {
-            ...defaultState,
+        Object.assign(storeState, {
             step: 'done',
             cards: [{ Front: 'A', Back: 'B', anki_note_id: 101, _uid: '123' }],
             confirmModal: { isOpen: true, type: 'anki', index: 0, noteId: 101 },
             handleAnkiDelete: vi.fn(),
             setConfirmModal: vi.fn(),
-        };
-        storeState = mockState;
+        });
 
         render(<ProgressView />);
 
@@ -395,10 +393,10 @@ describe('ProgressView', () => {
         // It's rendered.
         const confirmBtn = screen.getByText('Permanently Delete');
         confirmBtn.click();
-        expect(mockState.handleAnkiDelete).toHaveBeenCalledWith(101, 0);
+        expect(storeState.handleAnkiDelete).toHaveBeenCalledWith(101, 0);
 
         const closeBtn = screen.getByText('Cancel');
         closeBtn.click();
-        expect(mockState.setConfirmModal).toHaveBeenCalled();
+        expect(storeState.setConfirmModal).toHaveBeenCalled();
     });
 });

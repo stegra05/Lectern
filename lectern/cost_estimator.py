@@ -192,7 +192,9 @@ def _compute_cost_and_output(
         "image_count": image_count,
         "image_token_cost": 0,
         "image_token_source": "native_embedded",
-        "document_type": detect_content_mode(chars_per_page=text_chars / page_count if page_count > 0 else 0.0),
+        "document_type": detect_content_mode(
+            chars_per_page=text_chars / page_count if page_count > 0 else 0.0
+        ),
     }
 
 
@@ -282,8 +284,12 @@ async def verify_image_token_cost(model_name: str | None = None) -> Dict[str, An
     )
     prompt = "Token counting probe."
 
-    text_only_content = _compose_multimodal_content([{"text": "probe", "images": []}], prompt)
-    image_content = _compose_multimodal_content([{"text": "probe", "images": [tiny_png]}], prompt)
+    text_only_content = _compose_multimodal_content(
+        [{"text": "probe", "images": []}], prompt
+    )
+    image_content = _compose_multimodal_content(
+        [{"text": "probe", "images": [tiny_png]}], prompt
+    )
 
     ai = LecternAIClient(model_name=model_name)
     text_tokens = ai.count_tokens(text_only_content)

@@ -129,7 +129,9 @@ class DatabaseManager:
         )
         return cursor.fetchone() is not None
 
-    def _column_exists(self, conn: sqlite3.Connection, table_name: str, column_name: str) -> bool:
+    def _column_exists(
+        self, conn: sqlite3.Connection, table_name: str, column_name: str
+    ) -> bool:
         if not self._table_exists(conn, table_name):
             return False
         cursor = conn.execute(f"PRAGMA table_info({table_name})")
@@ -375,7 +377,7 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.execute(
                 "UPDATE history SET logs = ?, last_modified = ? WHERE session_id = ?",
-                (json.dumps(logs), datetime.now().isoformat(), session_id)
+                (json.dumps(logs), datetime.now().isoformat(), session_id),
             )
             conn.commit()
             return cursor.rowcount > 0

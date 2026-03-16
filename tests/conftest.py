@@ -16,6 +16,7 @@ import pytest
 
 # --- Anki Connector Fixtures ---
 
+
 @pytest.fixture
 def mock_anki_response() -> MagicMock:
     """Create a mock Anki API response with configurable result/error."""
@@ -25,7 +26,9 @@ def mock_anki_response() -> MagicMock:
 
 
 @pytest.fixture
-def mock_requests_post(mock_anki_response: MagicMock) -> Generator[MagicMock, None, None]:
+def mock_requests_post(
+    mock_anki_response: MagicMock,
+) -> Generator[MagicMock, None, None]:
     """Mock requests.post for AnkiConnect API calls."""
     with patch("requests.post") as mock_post:
         mock_post.return_value = mock_anki_response
@@ -33,7 +36,9 @@ def mock_requests_post(mock_anki_response: MagicMock) -> Generator[MagicMock, No
 
 
 @pytest.fixture
-def mock_anki_connected(mock_requests_post: MagicMock, mock_anki_response: MagicMock) -> MagicMock:
+def mock_anki_connected(
+    mock_requests_post: MagicMock, mock_anki_response: MagicMock
+) -> MagicMock:
     """Configure Anki mock for successful connection."""
     mock_anki_response.json.return_value = {"result": 6, "error": None}
     return mock_requests_post
@@ -47,6 +52,7 @@ def mock_anki_disconnected(mock_requests_post: MagicMock) -> MagicMock:
 
 
 # --- AI Client Fixtures ---
+
 
 @pytest.fixture
 def mock_ai_client() -> Generator[MagicMock, None, None]:
@@ -64,14 +70,13 @@ def mock_ai_response() -> MagicMock:
     response = MagicMock()
     response.text = "Generated flashcard content"
     response.usage_metadata = MagicMock(
-        prompt_token_count=100,
-        candidates_token_count=50,
-        total_token_count=150
+        prompt_token_count=100, candidates_token_count=50, total_token_count=150
     )
     return response
 
 
 # --- State Persistence Fixtures ---
+
 
 @pytest.fixture
 def temp_state_dir() -> Generator[Path, None, None]:
@@ -80,10 +85,8 @@ def temp_state_dir() -> Generator[Path, None, None]:
         yield Path(tmpdir)
 
 
-
-
-
 # --- PDF Fixtures ---
+
 
 @pytest.fixture
 def sample_pdf_bytes() -> bytes:
@@ -130,6 +133,7 @@ def sample_pdf_file(sample_pdf_bytes: bytes) -> Generator[str, None, None]:
 
 # --- Config Fixtures ---
 
+
 @pytest.fixture
 def isolated_config() -> Generator[None, None, None]:
     """Reset ConfigManager singleton before and after each test."""
@@ -154,6 +158,7 @@ def temp_config_dir(temp_state_dir: Path) -> Generator[Path, None, None]:
 
 # --- History Fixtures ---
 
+
 @pytest.fixture
 def mock_history_manager() -> Generator[MagicMock, None, None]:
     """Mock HistoryManager for testing."""
@@ -168,16 +173,17 @@ def mock_history_manager() -> Generator[MagicMock, None, None]:
 
 # --- Service Fixtures ---
 
+
 @pytest.fixture
 def mock_generation_service() -> Generator[MagicMock, None, None]:
     """Mock LecternGenerationService for testing."""
-    with patch("lectern.lectern_service.LecternGenerationService") as mock_service_class:
+    with patch(
+        "lectern.lectern_service.LecternGenerationService"
+    ) as mock_service_class:
         mock_service = MagicMock()
         mock_service.run_generation = AsyncMock()
-        mock_service.estimate_cost = AsyncMock(return_value={
-            "cost": 0.05,
-            "tokens": 1000,
-            "estimated_card_count": 10
-        })
+        mock_service.estimate_cost = AsyncMock(
+            return_value={"cost": 0.05, "tokens": 1000, "estimated_card_count": 10}
+        )
         mock_service_class.return_value = mock_service
         yield mock_service

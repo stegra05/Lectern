@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 # NOTE(Paths): Use Path.resolve() to handle frozen PyInstaller envs correctly.
-_here = Path(__file__).resolve().parent          # gui/backend/
-_project_root = _here.parent.parent              # project root
+_here = Path(__file__).resolve().parent  # gui/backend/
+_project_root = _here.parent.parent  # project root
 sys.path.insert(0, str(_project_root))
 sys.path.insert(0, str(_here))
 
@@ -32,7 +32,14 @@ from cachetools import TTLCache
 from lectern.cost_estimator import recompute_estimate
 from starlette.concurrency import run_in_threadpool
 
-from lectern.anki_connector import check_connection, get_deck_names, notes_info, update_note_fields, delete_notes, get_connection_info
+from lectern.anki_connector import (
+    check_connection,
+    get_deck_names,
+    notes_info,
+    update_note_fields,
+    delete_notes,
+    get_connection_info,
+)
 from lectern import config
 from lectern.config import ConfigManager
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
@@ -57,13 +64,11 @@ log_file = get_app_data_dir() / "logs" / "backend.log"
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(log_file), logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("lectern.backend")
+
 
 # Redirect stdout and stderr to capture crashes in PyInstaller
 class StreamToLogger:
@@ -81,9 +86,9 @@ class StreamToLogger:
     def isatty(self):
         return False
 
+
 sys.stdout = StreamToLogger(logging.getLogger("STDOUT"), logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger("STDERR"), logging.ERROR)
-
 
 
 @asynccontextmanager
@@ -93,7 +98,7 @@ async def lifespan(app: FastAPI):
     session_manager.shutdown()
 
 
-app = FastAPI(title='Lectern API', version='1.11.5', lifespan=lifespan)
+app = FastAPI(title="Lectern API", version="1.11.5", lifespan=lifespan)
 session_manager.sweep_orphan_temp_files()
 
 # NOTE(Estimate): Session-level cache for estimate base data. Key = (content_sha256, model).
@@ -107,6 +112,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Configuration Models
 class ConfigUpdate(BaseModel):
@@ -127,7 +133,7 @@ async def stream_sync_cards(
     tags: List[str],
     entry_id: Optional[str] = None,
     slide_set_name: str = "",  # NOTE(Tags): Pass through for hierarchical tagging
-    allow_updates: bool = False, # Default to False if not specified
+    allow_updates: bool = False,  # Default to False if not specified
     on_complete: Optional[Callable[[List[dict], int, int, int], None]] = None,
 ):
     created = 0
@@ -157,12 +163,18 @@ async def stream_sync_cards(
                 if info and info[0].get("noteId"):
                     update_note_fields(note_id, card["fields"])
                     updated += 1
-                    yield event_json("note_updated", f"Updated note {note_id}", {"id": note_id})
+                    yield event_json(
+                        "note_updated", f"Updated note {note_id}", {"id": note_id}
+                    )
                 else:
                     success, created_id, error = _export_new_note(card)
                     if success and created_id is not None:
                         created += 1
-                        yield event_json("note_recreated", f"Re-created note {created_id}", {"id": created_id})
+                        yield event_json(
+                            "note_recreated",
+                            f"Re-created note {created_id}",
+                            {"id": created_id},
+                        )
                     else:
                         failed += 1
                         yield event_json("warning", f"Failed to create note: {error}")
@@ -170,7 +182,9 @@ async def stream_sync_cards(
                 success, created_id, error = _export_new_note(card)
                 if success and created_id is not None:
                     created += 1
-                    yield event_json("note_created", f"Created note {created_id}", {"id": created_id})
+                    yield event_json(
+                        "note_created", f"Created note {created_id}", {"id": created_id}
+                    )
                 else:
                     failed += 1
                     yield event_json("warning", f"Failed to create note: {error}")
@@ -190,6 +204,7 @@ async def stream_sync_cards(
         {"created": created, "updated": updated, "failed": failed},
     )
 
+
 @app.get("/version")
 async def get_version():
     """Returns local version and checks GitHub for updates."""
@@ -200,47 +215,50 @@ async def get_version():
             requests.get,
             "https://api.github.com/repos/stegra05/Lectern/releases/latest",
             headers={"Accept": "application/vnd.github.v3+json"},
-            timeout=5
+            timeout=5,
         )
         if response.status_code == 200:
             data = response.json()
             latest_version = data.get("tag_name", "v0.0.0").lstrip("v")
-            release_url = data.get("html_url", "https://github.com/stegra05/Lectern/releases")
-            
+            release_url = data.get(
+                "html_url", "https://github.com/stegra05/Lectern/releases"
+            )
+
             # Simple semver compare (split by dots)
             curr_parts = [int(p) for p in __version__.split(".")]
             late_parts = [int(p) for p in latest_version.split(".")]
-            
+
             update_available = late_parts > curr_parts
-            
+
             result: Dict[str, str | bool] = {
                 "current": __version__,
                 "latest": latest_version,
                 "update_available": update_available,
-                "release_url": release_url
+                "release_url": release_url,
             }
 
             return result
     except Exception as e:
         capture_exception(e, "Version check")
-    
+
     # Fallback to current only if check fails
     return {
         "current": __version__,
         "latest": None,
         "update_available": False,
-        "release_url": "https://github.com/stegra05/Lectern/releases"
+        "release_url": "https://github.com/stegra05/Lectern/releases",
     }
+
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint that safely checks system status.
-    
+
     Returns status even if individual checks fail to prevent blocking the UI.
     """
     anki_status = False
     gemini_configured = False
-    
+
     # Safely check Anki connection
     try:
         anki_status = await run_in_threadpool(check_connection)
@@ -254,12 +272,12 @@ async def health_check():
     except Exception as e:
         capture_exception(e, "Gemini config check")
         gemini_configured = False
-        
+
     return {
         "status": "ok",
         "anki_connected": anki_status,
         "gemini_configured": gemini_configured,
-        "backend_ready": True
+        "backend_ready": True,
     }
 
 
@@ -268,10 +286,7 @@ async def anki_status():
     """Detailed AnkiConnect status with diagnostics."""
     try:
         info = await run_in_threadpool(get_connection_info)
-        return {
-            "status": "ok",
-            **info
-        }
+        return {"status": "ok", **info}
     except Exception as e:
         user_msg, _ = capture_exception(e, "Anki status")
         return {
@@ -279,7 +294,7 @@ async def anki_status():
             "connected": False,
             "version": None,
             "version_ok": False,
-            "error": user_msg
+            "error": user_msg,
         }
 
 
@@ -290,23 +305,25 @@ async def get_config():
         "anki_url": config.ANKI_CONNECT_URL,
         "basic_model": config.DEFAULT_BASIC_MODEL,
         "cloze_model": config.DEFAULT_CLOZE_MODEL,
-        "gemini_configured": bool(config.GEMINI_API_KEY)
+        "gemini_configured": bool(config.GEMINI_API_KEY),
     }
+
 
 @app.post("/config")
 async def update_config(cfg: ConfigUpdate):
     updated_fields = []
-    
+
     # Handle API key separately (Keychain storage)
     if cfg.gemini_api_key:
         try:
             from lectern.utils.keychain_manager import set_gemini_key
+
             set_gemini_key(cfg.gemini_api_key)
             updated_fields.append("gemini_api_key")
         except Exception as e:
             user_msg, _ = capture_exception(e, "API key update")
             raise HTTPException(status_code=500, detail=user_msg)
-    
+
     # Handle other settings (JSON storage)
     json_updates = {}
     if cfg.anki_url:
@@ -318,15 +335,20 @@ async def update_config(cfg: ConfigUpdate):
     if cfg.basic_model or cfg.cloze_model:
         try:
             from lectern.anki_connector import get_model_names
+
             anki_models = await run_in_threadpool(get_model_names)
         except Exception as e:
             capture_exception(e, "Model names fetch")
             anki_models = []
         if anki_models:
             if cfg.basic_model and cfg.basic_model not in anki_models:
-                warnings.append(f"Note type '{cfg.basic_model}' not found in Anki — saving anyway.")
+                warnings.append(
+                    f"Note type '{cfg.basic_model}' not found in Anki — saving anyway."
+                )
             if cfg.cloze_model and cfg.cloze_model not in anki_models:
-                warnings.append(f"Note type '{cfg.cloze_model}' not found in Anki — saving anyway.")
+                warnings.append(
+                    f"Note type '{cfg.cloze_model}' not found in Anki — saving anyway."
+                )
 
     if cfg.basic_model:
         json_updates["basic_model"] = cfg.basic_model
@@ -337,7 +359,7 @@ async def update_config(cfg: ConfigUpdate):
     if cfg.gemini_model:
         json_updates["gemini_model"] = cfg.gemini_model
         updated_fields.append("gemini_model")
-    
+
     if json_updates:
         try:
             # Use ConfigManager to persist and get live values
@@ -351,19 +373,22 @@ async def update_config(cfg: ConfigUpdate):
     # Invalidate the note-export model cache so new values are picked up
     if updated_fields:
         from lectern.utils import note_export as _ne
+
         _ne._anki_models_cache = None
         _ne._detected_builtins_cache = None
         result: dict = {"status": "updated", "fields": updated_fields}
         if warnings:
             result["warnings"] = warnings
         return result
-            
+
     return {"status": "no_change"}
+
 
 @app.get("/history")
 async def get_history():
     mgr = HistoryManager()
     return await run_in_threadpool(mgr.get_all)
+
 
 @app.get("/decks")
 async def get_decks():
@@ -374,12 +399,15 @@ async def get_decks():
         logger.warning(f"Deck list fetch failed: {e}")
         return {"decks": []}
 
+
 class DeckCreate(BaseModel):
     name: str
+
 
 @app.post("/decks")
 async def create_deck_endpoint(req: DeckCreate):
     from lectern.anki_connector import create_deck
+
     try:
         success = await run_in_threadpool(create_deck, req.name)
         if not success:
@@ -389,11 +417,13 @@ async def create_deck_endpoint(req: DeckCreate):
         logger.error(f"Deck creation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/history")
 async def clear_history():
     mgr = HistoryManager()
     mgr.clear_all()
     return {"status": "cleared"}
+
 
 @app.delete("/history/{entry_id}")
 async def delete_history_entry(entry_id: str):
@@ -401,7 +431,7 @@ async def delete_history_entry(entry_id: str):
     entry = await run_in_threadpool(mgr.get_entry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
-    
+
     success = await run_in_threadpool(mgr.delete_entry, entry_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete history entry")
@@ -412,8 +442,10 @@ class BatchDeleteRequest(BaseModel):
     ids: Optional[List[str]] = None
     status: Optional[str] = None
 
+
 # Lock to ensure thread safety for concurrent history modifications
 _history_lock = threading.Lock()
+
 
 def _batch_delete_impl(req_status: Optional[str], req_ids: Optional[List[str]]) -> int:
     with _history_lock:
@@ -430,6 +462,7 @@ def _batch_delete_impl(req_status: Optional[str], req_ids: Optional[List[str]]) 
         deleted = mgr.delete_entries(entry_ids)
         return deleted
 
+
 @app.post("/history/batch-delete")
 async def batch_delete_history(req: BatchDeleteRequest):
     if not req.status and not req.ids:
@@ -437,6 +470,7 @@ async def batch_delete_history(req: BatchDeleteRequest):
 
     deleted = await run_in_threadpool(_batch_delete_impl, req.status, req.ids)
     return {"status": "deleted", "count": deleted}
+
 
 def _estimate_cache_key(tmp_path: str, model: str) -> tuple:
     """Content-based key for same PDF+model. Reuses cache when same file uploaded again."""
@@ -473,18 +507,20 @@ async def estimate_cost(
         if page_range:
             from lectern.utils.pdf_utils import parse_page_range, extract_pages
             from pypdf import PdfReader
-            
+
             def extract_for_estimate():
                 reader = PdfReader(tmp_path)
                 max_pages = len(reader.pages)
                 pages_to_extract = parse_page_range(page_range, max_pages)
                 if pages_to_extract and len(pages_to_extract) < max_pages:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as ext_tmp:
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=".pdf"
+                    ) as ext_tmp:
                         extract_path = ext_tmp.name
                     extract_pages(tmp_path, extract_path, pages_to_extract)
                     return extract_path
                 return None
-                
+
             extracted_path = await run_in_threadpool(extract_for_estimate)
             if extracted_path:
                 os.remove(tmp_path)
@@ -521,6 +557,7 @@ async def estimate_cost(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+
 @app.post("/generate")
 async def generate_cards(
     pdf_file: UploadFile = File(...),
@@ -533,10 +570,10 @@ async def generate_cards(
     page_range: Optional[str] = Form(""),
 ):
     service = LecternGenerationService()
-    
+
     if focus_prompt:
         logger.info(f"User focus: '{focus_prompt}'")
-    
+
     try:
         tags_list = json.loads(tags)
     except:
@@ -550,17 +587,19 @@ async def generate_cards(
         ) as tmp:
             shutil.copyfileobj(pdf_file.file, tmp)
             return tmp.name
-            
+
     tmp_path = await run_in_threadpool(save_generate_temp)
-    
+
     try:
         uploaded_size = os.fstat(pdf_file.file.fileno()).st_size
     except:
         uploaded_size = -1
-        
+
     temp_size = os.path.getsize(tmp_path)
-    logger.info(f"Uploaded file size: {uploaded_size} bytes. Temp file size: {temp_size} bytes. Path: {tmp_path}")
-        
+    logger.info(
+        f"Uploaded file size: {uploaded_size} bytes. Temp file size: {temp_size} bytes. Path: {tmp_path}"
+    )
+
     session = session_manager.create_session(pdf_path=tmp_path)
 
     history_mgr = HistoryManager()
@@ -568,7 +607,7 @@ async def generate_cards(
         filename=pdf_file.filename,
         deck=deck_name,
         session_id=session.session_id,
-        status="draft"
+        status="draft",
     )
 
     status_handlers = {
@@ -583,22 +622,34 @@ async def generate_cards(
         import json
         import threading
         import queue
+        from lectern.snapshot import SnapshotTracker
+
         session_logs = []
+
         def emit_event(evt_type: str, message: str, data: Any = None):
-            evt = {"type": evt_type, "message": message, "timestamp": int(time.time() * 1000)}
+            evt = {
+                "type": evt_type,
+                "message": message,
+                "timestamp": int(time.time() * 1000),
+            }
             if data is not None:
                 evt["data"] = data
             session_logs.append(evt)
             return json.dumps(evt) + "\n"
 
-        yield emit_event("session_start", "Session started", {"session_id": session.session_id})
-        
+        yield emit_event(
+            "session_start", "Session started", {"session_id": session.session_id}
+        )
+
+        # Control-plane: tracks phase/progress, emits lightweight snapshots
+        tracker = SnapshotTracker(session_id=session.session_id)
+
         q = queue.Queue()
         final_cards = []
         final_slide_set_name = "Generation"
         final_total_pages = None
         final_coverage_data = None
-        
+
         def worker():
             try:
                 for event in service.run(
@@ -611,40 +662,55 @@ async def generate_cards(
                     target_card_count=target_card_count,
                     skip_export=True,
                     page_range=page_range,
-                    stop_check=lambda: session_manager.get_session(session.session_id).stop_requested if session_manager.get_session(session.session_id) else True
+                    stop_check=lambda: (
+                        session_manager.get_session(session.session_id).stop_requested
+                        if session_manager.get_session(session.session_id)
+                        else True
+                    ),
                 ):
                     q.put(event)
             except Exception as e:
                 q.put(e)
             finally:
                 q.put(None)
-                
+
         t = threading.Thread(target=worker, daemon=True)
         t.start()
-        
+
         while True:
             import asyncio
+
             # Non-blocking pull from queue to allow async event loop
             try:
                 event = q.get_nowait()
             except queue.Empty:
+                # Tick the tracker — may emit a timed control_snapshot
+                timed_snap = tracker.tick()
+                if timed_snap:
+                    yield emit_event("control_snapshot", "", timed_snap.to_dict())
                 await asyncio.sleep(0.1)
                 continue
-                
+
             if event is None:
                 break
-                
+
             if isinstance(event, Exception):
                 session_manager.mark_status(session.session_id, "error")
                 yield emit_event("error", f"Generation failed: {str(event)}")
                 history_mgr.update_session_logs(session.session_id, session_logs)
                 break
-                
+
+            # DATA PLANE: emit the raw event first (real-time feedback)
             yield emit_event(event.type, event.message, event.data)
-            
+
+            # CONTROL PLANE: update tracker state and potentially emit a snapshot
+            snap = tracker.process_event(event.type, event.data or {}, event.message)
+            if snap:
+                yield emit_event("control_snapshot", "", snap.to_dict())
+
             try:
                 event_type = event.type
-                
+
                 if event.data:
                     if "slide_set_name" in event.data:
                         final_slide_set_name = event.data["slide_set_name"]
@@ -654,17 +720,23 @@ async def generate_cards(
                         final_coverage_data = event.data["coverage_data"]
                     if "cards" in event.data:
                         final_cards = event.data["cards"]
-                        
+
                 if event_type in status_handlers:
                     status, cleanup = status_handlers[event_type]
                     session_manager.mark_status(session.session_id, status)
                     if cleanup:
                         session_manager.cleanup_temp_file(session.session_id)
-                        
+
                     if event_type in ("done", "cancelled", "error"):
-                        history_mgr.update_session_logs(session.session_id, session_logs)
-                        
-                    if event_type == "done" or event_type == "step_end" or event_type == "cards_replaced":
+                        history_mgr.update_session_logs(
+                            session.session_id, session_logs
+                        )
+
+                    if (
+                        event_type == "done"
+                        or event_type == "step_end"
+                        or event_type == "cards_replaced"
+                    ):
                         history_mgr.sync_session_state(
                             session_id=session.session_id,
                             cards=final_cards,
@@ -681,6 +753,7 @@ async def generate_cards(
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
+
 @app.post("/stop")
 async def stop_generation(session_id: str | None = None):
     session = _get_session_or_404(session_id)
@@ -690,8 +763,10 @@ async def stop_generation(session_id: str | None = None):
 
 # Session API (View/Edit Past Sessions)
 
+
 class SessionCardsUpdate(BaseModel):
     cards: List[dict]
+
 
 @app.get("/session/{session_id}")
 async def get_session(session_id: str):
@@ -701,8 +776,10 @@ async def get_session(session_id: str):
         return {"cards": [], "session_id": session_id, "not_found": True}
     return entry
 
+
 class AnkiDeleteRequest(BaseModel):
     note_ids: List[int]
+
 
 @app.delete("/anki/notes")
 async def delete_anki_notes(req: AnkiDeleteRequest):
@@ -713,14 +790,17 @@ async def delete_anki_notes(req: AnkiDeleteRequest):
         logger.error(f"Failed to delete Anki notes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 class AnkiUpdateRequest(BaseModel):
     fields: Dict[str, str]
+
 
 @app.put("/anki/notes/{note_id}")
 async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
     """Update fields on an existing Anki note."""
     try:
         from lectern.anki_connector import update_note_fields
+
         update_note_fields(note_id, req.fields)
         return {"status": "updated", "note_id": note_id}
     except Exception as e:
@@ -734,6 +814,7 @@ class SyncRequest(BaseModel):
     tags: List[str]
     slide_set_name: str
     allow_updates: bool = False
+
 
 @app.post("/sync")
 async def sync_cards(req: SyncRequest):
@@ -750,18 +831,20 @@ async def sync_cards(req: SyncRequest):
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
 
 
-
-
 # Mount static files (Frontend Build)
 # In Dev: ../frontend/dist (relative to backend/main.py)
 # In Frozen: frontend/dist (relative to sys._MEIPASS root)
-if hasattr(sys, '_MEIPASS'):
+if hasattr(sys, "_MEIPASS"):
     frontend_dist = os.path.join(getattr(sys, "_MEIPASS"), "frontend", "dist")
 else:
     frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
 if os.path.exists(frontend_dist):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(frontend_dist, "assets")),
+        name="assets",
+    )
 
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
@@ -780,5 +863,6 @@ if os.path.exists(frontend_dist):
         if first_segment in api_roots or full_path.startswith("assets"):
             raise HTTPException(status_code=404)
         return FileResponse(os.path.join(frontend_dist, "index.html"))
+
 else:
     logger.warning(f"Frontend build not found at {frontend_dist}")

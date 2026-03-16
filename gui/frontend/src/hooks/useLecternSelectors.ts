@@ -114,6 +114,8 @@ export const useLecternActions = () => useLecternStore(useShallow((s) => ({
     saveEdit: s.saveEdit,
     handleFieldChange: s.handleFieldChange,
     handleSync: s.handleSync,
+    dismissSyncSuccess: s.dismissSyncSuccess,
+    dismissSyncPartialFailure: s.dismissSyncPartialFailure,
     setConfirmModal: s.setConfirmModal,
 
     // UI actions

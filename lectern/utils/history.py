@@ -5,6 +5,7 @@ from lectern.utils.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
+
 class HistoryManager:
     def __init__(self):
         self.db = DatabaseManager()
@@ -13,35 +14,41 @@ class HistoryManager:
         """Return all history entries, sorted by most recent activity desc."""
         return self.db.get_all_history()
 
-    def add_entry(self,
-                  filename: str,
-                  deck: str,
-                  session_id: Optional[str] = None,
-                  status: str = "draft") -> str:
+    def add_entry(
+        self,
+        filename: str,
+        deck: str,
+        session_id: Optional[str] = None,
+        status: str = "draft",
+    ) -> str:
         """Create a new history entry and return its ID."""
         return self.db.add_history(filename, deck, session_id, status)
 
-    def update_entry(self,
-                     entry_id: str,
-                     status: Optional[str] = None,
-                     card_count: Optional[int] = None) -> None:
+    def update_entry(
+        self,
+        entry_id: str,
+        status: Optional[str] = None,
+        card_count: Optional[int] = None,
+    ) -> None:
         """Update an existing history entry."""
         self.db.update_history(entry_id, status, card_count)
 
-    def sync_session_state(self, 
-                           session_id: str, 
-                           cards: List[Dict[str, Any]],
-                           status: Optional[str] = None,
-                           deck_name: Optional[str] = None,
-                           slide_set_name: Optional[str] = None,
-                           model_name: Optional[str] = None,
-                           tags: Optional[List[str]] = None,
-                           total_pages: Optional[int] = None,
-                           coverage_data: Optional[Dict[str, Any]] = None) -> bool:
+    def sync_session_state(
+        self,
+        session_id: str,
+        cards: List[Dict[str, Any]],
+        status: Optional[str] = None,
+        deck_name: Optional[str] = None,
+        slide_set_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        total_pages: Optional[int] = None,
+        coverage_data: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """Persist session cards, status, and metadata in one transaction."""
         if not session_id:
             return False
-            
+
         # Update cards and metadata
         success = self.db.update_session_cards(
             session_id=session_id,
@@ -53,18 +60,18 @@ class HistoryManager:
             total_pages=total_pages,
             coverage_data=coverage_data,
         )
-        
+
         # If status or card_count provided, update core record
         if status or cards is not None:
             # Note: We use cards list as source of truth for count if cards provided
             entry = self.db.get_entry_by_session_id(session_id)
             if entry:
                 self.db.update_history(
-                    entry["id"], 
-                    status=status, 
-                    card_count=len(cards) if cards is not None else None
+                    entry["id"],
+                    status=status,
+                    card_count=len(cards) if cards is not None else None,
                 )
-        
+
         return success
 
     def get_entry(self, entry_id: str) -> Optional[Dict[str, Any]]:

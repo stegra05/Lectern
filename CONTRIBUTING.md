@@ -1,32 +1,27 @@
 # Contributing to Lectern
 
-First off, thank you for considering contributing to Lectern. It's people like you that make things easier for students everywhere.
-
 ## The Philosophy
 
-Lectern follows a "Craft over Speed" philosophy. We value:
-- **Readability:** Code is read more often than written.
-- **Aesthetics:** Even command-line tools should be beautiful.
-- **Safety:** We never mess with the user's data (Anki collection) directly; we use APIs.
+Lectern was vibe-coded to a working MVP. The mandate now is structural integrity without over-engineering. Read the **Development Philosophy** section in `GEMINI.md` for the four laws that govern every change to this codebase:
+
+1. **Safety Net Before Surgery** — integration tests before refactoring
+2. **Strict Separation of Concerns** — no God components
+3. **Single Source of Truth** — no duplicated logic
+4. **Boy Scout Rule** — incremental improvement, no big-bang rewrites
 
 ## Development Setup
 
-### Python Environment
+### Python
 
 ```bash
-python -m venv .venv
-# macOS/Linux:
-source .venv/bin/activate
-# Windows:
-.venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Frontend Environment
+### Frontend
 
 ```bash
-cd gui/frontend
-npm install
+cd gui/frontend && npm install
 ```
 
 ### Formatters
@@ -36,52 +31,35 @@ npm install
 
 ## Workflow
 
-1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. Ensure the test suite passes.
+1. Create your branch from `main`.
+2. Write or confirm integration tests for any code you touch.
+3. Ensure the test suite passes before opening a PR.
 4. Make sure your code lints.
-5. Issue that pull request!
 
 ## Code Style
 
 ### Python
 
-- **Type Hints:** Use `typing` module or modern `list[str]` syntax where supported (3.9+).
-- **Docstrings:** Use Google-style docstrings for complex functions.
-- **Imports:** Standard library first, then third-party, then local.
+- **Type Hints:** `typing` module or modern `list[str]` syntax (3.9+).
+- **Docstrings:** Google-style for complex functions.
+- **Imports:** stdlib → third-party → local.
 
 ### TypeScript / React
 
-- **Functional Components:** Use `const Component: React.FC<Props> = (...) => ...`.
-- **Tailwind:** Group utility classes logically (layout -> spacing -> typography -> color).
-- **Naming:** PascalCase for components, camelCase for variables/functions.
+- **Functional Components:** `const Component: React.FC<Props> = (...) => ...`
+- **Tailwind:** Group utilities logically (layout → spacing → typography → color).
+- **Naming:** PascalCase components, camelCase variables/functions.
 
 ## Testing
 
-We use `pytest` for the backend and `vitest` for the frontend.
-
 ```bash
-# Backend tests
+# Backend
 pytest tests/
 
-# Frontend tests
+# Frontend
 cd gui/frontend && npm test
 ```
 
 ## Reporting Bugs
 
-Bugs are tracked as GitHub issues.
-- Explain the problem and include additional details to help maintainers reproduce the problem.
-- A clear, minimal reproduction is worth a thousand words.
-
-## License
-
-
-## Future Ideas (Backlog)
-
-### Multi-Document Input
-**Status:** Deferred  
-**Requested by:** User feedback (Feb 2026)  
-**Description:** Allow feeding multiple documents with role annotations (primary source vs. reference material like past exams).  
-**Considerations:** Token budget constraints, UX complexity, quality risk.
-
+Bugs are tracked as GitHub issues. A clear, minimal reproduction is worth a thousand words.

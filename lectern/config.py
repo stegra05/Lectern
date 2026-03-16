@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # --- ConfigManager Singleton ---
 
+
 class ConfigManager:
     """Singleton configuration manager for Lectern.
 
@@ -53,6 +54,7 @@ class ConfigManager:
         "basic_model": "Basic",
         "cloze_model": "Cloze",
         "tag_template": "{{deck}}::{{slide_set}}::{{topic}}",
+        "debug": False,
     }
 
     # Environment variable name mappings
@@ -63,6 +65,7 @@ class ConfigManager:
         "basic_model": "BASIC_MODEL_NAME",
         "cloze_model": "CLOZE_MODEL_NAME",
         "tag_template": "TAG_TEMPLATE",
+        "debug": "DEBUG",
     }
 
     def __init__(self) -> None:
@@ -155,6 +158,7 @@ class ConfigManager:
 
 # --- Helper Functions ---
 
+
 def _load_environment_files() -> None:
     """Load environment variables from project .env and fallback to home .env."""
     if load_dotenv is None:
@@ -214,20 +218,34 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
 MIN_CARDS_PER_SLIDE: float = float(os.getenv("MIN_CARDS_PER_SLIDE", "0.8"))
 CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2"))
 CHARS_PER_CARD_TARGET: int = int(os.getenv("CHARS_PER_CARD_TARGET", "200"))
-DENSE_THRESHOLD_CHARS_PER_PAGE: int = int(os.getenv("DENSE_THRESHOLD_CHARS_PER_PAGE", "1500"))
-NORMAL_THRESHOLD_CHARS_PER_PAGE: int = int(os.getenv("NORMAL_THRESHOLD_CHARS_PER_PAGE", "400"))
+DENSE_THRESHOLD_CHARS_PER_PAGE: int = int(
+    os.getenv("DENSE_THRESHOLD_CHARS_PER_PAGE", "1500")
+)
+NORMAL_THRESHOLD_CHARS_PER_PAGE: int = int(
+    os.getenv("NORMAL_THRESHOLD_CHARS_PER_PAGE", "400")
+)
 SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
-SCRIPT_SUGGESTED_CARDS_PER_1K: float = float(os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "3.0"))
+SCRIPT_SUGGESTED_CARDS_PER_1K: float = float(
+    os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "3.0")
+)
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 MIN_NOTES_PER_BATCH: int = int(os.getenv("MIN_NOTES_PER_BATCH", "20"))
 MAX_NOTES_PER_BATCH: int = int(os.getenv("MAX_NOTES_PER_BATCH", "50"))
 SCRIPT_BASE_CHARS: int = int(os.getenv("SCRIPT_BASE_CHARS", "1000"))
 GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "1.0"))
-USE_NATIVE_PDF: bool = os.getenv("USE_NATIVE_PDF", "true").lower() in ("1", "true", "yes")
+USE_NATIVE_PDF: bool = os.getenv("USE_NATIVE_PDF", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Reflection loop settings (env-only)
-REFLECTION_RECENT_CARD_WINDOW: int = int(os.getenv("REFLECTION_RECENT_CARD_WINDOW", "100"))
-REFLECTION_HARD_CAP_MULTIPLIER: float = float(os.getenv("REFLECTION_HARD_CAP_MULTIPLIER", "1.2"))
+REFLECTION_RECENT_CARD_WINDOW: int = int(
+    os.getenv("REFLECTION_RECENT_CARD_WINDOW", "100")
+)
+REFLECTION_HARD_CAP_MULTIPLIER: float = float(
+    os.getenv("REFLECTION_HARD_CAP_MULTIPLIER", "1.2")
+)
 REFLECTION_HARD_CAP_PADDING: int = int(os.getenv("REFLECTION_HARD_CAP_PADDING", "5"))
 
 # Session logging controls
@@ -255,7 +273,9 @@ ESTIMATION_BASE_OUTPUT_RATIO: float = 0.20
 ESTIMATION_TOKENS_PER_CARD: int = 100
 ESTIMATION_PROMPT_OVERHEAD: int = 3000
 GEMINI_IMAGE_TOKEN_COST: int = 258
-ESTIMATION_VERIFY_IMAGE_TOKEN_COST: bool = os.getenv("ESTIMATION_VERIFY_IMAGE_TOKEN_COST", "false").lower() in (
+ESTIMATION_VERIFY_IMAGE_TOKEN_COST: bool = os.getenv(
+    "ESTIMATION_VERIFY_IMAGE_TOKEN_COST", "false"
+).lower() in (
     "1",
     "true",
     "yes",
@@ -264,6 +284,7 @@ ESTIMATION_VERIFY_IMAGE_TOKEN_COST: bool = os.getenv("ESTIMATION_VERIFY_IMAGE_TO
 
 # --- Dynamic Config via __getattr__ ---
 # This allows config.DEFAULT_GEMINI_MODEL to return live values from ConfigManager.
+
 
 def __getattr__(name: str) -> Any:
     """Dynamic attribute access for hot-reloadable config values."""
@@ -275,6 +296,7 @@ def __getattr__(name: str) -> Any:
         "DEFAULT_BASIC_MODEL": "basic_model",
         "DEFAULT_CLOZE_MODEL": "cloze_model",
         "TAG_TEMPLATE": "tag_template",
+        "DEBUG": "debug",
     }
 
     if name in key_mapping:
