@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-03-17
+
+### Added
+- **Session Orchestration**: Introduced `SessionOrchestrator` to decouple generation logic from the service layer, enabling better session management and tracking.
+- **State Synchronization**: Implemented a robust "Control Plane/Data Plane" sync protocol over SSE using `SnapshotTracker` to ensure client-server state consistency and eliminate "split-brain" issues.
+- **Real-time Streaming**: Enhanced SSE event stream with granular phase-based progress tracking and delta updates for improved UI responsiveness.
+
+### Changed
+- Refactored `LecternService` to use `SessionOrchestrator` for all generation tasks.
+- Improved frontend state management using Zustand slices for better modularity and performance.
+
+### Removed
+- Legacy synchronous generation loops in `LecternService`.
+- Obsolete `pdf_utils.py` and redundant SSE events.
+
 ## [1.11.5] - 2026-03-16
 
 ### Added
