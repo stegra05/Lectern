@@ -33,6 +33,7 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
     const [showBudget, setShowBudget] = useState(false);
     const [versionInfo, setVersionInfo] = useState<{ current: string; latest: string | null; update_available: boolean; release_url: string } | null>(null);
     const [checkLoading, setCheckLoading] = useState(false);
+    const [ankiStatus, setAnkiStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
     const modalRef = useRef<HTMLDivElement>(null);
     const previousActiveElement = useRef<HTMLElement | null>(null);
@@ -150,12 +151,36 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
         }
     };
 
+    const checkAnkiConnection = async (url: string) => {
+        setAnkiStatus('checking');
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'version', version: 6 }),
+                signal: AbortSignal.timeout(3000),
+            });
+            setAnkiStatus(res.ok ? 'connected' : 'disconnected');
+        } catch {
+            setAnkiStatus('disconnected');
+        }
+    };
+
     useEffect(() => {
         if (isOpen) {
             loadConfig();
             checkUpdates();
         }
     }, [isOpen]);
+
+    // Check Anki connection when config loads or URL changes
+    useEffect(() => {
+        if (editedConfig?.anki_url && isValidUrl(editedConfig.anki_url)) {
+            checkAnkiConnection(editedConfig.anki_url);
+        } else if (editedConfig?.anki_url) {
+            setAnkiStatus('disconnected');
+        }
+    }, [editedConfig?.anki_url, isOpen]);
 
     return (
         <AnimatePresence>
@@ -252,6 +277,43 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                 <p className="text-[10px] text-text-muted">Leave blank to keep current key.</p>
                                             </div>
 
+                                            {/* Anki Connect — always visible */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-text-muted flex items-center">
+                                                    Anki Connect
+                                                    <Tooltip text="The address where AnkiConnect is listening. Default: http://localhost:8765" />
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={editedConfig.anki_url}
+                                                        onChange={(e) => updateField('anki_url', e.target.value)}
+                                                        placeholder="http://localhost:8765"
+                                                        aria-label="Anki Connect URL"
+                                                        aria-invalid={ankiUrlError ? 'true' : 'false'}
+                                                        aria-describedby={ankiUrlError ? 'anki-url-error' : undefined}
+                                                        className={`w-full bg-background/50 rounded-lg py-2.5 pl-4 pr-28 text-text-main focus:ring-1 focus:ring-primary/50 outline-none font-mono text-sm ${ankiUrlError ? 'border border-red-500' : 'border-0'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        <div className={`w-2 h-2 rounded-full ${
+                                                            ankiStatus === 'checking' ? 'bg-amber-400 animate-pulse' :
+                                                            ankiStatus === 'connected' ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]' :
+                                                            'bg-red-500'
+                                                        }`} />
+                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                                            ankiStatus === 'checking' ? 'text-amber-400' :
+                                                            ankiStatus === 'connected' ? 'text-green-500' :
+                                                            'text-red-400'
+                                                        }`}>
+                                                            {ankiStatus === 'checking' ? 'Checking...' : ankiStatus === 'connected' ? 'Connected' : 'Offline'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                {ankiUrlError && (
+                                                    <p id="anki-url-error" className="text-xs text-red-500 mt-1" role="alert">{ankiUrlError}</p>
+                                                )}
+                                            </div>
+
                                             {/* Advanced Toggle */}
                                             <div className="pt-2">
                                                 <button
@@ -275,26 +337,6 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
                                                         exit={{ height: 0, opacity: 0 }}
                                                         className="space-y-4"
                                                     >
-                                                        <div className="space-y-2 pt-2">
-                                                            <label className="text-sm font-medium text-text-muted flex items-center">
-                                                                Anki Connect URL
-                                                                <Tooltip text="The address where AnkiConnect is listening. Default: http://localhost:8765" />
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                value={editedConfig.anki_url}
-                                                                onChange={(e) => updateField('anki_url', e.target.value)}
-                                                                placeholder="http://localhost:8765"
-                                                                aria-label="Anki Connect URL"
-                                                                aria-invalid={ankiUrlError ? 'true' : 'false'}
-                                                                aria-describedby={ankiUrlError ? 'anki-url-error' : undefined}
-                                                                className={`w-full bg-background/50 rounded-lg py-2.5 px-4 text-text-main focus:ring-1 focus:ring-primary/50 outline-none font-mono text-sm ${ankiUrlError ? 'border border-red-500' : 'border-0'}`}
-                                                            />
-                                                            {ankiUrlError && (
-                                                                <p id="anki-url-error" className="text-xs text-red-500 mt-1" role="alert">{ankiUrlError}</p>
-                                                            )}
-                                                        </div>
-
                                                         <div className="space-y-2">
                                                             <label className="text-sm font-medium text-text-muted flex items-center">
                                                                 Tag Template

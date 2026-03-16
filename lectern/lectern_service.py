@@ -33,6 +33,9 @@ from lectern.generation_loop import (
 from lectern.utils.tags import infer_slide_set_name
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.error_handling import capture_exception
+from lectern.utils.pdf_utils import extract_pages, parse_page_range
+from pypdf import PdfReader
+import tempfile
 
 from lectern.utils.history import HistoryManager
 
@@ -80,6 +83,7 @@ class GenerationConfig:
     target_card_count: Optional[int] = None
     session_id: Optional[str] = None
     entry_id: Optional[str] = None
+    page_range: Optional[str] = None
 
 class LecternGenerationService:
     """
@@ -101,6 +105,7 @@ class LecternGenerationService:
         target_card_count: Optional[int] = None,
         session_id: Optional[str] = None,
         entry_id: Optional[str] = None,
+        page_range: Optional[str] = None,
     ) -> Generator[ServiceEvent, None, None]:
         
         cfg = GenerationConfig(
@@ -115,6 +120,7 @@ class LecternGenerationService:
             target_card_count=target_card_count,
             session_id=session_id,
             entry_id=entry_id,
+            page_range=page_range,
         )
 
         start_time = time.perf_counter()
@@ -216,12 +222,40 @@ class LecternGenerationService:
                 "ai_log_path": getattr(ai, "log_path", ""),
             })
 
-            # 4b. Native PDF upload
+            # 4b. Native PDF extraction & upload
+            upload_path = cfg.pdf_path
+            tmp_extracted_path = None
+            if cfg.page_range:
+                try:
+                    yield ServiceEvent("step_start", "Extract specified pages")
+                    extract_started_at = time.perf_counter()
+                    reader = PdfReader(cfg.pdf_path)
+                    max_pages = len(reader.pages)
+                    extracted_pages = parse_page_range(cfg.page_range, max_pages)
+
+                    if extracted_pages and len(extracted_pages) < max_pages:
+                        tmp_fd, tmp_extracted_path = tempfile.mkstemp(suffix=".pdf")
+                        os.close(tmp_fd)
+                        extract_pages(cfg.pdf_path, tmp_extracted_path, extracted_pages)
+                        upload_path = tmp_extracted_path
+                        yield ServiceEvent("step_end", f"Extracted {len(extracted_pages)} pages", {
+                            "success": True,
+                            "duration_ms": self._elapsed_ms(extract_started_at),
+                        })
+                    else:
+                        yield ServiceEvent("step_end", "Skipped extraction (all pages selected)", {
+                            "success": True,
+                            "duration_ms": self._elapsed_ms(extract_started_at),
+                        })
+                except Exception as e:
+                    user_msg, _ = capture_exception(e, "PDF extraction")
+                    yield ServiceEvent("warning", f"Page extraction failed: {user_msg}. Using full document instead.")
+
             uploaded_pdf: Dict[str, str] = {}
             yield ServiceEvent("step_start", "Upload PDF to Gemini")
             upload_started_at = time.perf_counter()
             try:
-                uploaded_pdf = ai.upload_pdf(cfg.pdf_path)
+                uploaded_pdf = ai.upload_pdf(upload_path)
                 yield ServiceEvent("step_end", "PDF Uploaded", {
                     "success": True,
                     "duration_ms": self._elapsed_ms(upload_started_at),
@@ -240,6 +274,13 @@ class LecternGenerationService:
                 })
                 history_mgr.update_entry(history_id, status="error")
                 return
+            finally:
+                if tmp_extracted_path and os.path.exists(tmp_extracted_path):
+                    try:
+                        os.remove(tmp_extracted_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to cleanup temporary extracted PDF: {e}")
+
             
             # 5. Concept Map
             concept_map = {}

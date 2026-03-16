@@ -1,0 +1,77 @@
+
+> frontend@1.11.4 lint
+> eslint .
+
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/components/CardList.tsx
+  121:25  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/components/CardList.tsx:121:25
+  119 |     const [canVirtualize, setCanVirtualize] = useState(!isTestEnvironment);
+  120 |
+> 121 |     const virtualizer = useVirtualizer({
+      |                         ^^^^^^^^^^^^^^ TanStack Virtual's `useVirtualizer()` API returns functions that cannot be memoized safely
+  122 |         count: sortedCards.length,
+  123 |         getScrollElement: () => scrollRef.current,
+  124 |         estimateSize: () => 200,  react-hooks/incompatible-library
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/components/FocusMode.tsx
+  83:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  83:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/components/PhaseIndicator.tsx
+  3:10  error  'clsx' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/components/RichTextEditor.tsx
+  66:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/components/RichTextEditor.tsx:66:13
+  64 |             const sanitized = DOMPurify.sanitize(value);
+  65 |             editor.commands.setContent(sanitized, { emitUpdate: false });
+> 66 |             setInternalValue(sanitized);
+     |             ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  67 |         }
+  68 |     }, [editor, value, internalValue]);
+  69 |  react-hooks/set-state-in-effect
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/components/SourceMaterialCard.tsx
+  2:10  error  'clsx' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/logic/generation.ts
+  124:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  176:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/logic/stream.ts
+  12:6  error  'ProgressState' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/tests/uid.test.ts
+  2:20  error  'stampUids' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/views/ProgressView.tsx
+  384:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/stef/Dev/Product/apps/Lectern/LecternApp/gui/frontend/src/views/ProgressView.tsx:384:9
+  382 |     // Reset filters when step changes
+  383 |     useEffect(() => {
+> 384 |         setActivePage(null);
+      |         ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  385 |     }, [step]);
+  386 |
+  387 |     const lastError = useMemo(() => findLastError(logs, isError), [isError, logs]);  react-hooks/set-state-in-effect
+
+✖ 11 problems (10 errors, 1 warning)
+

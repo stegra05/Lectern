@@ -157,14 +157,17 @@ describe('SettingsModal', () => {
         await waitFor(() => screen.getByText('Show Advanced'));
         const toggle = screen.getByText('Show Advanced');
 
-        expect(screen.queryByDisplayValue('http://localhost:8765')).not.toBeInTheDocument();
+        // Anki URL is always visible now
+        expect(screen.getByDisplayValue('http://localhost:8765')).toBeInTheDocument();
+        // Tag Template is still advanced
+        expect(screen.queryByDisplayValue('{{deck}}::{{slide_set}}::{{topic}}')).not.toBeInTheDocument();
 
         await act(async () => {
             fireEvent.click(toggle);
         });
 
         await waitFor(() => {
-            expect(screen.getByDisplayValue('http://localhost:8765')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('{{deck}}::{{slide_set}}::{{topic}}')).toBeInTheDocument();
         });
     });
 

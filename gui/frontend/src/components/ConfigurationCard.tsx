@@ -21,6 +21,8 @@ export function ConfigurationCard() {
     const setTargetDeckSize = useLecternStore((s) => s.setTargetDeckSize);
     const focusPrompt = useLecternStore((s) => s.focusPrompt);
     const setFocusPrompt = useLecternStore((s) => s.setFocusPrompt);
+    const pageRange = useLecternStore((s) => s.pageRange);
+    const setPageRange = useLecternStore((s) => s.setPageRange);
     const estimation = useLecternStore((s) => s.estimation);
     const isEstimating = useLecternStore((s) => s.isEstimating);
     const estimationError = useLecternStore((s) => s.estimationError);
@@ -136,12 +138,21 @@ export function ConfigurationCard() {
                 </div>
 
                 <div className="pt-6">
+                    <label className="block text-xs font-semibold text-text-muted mb-3 uppercase tracking-wider">Page Range <span className="opacity-50 lowercase tracking-normal font-normal">(Optional)</span></label>
+                    <input
+                        type="text"
+                        value={pageRange}
+                        onChange={(e) => setPageRange(e.target.value)}
+                        placeholder="E.g. 1-5, 8, 11-13"
+                        className="w-full bg-surface/30 border border-border/30 rounded-lg px-4 py-3 text-sm mb-4 outline-none transition-all focus:ring-1 focus:ring-primary/50 focus:bg-surface/50 focus:border-primary/30 placeholder:text-text-muted/70"
+                    />
+                    
                     <label className="block text-xs font-semibold text-text-muted mb-3 uppercase tracking-wider">Focus Guidance <span className="opacity-50 lowercase tracking-normal font-normal">(Optional)</span></label>
                     <textarea
                         value={focusPrompt}
                         onChange={(e) => setFocusPrompt(e.target.value)}
                         placeholder="E.g. 'Focus on clinical formulas' or 'Prioritize case studies'"
-                        className="w-full bg-surface/30 border-0 rounded-lg p-4 text-sm min-h-[100px] outline-none transition-all focus:ring-1 focus:ring-primary/50 focus:bg-surface/50 placeholder:text-text-muted/50 resize-none leading-relaxed"
+                        className="w-full bg-surface/30 border border-border/30 rounded-lg p-4 text-sm min-h-[100px] outline-none transition-all focus:ring-1 focus:ring-primary/50 focus:bg-surface/50 focus:border-primary/30 placeholder:text-text-muted/70 resize-none leading-relaxed"
                     />
                 </div>
             </div>

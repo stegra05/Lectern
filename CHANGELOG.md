@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.5] - 2026-03-16
+
+### Added
+- **Page Range Selection**: Added granular page/content selection to configuration, allowing users to specify exact PDF pages for processing.
+
+### Fixed
+- **UI Audit**: Fixed placeholder contrast in ConfigurationCard for WCAG compliance.
+- **UI Audit**: Added border affordances to ghost input fields in ConfigurationCard.
+- **UI Audit**: Enhanced Focus Mode helper text visibility with keyboard hints (← / E / →).
+- **UI Audit**: Renamed "Triage" to "Edit" in Focus Mode to match the pencil icon.
+- **Test Stability**: Updated SettingsModal tests to reflect new always-visible AnkiConnect inputs.
+
+### Changed
+- **Anki Troubleshooting**: Surfaced AnkiConnect URL and added a live connection status indicator in Settings (no longer hidden under Advanced).
+
 ## [1.11.0] - 2026-03-08
 
 ### Added

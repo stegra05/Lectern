@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { Trash2, Edit2, X, ChevronRight, CornerDownLeft, Sparkles } from 'lucide-react';
+import { Trash2, Edit2, X, ChevronRight, Sparkles } from 'lucide-react';
 import type { Card } from '../api';
 
 interface FocusModeProps {
@@ -231,11 +231,11 @@ export const FocusMode: React.FC<FocusModeProps> = ({
             {/* Floating Operations Dock */}
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-6 z-50 pointer-events-none">
 
-                {/* Drag Insights */}
-                <div className="flex items-center gap-16 text-[10px] font-bold uppercase tracking-[0.3em] text-text-muted/30">
-                    <span className="flex items-center gap-2"><CornerDownLeft className="w-3 h-3" /> Discard</span>
-                    <span>Triage</span>
-                    <span className="flex items-center gap-2">Keep <ChevronRight className="w-3 h-3" /></span>
+                {/* Keyboard Hints */}
+                <div className="flex items-center gap-16 text-[10px] font-bold uppercase tracking-[0.3em] text-text-muted/60">
+                    <span className="flex items-center gap-2"><kbd className="px-1.5 py-0.5 rounded bg-surface/50 border border-border/50 text-[9px] font-mono not-italic normal-case">←</kbd> Discard</span>
+                    <span className="flex items-center gap-2"><kbd className="px-1.5 py-0.5 rounded bg-surface/50 border border-border/50 text-[9px] font-mono not-italic normal-case">E</kbd> Edit</span>
+                    <span className="flex items-center gap-2">Keep <kbd className="px-1.5 py-0.5 rounded bg-surface/50 border border-border/50 text-[9px] font-mono not-italic normal-case">→</kbd></span>
                 </div>
 
                 {/* Dock Container */}

@@ -169,6 +169,7 @@ export const handleGenerate = async (
                 deck_name: state.deckName,
                 focus_prompt: state.focusPrompt,
                 target_card_count: state.targetDeckSize,
+                page_range: state.pageRange,
             },
             (event) => processGenerationEvent(event, set)
         );

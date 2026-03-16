@@ -10,6 +10,7 @@ export const getGenerationState = () => ({
   availableDecks: [] as string[],
   focusPrompt: "",
   targetDeckSize: 1,
+  pageRange: "",
   densityPreferences: { per1k: null as number | null, perSlide: null as number | null },
   logs: [] as import("../api").ProgressEvent[],
   progress: { current: 0, total: 0 },
@@ -76,6 +77,10 @@ export const createGenerationActions = (
         set((state) => ({ densityPreferences: { ...state.densityPreferences, perSlide } }));
       }
     }
+  },
+  setPageRange: (range) => {
+    // Also reset estimation when page range changes
+    set({ pageRange: range, estimation: null, estimationError: null, isEstimating: false });
   },
   setEstimation: (est) => set({ estimation: est, estimationError: null }),
   setEstimationError: (error) => set({ estimationError: error }),
