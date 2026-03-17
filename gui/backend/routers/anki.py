@@ -96,13 +96,40 @@ async def stream_sync_cards(
             return True, result.note_id, None
         return False, None, result.error
 
+    existing_note_ids = set()
+    batch_check_success = False
+    if allow_updates:
+        note_ids_to_check: List[int] = []
+        for c in cards:
+            raw_id = c.get("anki_note_id")
+            if isinstance(raw_id, int):
+                note_ids_to_check.append(raw_id)
+            elif isinstance(raw_id, str) and raw_id.isdigit():
+                note_ids_to_check.append(int(raw_id))
+        if note_ids_to_check:
+            try:
+                infos = await anki_connector.notes_info(note_ids_to_check)
+                existing_note_ids = {int(info.get("noteId")) for info in infos if info and info.get("noteId")}
+                batch_check_success = True
+            except Exception as e:
+                logger.warning(f"Failed to batch fetch notes info: {e}")
+                batch_check_success = False
+
     for idx, card in enumerate(cards, start=1):
         note_id = card.get("anki_note_id")
         try:
             if allow_updates and note_id:
-                info = await anki_connector.notes_info([note_id])
-                if info and info[0].get("noteId"):
-                    await anki_connector.update_note_fields(note_id, card["fields"])
+                note_id_int = int(note_id)
+                note_exists = False
+
+                if batch_check_success:
+                    note_exists = note_id_int in existing_note_ids
+                else:
+                    info = await anki_connector.notes_info([note_id_int])
+                    note_exists = bool(info and info[0].get("noteId"))
+
+                if note_exists:
+                    await anki_connector.update_note_fields(note_id_int, card["fields"])
                     updated += 1
                     yield event_json(
                         "note_updated", f"Updated note {note_id}", {"id": note_id}
