@@ -99,11 +99,13 @@ async def stream_sync_cards(
     existing_note_ids = set()
     batch_check_success = False
     if allow_updates:
-        note_ids_to_check = [
-            int(c["anki_note_id"])
-            for c in cards
-            if c.get("anki_note_id")
-        ]
+        note_ids_to_check: List[int] = []
+        for c in cards:
+            raw_id = c.get("anki_note_id")
+            if isinstance(raw_id, int):
+                note_ids_to_check.append(raw_id)
+            elif isinstance(raw_id, str) and raw_id.isdigit():
+                note_ids_to_check.append(int(raw_id))
         if note_ids_to_check:
             try:
                 infos = await anki_connector.notes_info(note_ids_to_check)
