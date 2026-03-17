@@ -121,6 +121,10 @@ jobs:
           raise SystemExit(f"backend not ready: {last_err}")
           PY
 
+      - name: Verify OpenAPI Client Sync
+        working-directory: gui/frontend
+        run: npm run check-client-sync
+
       - name: Start Frontend (Vite)
         working-directory: gui/frontend
         env:
