@@ -336,7 +336,13 @@ async def update_config(cfg: ConfigUpdate):
         try:
             from lectern.anki_connector import get_model_names
 
-            anki_models = await run_in_threadpool(get_model_names)
+            anki_info = await run_in_threadpool(get_connection_info)
+            if anki_info.get("connected") and anki_info.get(
+                "collection_available", False
+            ):
+                anki_models = await run_in_threadpool(get_model_names)
+            else:
+                anki_models = []
         except Exception as e:
             capture_exception(e, "Model names fetch")
             anki_models = []
@@ -393,6 +399,13 @@ async def get_history():
 @app.get("/decks")
 async def get_decks():
     try:
+        info = await run_in_threadpool(get_connection_info)
+        if not info.get("connected") or not info.get("collection_available", False):
+            logger.info(
+                "Skipping deck list fetch; Anki unavailable (%s).",
+                info.get("error") or "unknown reason",
+            )
+            return {"decks": []}
         decks = await run_in_threadpool(get_deck_names)
         return {"decks": decks}
     except Exception as e:

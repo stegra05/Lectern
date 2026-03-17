@@ -14,6 +14,7 @@ from typing import Any, Dict, Generator, List, Optional
 
 from lectern.anki_connector import sample_examples_from_deck
 from lectern.ai_client import LecternAIClient
+from lectern.cost_estimator import extract_pdf_metadata
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.tags import infer_slide_set_name
 from lectern import config
@@ -168,7 +169,10 @@ class ConceptPhaseHandler:
 
         # Build concept map
         concept_map: Dict[str, Any] = {}
-        estimated_pages = max(1, int(file_size / 80000))
+        metadata = extract_pdf_metadata(pdf_path)
+        actual_pages = metadata["page_count"]
+        actual_text_chars = metadata["text_chars"]
+        estimated_pages = actual_pages
 
         yield {
             "type": "step_start",
@@ -204,11 +208,24 @@ class ConceptPhaseHandler:
                 except Exception as e:
                     logger.debug("Legacy concept map fallback failed: %s", e)
 
-            metadata_pages = int(concept_map.get("page_count") or 0)
-            metadata_chars = int(concept_map.get("estimated_text_chars") or 0)
+            advised_pages = int(concept_map.get("page_count") or 0)
+            advised_chars = int(concept_map.get("estimated_text_chars") or 0)
+            metadata_pages = actual_pages
+            metadata_chars = actual_text_chars
 
-            if metadata_pages <= 0:
-                metadata_pages = estimated_pages
+            page_delta_limit = max(5, int(actual_pages * 0.25))
+            if advised_pages > 0 and abs(advised_pages - actual_pages) <= page_delta_limit:
+                metadata_pages = advised_pages
+
+            if advised_chars > 0:
+                if actual_text_chars <= 0:
+                    metadata_chars = advised_chars
+                else:
+                    min_chars = int(actual_text_chars * 0.25)
+                    max_chars = int(actual_text_chars * 4.0)
+                    if min_chars <= advised_chars <= max_chars:
+                        metadata_chars = advised_chars
+
             if metadata_chars <= 0:
                 metadata_chars = metadata_pages * 800
 
@@ -249,9 +266,9 @@ class ConceptPhaseHandler:
                 "message": "Concept Map Failed",
                 "data": {"success": False},
             }
-            metadata_pages = estimated_pages
+            metadata_pages = actual_pages
             pages = [{} for _ in range(metadata_pages)]
-            total_text_chars = metadata_pages * 800
+            total_text_chars = actual_text_chars or (metadata_pages * 800)
 
         # Extract slide set name from concept map or use fallback
         slide_set_name = concept_map.get("slide_set_name", "") if concept_map else ""

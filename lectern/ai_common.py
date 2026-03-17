@@ -4,6 +4,7 @@ import base64
 import json
 import os
 from datetime import datetime, UTC
+from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from lectern import config
@@ -110,17 +111,34 @@ def _start_session_log() -> str:
 
         logs_dir = get_app_data_dir() / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
+        _cleanup_stale_empty_session_logs(logs_dir)
         ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
-        log_path = str(logs_dir / f"session-{ts}.json")
-        header = {
-            "timestamp_utc": ts,
-            "exchanges": [],
-        }
-        with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(header, f, ensure_ascii=False)
-        return log_path
+        # Delay file creation until first append to avoid persistent empty logs.
+        return str(logs_dir / f"session-{ts}.json")
     except Exception:
         return ""
+
+
+def _cleanup_stale_empty_session_logs(
+    logs_dir: Path, max_age_seconds: int = 24 * 60 * 60
+) -> None:
+    """Best-effort cleanup for stale empty session logs."""
+    now_ts = datetime.now(UTC).timestamp()
+    for path in logs_dir.glob("session-*.json"):
+        try:
+            stat = path.stat()
+            if now_ts - stat.st_mtime < max_age_seconds:
+                continue
+            # Empty exchange files are small; skip larger logs quickly.
+            if stat.st_size > 1024:
+                continue
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            exchanges = payload.get("exchanges", [])
+            if isinstance(exchanges, list) and not exchanges:
+                path.unlink(missing_ok=True)
+        except Exception:
+            continue
 
 
 def _append_session_log(
@@ -140,8 +158,16 @@ def _append_session_log(
     try:
         max_response_chars = getattr(config, "LOG_MAX_RESPONSE_CHARS", 20000)
         truncated_response = response_text[:max_response_chars] if response_text else ""
-        with open(log_path, "r+", encoding="utf-8") as f:
-            payload = json.load(f)
+        with open(log_path, "a+", encoding="utf-8") as f:
+            f.seek(0)
+            existing = f.read().strip()
+            if existing:
+                payload = json.loads(existing)
+            else:
+                payload = {
+                    "timestamp_utc": datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f"),
+                    "exchanges": [],
+                }
             exchanges = payload.get("exchanges", [])
             exchanges.append(
                 {

@@ -90,21 +90,38 @@ def _with_retry(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exception: Optional[AnkiTransportError] = None
             delay = initial_delay
+            retried_attempts = 0
 
             for attempt in range(max_retries + 1):
                 try:
-                    return func(*args, **kwargs)
+                    result = func(*args, **kwargs)
+                    if retried_attempts > 0:
+                        logger.info(
+                            "AnkiConnect recovered after %d retr%s.",
+                            retried_attempts,
+                            "y" if retried_attempts == 1 else "ies",
+                        )
+                    return result
                 except AnkiTransportError as e:
                     # Transport errors are retriable
                     last_exception = e
                     if attempt < max_retries:
-                        logger.warning(
-                            "AnkiConnect connection failed (attempt %d/%d), retrying in %.1fs: %s",
-                            attempt + 1,
-                            max_retries + 1,
-                            delay,
-                            e,
-                        )
+                        retried_attempts += 1
+                        if attempt == 0:
+                            logger.warning(
+                                "AnkiConnect connection failed, retrying up to %d time%s (initial backoff %.1fs): %s",
+                                max_retries,
+                                "" if max_retries == 1 else "s",
+                                delay,
+                                e,
+                            )
+                        else:
+                            logger.debug(
+                                "AnkiConnect retry %d/%d in %.1fs.",
+                                attempt + 1,
+                                max_retries,
+                                delay,
+                            )
                         time.sleep(delay)
                         delay = min(delay * 2, MAX_RETRY_DELAY)
                         continue
@@ -122,8 +139,7 @@ def _with_retry(
     return decorator
 
 
-@_with_retry()
-def _invoke(
+def _invoke_once(
     action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15
 ) -> Any:
     """Invoke an AnkiConnect action with the given parameters.
@@ -157,6 +173,12 @@ def _invoke(
     return data.get("result")
 
 
+@_with_retry()
+def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15) -> Any:
+    """Invoke AnkiConnect action with retry behavior for transport failures."""
+    return _invoke_once(action=action, params=params, timeout=timeout)
+
+
 # Minimum supported AnkiConnect version
 MIN_ANKICONNECT_VERSION = 6
 
@@ -178,27 +200,21 @@ def get_connection_info() -> Dict[str, Any]:
         - connected: bool
         - version: int or None
         - version_ok: bool (True if version >= MIN_ANKICONNECT_VERSION)
+        - collection_available: bool (True if deckNames succeeds)
+        - error_kind: str or None ('transport', 'api', 'unknown')
         - error: str or None
     """
     result: Dict[str, Any] = {
         "connected": False,
         "version": None,
         "version_ok": False,
+        "collection_available": False,
+        "error_kind": None,
         "error": None,
     }
 
     try:
-        # Make a raw request to get version without retry decorator
-        payload = {"action": "version", "version": 6}
-        url = _config.ANKI_CONNECT_URL
-        response = requests.post(url, json=payload, timeout=3)
-        data = response.json()
-
-        if data.get("error") is not None:
-            result["error"] = f"AnkiConnect error: {data['error']}"
-            return result
-
-        version = data.get("result")
+        version = _invoke_once("version", None, timeout=3)
         result["version"] = version
         result["version_ok"] = (
             isinstance(version, int) and version >= MIN_ANKICONNECT_VERSION
@@ -209,13 +225,23 @@ def get_connection_info() -> Dict[str, Any]:
             result["error"] = (
                 f"AnkiConnect version {version} is too old. Minimum required: {MIN_ANKICONNECT_VERSION}"
             )
+            result["error_kind"] = "api"
+            return result
 
-    except requests.RequestException as e:
-        result["error"] = f"Cannot reach AnkiConnect at {url}: {e}"
-    except ValueError as e:
-        result["error"] = f"Invalid response from AnkiConnect: {e}"
+        # Check collection readiness separately; this catches states like
+        # "collection is not available" even when version endpoint works.
+        _invoke_once("deckNames", None, timeout=3)
+        result["collection_available"] = True
+
+    except AnkiTransportError as e:
+        result["error"] = str(e)
+        result["error_kind"] = "transport"
+    except AnkiApiError as e:
+        result["error"] = str(e)
+        result["error_kind"] = "api"
     except Exception as e:
         result["error"] = f"Unexpected error: {e}"
+        result["error_kind"] = "unknown"
 
     return result
 

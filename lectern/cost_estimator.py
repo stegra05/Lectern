@@ -18,7 +18,7 @@ def _estimate_page_count_from_pdf_bytes(pdf_bytes: bytes) -> int:
     return max(1, int(len(pdf_bytes) / 80000))
 
 
-def _extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:
+def extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:
     """Extract text length, page count, and image count via pypdf."""
     try:
         from pypdf import PdfReader
@@ -44,6 +44,10 @@ def _extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:
             "text_chars": page_count * 600,
             "image_count": 0,
         }
+
+
+# Alias for backward compatibility with older mocks/calls
+_extract_pdf_metadata = extract_pdf_metadata
 
 
 def detect_content_mode(*, chars_per_page: float, force_mode: str | None = None) -> str:
@@ -221,7 +225,7 @@ async def estimate_cost_with_base(
     target_card_count: int | None = None,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     """Full estimate + base data for cache. Returns (response, base_data)."""
-    metadata = await asyncio.to_thread(_extract_pdf_metadata, pdf_path)
+    metadata = await asyncio.to_thread(extract_pdf_metadata, pdf_path)
     page_count = metadata["page_count"]
     text_chars = metadata["text_chars"]
     image_count = metadata["image_count"]

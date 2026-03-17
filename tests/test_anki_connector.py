@@ -76,6 +76,41 @@ def test_get_deck_names(mock_requests_post):
     assert len(decks) == 2
 
 
+def test_get_connection_info_collection_available(mock_requests_post):
+    """Connection info includes collection readiness when deckNames works."""
+    mock_version = MagicMock()
+    mock_version.json.return_value = {"result": 6, "error": None}
+    mock_decks = MagicMock()
+    mock_decks.json.return_value = {"result": ["Default"], "error": None}
+    mock_requests_post.side_effect = [mock_version, mock_decks]
+
+    info = anki_connector.get_connection_info()
+
+    assert info["connected"] is True
+    assert info["version_ok"] is True
+    assert info["collection_available"] is True
+    assert info["error_kind"] is None
+
+
+def test_get_connection_info_collection_unavailable_api_error(mock_requests_post):
+    """Connection info classifies API-level collection errors."""
+    mock_version = MagicMock()
+    mock_version.json.return_value = {"result": 6, "error": None}
+    mock_decks = MagicMock()
+    mock_decks.json.return_value = {
+        "result": None,
+        "error": "collection is not available",
+    }
+    mock_requests_post.side_effect = [mock_version, mock_decks]
+
+    info = anki_connector.get_connection_info()
+
+    assert info["connected"] is True
+    assert info["collection_available"] is False
+    assert info["error_kind"] == "api"
+    assert "collection is not available" in (info["error"] or "")
+
+
 def test_sample_examples_from_deck(mock_requests_post):
     # This function makes two calls: findNotes then notesInfo
 

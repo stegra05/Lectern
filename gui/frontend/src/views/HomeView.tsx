@@ -93,6 +93,7 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
     useEffect(() => {
         if (!deckSearchQuery.trim() || matchedDeckNodes.size === 0) return;
 
+        /* eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync controlled expansion with derived search matches */
         setExpandedDeckNodes(prev => {
             let changed = false;
             const next = new Set(prev);

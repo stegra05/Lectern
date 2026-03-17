@@ -5,11 +5,13 @@ from lectern.ai_common import (
     _build_loggable_parts,
     _start_session_log,
     _append_session_log,
+    _cleanup_stale_empty_session_logs,
 )
 from unittest.mock import MagicMock, patch, mock_open
 from lectern import config
 import json
 import os
+from pathlib import Path
 
 
 def test_infer_mime_type():
@@ -82,3 +84,52 @@ def test_session_logging_logic():
             _append_session_log(
                 "some.log", "stage", [], "resp", True
             )  # Should not raise
+
+
+def test_session_log_created_on_first_append(tmp_path):
+    with patch("lectern.config.LOG_SESSION_CONTENT", True), patch(
+        "lectern.utils.path_utils.get_app_data_dir", return_value=tmp_path
+    ):
+        log_path = _start_session_log()
+        path_obj = Path(log_path)
+        assert not path_obj.exists()
+
+        _append_session_log(
+            log_path=log_path,
+            stage="generation",
+            parts=[{"text": "prompt"}],
+            response_text="{}",
+            schema_used=True,
+        )
+
+        assert path_obj.exists()
+        payload = json.loads(path_obj.read_text(encoding="utf-8"))
+        assert isinstance(payload.get("exchanges"), list)
+        assert len(payload["exchanges"]) == 1
+
+
+def test_cleanup_stale_empty_session_logs(tmp_path):
+    stale_empty = tmp_path / "session-stale-empty.json"
+    stale_full = tmp_path / "session-stale-full.json"
+    fresh_empty = tmp_path / "session-fresh-empty.json"
+
+    stale_empty.write_text(
+        json.dumps({"timestamp_utc": "old", "exchanges": []}), encoding="utf-8"
+    )
+    stale_full.write_text(
+        json.dumps({"timestamp_utc": "old", "exchanges": [{"stage": "x"}]}),
+        encoding="utf-8",
+    )
+    fresh_empty.write_text(
+        json.dumps({"timestamp_utc": "new", "exchanges": []}), encoding="utf-8"
+    )
+
+    old_ts = 1
+    os.utime(stale_empty, (old_ts, old_ts))
+    os.utime(stale_full, (old_ts, old_ts))
+
+    _cleanup_stale_empty_session_logs(tmp_path, max_age_seconds=60)
+
+    assert not stale_empty.exists()
+    assert stale_full.exists()
+    assert fresh_empty.exists()

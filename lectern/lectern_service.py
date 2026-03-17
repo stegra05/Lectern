@@ -9,12 +9,13 @@ from dataclasses import dataclass, field, replace as dataclass_replace
 from typing import Any, Dict, Generator, List, Optional, Callable, Literal, Iterable
 
 from lectern import config
-from lectern.anki_connector import check_connection, sample_examples_from_deck
+from lectern.anki_connector import check_connection, get_connection_info, sample_examples_from_deck
 from lectern.ai_client import LecternAIClient
 
 from lectern.cost_estimator import (
     derive_effective_target,
     estimate_card_cap,
+    extract_pdf_metadata,
     estimate_cost as estimate_cost_impl,
     estimate_cost_with_base as estimate_cost_with_base_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
@@ -33,7 +34,6 @@ from lectern.generation_loop import (
 from lectern.utils.tags import infer_slide_set_name
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.error_handling import capture_exception
-from pypdf import PdfReader
 import tempfile
 
 from lectern.utils.history import HistoryManager
@@ -106,6 +106,10 @@ class LecternGenerationService:
         start_time: float,
         history_id: str | None = None,
     ) -> Generator[ServiceEvent, None, None]:
+        # Generate session_id if missing to ensure stable control snapshots
+        if not cfg.session_id:
+            cfg = dataclass_replace(cfg, session_id=uuid.uuid4().hex)
+
         try:
             # Control plane state tracking
             tracker = SnapshotTracker(cfg.session_id)
@@ -149,14 +153,28 @@ class LecternGenerationService:
                 )
                 return
 
-            # Sanity check AnkiConnect
+            # Extract metadata early for stable progress bar and pacing
+            metadata = extract_pdf_metadata(cfg.pdf_path)
+            actual_pages = metadata["page_count"]
+            actual_text_chars = metadata["text_chars"]
+            actual_image_count = metadata["image_count"]
+
+            # Sanity check AnkiConnect / collection before any Anki-dependent work
             if not cfg.skip_export:
-                if not check_connection():
+                anki_info = get_connection_info()
+                anki_ready = bool(
+                    anki_info.get("connected")
+                    and anki_info.get("collection_available", False)
+                )
+                if not anki_ready:
+                    reason = anki_info.get("error") or (
+                        "AnkiConnect collection is not available yet."
+                    )
                     if config.DEBUG:
                         yield from _yield_with_snapshot(
                             ServiceEvent(
                                 "warning",
-                                f"AnkiConnect not found at {config.ANKI_CONNECT_URL}, but DEBUG is ON. Proceeding with skip_export=True.",
+                                f"Anki unavailable ({reason}), but DEBUG is ON. Proceeding with skip_export=True.",
                             )
                         )
                         cfg = dataclass_replace(cfg, skip_export=True)
@@ -164,8 +182,11 @@ class LecternGenerationService:
                         yield from _yield_with_snapshot(
                             ServiceEvent(
                                 "error",
-                                f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}",
-                                {"recoverable": False},
+                                f"Could not use AnkiConnect: {reason}",
+                                {
+                                    "recoverable": False,
+                                    "error_kind": anki_info.get("error_kind"),
+                                },
                             )
                         )
                         history_mgr.update_entry(history_id, status="error")
@@ -186,18 +207,24 @@ class LecternGenerationService:
 
             # 2. Sample style examples
             examples = ""
-            yield from _yield_with_snapshot(
-                ServiceEvent("step_start", "Sample examples from deck")
-            )
+            yield from _yield_with_snapshot(ServiceEvent("step_start", "Sample examples from deck"))
             examples_started_at = time.perf_counter()
             try:
-                deck_for_examples = cfg.context_deck or cfg.deck_name
-                examples = sample_examples_from_deck(
-                    deck_name=deck_for_examples, sample_size=5
-                )
+                if not cfg.skip_export:
+                    deck_for_examples = cfg.context_deck or cfg.deck_name
+                    examples = sample_examples_from_deck(
+                        deck_name=deck_for_examples, sample_size=5
+                    )
                 if examples.strip():
                     yield from _yield_with_snapshot(
                         ServiceEvent("info", "Loaded style examples from Anki")
+                    )
+                elif cfg.skip_export:
+                    yield from _yield_with_snapshot(
+                        ServiceEvent(
+                            "info",
+                            "Skipping style example sampling (Anki unavailable / draft mode).",
+                        )
                     )
                 yield from _yield_with_snapshot(
                     ServiceEvent(
@@ -320,9 +347,6 @@ class LecternGenerationService:
                 )
                 return
 
-            # Estimate page count from file size for initial progress display
-            estimated_pages = max(1, int(file_size / 80000))
-
             yield from _yield_with_snapshot(
                 ServiceEvent(
                     "step_start", "Build global concept map", {"phase": "concept"}
@@ -332,17 +356,17 @@ class LecternGenerationService:
                 ServiceEvent(
                     "progress_start",
                     "Analyzing slides",
-                    {"total": estimated_pages, "phase": "concept"},
+                    {"total": actual_pages, "phase": "concept"},
                 )
             )
             concept_started_at = time.perf_counter()
 
-            # Emit initial progress to show activity
+            # Emit initial progress using actual page count
             yield from _yield_with_snapshot(
                 ServiceEvent(
                     "progress_update",
                     "",
-                    {"current": 0, "total": estimated_pages, "phase": "concept"},
+                    {"current": 0, "total": actual_pages, "phase": "concept"},
                 )
             )
 
@@ -361,16 +385,34 @@ class LecternGenerationService:
                             concept_map = legacy_map
                     except Exception as e:
                         logger.debug("Legacy concept map fallback failed: %s", e)
-                metadata_pages = int(concept_map.get("page_count") or 0)
-                metadata_chars = int(concept_map.get("estimated_text_chars") or 0)
-                if metadata_pages <= 0:
-                    metadata_pages = max(1, int(file_size / 80000))
+                
+                advised_pages = int(concept_map.get("page_count") or 0)
+                advised_chars = int(concept_map.get("estimated_text_chars") or 0)
+                metadata_pages = actual_pages
+                metadata_chars = actual_text_chars
+
+                # Treat model metadata as advisory only when reasonably close to
+                # deterministic PDF-derived metadata.
+                page_delta_limit = max(5, int(actual_pages * 0.25))
+                if advised_pages > 0 and abs(advised_pages - actual_pages) <= page_delta_limit:
+                    metadata_pages = advised_pages
+
+                if advised_chars > 0:
+                    if actual_text_chars <= 0:
+                        metadata_chars = advised_chars
+                    else:
+                        min_chars = int(actual_text_chars * 0.25)
+                        max_chars = int(actual_text_chars * 4.0)
+                        if min_chars <= advised_chars <= max_chars:
+                            metadata_chars = advised_chars
+
                 if metadata_chars <= 0:
                     metadata_chars = metadata_pages * 800
+                
                 pages = [{} for _ in range(metadata_pages)]
                 total_text_chars = metadata_chars
 
-                # Emit final progress to indicate concept phase completion
+                # Emit final progress
                 yield from _yield_with_snapshot(
                     ServiceEvent(
                         "progress_update",
@@ -429,9 +471,9 @@ class LecternGenerationService:
                         },
                     )
                 )
-                metadata_pages = max(1, int(file_size / 80000))
+                metadata_pages = actual_pages
                 pages = [{} for _ in range(metadata_pages)]
-                total_text_chars = metadata_pages * 800
+                total_text_chars = actual_text_chars or (metadata_pages * 800)
 
             # 5b. Extract Slide Set Name from Concept Map (or fallback to heuristic)
             slide_set_name = (
@@ -477,7 +519,7 @@ class LecternGenerationService:
             total_cards_cap, is_script_mode = estimate_card_cap(
                 page_count=len(pages),
                 estimated_text_chars=total_text_chars,
-                image_count=0,
+                image_count=actual_image_count,
                 density_target=None,
                 target_card_count=cfg.target_card_count,
                 script_base_chars=config.SCRIPT_BASE_CHARS,
@@ -680,6 +722,30 @@ class LecternGenerationService:
                         "export", start_time, {"generated_cards": len(all_cards)}
                     )
                 )
+                return
+
+            # Re-check Anki right before export to avoid per-note warning spam if
+            # Anki became unavailable during generation.
+            anki_export_info = get_connection_info()
+            if not (
+                anki_export_info.get("connected")
+                and anki_export_info.get("collection_available", False)
+            ):
+                reason = anki_export_info.get("error") or "AnkiConnect unavailable."
+                yield from _yield_with_snapshot(
+                    ServiceEvent(
+                        "error",
+                        f"Export skipped: {reason}",
+                        {
+                            "recoverable": False,
+                            "terminal": True,
+                            "stage": "export",
+                            "error_kind": anki_export_info.get("error_kind"),
+                            "elapsed_ms": self._elapsed_ms(start_time),
+                        },
+                    )
+                )
+                history_mgr.update_entry(history_id, status="error")
                 return
 
             yield from _yield_with_snapshot(
