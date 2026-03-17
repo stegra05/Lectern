@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-For full project context, see [AGENTS.md](./AGENTS.md).
+@AGENTS.md
 
 ## Claude-Specific Settings
 
