@@ -24,4 +24,21 @@ export default defineConfig([
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },
+  {
+    files: ['src/slices/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '../api',
+              allowTypeImports: true,
+              message: 'Move API side effects to hooks or logic orchestrators.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ])

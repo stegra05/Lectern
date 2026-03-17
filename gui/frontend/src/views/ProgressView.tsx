@@ -18,6 +18,7 @@ import { filterCards, sortCards } from '../utils/cards';
 import { getCardPageReferences } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
 import { useTimeEstimate } from '../hooks/useTimeEstimate';
+import { useReviewOrchestrator } from '../hooks/useReviewOrchestrator';
 import { countCardsByType } from '../logic/progress';
 
 import type { Phase } from '../components/PhaseIndicator';
@@ -29,6 +30,7 @@ import type { Phase } from '../components/PhaseIndicator';
 export function ProgressView() {
     // Use unified view model instead of atomic selectors
     const { state, actions } = useProgressViewModel();
+    const review = useReviewOrchestrator();
     const { session, logs, progress, cards, sync, ui } = state;
     
     const { step, currentPhase, isCancelling, isHistorical, sessionId, totalPages, coverageData } = session;
@@ -242,7 +244,7 @@ export function ProgressView() {
             {/* New Session + Sync CTA */}
             <div className="p-4 border-t border-border space-y-2 mt-auto">
                 <button
-                    onClick={() => actions.handleSync()}
+                    onClick={() => review.handleSync()}
                     disabled={allCards.length === 0}
                     className="w-full bg-primary hover:bg-primary/90 text-background font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
@@ -303,7 +305,7 @@ export function ProgressView() {
                     isGenerating={step === 'generating'}
                     onStartEdit={actions.startEdit}
                     onCancelEdit={actions.cancelEdit}
-                    onSaveEdit={actions.saveEdit}
+                    onSaveEdit={review.saveEdit}
                     onFieldChange={actions.handleFieldChange}
                     onSetConfirmModal={actions.setConfirmModal}
                     onToggleSelection={actions.toggleCardSelection}
@@ -321,7 +323,7 @@ export function ProgressView() {
                     if (confirmModal.type === 'lectern') {
                         actions.handleDelete(confirmModal.index);
                     } else if (confirmModal.type === 'anki' && confirmModal.noteId) {
-                        actions.handleAnkiDelete(confirmModal.noteId, confirmModal.index);
+                        review.handleAnkiDelete(confirmModal.noteId, confirmModal.index);
                     }
                 }}
                 title={confirmModal.type === 'lectern' ? "Remove from Lectern?" : "Permanently Delete from Anki?"}
@@ -371,7 +373,7 @@ export function ProgressView() {
                             }}
                             onSync={() => {
                                 setIsFocusMode(false);
-                                actions.handleSync();
+                                review.handleSync();
                             }}
                         />
                     )}

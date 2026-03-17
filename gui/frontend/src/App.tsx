@@ -11,6 +11,7 @@ import { useAnkiStatusQuery } from './queries';
 import { useLecternStore } from './store';
 import { useHistory } from './hooks/useHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useReviewOrchestrator } from './hooks/useReviewOrchestrator';
 
 import { HomeView } from './views/HomeView';
 import { ProgressView } from './views/ProgressView';
@@ -62,7 +63,7 @@ function App() {
 
   // Keyboard shortcuts - get edit state and actions from store
   const editingIndex = useLecternStore((s) => s.editingIndex);
-  const saveEdit = useLecternStore((s) => s.saveEdit);
+  const { saveEdit } = useReviewOrchestrator();
   const cancelEdit = useLecternStore((s) => s.cancelEdit);
   const handleDelete = useLecternStore((s) => s.handleDelete);
 

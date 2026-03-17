@@ -116,6 +116,7 @@ export const CardList = memo(function CardList({
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canVirtualize, setCanVirtualize] = useState(!isTestEnvironment);
 
+    // eslint-disable-next-line react-hooks/incompatible-library
     const virtualizer = useVirtualizer({
         count: sortedCards.length,
         getScrollElement: () => scrollRef.current,

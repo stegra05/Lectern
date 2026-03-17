@@ -38,30 +38,18 @@ export function useProgressViewModel() {
         confirmModal: s.confirmModal,
     })));
 
-    const progressPct = useMemo(() => {
-        if (stateSlice.step !== 'generating' && stateSlice.step !== 'done') return 0;
-        return calculateProgressPercentage({
-            currentPhase: stateSlice.currentPhase,
-            step: stateSlice.step as 'generating' | 'done',
-            cardsLength: stateSlice.cards.length,
-            progressTotal: stateSlice.progress.total,
-            progressCurrent: stateSlice.progress.current,
-            conceptProgress: stateSlice.conceptProgress,
-            setupStepsCompleted: stateSlice.setupStepsCompleted,
-        });
-    }, [
-        stateSlice.currentPhase,
-        stateSlice.step,
-        stateSlice.cards.length,
-        stateSlice.progress,
-        stateSlice.progress.current,
-        stateSlice.progress.total,
-        stateSlice.conceptProgress,
-        stateSlice.conceptProgress.current,
-        stateSlice.conceptProgress.total,
-        stateSlice.setupStepsCompleted
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    ]);
+    const progressPct =
+        stateSlice.step !== 'generating' && stateSlice.step !== 'done'
+            ? 0
+            : calculateProgressPercentage({
+                  currentPhase: stateSlice.currentPhase,
+                  step: stateSlice.step as 'generating' | 'done',
+                  cardsLength: stateSlice.cards.length,
+                  progressTotal: stateSlice.progress.total,
+                  progressCurrent: stateSlice.progress.current,
+                  conceptProgress: stateSlice.conceptProgress,
+                  setupStepsCompleted: stateSlice.setupStepsCompleted,
+              });
 
     return useMemo(() => ({
         // State

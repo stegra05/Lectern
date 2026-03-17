@@ -108,6 +108,14 @@ vi.mock('../store', () => ({
     useLecternStore: (selector?: (s: typeof storeState) => unknown) => mockUseLecternStore(selector),
 }));
 
+vi.mock('../hooks/useReviewOrchestrator', () => ({
+    useReviewOrchestrator: () => ({
+        saveEdit: storeState.saveEdit,
+        handleSync: storeState.handleSync,
+        handleAnkiDelete: storeState.handleAnkiDelete,
+    }),
+}));
+
 // Mock the new view model directly and map our storeState mock to its expected output shape dynamically
 vi.mock('../hooks/useProgressViewModel', () => {
     return {

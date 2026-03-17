@@ -31,6 +31,22 @@ const getInitialState = (): StoreState => ({
   ...getBudgetState(),
 });
 
+const persistedKeys = [
+  "sortBy",
+  "sessionId",
+  "totalSessionSpend",
+  "deckName",
+  "densityPreferences",
+] as const satisfies readonly (keyof StoreState)[];
+
+type PersistedState = Pick<StoreState, (typeof persistedKeys)[number]>;
+
+const partializePersistedState = (state: LecternStore): PersistedState => {
+  return Object.fromEntries(
+    persistedKeys.map((key) => [key, state[key]])
+  ) as PersistedState;
+};
+
 export const useLecternStore = create<LecternStore>()(
   persist(
     (set, get) => ({
@@ -45,13 +61,7 @@ export const useLecternStore = create<LecternStore>()(
     }),
     {
       name: "lectern-storage",
-      partialize: (state) => ({
-        sortBy: state.sortBy,
-        sessionId: state.sessionId,
-        totalSessionSpend: state.totalSessionSpend,
-        deckName: state.deckName,
-        densityPreferences: state.densityPreferences,
-      }),
+      partialize: partializePersistedState,
     }
   )
 );

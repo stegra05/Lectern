@@ -61,8 +61,8 @@ export const DecksResponseSchema = z.object({
 export type DecksResponse = z.infer<typeof DecksResponseSchema>;
 
 export const CreateDeckResponseSchema = z.object({
-  name: z.string(),
-  success: z.boolean(),
+  status: z.literal('created'),
+  deck: z.string(),
 });
 export type CreateDeckResponse = z.infer<typeof CreateDeckResponseSchema>;
 
@@ -273,6 +273,7 @@ export type GenericSuccess = z.infer<typeof GenericSuccessSchema>;
 
 export const StopResponseSchema = z.object({
   stopped: z.boolean(),
+  session_id: z.string().optional(),
   message: z.string().optional(),
 });
 export type StopResponse = z.infer<typeof StopResponseSchema>;
@@ -310,8 +311,18 @@ export const HistoryBatchDeleteResponseSchema = z.object({
 });
 export type HistoryBatchDeleteResponse = z.infer<typeof HistoryBatchDeleteResponseSchema>;
 
-export const AnkiNoteResponseSchema = z.object({
-  success: z.boolean(),
-  note_id: z.number().optional(),
-}).passthrough();
+const AnkiDeleteResponseSchema = z.object({
+  status: z.literal('deleted'),
+  count: z.number(),
+});
+
+const AnkiUpdateResponseSchema = z.object({
+  status: z.literal('updated'),
+  note_id: z.number(),
+});
+
+export const AnkiNoteResponseSchema = z.union([
+  AnkiDeleteResponseSchema,
+  AnkiUpdateResponseSchema,
+]);
 export type AnkiNoteResponse = z.infer<typeof AnkiNoteResponseSchema>;

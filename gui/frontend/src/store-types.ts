@@ -131,11 +131,12 @@ export type ReviewActions = {
     setSyncLogs: (logs: ProgressEvent[]) => void;
     startEdit: (index: number) => void;
     cancelEdit: () => void;
-    saveEdit: (index: number) => Promise<void>;
+    saveEdit: (index: number) => void;
     handleFieldChange: (field: string, value: string) => void;
     handleDelete: (index: number) => Promise<void>;
-    handleAnkiDelete: (noteId: number, index: number) => Promise<void>;
-    handleSync: () => Promise<void>;
+    handleAnkiDelete: (noteId: number, index: number) => void;
+    startSync: () => void;
+    finishSync: () => void;
     /** Restore a deleted card from the buffer */
     undoDelete: (cardUid: string) => void;
     /** Clear a deleted card from the buffer (called after timeout) */

@@ -1,9 +1,5 @@
-import { api, type ProgressEvent } from "../api";
+import type { ProgressEvent } from "../api";
 import type { StoreState, LecternStore, ReviewActions, BatchActions } from "../store-types";
-import { processStreamEvent } from "../logic/stream";
-import { reconcileCardUids } from "../utils/uid";
-import { normalizeCardsMetadata } from "../utils/cardMetadata";
-import { validateSyncDoneData } from "../schemas/sse";
 
 export const getReviewState = () => ({
   cards: [] as import("../api").Card[],
@@ -20,41 +16,6 @@ export const getReviewState = () => ({
   selectedCards: new Set<string>(),
   lastSelectedUid: null as string | null,
 });
-
-export const processSyncEvent = async (
-  event: ProgressEvent,
-  set: (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void,
-  get: () => LecternStore
-) => {
-  if (processStreamEvent(event, set, { logKey: 'syncLogs', progressKey: 'syncProgress' })) {
-    return;
-  }
-
-  if (event.type === 'done') {
-    const data = validateSyncDoneData(event.data) ?? {};
-    const failed = data.failed || 0;
-    const created = data.created || 0;
-
-    if (data.cards) {
-      const existingCards = get().cards;
-      const normalized = normalizeCardsMetadata(data.cards);
-      set(() => ({
-        cards: reconcileCardUids(existingCards, normalized),
-      }));
-    }
-
-    if (failed > 0) {
-      // Partial failure: show warning, no success animation
-      set(() => ({ syncSuccess: false, syncPartialFailure: { failed, created } }));
-      get().addToast('warning', `Sync completed with ${failed} failure(s). Check logs.`, 8000);
-    } else {
-      // Full success
-      set(() => ({ syncSuccess: true, syncPartialFailure: null }));
-      get().addToast('success', `Synced ${created} cards to Anki!`);
-      setTimeout(() => set(() => ({ syncSuccess: false })), 3000);
-    }
-  }
-};
 
 export const setEditSession = (
   set: (state: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
@@ -88,27 +49,14 @@ export const createReviewActions = (
   cancelEdit: () => {
     setEditSession(set, null);
   },
-  saveEdit: async (index) => {
+  saveEdit: (index) => {
     const { editForm, cards } = get();
     if (!editForm) return;
 
-    try {
-      const newCards = [...cards];
-      newCards[index] = editForm;
-
-      if (editForm.anki_note_id && editForm.fields) {
-        const stringFields: Record<string, string> = {};
-        for (const [k, v] of Object.entries(editForm.fields)) {
-          stringFields[k] = String(v);
-        }
-        await api.updateAnkiNote(editForm.anki_note_id, stringFields);
-      }
-
-      setEditSession(set, null);
-      set({ cards: newCards });
-    } catch (e) {
-      console.error('Failed to update card', e);
-    }
+    const newCards = [...cards];
+    newCards[index] = editForm;
+    setEditSession(set, null);
+    set({ cards: newCards });
   },
   handleFieldChange: (field, value) => {
     const { editForm } = get();
@@ -211,38 +159,22 @@ export const createReviewActions = (
       deletedCards: state.deletedCards.filter((e) => e.card._uid !== cardUid),
     }));
   },
-  handleAnkiDelete: async (noteId, index) => {
+  handleAnkiDelete: (noteId, index) => {
     const { cards } = get();
-    try {
-      await api.deleteAnkiNotes([noteId]);
-      const newCards = [...cards];
-      if (newCards[index] && newCards[index].anki_note_id === noteId) {
-        delete newCards[index].anki_note_id;
-        set({ cards: newCards });
-      }
-      set((state) => ({
-        confirmModal: { ...state.confirmModal, isOpen: false },
-      }));
-      get().addToast('warning', 'Note deleted from Anki');
-    } catch (e) {
-      console.error('Failed to delete Anki note', e);
-      get().addToast('error', 'Failed to delete from Anki');
+    const newCards = [...cards];
+    if (newCards[index] && newCards[index].anki_note_id === noteId) {
+      delete newCards[index].anki_note_id;
     }
+    set((state) => ({
+      cards: newCards,
+      confirmModal: { ...state.confirmModal, isOpen: false },
+    }));
   },
-  handleSync: async () => {
-    const { cards, deckName } = get();
+  startSync: () => {
     set({ isSyncing: true, syncSuccess: false, syncLogs: [] });
-    try {
-      await api.syncCardsToAnki(
-        { cards, deck_name: deckName, tags: [], slide_set_name: deckName, allow_updates: true },
-        (event: ProgressEvent) => processSyncEvent(event, set, get)
-      );
-    } catch (e) {
-      console.error('Sync failed', e);
-      get().addToast('error', 'Sync failed');
-    } finally {
-      set({ isSyncing: false });
-    }
+  },
+  finishSync: () => {
+    set({ isSyncing: false });
   },
   dismissSyncSuccess: () => set({ syncSuccess: false }),
   dismissSyncPartialFailure: () => set({ syncPartialFailure: null }),
