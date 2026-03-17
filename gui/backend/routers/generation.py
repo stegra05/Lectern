@@ -90,7 +90,7 @@ async def estimate_cost(
     tmp_path = await run_in_threadpool(save_to_temp)
 
     try:
-        cache_key = _estimate_cache_key(tmp_path, model)
+        cache_key = await run_in_threadpool(_estimate_cache_key, tmp_path, model)
         base_data = _estimate_base_cache.get(cache_key)
 
         if base_data is not None:
