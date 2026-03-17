@@ -1,21 +1,17 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with Lectern.
+For full project context, see [AGENTS.md](./AGENTS.md).
 
-## The Four Laws of Lectern
-Every change to this codebase must follow these principles:
-1. **Safety Net Before Surgery:** Never refactor without a verification mechanism (write integration tests first).
-2. **Strict Separation of Concerns:** No God components. Isolate UI, state, orchestration, and clients.
-3. **Single Source of Truth:** Do not duplicate prompt logic, schemas, configurations, or event definitions.
-4. **Boy Scout Rule:** Make incremental improvements. Do not halt progress for big-bang rewrites.
+## Claude-Specific Settings
 
-## Documentation Index
-Refer to the centralized `docs/` folder for deep-dive technical context:
-- **`docs/ARCHITECTURE.md`:** System diagrams and data flow.
-- **`docs/DEVELOPMENT.md`:** Setup, build scripts, and test commands (`python gui/launcher.py`, `pytest tests/`, `cd gui/frontend && npm test`).
-- **`docs/DESIGN_SYSTEM.md`:** The "Anti-Slop" UI philosophy and styling rules.
-- **`docs/AI_PIPELINE.md`:** Gemini interaction, generation phases, and pacing.
-- **`docs/FRONTEND.md`:** React, Zustand, and Server-Sent Events.
-- **`docs/BACKEND.md`:** FastAPI, Session Management, and Anki integration.
+- Uses superpowers skills from `~/.claude/plugins/`
+- Plan mode available for complex changes
+- See `.claude/settings.local.json` for allowed commands
 
-*Note: All end-user documentation is hosted externally on the Lectern landing page.*
+## Quick Start
+
+```bash
+python gui/launcher.py              # Run desktop app
+pytest tests/                       # Backend tests
+cd gui/frontend && npm test         # Frontend tests
+```

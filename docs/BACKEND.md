@@ -14,7 +14,7 @@ The backend (`gui/backend/`) is a FastAPI application that serves the React fron
 - `system.py`: Configuration and environment checks.
 
 ### The Service Layer
-The bridge between FastAPI and the AI engine is `lectern_service.py` (located in `lectern/`). This module owns the pipeline, calculates pacing, tracks state, and yields events. The backend's `service.py` acts as a thin wrapper to expose this orchestrator to the API routes.
+The bridge between FastAPI and the AI engine is `lectern_service.py` (located in `lectern/`), which uses `phase_handlers.py` to manage discrete logic for each generation stage. This module owns the pipeline, calculates pacing, tracks state, and yields events. The backend's `service.py` acts as a thin wrapper to expose this orchestrator to the API routes.
 
 ### State & Session Management
 - `utils/state.py`: Manages the serialization of active generation sessions so they can be paused or resumed.

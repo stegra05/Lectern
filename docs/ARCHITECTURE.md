@@ -33,7 +33,7 @@ graph TB
             FastAPI["FastAPI<br/>REST + SSE"]
             Service["Lectern Service<br/>Orchestrator"]
             AIClient["AI Client<br/>Gemini SDK"]
-            PDFParser["PDF Parser<br/>PyMuPDF"]
+            PDFParser["PDF Parser<br/>pypdf"]
             AnkiConn["Anki Connector<br/>REST Client"]
         end
         
@@ -126,13 +126,13 @@ sequenceDiagram
 
 ## Core Components
 
-### PDF Parser (`pdf_parser.py`)
+### PDF Metadata & Extraction (`cost_estimator.py`)
 
-Extracts content from lecture slides for multimodal prompting.
+Extracts content from lecture slides for multimodal prompting and cost estimation.
 
 | Responsibility | Implementation |
 | :--- | :--- |
-| Text extraction | PyMuPDF page-by-page parsing |
+| Text extraction | pypdf page-by-page parsing |
 | Image extraction | Convert to base64 for AI prompts |
 | Page tracking | Preserve slide numbers for citation |
 
