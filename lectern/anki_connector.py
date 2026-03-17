@@ -184,10 +184,15 @@ MIN_ANKICONNECT_VERSION = 6
 
 
 def check_connection() -> bool:
-    """Return True if AnkiConnect is reachable and responding."""
+    """Return True if AnkiConnect is reachable and responding.
+
+    NOTE(HealthProbe): This is used by high-frequency health polling and CI
+    readiness checks. It intentionally performs a single probe (no retry
+    backoff) so `/health` remains responsive when Anki is offline.
+    """
 
     try:
-        _invoke("version", None, timeout=3)
+        _invoke_once("version", None, timeout=1)
         return True
     except Exception:
         return False
