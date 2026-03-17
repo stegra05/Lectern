@@ -31,6 +31,7 @@ describe('HistoryModal', () => {
         onClose: vi.fn(),
         history: mockEntries,
         loadSession: vi.fn(),
+        onResume: vi.fn(),
         deleteHistoryEntry: vi.fn(),
         clearAllHistory: vi.fn(),
         batchDeleteHistory: vi.fn(),

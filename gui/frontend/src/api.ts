@@ -99,6 +99,7 @@ export interface ControlSnapshot {
 export interface ProgressEvent {
     type:
     | "session_start"
+    | "session_resumed"
     | "status"
     | "info"
     | "warning"

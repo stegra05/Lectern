@@ -22,6 +22,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     sessionId: null,
     isError: false,
     isCancelling: false,
+    isResuming: false,
     estimation: null,
     isEstimating: false,
     estimationError: null,
