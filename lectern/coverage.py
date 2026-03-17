@@ -88,15 +88,26 @@ def build_coverage_catalog(
     concepts = concept_map.get("concepts") if isinstance(concept_map, dict) else []
     relations = concept_map.get("relations") if isinstance(concept_map, dict) else []
 
+    concept_ids: List[str] = []
+    high_priority_ids: List[str] = []
     concept_catalog: List[Dict[str, Any]] = []
     for concept in concepts if isinstance(concepts, list) else []:
         if not isinstance(concept, dict):
             continue
+
+        concept_id = str(concept.get("id") or "").strip()
+        importance = str(concept.get("importance") or "medium").strip()
+
+        if concept_id:
+            concept_ids.append(concept_id)
+            if importance == "high":
+                high_priority_ids.append(concept_id)
+
         concept_catalog.append(
             {
-                "id": str(concept.get("id") or "").strip(),
+                "id": concept_id,
                 "name": str(concept.get("name") or "").strip(),
-                "importance": str(concept.get("importance") or "medium"),
+                "importance": importance,
                 "difficulty": str(concept.get("difficulty") or "intermediate"),
                 "page_references": normalize_page_references(
                     concept.get("page_references")
@@ -104,20 +115,26 @@ def build_coverage_catalog(
             }
         )
 
+    relation_keys: List[str] = []
     relation_catalog: List[Dict[str, Any]] = []
     for relation in relations if isinstance(relations, list) else []:
         if not isinstance(relation, dict):
             continue
+
+        relation_key = make_relation_key(
+            relation.get("source"),
+            relation.get("type"),
+            relation.get("target"),
+        )
+        if relation_key:
+            relation_keys.append(relation_key)
+
         relation_catalog.append(
             {
                 "source": str(relation.get("source") or "").strip(),
                 "target": str(relation.get("target") or "").strip(),
                 "type": str(relation.get("type") or "").strip(),
-                "key": make_relation_key(
-                    relation.get("source"),
-                    relation.get("type"),
-                    relation.get("target"),
-                ),
+                "key": relation_key,
                 "page_references": normalize_page_references(
                     relation.get("page_references") or relation.get("page_reference")
                 ),
@@ -131,6 +148,9 @@ def build_coverage_catalog(
         ),
         "concept_catalog": concept_catalog,
         "relation_catalog": relation_catalog,
+        "concept_ids": concept_ids,
+        "high_priority_ids": high_priority_ids,
+        "relation_keys": relation_keys,
     }
 
 
@@ -143,6 +163,9 @@ def compute_coverage_data(
     catalog = build_coverage_catalog(concept_map, total_pages)
     concept_catalog = catalog.get("concept_catalog", [])
     relation_catalog = catalog.get("relation_catalog", [])
+    concept_ids = catalog.get("concept_ids", [])
+    high_priority_ids = catalog.get("high_priority_ids", [])
+    relation_keys = catalog.get("relation_keys", [])
 
     covered_pages: Set[int] = set()
     explicit_concept_ids: Set[str] = set()
@@ -188,21 +211,6 @@ def compute_coverage_data(
 
     covered_concept_ids_set = explicit_concept_ids.union(covered_concepts_by_page)
     covered_concept_ids = sorted(covered_concept_ids_set)
-    concept_ids = [
-        str(concept.get("id") or "").strip()
-        for concept in concept_catalog
-        if concept.get("id")
-    ]
-    high_priority_ids = [
-        str(concept.get("id") or "").strip()
-        for concept in concept_catalog
-        if str(concept.get("importance") or "").strip() == "high" and concept.get("id")
-    ]
-    relation_keys = [
-        str(relation.get("key") or "").strip()
-        for relation in relation_catalog
-        if relation.get("key")
-    ]
     covered_relation_keys_set = explicit_relation_keys.union(covered_relations_by_page)
 
     uncovered_pages = [
