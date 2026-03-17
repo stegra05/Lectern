@@ -361,11 +361,8 @@ export interface components {
              * @default
              */
             focus_prompt: string;
-            /**
-             * Model Name
-             * @default gemini-3-flash-preview
-             */
-            model_name: string;
+            /** Model Name */
+            model_name?: null | string;
             /**
              * Pdf File
              * Format: binary

@@ -10,7 +10,10 @@ pypdf>=4.0.0
 httpx>=0.27.0
 
 # Web Server & API
-fastapi>=0.109.0
+# NOTE: FastAPI + Pydantic are pinned to exact versions so the OpenAPI schema
+# (and the generated TypeScript client) is byte-identical across environments.
+fastapi==0.125.0
+pydantic==2.12.5
 uvicorn>=0.27.0
 python-multipart>=0.0.9
 

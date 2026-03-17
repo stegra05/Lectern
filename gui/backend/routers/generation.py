@@ -123,7 +123,7 @@ async def estimate_cost(
 async def generate_cards(
     pdf_file: UploadFile = File(...),
     deck_name: str = Form(...),
-    model_name: str = Form(config.DEFAULT_GEMINI_MODEL),
+    model_name: Optional[str] = Form(None),
     tags: str = Form("[]"),
     context_deck: str = Form(""),
     focus_prompt: str = Form(""),
@@ -133,6 +133,7 @@ async def generate_cards(
     history_mgr: HistoryManager = Depends(get_history_manager),
     service: LecternGenerationService = Depends(get_generation_service),
 ):
+    model_name = model_name or config.DEFAULT_GEMINI_MODEL
     if focus_prompt:
         logger.info(f"User focus: '{focus_prompt}'")
 
