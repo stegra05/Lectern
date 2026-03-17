@@ -9,6 +9,7 @@ from html import unescape
 from typing import Any, Callable, Dict, Generator, Iterable, List, Optional
 
 from lectern.ai_pacing import PacingState
+from lectern.card_quality import CardQualityEvaluator
 from lectern.coverage import (
     build_generation_gap_text,
     build_reflection_gap_text,
@@ -26,6 +27,7 @@ _HTML_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
 _CLOZE_RE = re.compile(r"\{\{c\d+::(.*?)(?:::[^}]*)?\}\}")
 _NON_WORD_RE = re.compile(r"[^\w\s]")
+_CARD_QUALITY_EVALUATOR = CardQualityEvaluator()
 
 
 def get_card_key(card: Dict[str, Any]) -> str:
@@ -75,75 +77,10 @@ def _estimate_card_quality(
     *,
     high_priority_ids: set[str] | None = None,
 ) -> tuple[float, List[str]]:
-    high_priority_ids = high_priority_ids or set()
-    flags: List[str] = []
-    score = 30.0
-
-    front = _strip_markup(_get_card_front(card))
-    back = _strip_markup(_get_card_back(card))
-    text = _strip_markup(str(card.get("text") or _get_card_field(card, "Text") or ""))
-    answer_text = text or back
-    source_pages = get_card_page_references(card)
-    concept_ids = get_card_concept_ids(card)
-    relation_keys = get_card_relation_keys(card)
-    rationale = _strip_markup(str(card.get("rationale") or ""))
-    source_excerpt = _strip_markup(str(card.get("source_excerpt") or ""))
-
-    if front or text:
-        score += 12
-    else:
-        flags.append("missing_prompt_text")
-        score -= 20
-
-    if answer_text:
-        score += 10
-    else:
-        flags.append("missing_answer_text")
-        score -= 15
-
-    if source_pages:
-        score += 12
-    else:
-        flags.append("missing_source_pages")
-        score -= 10
-
-    if concept_ids:
-        score += 12
-    else:
-        flags.append("missing_concept_ids")
-        score -= 8
-
-    if relation_keys:
-        score += 6
-
-    if rationale:
-        score += 7
-    else:
-        flags.append("missing_rationale")
-        score -= 4
-
-    if source_excerpt:
-        score += 6
-    else:
-        flags.append("missing_source_excerpt")
-        score -= 4
-
-    if card.get("slide_number"):
-        score += 3
-
-    if len(front) > 180:
-        flags.append("long_front")
-        score -= 8
-    if len(answer_text) > 420:
-        flags.append("long_answer")
-        score -= 8
-    if len(source_pages) > 3:
-        flags.append("broad_grounding")
-        score -= 3
-    if high_priority_ids.intersection(concept_ids):
-        score += 5
-
-    return max(0.0, min(100.0, score)), sorted(set(flags))
+    score, flags = _CARD_QUALITY_EVALUATOR.evaluate(
+        card, high_priority_ids=high_priority_ids
+    )
+    return score, flags
 
 
 def _annotate_card_quality(

@@ -18,7 +18,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, Union
 import hashlib
 import shutil
 import tempfile
@@ -123,6 +123,143 @@ class ConfigUpdate(BaseModel):
     gemini_model: Optional[str] = None
 
 
+class VersionResponse(BaseModel):
+    current: str
+    latest: Optional[str] = None
+    update_available: bool
+    release_url: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+    anki_connected: bool
+    gemini_configured: bool
+    backend_ready: bool
+
+
+class AnkiStatusResponse(BaseModel):
+    status: str
+    connected: bool
+    version: Optional[str] = None
+    version_ok: bool = False
+    collection_available: Optional[bool] = None
+    error: Optional[str] = None
+
+
+class ConfigResponse(BaseModel):
+    gemini_model: Optional[str] = None
+    anki_url: Optional[str] = None
+    basic_model: Optional[str] = None
+    cloze_model: Optional[str] = None
+    gemini_configured: bool
+
+
+class ConfigUpdatedResponse(BaseModel):
+    status: Literal["updated"]
+    fields: List[str]
+    warnings: Optional[List[str]] = None
+
+
+class ConfigNoChangeResponse(BaseModel):
+    status: Literal["no_change"]
+
+
+ConfigUpdateResponse = Union[ConfigUpdatedResponse, ConfigNoChangeResponse]
+
+
+class HistoryEntryResponse(BaseModel):
+    id: Optional[str] = None
+    session_id: Optional[str] = None
+    filename: Optional[str] = None
+    full_path: Optional[str] = None
+    deck: Optional[str] = None
+    date: Optional[str] = None
+    card_count: Optional[int] = None
+    status: Optional[str] = None
+
+
+class DeckListResponse(BaseModel):
+    decks: List[str]
+
+
+class DeckCreateResponse(BaseModel):
+    status: Literal["created"]
+    deck: str
+
+
+class HistoryClearResponse(BaseModel):
+    status: Literal["cleared"]
+
+
+class HistoryDeleteResponse(BaseModel):
+    status: Literal["deleted"]
+
+
+class HistoryBatchDeleteResponse(BaseModel):
+    status: Literal["deleted"]
+    count: int
+
+
+class EstimateResponse(BaseModel):
+    tokens: Optional[int] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    input_cost: Optional[float] = None
+    output_cost: Optional[float] = None
+    cost: Optional[float] = None
+    pages: Optional[int] = None
+    text_chars: Optional[int] = None
+    model: Optional[str] = None
+    suggested_card_count: Optional[int] = None
+    estimated_card_count: Optional[int] = None
+    image_count: Optional[int] = None
+    document_type: Optional[str] = None
+
+
+class StopResponse(BaseModel):
+    stopped: bool
+    session_id: str
+    message: Optional[str] = None
+
+
+class SessionNotFoundResponse(BaseModel):
+    cards: List[dict]
+    session_id: str
+    not_found: Literal[True]
+
+
+class SessionEntryResponse(BaseModel):
+    id: str
+    session_id: str
+    status: str
+    cards: List[dict]
+    deck: Optional[str] = None
+    deck_name: Optional[str] = None
+    logs: Optional[List[dict]] = None
+    total_pages: Optional[int] = None
+    coverage_data: Optional[dict] = None
+    filename: Optional[str] = None
+    full_path: Optional[str] = None
+    date: Optional[str] = None
+    card_count: Optional[int] = None
+    slide_set_name: Optional[str] = None
+    model_name: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+SessionResponse = Union[SessionNotFoundResponse, SessionEntryResponse]
+
+
+class AnkiDeleteResponse(BaseModel):
+    status: Literal["deleted"]
+    count: int
+
+
+class AnkiUpdateResponse(BaseModel):
+    status: Literal["updated"]
+    note_id: int
+
+
 def event_json(event_type: str, message: str = "", data: Optional[Dict] = None) -> str:
     return ndjson_event(event_type, message, data or {})
 
@@ -205,7 +342,7 @@ async def stream_sync_cards(
     )
 
 
-@app.get("/version")
+@app.get("/version", response_model=VersionResponse)
 async def get_version():
     """Returns local version and checks GitHub for updates."""
     # Check GitHub
@@ -250,7 +387,7 @@ async def get_version():
     }
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint that safely checks system status.
 
@@ -281,7 +418,7 @@ async def health_check():
     }
 
 
-@app.get("/anki/status")
+@app.get("/anki/status", response_model=AnkiStatusResponse)
 async def anki_status():
     """Detailed AnkiConnect status with diagnostics."""
     try:
@@ -298,7 +435,7 @@ async def anki_status():
         }
 
 
-@app.get("/config")
+@app.get("/config", response_model=ConfigResponse)
 async def get_config():
     return {
         "gemini_model": config.DEFAULT_GEMINI_MODEL,
@@ -309,7 +446,7 @@ async def get_config():
     }
 
 
-@app.post("/config")
+@app.post("/config", response_model=ConfigUpdateResponse)
 async def update_config(cfg: ConfigUpdate):
     updated_fields = []
 
@@ -390,13 +527,13 @@ async def update_config(cfg: ConfigUpdate):
     return {"status": "no_change"}
 
 
-@app.get("/history")
+@app.get("/history", response_model=List[HistoryEntryResponse])
 async def get_history():
     mgr = HistoryManager()
     return await run_in_threadpool(mgr.get_all)
 
 
-@app.get("/decks")
+@app.get("/decks", response_model=DeckListResponse)
 async def get_decks():
     try:
         info = await run_in_threadpool(get_connection_info)
@@ -417,7 +554,7 @@ class DeckCreate(BaseModel):
     name: str
 
 
-@app.post("/decks")
+@app.post("/decks", response_model=DeckCreateResponse)
 async def create_deck_endpoint(req: DeckCreate):
     from lectern.anki_connector import create_deck
 
@@ -431,14 +568,14 @@ async def create_deck_endpoint(req: DeckCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/history")
+@app.delete("/history", response_model=HistoryClearResponse)
 async def clear_history():
     mgr = HistoryManager()
     mgr.clear_all()
     return {"status": "cleared"}
 
 
-@app.delete("/history/{entry_id}")
+@app.delete("/history/{entry_id}", response_model=HistoryDeleteResponse)
 async def delete_history_entry(entry_id: str):
     mgr = HistoryManager()
     entry = await run_in_threadpool(mgr.get_entry, entry_id)
@@ -476,7 +613,7 @@ def _batch_delete_impl(req_status: Optional[str], req_ids: Optional[List[str]]) 
         return deleted
 
 
-@app.post("/history/batch-delete")
+@app.post("/history/batch-delete", response_model=HistoryBatchDeleteResponse)
 async def batch_delete_history(req: BatchDeleteRequest):
     if not req.status and not req.ids:
         raise HTTPException(status_code=400, detail="Provide 'ids' or 'status'")
@@ -494,7 +631,7 @@ def _estimate_cache_key(tmp_path: str, model: str) -> tuple:
     return (h.hexdigest(), model or "")
 
 
-@app.post("/estimate")
+@app.post("/estimate", response_model=EstimateResponse)
 async def estimate_cost(
     pdf_file: UploadFile = File(...),
     model_name: Optional[str] = Form(None),
@@ -742,11 +879,11 @@ async def generate_cards(
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
-@app.post("/stop")
+@app.post("/stop", response_model=StopResponse)
 async def stop_generation(session_id: str | None = None):
     session = _get_session_or_404(session_id)
     session_manager.stop_session(session.session_id)
-    return {"status": "stopped", "session_id": session.session_id}
+    return {"stopped": True, "session_id": session.session_id}
 
 
 # Session API (View/Edit Past Sessions)
@@ -756,7 +893,7 @@ class SessionCardsUpdate(BaseModel):
     cards: List[dict]
 
 
-@app.get("/session/{session_id}")
+@app.get("/session/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: str):
     db = DatabaseManager()
     entry = db.get_entry_by_session_id(session_id)
@@ -769,7 +906,7 @@ class AnkiDeleteRequest(BaseModel):
     note_ids: List[int]
 
 
-@app.delete("/anki/notes")
+@app.delete("/anki/notes", response_model=AnkiDeleteResponse)
 async def delete_anki_notes(req: AnkiDeleteRequest):
     try:
         delete_notes(req.note_ids)
@@ -783,7 +920,7 @@ class AnkiUpdateRequest(BaseModel):
     fields: Dict[str, str]
 
 
-@app.put("/anki/notes/{note_id}")
+@app.put("/anki/notes/{note_id}", response_model=AnkiUpdateResponse)
 async def update_anki_note(note_id: int, req: AnkiUpdateRequest):
     """Update fields on an existing Anki note."""
     try:

@@ -191,7 +191,10 @@ def test_estimate_cache_miss_different_model(mock_service_class):
 def test_decks_endpoint():
     """Test the /decks endpoint."""
     with patch("gui.backend.main.run_in_threadpool") as mock_run:
-        mock_run.return_value = ["Default", "Deck 1"]
+        mock_run.side_effect = [
+            {"connected": True, "collection_available": True},
+            ["Default", "Deck 1"],
+        ]
         response = client.get("/decks")
         assert response.status_code == 200
         assert "decks" in response.json()
@@ -391,7 +394,10 @@ def test_version_fetches_when_called():
 
 def test_deck_actions_success():
     """Test successful deck listing and creation."""
-    with patch("gui.backend.main.run_in_threadpool", return_value=["D1"]):
+    with patch(
+        "gui.backend.main.run_in_threadpool",
+        side_effect=[{"connected": True, "collection_available": True}, ["D1"]],
+    ):
         response = client.get("/decks")
         assert "D1" in response.json()["decks"]
 
