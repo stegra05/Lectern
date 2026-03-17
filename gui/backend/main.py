@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
     session_manager.shutdown()
 
 
-app = FastAPI(title="Lectern API", version="1.11.5", lifespan=lifespan)
+app = FastAPI(title="Lectern API", version=__version__, lifespan=lifespan)
 session_manager.sweep_orphan_temp_files()
 
 # NOTE(Estimate): Session-level cache for estimate base data. Key = (content_sha256, model).
