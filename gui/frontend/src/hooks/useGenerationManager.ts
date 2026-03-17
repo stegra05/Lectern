@@ -56,7 +56,6 @@ export function useGenerationManager() {
     isHistorical: store.isHistorical,
 
     // Setup state
-    availableDecks: store.availableDecks,
     densityPreferences: store.densityPreferences,
 
     // Actions
@@ -64,7 +63,6 @@ export function useGenerationManager() {
     setDeckName: store.setDeckName,
     setFocusPrompt: store.setFocusPrompt,
     setTargetDeckSize: store.setTargetDeckSize,
-    setAvailableDecks: store.setAvailableDecks,
     setEstimation: store.setEstimation,
     setEstimationError: store.setEstimationError,
     setIsEstimating: store.setIsEstimating,

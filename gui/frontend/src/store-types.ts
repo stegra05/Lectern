@@ -36,7 +36,6 @@ export type StoreState = {
     step: Step;
     pdfFile: File | null;
     deckName: string;
-    availableDecks: string[];
     focusPrompt: string;
     targetDeckSize: number;
     densityPreferences: { per1k: number | null; perSlide: number | null };
@@ -98,7 +97,6 @@ export type GenerationActions = {
     setStep: (step: Step) => void;
     setPdfFile: (file: File | null) => void;
     setDeckName: (name: string) => void;
-    setAvailableDecks: (decks: string[]) => void;
     setFocusPrompt: (prompt: string) => void;
     setTargetDeckSize: (target: number) => void;
     setEstimation: (est: Estimation | null) => void;

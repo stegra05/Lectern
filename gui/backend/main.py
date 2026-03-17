@@ -121,6 +121,7 @@ class ConfigUpdate(BaseModel):
     basic_model: Optional[str] = None
     cloze_model: Optional[str] = None
     gemini_model: Optional[str] = None
+    tag_template: Optional[str] = None
 
 
 class VersionResponse(BaseModel):
@@ -151,6 +152,7 @@ class ConfigResponse(BaseModel):
     anki_url: Optional[str] = None
     basic_model: Optional[str] = None
     cloze_model: Optional[str] = None
+    tag_template: Optional[str] = None
     gemini_configured: bool
 
 
@@ -442,6 +444,7 @@ async def get_config():
         "anki_url": config.ANKI_CONNECT_URL,
         "basic_model": config.DEFAULT_BASIC_MODEL,
         "cloze_model": config.DEFAULT_CLOZE_MODEL,
+        "tag_template": config.TAG_TEMPLATE,
         "gemini_configured": bool(config.GEMINI_API_KEY),
     }
 
@@ -502,6 +505,9 @@ async def update_config(cfg: ConfigUpdate):
     if cfg.gemini_model:
         json_updates["gemini_model"] = cfg.gemini_model
         updated_fields.append("gemini_model")
+    if cfg.tag_template:
+        json_updates["tag_template"] = cfg.tag_template
+        updated_fields.append("tag_template")
 
     if json_updates:
         try:

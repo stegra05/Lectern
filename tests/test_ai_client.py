@@ -60,6 +60,12 @@ def test_safe_parse_json_invalid(ai_client):
     assert result is None
 
 
+def test_safe_parse_json_truncated_payload_rejected(ai_client):
+    json_str = '{"cards":[{"model_name":"Basic","front":"Q","back":"A"}'
+    result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
+    assert result is None
+
+
 def test_safe_parse_json_accepts_fields_dict_shape(ai_client):
     json_str = '{"cards":[{"model_name":"basic","fields":{"Front":"A"}}],"done":false}'
     result = ai_client._safe_parse_json(json_str, CardGenerationResponse)
@@ -146,6 +152,29 @@ def test_generate_more_cards_flow(ai_client):
     ai_client._chat.send_message.assert_called_once()
     assert result["done"] is False
     assert len(result["cards"]) == 1
+    assert result["parse_error"] == ""
+
+
+def test_generate_more_cards_uses_parsed_response(ai_client):
+    mock_response = MagicMock()
+    mock_response.parsed = {
+        "cards": [
+            {
+                "model_name": "Basic",
+                "fields": [{"name": "Front", "value": "Q"}],
+                "slide_number": "3",
+            }
+        ],
+        "done": False,
+    }
+    mock_response.text = ""
+    ai_client._chat.send_message.return_value = mock_response
+
+    result = ai_client.generate_more_cards(limit=1)
+
+    assert result["done"] is False
+    assert result["cards"][0]["fields"]["Front"] == "Q"
+    assert result["cards"][0]["slide_number"] == 3
     assert result["parse_error"] == ""
 
 

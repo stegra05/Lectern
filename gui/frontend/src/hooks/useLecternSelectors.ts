@@ -129,7 +129,6 @@ export const useGenerationSummaryState = () => useLecternStore(useShallow((s) =>
     targetDeckSize: s.targetDeckSize,
     estimation: s.estimation,
     isEstimating: s.isEstimating,
-    availableDecks: s.availableDecks,
 })));
 
 // ---------------------------------------------------------------------------
@@ -164,7 +163,6 @@ export const useLecternActions = () => useLecternStore(useShallow((s) => ({
     handleGenerate: s.handleGenerate,
     setPdfFile: s.setPdfFile,
     setDeckName: s.setDeckName,
-    setAvailableDecks: s.setAvailableDecks,
     setFocusPrompt: s.setFocusPrompt,
     setTargetDeckSize: s.setTargetDeckSize,
     setEstimation: s.setEstimation,

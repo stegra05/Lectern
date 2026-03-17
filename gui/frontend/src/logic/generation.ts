@@ -219,7 +219,7 @@ export const handleGenerate = async (
                     
                     set({
                         cards,
-                        logs: session.logs ?? [],
+                        logs: (session.logs as ProgressEvent[]) ?? [],
                         totalPages: deriveTotalPages(cards, session.total_pages),
                         coverageData: session.coverage_data || null,
                         deckName: session.deck_name || session.deck || deckName,
@@ -283,7 +283,7 @@ export const loadSession = async (
         const cards = stampUids(normalizeCardsMetadata(session.cards || []));
         set({
             cards,
-            logs: session.logs ?? [],
+            logs: (session.logs as ProgressEvent[]) ?? [],
             totalPages: deriveTotalPages(cards, session.total_pages),
             coverageData: session.coverage_data || null,
             deckName: session.deck_name || session.deck || '',

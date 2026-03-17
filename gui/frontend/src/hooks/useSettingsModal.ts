@@ -2,7 +2,8 @@
  * Hook that owns all data fetching and orchestration for the Settings modal.
  * Keeps SettingsModal as a pure presentational component.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useConfigQuery, useSaveConfigMutation, useVersionQuery } from '../queries';
 import { api } from '../api';
 import type { Config } from '../schemas/api';
@@ -42,7 +43,6 @@ export function useSettingsModal(isOpen: boolean) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showBudget, setShowBudget] = useState(false);
-  const [ankiStatus, setAnkiStatus] = useState<AnkiCheckStatus>('checking');
 
   const { data: config, isLoading, isError, refetch: refetchConfig } = useConfigQuery();
   const { data: versionInfo, isLoading: versionLoading, refetch: refetchVersion } = useVersionQuery(isOpen);
@@ -58,25 +58,26 @@ export function useSettingsModal(isOpen: boolean) {
     }
   }, [config]);
 
-  const checkAnkiConnection = useCallback(async (url: string) => {
-    setAnkiStatus('checking');
-    try {
-      const { connected } = await api.checkAnkiConnectUrl(url);
-      setAnkiStatus(connected ? 'connected' : 'disconnected');
-    } catch {
-      setAnkiStatus('disconnected');
-    }
-  }, []);
+  const ankiUrl = editedConfig?.anki_url ?? '';
+  const shouldCheckAnki = Boolean(isOpen && ankiUrl && isValidUrl(ankiUrl));
+  const ankiStatusQuery = useQuery({
+    queryKey: ['anki-connect-check', ankiUrl],
+    enabled: shouldCheckAnki,
+    retry: 1,
+    queryFn: () => api.checkAnkiConnectUrl(ankiUrl),
+  });
 
-  // Check Anki connection when URL changes (async callback sets state)
-  useEffect(() => {
-    if (editedConfig?.anki_url && isValidUrl(editedConfig.anki_url)) {
-      /* eslint-disable-next-line react-hooks/set-state-in-effect -- checkAnkiConnection sets state in async callback */
-      checkAnkiConnection(editedConfig.anki_url);
-    } else if (editedConfig?.anki_url) {
-      setAnkiStatus('disconnected');
-    }
-  }, [editedConfig?.anki_url, isOpen, checkAnkiConnection]);
+  const ankiStatus: AnkiCheckStatus = useMemo(() => {
+    if (!ankiUrl) return 'checking';
+    if (!isValidUrl(ankiUrl)) return 'disconnected';
+    if (ankiStatusQuery.isLoading || ankiStatusQuery.isFetching) return 'checking';
+    return ankiStatusQuery.data?.connected ? 'connected' : 'disconnected';
+  }, [
+    ankiUrl,
+    ankiStatusQuery.data?.connected,
+    ankiStatusQuery.isFetching,
+    ankiStatusQuery.isLoading,
+  ]);
 
   const updateField = useCallback((field: keyof ConfigState, value: string) => {
     if (!editedConfig) return;

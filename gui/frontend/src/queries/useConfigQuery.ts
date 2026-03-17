@@ -1,16 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { queryKeys } from '../lib/queryKeys';
-import type { Config } from '../schemas/api';
-
-export interface SaveConfigPayload {
-  gemini_api_key?: string;
-  anki_url?: string;
-  basic_model?: string;
-  cloze_model?: string;
-  gemini_model?: string;
-  tag_template?: string;
-}
+import type { Config, SaveConfigPayload } from '../schemas/api';
 
 /**
  * Hook for fetching configuration.

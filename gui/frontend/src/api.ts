@@ -1,27 +1,14 @@
-import { validateOrThrow } from './schemas/validate';
+import createClient from 'openapi-fetch';
+
+import type { components, paths } from './generated/api';
 import { ProgressEventSchema } from './schemas/sse';
-import {
-  AnkiNoteResponseSchema,
-  AnkiStatusSchema,
-  ConfigSchema,
-  CreateDeckResponseSchema,
-  DecksResponseSchema,
-  EstimationSchema,
-  HealthStatusSchema,
-  HistoryBatchDeleteResponseSchema,
-  HistoryClearResponseSchema,
-  HistoryDeleteResponseSchema,
-  HistoryResponseSchema,
-  SaveConfigResponseSchema,
-  SessionDataSchema,
-  StopResponseSchema,
-  VersionSchema,
-} from './schemas/api';
+import { validateOrThrow } from './schemas/validate';
 import type {
   AnkiNoteResponse,
   AnkiStatus,
   Card,
   Config,
+  CoverageData,
   CreateDeckResponse,
   DecksResponse,
   Estimation,
@@ -30,6 +17,7 @@ import type {
   HistoryClearResponse,
   HistoryDeleteResponse,
   HistoryResponse,
+  SaveConfigPayload,
   SaveConfigResponse,
   SessionData,
   StopResponse,
@@ -39,12 +27,12 @@ import type {
 // Re-export types for backward compatibility
 export type {
   Card,
+  CoverageData,
   Estimation,
   HealthStatus,
   SessionData,
+  HistoryEntry,
 } from './schemas/api';
-
-export type { HistoryEntry } from './schemas/api';
 
 // Auto-detect API URL based on environment
 // If we're served from the packaged app (port 4173), use that
@@ -71,12 +59,7 @@ export const getApiUrl = () => {
 const ENV_API_URL =
     typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_URL : undefined;
 const API_URL = ENV_API_URL || getApiUrl();
-
-const withSessionId = (url: string, sessionId?: string) => {
-    if (!sessionId) return url;
-    const separator = url.includes("?") ? "&" : "?";
-    return `${url}${separator}session_id=${encodeURIComponent(sessionId)}`;
-};
+const apiClient = createClient<paths>({ baseUrl: API_URL });
 
 export interface GenerateRequest {
     pdf_file: File;
@@ -86,42 +69,6 @@ export interface GenerateRequest {
     context_deck?: string;
     focus_prompt?: string;
     target_card_count?: number;
-}
-
-// Coverage types needed for SessionData
-export interface CoverageConcept {
-    id: string;
-    name: string;
-    importance: string;
-    difficulty?: string;
-    page_references?: number[];
-}
-
-export interface CoverageData {
-    total_pages: number;
-    document_type?: string | null;
-    concept_catalog?: CoverageConcept[];
-    relation_catalog?: Array<Record<string, unknown>>;
-    covered_pages?: number[];
-    uncovered_pages?: number[];
-    covered_page_count?: number;
-    page_coverage_pct?: number;
-    saturated_pages?: number[];
-    explicit_concept_count?: number;
-    explicit_concept_coverage_pct?: number;
-    covered_concept_ids?: string[];
-    covered_concept_count?: number;
-    total_concepts?: number;
-    concept_coverage_pct?: number;
-    explicit_relation_count?: number;
-    covered_relation_count?: number;
-    total_relations?: number;
-    relation_coverage_pct?: number;
-    high_priority_total?: number;
-    high_priority_covered?: number;
-    missing_high_priority?: CoverageConcept[];
-    uncovered_concepts?: CoverageConcept[];
-    uncovered_relations?: Array<Record<string, unknown>>;
 }
 
 export type SnapshotStatus =
@@ -172,24 +119,6 @@ export interface ProgressEvent {
     data?: unknown;
     timestamp: number;
 }
-
-// Helper to make fetch calls with timeout
-const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs: number = 5000) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
-        return response;
-    } catch (error) {
-        clearTimeout(timeout);
-        throw error;
-    }
-};
 
 const parseNDJSONStream = async (
     res: Response,
@@ -242,93 +171,101 @@ export interface SessionStatus {
     status: string;
 }
 
+const unwrapData = <T>(
+    payload: { data?: T; error?: unknown; response: Response },
+    fallbackMessage: string
+): T => {
+    const { data, error, response } = payload;
+    if (response.ok && data !== undefined) return data;
+    if (error) throw new Error(fallbackMessage);
+    throw new Error(`HTTP ${response.status}`);
+};
+
+const normalizeEstimation = (raw: Record<string, unknown>): Estimation => ({
+    tokens: Number(raw.tokens ?? 0),
+    input_tokens: Number(raw.input_tokens ?? 0),
+    output_tokens: Number(raw.output_tokens ?? 0),
+    input_cost: Number(raw.input_cost ?? 0),
+    output_cost: Number(raw.output_cost ?? 0),
+    cost: Number(raw.cost ?? 0),
+    pages: Number(raw.pages ?? 0),
+    text_chars: raw.text_chars == null ? undefined : Number(raw.text_chars),
+    model: String(raw.model ?? ''),
+    suggested_card_count:
+        raw.suggested_card_count == null ? undefined : Number(raw.suggested_card_count),
+    estimated_card_count:
+        raw.estimated_card_count == null ? undefined : Number(raw.estimated_card_count),
+    image_count: raw.image_count == null ? undefined : Number(raw.image_count),
+    document_type: raw.document_type == null ? undefined : String(raw.document_type),
+});
+
 export const api = {
     checkHealth: async (): Promise<HealthStatus> => {
-        const res = await fetchWithTimeout(`${API_URL}/health`, {}, 3000);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return validateOrThrow(HealthStatusSchema, await res.json());
+        const data = unwrapData(await apiClient.GET('/health'), 'Failed to fetch health status');
+        return { ...data, backend_ready: data.backend_ready ?? true };
     },
 
     getAnkiStatus: async (): Promise<AnkiStatus> => {
-        const res = await fetchWithTimeout(`${API_URL}/anki/status`, {}, 5000);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return validateOrThrow(AnkiStatusSchema, await res.json());
+        return unwrapData(await apiClient.GET('/anki/status'), 'Failed to fetch Anki status');
     },
 
     getConfig: async (): Promise<Config> => {
-        try {
-            const res = await fetchWithTimeout(`${API_URL}/config`, {}, 3000);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            return validateOrThrow(ConfigSchema, data);
-        } catch (error) {
-            console.error('Failed to fetch config:', error);
-            throw error;
-        }
+        const data = unwrapData(await apiClient.GET('/config'), 'Failed to fetch config');
+        return { ...data, gemini_configured: data.gemini_configured ?? false };
     },
 
     getDecks: async (): Promise<DecksResponse> => {
-        const res = await fetchWithTimeout(`${API_URL}/decks`, {}, 3000);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return validateOrThrow(DecksResponseSchema, await res.json());
+        return unwrapData(await apiClient.GET('/decks'), 'Failed to fetch decks');
     },
 
     createDeck: async (name: string): Promise<CreateDeckResponse> => {
-        const res = await fetch(`${API_URL}/decks`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name }),
-        });
-        if (!res.ok) throw new Error("Failed to create deck");
-        return validateOrThrow(CreateDeckResponseSchema, await res.json());
+        return unwrapData(
+            await apiClient.POST('/decks', { body: { name } }),
+            'Failed to create deck'
+        );
     },
 
-    saveConfig: async (config: {
-        gemini_api_key?: string;
-        anki_url?: string;
-        basic_model?: string;
-        cloze_model?: string;
-        gemini_model?: string;
-        tag_template?: string;
-    }): Promise<SaveConfigResponse> => {
-        const res = await fetch(`${API_URL}/config`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(config),
-        });
-        if (!res.ok) throw new Error("Failed to save config");
-        return validateOrThrow(SaveConfigResponseSchema, await res.json());
+    saveConfig: async (config: SaveConfigPayload): Promise<SaveConfigResponse> => {
+        return unwrapData(
+            await apiClient.POST('/config', {
+                body: config,
+            }),
+            'Failed to save config'
+        ) as SaveConfigResponse;
     },
 
     getHistory: async (): Promise<HistoryResponse> => {
-        const res = await fetchWithTimeout(`${API_URL}/history`, {}, 3000);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return validateOrThrow(HistoryResponseSchema, await res.json());
+        const data = unwrapData(await apiClient.GET('/history'), 'Failed to fetch history');
+        return data.map((entry) => ({
+            id: entry.id ?? '',
+            session_id: entry.session_id ?? '',
+            filename: entry.filename ?? '',
+            full_path: entry.full_path ?? '',
+            deck: entry.deck ?? '',
+            date: entry.date ?? '',
+            card_count: Number(entry.card_count ?? 0),
+            status: entry.status ?? 'draft',
+        }));
     },
 
     clearHistory: async (): Promise<HistoryClearResponse> => {
-        const res = await fetch(`${API_URL}/history`, {
-            method: "DELETE",
-        });
-        return validateOrThrow(HistoryClearResponseSchema, await res.json());
+        return unwrapData(await apiClient.DELETE('/history'), 'Failed to clear history');
     },
 
     deleteHistoryEntry: async (id: string): Promise<HistoryDeleteResponse> => {
-        const res = await fetch(`${API_URL}/history/${id}`, {
-            method: "DELETE",
-        });
-        if (!res.ok) throw new Error("Failed to delete entry");
-        return validateOrThrow(HistoryDeleteResponseSchema, await res.json());
+        return unwrapData(
+            await apiClient.DELETE('/history/{entry_id}', {
+                params: { path: { entry_id: id } },
+            }),
+            'Failed to delete entry'
+        );
     },
 
     batchDeleteHistory: async (params: { ids?: string[]; status?: string }): Promise<HistoryBatchDeleteResponse> => {
-        const res = await fetch(`${API_URL}/history/batch-delete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(params),
-        });
-        if (!res.ok) throw new Error("Failed to batch delete history");
-        return validateOrThrow(HistoryBatchDeleteResponseSchema, await res.json());
+        return unwrapData(
+            await apiClient.POST('/history/batch-delete', { body: params }),
+            'Failed to batch delete history'
+        );
     },
 
     estimateCost: async (
@@ -344,8 +281,6 @@ export const api = {
             formData.append("target_card_count", String(targetCardCount));
         }
 
-        const url = `${API_URL}/estimate`;
-
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
@@ -357,15 +292,15 @@ export const api = {
             });
         }
 
-        const res = await fetch(url, {
-            method: "POST",
-            body: formData,
-            signal: controller.signal
+        const payload = await apiClient.POST('/estimate', {
+            body: formData as unknown as components['schemas']['Body_estimate_cost_estimate_post'],
+            bodySerializer: (body) => body as unknown as FormData,
+            signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return validateOrThrow(EstimationSchema, await res.json());
+        const data = unwrapData(payload, 'Failed to estimate cost');
+        return normalizeEstimation(data as Record<string, unknown>);
     },
 
     generate: async (req: GenerateRequest, onEvent: (event: ProgressEvent) => void) => {
@@ -380,71 +315,84 @@ export const api = {
             formData.append("target_card_count", String(req.target_card_count));
         }
 
-        const res = await fetch(`${API_URL}/generate`, {
-            method: "POST",
-            body: formData,
+        const { response } = await apiClient.POST('/generate', {
+            body: formData as unknown as components['schemas']['Body_generate_cards_generate_post'],
+            bodySerializer: (body) => body as unknown as FormData,
+            parseAs: 'stream',
         });
 
-        if (!res.ok) {
-            const errBody = await res.text();
-            throw new Error(`HTTP ${res.status}: ${errBody}`);
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errBody}`);
         }
 
-        await parseNDJSONStream(res, onEvent);
+        await parseNDJSONStream(response, onEvent);
     },
 
     stopGeneration: async (sessionId?: string): Promise<StopResponse> => {
-        const res = await fetch(withSessionId(`${API_URL}/stop`, sessionId), {
-            method: "POST",
-        });
-        return validateOrThrow(StopResponseSchema, await res.json());
+        return unwrapData(
+            await apiClient.POST('/stop', {
+                params: sessionId ? { query: { session_id: sessionId } } : undefined,
+            }),
+            'Failed to stop generation'
+        );
     },
 
     getSession: async (sessionId: string): Promise<SessionData> => {
-        const res = await fetch(`${API_URL}/session/${sessionId}`);
-        if (!res.ok) throw new Error("Failed to load session");
-        const data = await res.json();
-      return validateOrThrow(SessionDataSchema, data);
+        const data = unwrapData(
+            await apiClient.GET('/session/{session_id}', {
+                params: { path: { session_id: sessionId } },
+            }),
+            'Failed to load session'
+        );
+        return {
+            ...data,
+            cards: ((data.cards ?? []) as Card[]),
+            logs:
+                'logs' in data
+                    ? (data.logs as SessionData['logs'])
+                    : undefined,
+            coverage_data:
+                'coverage_data' in data
+                    ? (data.coverage_data as CoverageData | null | undefined) ?? null
+                    : null,
+        } as SessionData;
     },
 
     syncCardsToAnki: async (
         payload: { cards: Card[]; deck_name: string; tags: string[]; slide_set_name: string; allow_updates: boolean },
         onEvent: (event: ProgressEvent) => void
     ) => {
-        const res = await fetch(`${API_URL}/sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+        const { response } = await apiClient.POST('/sync', {
+            body: payload as unknown as components['schemas']['SyncRequest'],
+            parseAs: 'stream',
         });
-        if (!res.ok) throw new Error("Sync failed");
-        await parseNDJSONStream(res, onEvent);
+        if (!response.ok) throw new Error("Sync failed");
+        await parseNDJSONStream(response, onEvent);
     },
 
     deleteAnkiNotes: async (noteIds: number[]): Promise<AnkiNoteResponse> => {
-        const res = await fetchWithTimeout(`${API_URL}/anki/notes`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note_ids: noteIds }),
-        });
-        if (!res.ok) throw new Error('Failed to delete notes from Anki');
-        return validateOrThrow(AnkiNoteResponseSchema, await res.json());
+        return unwrapData(
+            await apiClient.DELETE('/anki/notes', {
+                body: { note_ids: noteIds },
+            }),
+            'Failed to delete notes from Anki'
+        );
     },
 
     updateAnkiNote: async (noteId: number, fields: Record<string, string>): Promise<AnkiNoteResponse> => {
-        const res = await fetchWithTimeout(`${API_URL}/anki/notes/${noteId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields }),
-        });
-        if (!res.ok) throw new Error('Failed to update Anki note');
-        return validateOrThrow(AnkiNoteResponseSchema, await res.json());
+        return unwrapData(
+            await apiClient.PUT('/anki/notes/{note_id}', {
+                params: { path: { note_id: noteId } },
+                body: { fields },
+            }),
+            'Failed to update Anki note'
+        );
     },
 
     getVersion: async (): Promise<Version> => {
-        const res = await fetchWithTimeout(`${API_URL}/version`);
-        if (!res.ok) throw new Error('Failed to fetch version info');
-        const data = await res.json();
-        return validateOrThrow(VersionSchema, data);
+        const data = unwrapData(await apiClient.GET('/version'), 'Failed to fetch version info');
+        return { ...data, latest: data.latest ?? null };
     },
 
     /** Check AnkiConnect at an arbitrary URL (e.g. user-edited URL in settings). */

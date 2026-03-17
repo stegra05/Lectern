@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLecternStore } from '../store';
-import { api } from '../api';
+import { useEstimationQuery } from '../queries';
 import { extractBase, recomputeCost, type EstimationBase } from '../utils/recompute';
 import type { HealthStatus } from '../hooks/useAppState';
 
@@ -17,50 +17,49 @@ export function useEstimationLogic(health: HealthStatus | null) {
     const estimationBaseRef = useRef<EstimationBase | null>(null);
     const previousEstimateContextRef = useRef<string | null>(null);
 
-    // Effect 1: Initial estimate — fires on PDF change only.
-    useEffect(() => {
-        const controller = new AbortController();
-        estimationBaseRef.current = null;
+    const estimateQuery = useEstimationQuery({
+        file: pdfFile,
+        modelName: health?.gemini_model,
+    });
 
-        const fetchEstimate = async () => {
-            if (!pdfFile) {
-                setEstimation(null);
-                setIsEstimating(false);
-                return;
-            }
-            setIsEstimating(true);
+    // Effect 1: Sync query state into store state consumed by existing UI logic.
+    useEffect(() => {
+        if (!pdfFile) {
+            estimationBaseRef.current = null;
+            setEstimation(null);
             setEstimationError(null);
-            try {
-                const est = await api.estimateCost(
-                    pdfFile,
-                    health?.gemini_model,
-                    undefined, // No target_card_count — use backend default for initial estimate
-                    controller.signal
-                );
-                if (!controller.signal.aborted && est) {
-                    estimationBaseRef.current = extractBase(est);
-                    setEstimation(est);
-                }
-            } catch (e) {
-                if ((e as Error).name !== 'AbortError') {
-                    console.error(e);
-                    if (!controller.signal.aborted) {
-                        setEstimation(null);
-                        const msg = (e as Error).message || 'Estimation failed';
-                        setEstimationError(
-                            msg.includes('500') ? 'Estimation failed — check your Gemini API key in Settings.' : `Estimation failed: ${msg}`
-                        );
-                    }
-                }
-            } finally {
-                if (!controller.signal.aborted) {
-                    setIsEstimating(false);
-                }
-            }
-        };
-        fetchEstimate();
-        return () => controller.abort();
-    }, [pdfFile, health?.gemini_model, setEstimation, setIsEstimating, setEstimationError]);
+            setIsEstimating(false);
+            return;
+        }
+
+        setIsEstimating(estimateQuery.isLoading || estimateQuery.isFetching);
+
+        if (estimateQuery.error) {
+            const msg = (estimateQuery.error as Error).message || 'Estimation failed';
+            setEstimation(null);
+            setEstimationError(
+                msg.includes('500')
+                    ? 'Estimation failed — check your Gemini API key in Settings.'
+                    : `Estimation failed: ${msg}`
+            );
+            return;
+        }
+
+        if (estimateQuery.data) {
+            estimationBaseRef.current = extractBase(estimateQuery.data);
+            setEstimationError(null);
+            setEstimation(estimateQuery.data);
+        }
+    }, [
+        estimateQuery.data,
+        estimateQuery.error,
+        estimateQuery.isFetching,
+        estimateQuery.isLoading,
+        pdfFile,
+        setEstimation,
+        setEstimationError,
+        setIsEstimating,
+    ]);
 
     // Effect 2: Slider recompute — instant client-side math, no loading state.
     useEffect(() => {

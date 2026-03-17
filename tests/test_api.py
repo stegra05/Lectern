@@ -370,13 +370,15 @@ def test_config_update_all_fields():
                 "basic_model": "NewBasic",
                 "cloze_model": "NewCloze",
                 "gemini_model": "gemini-3-flash",
+                "tag_template": "{{deck}}::{{slide_set}}::{{topic}}",
             },
         )
         assert response.status_code == 200
         assert "anki_url" in response.json()["fields"]
         assert "basic_model" in response.json()["fields"]
+        assert "tag_template" in response.json()["fields"]
         # Verify ConfigManager._save was called for each field set
-        assert mock_save.call_count == 4
+        assert mock_save.call_count == 5
 
 
 def test_version_fetches_when_called():

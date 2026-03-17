@@ -410,6 +410,8 @@ export interface components {
             basic_model?: string | null;
             /** Cloze Model */
             cloze_model?: string | null;
+            /** Tag Template */
+            tag_template?: string | null;
             /** Gemini Configured */
             gemini_configured: boolean;
         };
@@ -425,6 +427,8 @@ export interface components {
             cloze_model?: string | null;
             /** Gemini Model */
             gemini_model?: string | null;
+            /** Tag Template */
+            tag_template?: string | null;
         };
         /** ConfigUpdatedResponse */
         ConfigUpdatedResponse: {

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DeckSelector } from '../components/DeckSelector';
-import { useLecternStore } from '../store';
 
 describe('DeckSelector', () => {
     const mockOnChange = vi.fn();
@@ -10,19 +9,20 @@ describe('DeckSelector', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-
-        // Reset real store
-        useLecternStore.getState().reset();
     });
 
     // Controlled wrapper for DeckSelector
-    const ControlledDeckSelector = ({ initialValue = "" }: { initialValue?: string }) => {
+    const ControlledDeckSelector = ({
+        initialValue = "",
+        availableDecks = [],
+    }: {
+        initialValue?: string;
+        availableDecks?: string[];
+    }) => {
         const [val, setVal] = useState(initialValue);
         const [isOpen, setIsOpen] = useState(false);
         const [searchQuery, setSearchQuery] = useState('');
         const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['Uni']));
-
-        const availableDecks = useLecternStore.getState().availableDecks;
 
         return (
             <DeckSelector
@@ -47,11 +47,8 @@ describe('DeckSelector', () => {
     });
 
     it('fetches decks on focus', async () => {
-        act(() => {
-            useLecternStore.getState().setAvailableDecks(['Uni', 'Uni::Math', 'Uni::CS']);
-        });
-
-        render(<ControlledDeckSelector />);
+        const decks = ['Uni', 'Uni::Math', 'Uni::CS'];
+        render(<ControlledDeckSelector availableDecks={decks} />);
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);
@@ -61,12 +58,8 @@ describe('DeckSelector', () => {
     });
 
     it('filters decks based on input', async () => {
-        // Pre-populate actual store with decks
-        act(() => {
-            useLecternStore.getState().setAvailableDecks(['Uni', 'Uni::Math', 'Uni::CS']);
-        });
-
-        render(<ControlledDeckSelector />);
+        const decks = ['Uni', 'Uni::Math', 'Uni::CS'];
+        render(<ControlledDeckSelector availableDecks={decks} />);
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);

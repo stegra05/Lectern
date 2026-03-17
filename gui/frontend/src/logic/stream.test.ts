@@ -12,7 +12,6 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     step: 'dashboard',
     pdfFile: null,
     deckName: '',
-    availableDecks: [],
     focusPrompt: '',
     targetDeckSize: 50,
     densityPreferences: { per1k: null, perSlide: null },

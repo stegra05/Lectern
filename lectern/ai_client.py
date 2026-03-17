@@ -4,10 +4,11 @@ import random
 import re
 import time
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from google import genai  # type: ignore
 from google.genai import types  # type: ignore
+from pydantic import BaseModel
 
 from lectern import config
 from lectern.ai_common import (
@@ -142,6 +143,97 @@ class LecternAIClient:
             self._model_name,
             self._thinking_supported,
             genai.__version__,
+        )
+
+    @staticmethod
+    def _normalize_card_payload(
+        payload: Dict[str, Any], raw_payload: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
+        """Normalize model card payload to app-facing shape."""
+        if "cards" not in payload:
+            return payload
+
+        cards = payload.get("cards")
+        if not isinstance(cards, list):
+            return payload
+
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+
+            fields = card.get("fields")
+            if isinstance(fields, list):
+                mapped: Dict[str, str] = {}
+                for item in fields:
+                    if not isinstance(item, dict):
+                        continue
+                    name = str(item.get("name") or "").strip()
+                    value = item.get("value")
+                    if name and value is not None:
+                        mapped[name] = str(value)
+                card["fields"] = mapped
+
+            slide_number = card.get("slide_number")
+            if (
+                isinstance(slide_number, str)
+                and slide_number.strip().isdigit()
+                and len(slide_number.strip()) <= 5
+            ):
+                card["slide_number"] = int(slide_number.strip())
+
+        # Preserve extra fields not present in Gemini-facing schema.
+        if raw_payload and isinstance(raw_payload.get("cards"), list):
+            for res_card, raw_card in zip(cards, raw_payload["cards"]):
+                if isinstance(res_card, dict) and isinstance(raw_card, dict):
+                    for key, value in raw_card.items():
+                        if key not in res_card:
+                            res_card[key] = value
+        return payload
+
+    def _validate_structured_payload(
+        self,
+        payload: Any,
+        model_class: Type[BaseModel],
+        raw_payload: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any] | None:
+        """Validate parsed payload with Pydantic and normalize app-facing fields."""
+        self._last_parse_error = ""
+        try:
+            data_obj = model_class.model_validate(payload)
+            result = data_obj.model_dump()
+            return self._normalize_card_payload(result, raw_payload=raw_payload)
+        except Exception as exc:
+            self._last_parse_error = str(exc)
+            logger.warning("[AI] Structured response validation failed: %s", exc)
+            return None
+
+    def _parse_structured_response(
+        self, response: Any, model_class: Type[BaseModel]
+    ) -> Dict[str, Any] | None:
+        """Prefer SDK parsed output, then strict JSON text fallback."""
+        self._last_parse_error = ""
+
+        parsed_payload = getattr(response, "parsed", None)
+        if parsed_payload is not None:
+            parsed_result = self._validate_structured_payload(parsed_payload, model_class)
+            if parsed_result is not None:
+                return parsed_result
+
+        text = (getattr(response, "text", "") or "").strip()
+        if not text:
+            self._last_parse_error = "Gemini returned an empty response body."
+            logger.warning("[AI] %s", self._last_parse_error)
+            return None
+
+        try:
+            raw_payload = json.loads(text)
+        except Exception as exc:
+            self._last_parse_error = str(exc)
+            logger.warning("[AI] JSON parsing failed: %s", exc)
+            return None
+
+        return self._validate_structured_payload(
+            raw_payload, model_class, raw_payload=raw_payload
         )
 
     @property
@@ -405,7 +497,7 @@ class LecternAIClient:
         logger.debug(f"[Chat/ConceptMap] Response snippet: {text_snippet}...")
         _append_session_log(self._log_path, "conceptmap", parts, text, True)
 
-        data = self._safe_parse_json(text, ConceptMapResponse)
+        data = self._parse_structured_response(response, ConceptMapResponse)
         if isinstance(data, dict):
             detected_lang = data.get("language")
             if detected_lang:
@@ -505,7 +597,7 @@ class LecternAIClient:
             self._log_path, "generation", [{"text": prompt}], text, True
         )
 
-        data = self._safe_parse_json(text, CardGenerationResponse)
+        data = self._parse_structured_response(response, CardGenerationResponse)
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", len(cards) == 0))
@@ -543,7 +635,7 @@ class LecternAIClient:
             self._log_path, "reflection", [{"text": prompt}], text, True
         )
 
-        data = self._safe_parse_json(text, ReflectionResponse)
+        data = self._parse_structured_response(response, ReflectionResponse)
         if isinstance(data, dict):
             cards = [c for c in data.get("cards", []) if isinstance(c, dict)]
             done = bool(data.get("done", False)) or (len(cards) == 0)
@@ -560,74 +652,12 @@ class LecternAIClient:
             "parse_error": self._last_parse_error,
         }
 
-    def _safe_parse_json(self, text: str, model_class: Any) -> Dict[str, Any] | None:
-        """Parse JSON response from AI using strict canonical schema.
-        Handles partial/truncated JSON by attempting to close open brackets.
-        """
-        self._last_parse_error = ""
-
-        # Pre-process text to handle common truncation patterns
-        clean_text = text.strip()
-
-        # Simple heuristic to close truncated JSON:
-        # If the last character is not '}' and looks like it was inside an array of objects
-        if clean_text and not clean_text.endswith("}"):
-            # Try to backtrack to the last complete object or array element
-            # This is a basic approach; more sophisticated parsers exist,
-            # but for our card schema, this often suffices to recover partial batches.
-            if clean_text.count("[") > clean_text.count("]"):
-                # We are likely inside a list of cards
-                last_comma = clean_text.rfind("},")
-                if last_comma != -1:
-                    clean_text = clean_text[: last_comma + 1] + "]}"
-                else:
-                    last_obj_end = clean_text.rfind("}")
-                    if last_obj_end != -1:
-                        clean_text = clean_text[: last_obj_end + 1] + "]}"
-            elif clean_text.count("{") > clean_text.count("}"):
-                # We are likely inside a single object
-                last_comma = clean_text.rfind('",')
-                if last_comma != -1:
-                    clean_text = clean_text[:last_comma] + '"}'
-                else:
-                    clean_text += "}"
-
-        try:
-            raw = json.loads(clean_text)
-            data_obj = model_class.model_validate(raw)
-            result = data_obj.model_dump()
-            if "cards" in result:
-                for card in result["cards"]:
-                    fields = card.get("fields")
-                    if isinstance(fields, list):
-                        mapped: Dict[str, str] = {}
-                        for item in fields:
-                            if not isinstance(item, dict):
-                                continue
-                            name = str(item.get("name") or "").strip()
-                            value = item.get("value")
-                            if name and value is not None:
-                                mapped[name] = str(value)
-                        card["fields"] = mapped
-                    slide_number = card.get("slide_number")
-                    if (
-                        isinstance(slide_number, str)
-                        and slide_number.strip().isdigit()
-                        and len(slide_number.strip()) <= 5
-                    ):
-                        card["slide_number"] = int(slide_number.strip())
-            # Preserve extra fields that are not in the Gemini-facing schema.
-            if "cards" in result and "cards" in raw:
-                for res_card, raw_card in zip(result["cards"], raw["cards"]):
-                    if isinstance(raw_card, dict):
-                        for k, v in raw_card.items():
-                            if k not in res_card:
-                                res_card[k] = v
-            return result
-        except Exception as e:
-            self._last_parse_error = str(e)
-            logger.warning("[AI] JSON parsing failed: %s", e)
-            return None
+    def _safe_parse_json(
+        self, text: str, model_class: Type[BaseModel]
+    ) -> Dict[str, Any] | None:
+        """Backward-compatible helper used by tests; strict JSON only."""
+        mock_response = type("MockResponse", (), {"parsed": None, "text": text})()
+        return self._parse_structured_response(mock_response, model_class)
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""

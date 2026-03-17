@@ -7,7 +7,6 @@ export const getGenerationState = () => ({
   step: "dashboard" as Step,
   pdfFile: null as File | null,
   deckName: "",
-  availableDecks: [] as string[],
   focusPrompt: "",
   targetDeckSize: 1,
   densityPreferences: { per1k: null as number | null, perSlide: null as number | null },
@@ -34,7 +33,6 @@ export const getSessionState = () => ({
 const preservePersistedState = (state: StoreState) => ({
   densityPreferences: state.densityPreferences,
   deckName: state.deckName,
-  availableDecks: state.availableDecks,
   sortBy: state.sortBy,
   totalSessionSpend: state.totalSessionSpend,
 });
@@ -54,7 +52,6 @@ export const createGenerationActions = (
     isEstimating: false,
   }),
   setDeckName: (name) => set({ deckName: name }),
-  setAvailableDecks: (decks) => set({ availableDecks: decks }),
   setFocusPrompt: (prompt) => set({ focusPrompt: prompt }),
   setTargetDeckSize: (target) => {
     set({ targetDeckSize: target });

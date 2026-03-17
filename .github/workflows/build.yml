@@ -123,7 +123,9 @@ jobs:
 
       - name: Verify OpenAPI Client Sync
         working-directory: gui/frontend
-        run: npm run check-client-sync
+        run: |
+          npm run generate-api
+          test -z "$(git status --porcelain -- src/generated/api.ts)"
 
       - name: Start Frontend (Vite)
         working-directory: gui/frontend

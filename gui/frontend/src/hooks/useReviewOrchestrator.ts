@@ -1,6 +1,10 @@
 import { useCallback } from 'react';
 
 import { api, type ProgressEvent } from '../api';
+import {
+  useDeleteAnkiNotesMutation,
+  useUpdateAnkiNoteMutation,
+} from '../queries';
 import { useLecternStore } from '../store';
 import type { LecternStore, StoreState } from '../store-types';
 import { processSyncEvent } from '../logic/reviewSync';
@@ -18,6 +22,8 @@ export function useReviewOrchestrator() {
   const handleAnkiDeleteLocal = useLecternStore((s) => s.handleAnkiDelete);
   const startSync = useLecternStore((s) => s.startSync);
   const finishSync = useLecternStore((s) => s.finishSync);
+  const updateAnkiNote = useUpdateAnkiNoteMutation();
+  const deleteAnkiNotes = useDeleteAnkiNotesMutation();
 
   const saveEdit = useCallback(async (index: number) => {
     const state = getFromStore();
@@ -32,7 +38,10 @@ export function useReviewOrchestrator() {
         for (const [k, v] of Object.entries(editForm.fields)) {
           stringFields[k] = String(v);
         }
-        await api.updateAnkiNote(editForm.anki_note_id, stringFields);
+        await updateAnkiNote.mutateAsync({
+          noteId: editForm.anki_note_id,
+          fields: stringFields,
+        });
       }
 
       // Guard against stale async completion overriding a newer edit session.
@@ -49,18 +58,18 @@ export function useReviewOrchestrator() {
       console.error('Failed to update card', error);
       getFromStore().addToast('error', 'Failed to update card');
     }
-  }, [saveEditLocal]);
+  }, [saveEditLocal, updateAnkiNote]);
 
   const handleAnkiDelete = useCallback(async (noteId: number, index: number) => {
     try {
-      await api.deleteAnkiNotes([noteId]);
+      await deleteAnkiNotes.mutateAsync([noteId]);
       handleAnkiDeleteLocal(noteId, index);
       getFromStore().addToast('warning', 'Note deleted from Anki');
     } catch (error) {
       console.error('Failed to delete Anki note', error);
       getFromStore().addToast('error', 'Failed to delete from Anki');
     }
-  }, [handleAnkiDeleteLocal]);
+  }, [deleteAnkiNotes, handleAnkiDeleteLocal]);
 
   const handleSync = useCallback(async () => {
     const { cards, deckName } = getFromStore();

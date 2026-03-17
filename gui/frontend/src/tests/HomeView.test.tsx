@@ -50,8 +50,6 @@ describe('HomeView', () => {
             syncSuccess: false,
             totalSessionSpend: 0,
             addToSessionSpend: vi.fn(),
-            availableDecks: [],
-            setAvailableDecks: vi.fn(),
         };
 
         vi.mocked(useLecternStore).mockImplementation((selector: (s: LecternStore) => unknown) =>
