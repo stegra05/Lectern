@@ -356,10 +356,7 @@ export interface components {
         };
         /** Body_estimate_cost_estimate_post */
         Body_estimate_cost_estimate_post: {
-            /**
-             * Pdf File
-             * Format: binary
-             */
+            /** Pdf File */
             pdf_file: string;
             /** Model Name */
             model_name?: string | null;
@@ -368,10 +365,7 @@ export interface components {
         };
         /** Body_generate_cards_generate_post */
         Body_generate_cards_generate_post: {
-            /**
-             * Pdf File
-             * Format: binary
-             */
+            /** Pdf File */
             pdf_file: string;
             /** Deck Name */
             deck_name: string;
@@ -644,6 +638,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /** VersionResponse */
         VersionResponse: {
