@@ -25,14 +25,16 @@ def extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:
 
         reader = PdfReader(pdf_path)
         page_count = len(reader.pages)
-        total_text = ""
+        text_chars = 0
         image_count = 0
         for page in reader.pages:
-            total_text += page.extract_text() or ""
+            text = page.extract_text()
+            if text:
+                text_chars += len(text)
             image_count += len(page.images)
         return {
             "page_count": max(1, page_count),
-            "text_chars": len(total_text),
+            "text_chars": text_chars,
             "image_count": image_count,
         }
     except Exception:
