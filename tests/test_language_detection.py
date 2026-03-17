@@ -18,6 +18,8 @@ async def test_language_detection_integration(mock_client_cls):
     # Ensure send_message is an AsyncMock and returns our mock response
     mock_chat.send_message = AsyncMock(return_value=mock_response)
 
+    from lectern import config
+    config.GEMINI_API_KEY = "test_key"
     client = LecternAIClient()
 
     # Initial state
