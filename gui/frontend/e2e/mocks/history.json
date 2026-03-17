@@ -1,0 +1,12 @@
+[
+  {
+    "id": "hist-001",
+    "session_id": "test-session-123",
+    "filename": "sample.pdf",
+    "full_path": "/tmp/sample.pdf",
+    "deck": "Study::Biology",
+    "date": "2025-03-17T12:00:00Z",
+    "card_count": 5,
+    "status": "completed"
+  }
+]

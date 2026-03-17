@@ -223,7 +223,7 @@ gui/frontend/frontend_coverage_*.txt
 gui/frontend/coverage/
 
 # Local state
-history.json
+/history.json
 .lectern_state.json
 _test_thinking.py
 
