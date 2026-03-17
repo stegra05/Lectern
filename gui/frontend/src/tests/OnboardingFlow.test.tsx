@@ -1,4 +1,5 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { renderWithQueryClient } from './test-utils';
 import { OnboardingFlow } from '../components/OnboardingFlow';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -43,8 +44,8 @@ vi.mock('framer-motion', async () => {
     const React = await import('react');
     const motion = new Proxy({}, {
         get: (_target, prop) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return ({ children, ...props }: any) => React.createElement(prop as string, props, children);
+            return ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) =>
+                React.createElement(prop as string, props, children);
         }
     });
     return {
@@ -66,7 +67,7 @@ describe('OnboardingFlow', () => {
     it('shows help text when Anki connection fails', async () => {
         vi.mocked(api.checkHealth).mockRejectedValue(new Error('Failed'));
 
-        render(<OnboardingFlow onComplete={mockOnComplete} />);
+        renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
 
         expect(screen.getByText('Anki Connection')).toBeInTheDocument();
 
@@ -77,11 +78,12 @@ describe('OnboardingFlow', () => {
 
     it('navigates to AI Service step on Anki success', async () => {
         vi.mocked(api.checkHealth).mockResolvedValue({
+            status: 'ok',
             anki_connected: true,
-            gemini_configured: false
+            gemini_configured: false,
         });
 
-        render(<OnboardingFlow onComplete={mockOnComplete} />);
+        renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
 
         await waitFor(() => {
             expect(screen.getByText('CONNECTED: LOCALHOST:8765')).toBeInTheDocument();
@@ -94,11 +96,12 @@ describe('OnboardingFlow', () => {
 
     it('completes onboarding when both services are configured', async () => {
         vi.mocked(api.checkHealth).mockResolvedValue({
+            status: 'ok',
             anki_connected: true,
-            gemini_configured: true
+            gemini_configured: true,
         });
 
-        render(<OnboardingFlow onComplete={mockOnComplete} />);
+        renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
 
         await waitFor(() => {
             expect(screen.getByText('AUTHENTICATED')).toBeInTheDocument();
@@ -111,11 +114,12 @@ describe('OnboardingFlow', () => {
 
     it('submits API key successfully', async () => {
         vi.mocked(api.checkHealth).mockResolvedValue({
+            status: 'ok',
             anki_connected: true,
-            gemini_configured: false
+            gemini_configured: false,
         });
 
-        render(<OnboardingFlow onComplete={mockOnComplete} />);
+        renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
 
         const input = await screen.findByPlaceholderText('sk-...', {}, { timeout: 10000 });
         fireEvent.change(input, { target: { value: 'test-api-key-long-enough' } });

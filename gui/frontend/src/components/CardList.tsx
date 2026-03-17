@@ -26,8 +26,8 @@ interface CardListProps {
     onClearSelection: () => void;
 }
 
-// Check if we're in a test environment
-const isTestEnvironment = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test' ||
+// Check if we're in a test environment (browser-safe)
+const isTestEnvironment =
     typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';
 
 /**
@@ -35,7 +35,6 @@ const isTestEnvironment = typeof process !== 'undefined' && process.env?.NODE_EN
  */
 function RenderCardItem({
     card,
-    index,
     uidToIndex,
     editingIndex,
     editForm,
@@ -51,7 +50,6 @@ function RenderCardItem({
     onSelectRange,
 }: {
     card: Card;
-    index: number;
     uidToIndex: Map<string, number>;
     editingIndex: number | null;
     editForm: Card | null;
@@ -251,7 +249,6 @@ export const CardList = memo(function CardList({
                             <RenderCardItem
                                 key={card._uid || `card-fallback-${index}`}
                                 card={card}
-                                index={index}
                                 uidToIndex={uidToIndex}
                                 editingIndex={editingIndex}
                                 editForm={editForm}

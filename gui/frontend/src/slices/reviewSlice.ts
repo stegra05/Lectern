@@ -3,6 +3,7 @@ import type { StoreState, LecternStore, ReviewActions, BatchActions } from "../s
 import { processStreamEvent } from "../logic/stream";
 import { reconcileCardUids } from "../utils/uid";
 import { normalizeCardsMetadata } from "../utils/cardMetadata";
+import { validateSyncDoneData } from "../schemas/sse";
 
 export const getReviewState = () => ({
   cards: [] as import("../api").Card[],
@@ -30,7 +31,7 @@ export const processSyncEvent = async (
   }
 
   if (event.type === 'done') {
-    const data = (event.data || {}) as { failed?: number; created?: number; cards?: import("../api").Card[] };
+    const data = validateSyncDoneData(event.data) ?? {};
     const failed = data.failed || 0;
     const created = data.created || 0;
 
@@ -125,7 +126,7 @@ export const createReviewActions = (
     });
   },
   handleDelete: async (index) => {
-    const { cards, deletedCards } = get();
+    const { cards } = get();
     const card = cards[index];
     if (!card) return;
 
@@ -135,11 +136,14 @@ export const createReviewActions = (
 
       // Add to undo buffer with 30s timeout
       const cardUid = card._uid || '';
-      const timeoutId = setTimeout(() => {
-        get().clearDeletedCard(cardUid);
-      }, 30000);
+      const timeoutId =
+        cardUid
+          ? setTimeout(() => {
+              get().clearDeletedCard(cardUid);
+            }, 30000)
+          : null;
 
-      const bufferEntry: import('./store-types').DeletedCardBuffer = {
+      const bufferEntry: import('../store-types').DeletedCardBuffer = {
         card,
         originalIndex: index,
         deletedAt: Date.now(),
@@ -148,7 +152,7 @@ export const createReviewActions = (
 
       set((state) => ({
         cards: newCards,
-        deletedCards: [...deletedCards, bufferEntry],
+        deletedCards: [...state.deletedCards, bufferEntry],
         confirmModal: { ...state.confirmModal, isOpen: false },
       }));
 
@@ -156,7 +160,7 @@ export const createReviewActions = (
         'info',
         'Card removed',
         30000,
-        () => get().undoDelete(cardUid),
+        cardUid ? () => get().undoDelete(cardUid) : undefined,
         'Undo'
       );
     } catch (e) {
@@ -317,7 +321,7 @@ export const createBatchActions = (
     set({ selectedCards: new Set(), lastSelectedUid: null });
   },
   batchDeleteSelected: async () => {
-    const { cards, selectedCards, batchDeletedCards } = get();
+    const { cards, selectedCards } = get();
 
     if (selectedCards.size === 0) return;
 
@@ -335,11 +339,15 @@ export const createBatchActions = (
 
     try {
       // Store deleted cards in buffer for undo
-      const deletedCardsBuffer: import('./store-types').DeletedCardBuffer[] = indicesToDelete.map(index => {
+      const deletedCardsBuffer: import('../store-types').DeletedCardBuffer[] = indicesToDelete.map(index => {
         const card = cards[index];
-        const timeoutId = setTimeout(() => {
-          get().clearBatchDeletedCard(card._uid || '');
-        }, 30000);
+        const cardUid = card._uid || '';
+        const timeoutId =
+          cardUid
+            ? setTimeout(() => {
+                get().clearBatchDeletedCard(cardUid);
+              }, 30000)
+            : null;
 
         return {
           card,
@@ -353,7 +361,7 @@ export const createBatchActions = (
         cards: cards.filter((c) => !c._uid || !selectedCards.has(c._uid)),
         selectedCards: new Set(),
         isMultiSelectMode: false,
-        batchDeletedCards: [...batchDeletedCards, ...deletedCardsBuffer],
+        batchDeletedCards: [...state.batchDeletedCards, ...deletedCardsBuffer],
         confirmModal: { ...state.confirmModal, isOpen: false },
       }));
 
@@ -385,8 +393,8 @@ export const createBatchActions = (
     const newCards = [...cards];
 
     // Restore all deleted cards in their original positions
-    batchDeletedCards.sort((a, b) => b.originalIndex - a.originalIndex);
-    batchDeletedCards.forEach(entry => {
+    const sorted = [...batchDeletedCards].sort((a, b) => b.originalIndex - a.originalIndex);
+    sorted.forEach(entry => {
       const insertIndex = entry.originalIndex >= 0 && entry.originalIndex <= newCards.length
         ? entry.originalIndex
         : newCards.length;

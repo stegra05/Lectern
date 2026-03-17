@@ -1,45 +1,40 @@
-import { useState, useEffect } from 'react';
-import { api, type HistoryEntry } from '../api';
-import type { Step } from '../store';
+import { useEffect } from 'react';
+import { useHistoryQuery, useDeleteHistoryMutation, useClearHistoryMutation, useBatchDeleteHistoryMutation } from '../queries';
+import type { Step } from '../store-types';
 
 export function useHistory(step: Step) {
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  // React Query hooks
+  const { data: history, isLoading, refetch } = useHistoryQuery();
+  const deleteMutation = useDeleteHistoryMutation();
+  const clearMutation = useClearHistoryMutation();
+  const batchDeleteMutation = useBatchDeleteHistoryMutation();
 
-  // Refresh history when entering specific states or on mount
+  // Refresh history when entering specific states
   useEffect(() => {
     if (step === 'done' || step === 'dashboard') {
-      api.getHistory().then(setHistory);
+      refetch();
     }
-  }, [step]);
+  }, [step, refetch]);
 
   const clearAllHistory = async () => {
-    await api.clearHistory();
-    setHistory([]);
+    await clearMutation.mutateAsync();
   };
 
   const deleteHistoryEntry = async (id: string) => {
-    await api.deleteHistoryEntry(id);
-    setHistory(prev => prev.filter(h => h.id !== id));
+    await deleteMutation.mutateAsync(id);
   };
 
   const batchDeleteHistory = async (params: { ids?: string[]; status?: string }) => {
-    await api.batchDeleteHistory(params);
-    if (params.status) {
-      setHistory(prev => prev.filter(h => h.status !== params.status));
-    } else if (params.ids) {
-      const idSet = new Set(params.ids);
-      setHistory(prev => prev.filter(h => !idSet.has(h.id)));
-    }
+    await batchDeleteMutation.mutateAsync(params);
   };
-  
+
   const refreshHistory = async () => {
-      const hist = await api.getHistory();
-      setHistory(hist);
+    await refetch();
   };
 
   return {
     history,
-    setHistory,
+    isLoading,
     clearAllHistory,
     deleteHistoryEntry,
     batchDeleteHistory,

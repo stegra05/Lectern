@@ -4,10 +4,141 @@ on:
   push:
     branches: ['main']
     tags: ['v*']
+  pull_request:
+    branches: ['main']
   workflow_dispatch:
 
+# Gate order: lint -> e2e-tests -> build
+# Lint and critical-path E2E must pass before build/release.
+# Unit tests: run separately; fix refactor-related failures in follow-up.
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gui/frontend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: gui/frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: gui/frontend
+        run: npm run lint
+
+      - name: Typecheck (frontend)
+        working-directory: gui/frontend
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+  e2e-tests:
+    needs: lint
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gui/frontend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: gui/frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: gui/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Critical-Path E2E Tests
+        working-directory: gui/frontend
+        run: npm run test:e2e:critical
+        env:
+          CI: true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: gui/frontend/playwright-report/
+          retention-days: 7
+
+  integrated-smoke:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gui/frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Frontend Dependencies
+        working-directory: gui/frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: gui/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Backend (uvicorn)
+        run: |
+          uvicorn gui.backend.main:app --port 8000 --host 127.0.0.1 &
+          python - <<'PY'
+          import time
+          import urllib.request
+          url = "http://127.0.0.1:8000/health"
+          last_err = None
+          for _ in range(60):
+            try:
+              with urllib.request.urlopen(url, timeout=1) as r:
+                if r.status == 200:
+                  print("backend ready")
+                  raise SystemExit(0)
+            except Exception as e:
+              last_err = e
+              time.sleep(0.5)
+          raise SystemExit(f"backend not ready: {last_err}")
+          PY
+
+      - name: Start Frontend (Vite)
+        working-directory: gui/frontend
+        env:
+          VITE_API_URL: http://127.0.0.1:8000
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 &
+          node -e "const http=require('http'); \
+          const wait=()=>new Promise((res,rej)=>{const t=setInterval(()=>{http.get('http://127.0.0.1:5173',r=>{clearInterval(t);res();}).on('error',()=>{});},500);setTimeout(()=>{clearInterval(t);rej(new Error('timeout'));},20000);}); \
+          wait().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1);});"
+
+      - name: Run Integrated Smoke Test
+        working-directory: gui/frontend
+        run: npm run test:e2e:integrated
+        env:
+          CI: true
+
   build:
+    needs: [lint, e2e-tests, integrated-smoke]
     strategy:
       fail-fast: false
       matrix:

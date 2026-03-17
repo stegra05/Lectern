@@ -1,0 +1,12 @@
+{"type":"progress_start","message":"Syncing cards to Anki","data":{"total":5,"phase":"sync","label":"Syncing to Anki"},"timestamp":1705313900000}
+{"type":"note_created","message":"Note created","data":{"note_id":22345,"index":0},"timestamp":1705313901000}
+{"type":"progress_update","message":"Synced card 1","data":{"current":1,"total":5,"phase":"sync"},"timestamp":1705313901100}
+{"type":"note_created","message":"Note created","data":{"note_id":22346,"index":1},"timestamp":1705313902000}
+{"type":"progress_update","message":"Synced card 2","data":{"current":2,"total":5,"phase":"sync"},"timestamp":1705313902100}
+{"type":"warning","message":"Failed to sync one card","data":{"index":2},"timestamp":1705313902500}
+{"type":"progress_update","message":"Synced card 3","data":{"current":3,"total":5,"phase":"sync"},"timestamp":1705313903100}
+{"type":"note_created","message":"Note created","data":{"note_id":22348,"index":3},"timestamp":1705313904000}
+{"type":"progress_update","message":"Synced card 4","data":{"current":4,"total":5,"phase":"sync"},"timestamp":1705313904100}
+{"type":"note_created","message":"Note created","data":{"note_id":22349,"index":4},"timestamp":1705313905000}
+{"type":"progress_update","message":"Synced card 5","data":{"current":5,"total":5,"phase":"sync"},"timestamp":1705313905100}
+{"type":"done","message":"Sync complete (partial)","data":{"created":4,"failed":1},"timestamp":1705313906000}

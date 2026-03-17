@@ -1,11 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
- 
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProgressView } from '../views/ProgressView';
 import type { Phase } from '../components/PhaseIndicator';
 import type { Step } from '../store-types';
 import type { SortOption } from '../hooks/types';
+import type { Card, ProgressEvent } from '../api';
+import React from 'react';
 
 // Mock useTrickleProgress to skip animation
 vi.mock('../hooks/useTrickleProgress', () => ({
@@ -18,7 +18,19 @@ vi.mock('../hooks/useTimeEstimate', () => ({
 }));
 
 vi.mock('../components/RichTextEditor', () => ({
-    RichTextEditor: ({ value, onChange, placeholder, disabled, onKeyDown }: any) => (
+    RichTextEditor: ({
+        value,
+        onChange,
+        placeholder,
+        disabled,
+        onKeyDown,
+    }: {
+        value: string;
+        onChange: (value: string) => void;
+        placeholder?: string;
+        disabled?: boolean;
+        onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement>;
+    }) => (
         <textarea
             data-testid="rich-text-editor"
             value={value}
@@ -37,8 +49,8 @@ const { defaultState, storeState } = vi.hoisted(() => {
     const defaultStateObj = {
         step: 'generating' as Step,
         currentPhase: 'generating' as Phase,
-        logs: [] as any[],
-        cards: [] as any[],
+        logs: [] as ProgressEvent[],
+        cards: [] as Card[],
         progress: { current: 0, total: 10 },
         isError: false,
         isCancelling: false,
@@ -49,12 +61,12 @@ const { defaultState, storeState } = vi.hoisted(() => {
         searchQuery: '',
         isHistorical: false,
         editingIndex: null as number | null,
-        editForm: null as any | null,
+        editForm: null as Card | null,
         isSyncing: false,
         syncSuccess: false,
         syncPartialFailure: null as { failed: number; created: number } | null,
         syncProgress: { current: 0, total: 0 },
-        syncLogs: [] as any[],
+        syncLogs: [] as ProgressEvent[],
         confirmModal: { isOpen: false, type: 'lectern' as const, index: -1, noteId: undefined as number | undefined },
         isMultiSelectMode: false,
         selectedCards: new Set<string>(),
@@ -88,12 +100,12 @@ const { defaultState, storeState } = vi.hoisted(() => {
     };
 });
 
-const mockUseLecternStore = vi.fn((selector: any) => {
+const mockUseLecternStore = vi.fn((selector: ((s: typeof storeState) => unknown) | undefined) => {
     return selector ? selector(storeState) : storeState;
 });
 
 vi.mock('../store', () => ({
-    useLecternStore: (selector: any) => mockUseLecternStore(selector),
+    useLecternStore: (selector?: (s: typeof storeState) => unknown) => mockUseLecternStore(selector),
 }));
 
 // Mock the new view model directly and map our storeState mock to its expected output shape dynamically

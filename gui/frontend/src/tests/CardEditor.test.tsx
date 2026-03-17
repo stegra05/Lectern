@@ -1,20 +1,33 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import React from 'react';
 import { CardEditor } from '../components/CardEditor';
 import type { Card } from '../api';
+import React from 'react';
 
 // Mock framer-motion to avoid animation issues in tests
 vi.mock('framer-motion', () => ({
     motion: {
-        div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+        div: ({ children, ...props }: React.PropsWithChildren<React.HTMLAttributes<HTMLDivElement>>) => (
+            <div {...props}>{children}</div>
+        ),
     },
-    AnimatePresence: ({ children }: any) => <>{children}</>,
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('../components/RichTextEditor', () => ({
-    RichTextEditor: ({ value, onChange, placeholder, disabled, onKeyDown }: any) => (
+    RichTextEditor: ({
+        value,
+        onChange,
+        placeholder,
+        disabled,
+        onKeyDown,
+    }: {
+        value: string;
+        onChange: (value: string) => void;
+        placeholder?: string;
+        disabled?: boolean;
+        onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement>;
+    }) => (
         <textarea
             data-testid="rich-text-editor"
             value={value}

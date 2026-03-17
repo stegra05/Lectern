@@ -1,16 +1,23 @@
-
 import { FilePicker } from './FilePicker';
-import { useLecternStore } from '../store';
 
-export function SourceMaterialCard() {
-    const pdfFile = useLecternStore((s) => s.pdfFile);
-    const setPdfFile = useLecternStore((s) => s.setPdfFile);
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
+export interface SourceMaterialCardProps {
+    file: File | null;
+    onFileSelect: (file: File | null) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function SourceMaterialCard({ file, onFileSelect }: SourceMaterialCardProps) {
     return (
         <div className="space-y-4">
             <h2 className="text-2xl font-bold tracking-tight text-text-main">Source Material</h2>
-            <FilePicker file={pdfFile} onFileSelect={setPdfFile} />
+            <FilePicker file={file} onFileSelect={onFileSelect} />
         </div>
     );
 }
-

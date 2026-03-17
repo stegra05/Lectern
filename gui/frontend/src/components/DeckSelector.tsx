@@ -1,25 +1,40 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Plus, Folder, FolderOpen, Search, X } from 'lucide-react';
 import { clsx } from 'clsx';
-import { api } from '../api';
 import { KeyboardBadge } from './KeyboardBadge';
-import { useLecternStore } from '../store';
 
-interface DeckSelectorProps {
-    value: string;
-    onChange: (name: string) => void;
-    disabled?: boolean;
-}
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-interface DeckNode {
+export interface DeckNode {
     name: string;      // "Math"
     fullName: string;  // "Uni::Math"
     children: Record<string, DeckNode>;
-    hasCards: boolean; // In a real app we'd check this, here assume leaf nodes are decks
+    hasCards: boolean;
 }
 
-// Parse flat list of decks into a tree
+export interface DeckSelectorProps {
+    value: string;
+    availableDecks: string[];
+    isLoading: boolean;
+    isOpen: boolean;
+    searchQuery: string;
+    expandedNodes: Set<string>;
+    disabled?: boolean;
+    onChange: (name: string) => void;
+    onCreate: (name: string) => Promise<boolean>;
+    onOpenChange: (open: boolean) => void;
+    onSearchChange: (query: string) => void;
+    onToggleNode: (nodeName: string) => void;
+    onSearchMatchesChange?: (matchedFullNames: Set<string>) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Tree building utilities (pure functions)
+// ---------------------------------------------------------------------------
+
 const buildDeckTree = (decks: string[]): Record<string, DeckNode> => {
     const root: Record<string, DeckNode> = {};
 
@@ -70,7 +85,85 @@ const HighlightMatch: React.FC<{ text: string; query: string }> = ({ text, query
     );
 };
 
-// Collect all full names in a subtree (for parent matches, we need to show all descendants)
+// Recursive tree node component (avoids self-referential useCallback)
+interface DeckTreeNodeProps {
+    node: DeckNode;
+    level: number;
+    value: string;
+    searchQuery: string;
+    expandedNodes: Set<string>;
+    onSelect: (name: string) => void;
+    onToggleNode: (nodeName: string) => void;
+}
+
+function DeckTreeNode({
+    node,
+    level,
+    value,
+    searchQuery,
+    expandedNodes,
+    onSelect,
+    onToggleNode,
+}: DeckTreeNodeProps) {
+    const isExpanded = expandedNodes.has(node.fullName);
+    const isSelected = value === node.fullName;
+    const hasChildren = Object.keys(node.children).length > 0;
+
+    return (
+        <div className="select-none">
+            <div
+                className={clsx(
+                    'flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors',
+                    isSelected ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-surface hover:text-text-main',
+                    level > 0 && 'ml-4 border-l border-border/30'
+                )}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(node.fullName);
+                }}
+            >
+                {hasChildren && (
+                    <div
+                        className="p-1 hover:bg-black/5 rounded"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleNode(node.fullName);
+                        }}
+                    >
+                        {isExpanded ? <FolderOpen className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
+                    </div>
+                )}
+                {!hasChildren && <div className="w-5" />}
+
+                <span className="flex-1 text-sm truncate">
+                    <HighlightMatch text={node.name} query={searchQuery} />
+                </span>
+                {isSelected && <Check className="w-3 h-3" />}
+            </div>
+
+            {hasChildren && isExpanded && (
+                <div className="ml-2">
+                    {Object.values(node.children)
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((child) => (
+                            <DeckTreeNode
+                                key={child.fullName}
+                                node={child}
+                                level={level + 1}
+                                value={value}
+                                searchQuery={searchQuery}
+                                expandedNodes={expandedNodes}
+                                onSelect={onSelect}
+                                onToggleNode={onToggleNode}
+                            />
+                        ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Collect all full names in a subtree
 const collectAllFullNames = (node: DeckNode): Set<string> => {
     const names = new Set<string>();
     names.add(node.fullName);
@@ -80,7 +173,7 @@ const collectAllFullNames = (node: DeckNode): Set<string> => {
     return names;
 };
 
-// Filter tree nodes based on search query, preserving paths to matches
+// Filter tree nodes based on search query
 const filterTreeBySearch = (
     tree: Record<string, DeckNode>,
     query: string
@@ -92,29 +185,23 @@ const filterTreeBySearch = (
     const lowerQuery = query.toLowerCase();
     const matchedFullNames = new Set<string>();
 
-    // First pass: find all decks that match (by full name or partial name)
     const matchesDeck = (fullName: string): boolean => {
         return fullName.toLowerCase().includes(lowerQuery);
     };
 
-
-    // Clone a node, filtering children and marking matched paths
     const filterNode = (node: DeckNode): DeckNode | null => {
         const nodeMatches = matchesDeck(node.fullName);
 
-        // If this node matches, include all its descendants
         if (nodeMatches) {
             collectAllFullNames(node).forEach(name => matchedFullNames.add(name));
-            return { ...node }; // Return node with all children intact
+            return { ...node };
         }
 
-        // Otherwise, filter children
         const filteredChildren: Record<string, DeckNode> = {};
         Object.entries(node.children).forEach(([key, child]) => {
             const filteredChild = filterNode(child);
             if (filteredChild) {
                 filteredChildren[key] = filteredChild;
-                // Mark parent path as needed
                 matchedFullNames.add(node.fullName);
             }
         });
@@ -138,82 +225,76 @@ const filterTreeBySearch = (
     return { filteredTree, matchedFullNames };
 };
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
-
-export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    const availableDecks = useLecternStore((s) => s.availableDecks);
-    const setAvailableDecks = useLecternStore((s) => s.setAvailableDecks);
-    const [isLoading, setIsLoading] = useState(false);
-    const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-    const [searchQuery, setSearchQuery] = useState('');
+export function DeckSelector({
+    value,
+    availableDecks,
+    isLoading,
+    isOpen,
+    searchQuery,
+    expandedNodes,
+    disabled,
+    onChange,
+    onCreate,
+    onOpenChange,
+    onSearchChange,
+    onToggleNode,
+    onSearchMatchesChange,
+}: DeckSelectorProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
-
-    // Fetch decks (background update)
-    const fetchDecks = async () => {
-        if (isLoading) return;
-        setIsLoading(true);
-        try {
-            const res = await api.getDecks();
-            if (res.decks && Array.isArray(res.decks)) {
-                setAvailableDecks(res.decks);
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Handle selection
-    const handleSelect = useCallback((deckName: string) => {
-        onChange(deckName);
-        setIsOpen(false);
-    }, [onChange]);
-
-    // Handle input change
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onChange(e.target.value);
-        setIsOpen(true);
-    };
 
     // Handle click outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
+                onOpenChange(false);
             }
         };
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [onOpenChange]);
 
-    // Create deck on blur or enter if it doesn't exist
+    // Tree generation (guard against undefined from tests/legacy)
+    const deckTree = useMemo(() => buildDeckTree([...(availableDecks ?? [])].sort()), [availableDecks]);
+
+    // Filtered tree based on search query
+    const { filteredTree, matchedFullNames } = useMemo(() => {
+        return filterTreeBySearch(deckTree, searchQuery);
+    }, [deckTree, searchQuery]);
+
+    useEffect(() => {
+        onSearchMatchesChange?.(matchedFullNames);
+    }, [matchedFullNames, onSearchMatchesChange]);
+
+    // Handle selection
+    const handleSelect = (deckName: string) => {
+        onChange(deckName);
+        onOpenChange(false);
+    };
+
+    // Handle input change
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onChange(e.target.value);
+        onOpenChange(true);
+    };
+
+    // Handle create deck on blur or enter
     const handleCreateDeck = async () => {
         const trimmed = value.trim();
         if (!trimmed) return;
 
         // Basic validation
         if (trimmed.includes('"') || trimmed.startsWith('::') || trimmed.endsWith('::')) {
-            return; // Invalid format
+            return;
         }
 
-        if (!availableDecks.includes(trimmed)) {
-            // It's a new deck
-            try {
-                // Optimistic update
-                const newDecks = [...availableDecks, trimmed].sort();
-                setAvailableDecks(newDecks);
-
-                await api.createDeck(trimmed);
-                handleSelect(trimmed);
-            } catch (e) {
-                console.error('Failed to create deck', e);
-                // Revert if failed
-                setAvailableDecks(availableDecks.filter(d => d !== trimmed));
-            }
-        } else {
+        const success = await onCreate(trimmed);
+        if (success) {
             handleSelect(trimmed);
         }
     };
@@ -221,94 +302,12 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             handleCreateDeck();
-            setIsOpen(false);
+            onOpenChange(false);
             inputRef.current?.blur();
         }
     };
 
-
-
-    // Tree generation for dropdown
-    const deckTree = useMemo(() => buildDeckTree(availableDecks.sort()), [availableDecks]);
-
-    // Filtered tree based on search query
-    const { filteredTree, matchedFullNames } = useMemo(() => {
-        return filterTreeBySearch(deckTree, searchQuery);
-    }, [deckTree, searchQuery]);
-
-    // Auto-expand matched nodes when searching
-    useEffect(() => {
-        if (searchQuery.trim() && matchedFullNames.size > 0) {
-            setExpandedNodes(prev => {
-                const next = new Set(prev);
-                matchedFullNames.forEach(name => next.add(name));
-                return next;
-            });
-        }
-    }, [searchQuery, matchedFullNames]);
-
-    // Clear search when dropdown closes
-    useEffect(() => {
-        if (!isOpen) {
-            setSearchQuery('');
-        }
-    }, [isOpen]);
-
-    // Recursive tree renderer with highlighting
-    const renderNode = useCallback((node: DeckNode, level: number = 0) => {
-        const isExpanded = expandedNodes.has(node.fullName);
-        const isSelected = value === node.fullName;
-        const hasChildren = Object.keys(node.children).length > 0;
-
-        return (
-            <div key={node.fullName} className="select-none">
-                <div
-                    className={clsx(
-                        "flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors",
-                        isSelected ? "bg-primary/10 text-primary" : "text-text-muted hover:bg-surface hover:text-text-main",
-                        level > 0 && "ml-4 border-l border-border/30"
-                    )}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelect(node.fullName);
-                    }}
-                >
-                    {hasChildren && (
-                        <div
-                            className="p-1 hover:bg-black/5 rounded"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const next = new Set(expandedNodes);
-                                if (isExpanded) next.delete(node.fullName);
-                                else next.add(node.fullName);
-                                setExpandedNodes(next);
-                            }}
-                        >
-                            {isExpanded ? <FolderOpen className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
-                        </div>
-                    )}
-                    {!hasChildren && <div className="w-5" />}
-
-                    <span className="flex-1 text-sm truncate">
-                        <HighlightMatch text={node.name} query={searchQuery} />
-                    </span>
-                    {isSelected && <Check className="w-3 h-3" />}
-                </div>
-
-                {hasChildren && isExpanded && (
-                    <div className="ml-2">
-                        {Object.values(node.children)
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map(child => renderNode(child, level + 1))}
-                    </div>
-                )}
-            </div>
-        );
-    }, [expandedNodes, value, searchQuery, handleSelect]);
-
-    // Check if filtered tree has any nodes
     const hasFilteredResults = Object.keys(filteredTree).length > 0;
-
     const isNewDeck = value && !availableDecks.includes(value);
 
     return (
@@ -319,12 +318,8 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                     type="text"
                     value={value}
                     onChange={handleInputChange}
-                    onFocus={() => {
-                        setIsOpen(true);
-                        fetchDecks();
-                    }}
+                    onFocus={() => onOpenChange(true)}
                     onBlur={() => {
-                        // Delay hide to allow clicks
                         setTimeout(() => handleCreateDeck(), 200);
                     }}
                     onKeyDown={handleKeyDown}
@@ -364,14 +359,12 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                         <div className="sticky top-0 bg-surface/95 backdrop-blur-xl border-b border-border/50 p-2 z-10">
                             <div className="relative">
                                 <input
-                                    ref={searchInputRef}
                                     type="text"
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onChange={(e) => onSearchChange(e.target.value)}
                                     placeholder="Search decks..."
                                     className="w-full bg-background/50 border border-border/50 rounded-lg py-2 pl-9 pr-8 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary/30 outline-none transition-all placeholder:text-text-muted"
                                     onKeyDown={(e) => {
-                                        // Prevent closing dropdown on Enter in search
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
                                         }
@@ -380,7 +373,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
                                 {searchQuery && (
                                     <button
-                                        onClick={() => setSearchQuery('')}
+                                        onClick={() => onSearchChange('')}
                                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-black/5 rounded text-text-muted hover:text-text-main transition-colors"
                                     >
                                         <X className="w-3 h-3" />
@@ -393,7 +386,7 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                             <div
                                 className="px-4 py-3 border-b border-border/50 text-sm text-primary flex items-center gap-2 cursor-pointer hover:bg-primary/5"
                                 onMouseDown={(e) => {
-                                    e.preventDefault(); // Prevent blur
+                                    e.preventDefault();
                                     handleCreateDeck();
                                 }}
                             >
@@ -403,11 +396,21 @@ export function DeckSelector({ value, onChange, disabled }: DeckSelectorProps) {
                         )}
 
                         <div className="py-2">
-                            {/* Show filtered tree view always, with search highlighting */}
                             {hasFilteredResults ? (
                                 Object.values(filteredTree)
                                     .sort((a, b) => a.name.localeCompare(b.name))
-                                    .map(node => renderNode(node))
+                                    .map((node) => (
+                                        <DeckTreeNode
+                                            key={node.fullName}
+                                            node={node}
+                                            level={0}
+                                            value={value}
+                                            searchQuery={searchQuery}
+                                            expandedNodes={expandedNodes}
+                                            onSelect={handleSelect}
+                                            onToggleNode={onToggleNode}
+                                        />
+                                    ))
                             ) : (
                                 searchQuery && (
                                     <div className="px-4 py-8 text-center text-text-muted text-sm">

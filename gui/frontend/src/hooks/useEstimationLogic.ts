@@ -6,7 +6,6 @@ import type { HealthStatus } from '../hooks/useAppState';
 
 export function useEstimationLogic(health: HealthStatus | null) {
     const pdfFile = useLecternStore(s => s.pdfFile);
-    const sourceType = useLecternStore(s => s.sourceType);
     const targetDeckSize = useLecternStore(s => s.targetDeckSize);
     const estimation = useLecternStore(s => s.estimation);
     const setIsEstimating = useLecternStore(s => s.setIsEstimating);
@@ -18,7 +17,7 @@ export function useEstimationLogic(health: HealthStatus | null) {
     const estimationBaseRef = useRef<EstimationBase | null>(null);
     const previousEstimateContextRef = useRef<string | null>(null);
 
-    // Effect 1: Initial estimate — fires on PDF or source type change only.
+    // Effect 1: Initial estimate — fires on PDF change only.
     useEffect(() => {
         const controller = new AbortController();
         estimationBaseRef.current = null;
@@ -35,7 +34,6 @@ export function useEstimationLogic(health: HealthStatus | null) {
                 const est = await api.estimateCost(
                     pdfFile,
                     health?.gemini_model,
-                    sourceType,
                     undefined, // No target_card_count — use backend default for initial estimate
                     controller.signal
                 );
@@ -62,7 +60,7 @@ export function useEstimationLogic(health: HealthStatus | null) {
         };
         fetchEstimate();
         return () => controller.abort();
-    }, [pdfFile, health?.gemini_model, sourceType, setEstimation, setIsEstimating, setEstimationError]);
+    }, [pdfFile, health?.gemini_model, setEstimation, setIsEstimating, setEstimationError]);
 
     // Effect 2: Slider recompute — instant client-side math, no loading state.
     useEffect(() => {
@@ -82,10 +80,10 @@ export function useEstimationLogic(health: HealthStatus | null) {
         }
         if (estimation?.suggested_card_count === undefined) return;
 
-        const contextKey = `${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}:${sourceType}`;
+        const contextKey = `${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}`;
         if (previousEstimateContextRef.current !== contextKey) {
             recommendTargetDeckSize(estimation);
             previousEstimateContextRef.current = contextKey;
         }
-    }, [pdfFile, sourceType, estimation, recommendTargetDeckSize]);
+    }, [pdfFile, estimation, recommendTargetDeckSize]);
 }

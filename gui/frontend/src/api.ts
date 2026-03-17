@@ -1,3 +1,51 @@
+import { validateOrThrow } from './schemas/validate';
+import { ProgressEventSchema } from './schemas/sse';
+import {
+  AnkiNoteResponseSchema,
+  AnkiStatusSchema,
+  ConfigSchema,
+  CreateDeckResponseSchema,
+  DecksResponseSchema,
+  EstimationSchema,
+  HealthStatusSchema,
+  HistoryBatchDeleteResponseSchema,
+  HistoryClearResponseSchema,
+  HistoryDeleteResponseSchema,
+  HistoryResponseSchema,
+  SaveConfigResponseSchema,
+  SessionDataSchema,
+  StopResponseSchema,
+  VersionSchema,
+} from './schemas/api';
+import type {
+  AnkiNoteResponse,
+  AnkiStatus,
+  Card,
+  Config,
+  CreateDeckResponse,
+  DecksResponse,
+  Estimation,
+  HealthStatus,
+  HistoryBatchDeleteResponse,
+  HistoryClearResponse,
+  HistoryDeleteResponse,
+  HistoryResponse,
+  SaveConfigResponse,
+  SessionData,
+  StopResponse,
+  Version,
+} from './schemas/api';
+
+// Re-export types for backward compatibility
+export type {
+  Card,
+  Estimation,
+  HealthStatus,
+  SessionData,
+} from './schemas/api';
+
+export type { HistoryEntry } from './schemas/api';
+
 // Auto-detect API URL based on environment
 // If we're served from the packaged app (port 4173), use that
 // Otherwise use dev server default (port 8000)
@@ -40,31 +88,7 @@ export interface GenerateRequest {
     target_card_count?: number;
 }
 
-// ... (omitting ProgressEvent and others for brevity)
-
-
-export interface Card {
-    front?: string;
-    back?: string;
-    text?: string;
-    anki_note_id?: number;
-    fields?: Record<string, string>;
-    model_name?: string;
-    slide_number?: number;
-    source_pages?: number[];
-    concept_ids?: string[];
-    relation_keys?: string[];
-    slide_topic?: string;
-    rationale?: string;
-    source_excerpt?: string;
-    tag?: string;
-    /** Backend-assigned stable identity — set by server, used as React key */
-    uid?: string;
-    /** Legacy client-only uid — kept for backward compat during transition */
-    _uid?: string;
-    [key: string]: unknown;
-}
-
+// Coverage types needed for SessionData
 export interface CoverageConcept {
     id: string;
     name: string;
@@ -98,17 +122,6 @@ export interface CoverageData {
     missing_high_priority?: CoverageConcept[];
     uncovered_concepts?: CoverageConcept[];
     uncovered_relations?: Array<Record<string, unknown>>;
-}
-
-export interface SessionData {
-    cards: Card[];
-    session_id: string;
-    deck_name?: string;
-    deck?: string;
-    slide_set_name?: string;
-    total_pages?: number | null;
-    coverage_data?: CoverageData | null;
-    [key: string]: unknown;
 }
 
 export type SnapshotStatus =
@@ -160,17 +173,6 @@ export interface ProgressEvent {
     timestamp: number;
 }
 
-export interface HistoryEntry {
-    id: string;
-    session_id: string;
-    filename: string;
-    full_path: string;
-    deck: string;
-    date: string;
-    card_count: number;
-    status: "draft" | "completed" | "error" | "cancelled";
-}
-
 // Helper to make fetch calls with timeout
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs: number = 5000) => {
     const controller = new AbortController();
@@ -198,6 +200,11 @@ const parseNDJSONStream = async (
     const decoder = new TextDecoder();
     let buffer = "";
 
+    const emitValidated = (raw: unknown) => {
+        const event = validateOrThrow(ProgressEventSchema, raw);
+        onEvent(event as ProgressEvent);
+    };
+
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -209,10 +216,11 @@ const parseNDJSONStream = async (
         for (const line of lines) {
             if (line.trim()) {
                 try {
-                    const event = JSON.parse(line);
-                    onEvent(event);
+                    const raw = JSON.parse(line);
+                    emitValidated(raw);
                 } catch (e) {
-                    console.error("Failed to parse event:", line, e);
+                    console.error("Failed to parse/validate event:", line, e);
+                    throw e;
                 }
             }
         }
@@ -220,36 +228,14 @@ const parseNDJSONStream = async (
 
     if (buffer.trim()) {
         try {
-            const event = JSON.parse(buffer);
-            onEvent(event);
+            const raw = JSON.parse(buffer);
+            emitValidated(raw);
         } catch (e) {
-            console.error("Failed to parse event:", buffer, e);
+            console.error("Failed to parse/validate event:", buffer, e);
+            throw e;
         }
     }
 };
-
-export interface Estimation {
-    tokens: number;
-    input_tokens: number;
-    output_tokens: number;
-    input_cost: number;
-    output_cost: number;
-    cost: number;
-    pages: number;
-    text_chars?: number;
-    model: string;
-    suggested_card_count?: number;
-    image_count?: number;
-    document_type?: string;
-}
-
-export interface HealthStatus {
-    // ... existing interface ...
-    anki_connected: boolean;
-    gemini_configured: boolean;
-    anki_version?: string;
-    gemini_model?: string;
-}
 
 export interface SessionStatus {
     active: boolean;
@@ -257,70 +243,44 @@ export interface SessionStatus {
 }
 
 export const api = {
-    checkHealth: async () => {
-        try {
-            const res = await fetchWithTimeout(`${API_URL}/health`, {}, 3000);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        } catch (error) {
-            console.warn('Health check failed:', error);
-            // Return offline status instead of throwing
-            return {
-                status: "error",
-                anki_connected: false,
-                gemini_configured: false,
-                backend_ready: false
-            };
-        }
+    checkHealth: async (): Promise<HealthStatus> => {
+        const res = await fetchWithTimeout(`${API_URL}/health`, {}, 3000);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return validateOrThrow(HealthStatusSchema, await res.json());
     },
 
-    getAnkiStatus: async () => {
-        try {
-            const res = await fetchWithTimeout(`${API_URL}/anki/status`, {}, 5000);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        } catch (error) {
-            console.warn('Anki status check failed:', error);
-            return {
-                status: "error",
-                connected: false,
-                version: null,
-                version_ok: false,
-                error: 'Failed to check Anki status'
-            };
-        }
+    getAnkiStatus: async (): Promise<AnkiStatus> => {
+        const res = await fetchWithTimeout(`${API_URL}/anki/status`, {}, 5000);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return validateOrThrow(AnkiStatusSchema, await res.json());
     },
 
-    getConfig: async () => {
+    getConfig: async (): Promise<Config> => {
         try {
             const res = await fetchWithTimeout(`${API_URL}/config`, {}, 3000);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
+            const data = await res.json();
+            return validateOrThrow(ConfigSchema, data);
         } catch (error) {
             console.error('Failed to fetch config:', error);
             throw error;
         }
     },
 
-    getDecks: async () => {
-        try {
-            const res = await fetchWithTimeout(`${API_URL}/decks`, {}, 3000);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        } catch (error) {
-            console.error('Failed to fetch decks:', error);
-            return { decks: [] };
-        }
+    getDecks: async (): Promise<DecksResponse> => {
+        const res = await fetchWithTimeout(`${API_URL}/decks`, {}, 3000);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return validateOrThrow(DecksResponseSchema, await res.json());
     },
 
-    createDeck: async (name: string) => {
+    createDeck: async (name: string): Promise<CreateDeckResponse> => {
         const res = await fetch(`${API_URL}/decks`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name }),
         });
         if (!res.ok) throw new Error("Failed to create deck");
-        return res.json();
+        return validateOrThrow(CreateDeckResponseSchema, await res.json());
     },
 
     saveConfig: async (config: {
@@ -330,49 +290,45 @@ export const api = {
         cloze_model?: string;
         gemini_model?: string;
         tag_template?: string;
-    }) => {
+    }): Promise<SaveConfigResponse> => {
         const res = await fetch(`${API_URL}/config`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(config),
         });
-        return res.json();
+        if (!res.ok) throw new Error("Failed to save config");
+        return validateOrThrow(SaveConfigResponseSchema, await res.json());
     },
 
-    getHistory: async () => {
-        try {
-            const res = await fetchWithTimeout(`${API_URL}/history`, {}, 3000);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        } catch (error) {
-            console.error('Failed to fetch history:', error);
-            return [];
-        }
+    getHistory: async (): Promise<HistoryResponse> => {
+        const res = await fetchWithTimeout(`${API_URL}/history`, {}, 3000);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return validateOrThrow(HistoryResponseSchema, await res.json());
     },
 
-    clearHistory: async () => {
+    clearHistory: async (): Promise<HistoryClearResponse> => {
         const res = await fetch(`${API_URL}/history`, {
             method: "DELETE",
         });
-        return res.json();
+        return validateOrThrow(HistoryClearResponseSchema, await res.json());
     },
 
-    deleteHistoryEntry: async (id: string) => {
+    deleteHistoryEntry: async (id: string): Promise<HistoryDeleteResponse> => {
         const res = await fetch(`${API_URL}/history/${id}`, {
             method: "DELETE",
         });
         if (!res.ok) throw new Error("Failed to delete entry");
-        return res.json();
+        return validateOrThrow(HistoryDeleteResponseSchema, await res.json());
     },
 
-    batchDeleteHistory: async (params: { ids?: string[]; status?: string }) => {
+    batchDeleteHistory: async (params: { ids?: string[]; status?: string }): Promise<HistoryBatchDeleteResponse> => {
         const res = await fetch(`${API_URL}/history/batch-delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(params),
         });
         if (!res.ok) throw new Error("Failed to batch delete history");
-        return res.json();
+        return validateOrThrow(HistoryBatchDeleteResponseSchema, await res.json());
     },
 
     estimateCost: async (
@@ -380,7 +336,7 @@ export const api = {
         modelName?: string,
         targetCardCount?: number,
         signal?: AbortSignal
-    ) => {
+    ): Promise<Estimation> => {
         const formData = new FormData();
         formData.append("pdf_file", file);
         if (modelName) formData.append("model_name", modelName);
@@ -388,37 +344,28 @@ export const api = {
             formData.append("target_card_count", String(targetCardCount));
         }
 
-        try {
-            const url = `${API_URL}/estimate`;
+        const url = `${API_URL}/estimate`;
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
-            // If an external signal is provided, chain it
-            if (signal) {
-                signal.addEventListener('abort', () => {
-                    clearTimeout(timeoutId);
-                    controller.abort();
-                });
-            }
-
-            const res = await fetch(url, {
-                method: "POST",
-                body: formData,
-                signal: controller.signal
+        // If an external signal is provided, chain it
+        if (signal) {
+            signal.addEventListener('abort', () => {
+                clearTimeout(timeoutId);
+                controller.abort();
             });
-            clearTimeout(timeoutId);
-
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        } catch (error) {
-            if ((error as Error).name === 'AbortError') {
-                console.log('Estimation aborted');
-                return null;
-            }
-            console.error('Failed to estimate cost:', error);
-            throw error;
         }
+
+        const res = await fetch(url, {
+            method: "POST",
+            body: formData,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return validateOrThrow(EstimationSchema, await res.json());
     },
 
     generate: async (req: GenerateRequest, onEvent: (event: ProgressEvent) => void) => {
@@ -446,17 +393,18 @@ export const api = {
         await parseNDJSONStream(res, onEvent);
     },
 
-    stopGeneration: async (sessionId?: string) => {
+    stopGeneration: async (sessionId?: string): Promise<StopResponse> => {
         const res = await fetch(withSessionId(`${API_URL}/stop`, sessionId), {
             method: "POST",
         });
-        return res.json();
+        return validateOrThrow(StopResponseSchema, await res.json());
     },
 
     getSession: async (sessionId: string): Promise<SessionData> => {
         const res = await fetch(`${API_URL}/session/${sessionId}`);
         if (!res.ok) throw new Error("Failed to load session");
-        return res.json();
+        const data = await res.json();
+      return validateOrThrow(SessionDataSchema, data);
     },
 
     syncCardsToAnki: async (
@@ -472,30 +420,42 @@ export const api = {
         await parseNDJSONStream(res, onEvent);
     },
 
-    deleteAnkiNotes: async (noteIds: number[]) => {
+    deleteAnkiNotes: async (noteIds: number[]): Promise<AnkiNoteResponse> => {
         const res = await fetchWithTimeout(`${API_URL}/anki/notes`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ note_ids: noteIds }),
         });
         if (!res.ok) throw new Error('Failed to delete notes from Anki');
-        return res.json();
+        return validateOrThrow(AnkiNoteResponseSchema, await res.json());
     },
 
-    updateAnkiNote: async (noteId: number, fields: Record<string, string>) => {
+    updateAnkiNote: async (noteId: number, fields: Record<string, string>): Promise<AnkiNoteResponse> => {
         const res = await fetchWithTimeout(`${API_URL}/anki/notes/${noteId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fields }),
         });
         if (!res.ok) throw new Error('Failed to update Anki note');
-        return res.json();
+        return validateOrThrow(AnkiNoteResponseSchema, await res.json());
     },
 
-    getVersion: async (): Promise<{ current: string; latest: string | null; update_available: boolean; release_url: string }> => {
+    getVersion: async (): Promise<Version> => {
         const res = await fetchWithTimeout(`${API_URL}/version`);
         if (!res.ok) throw new Error('Failed to fetch version info');
-        return res.json();
+        const data = await res.json();
+        return validateOrThrow(VersionSchema, data);
+    },
+
+    /** Check AnkiConnect at an arbitrary URL (e.g. user-edited URL in settings). */
+    checkAnkiConnectUrl: async (url: string): Promise<{ connected: boolean }> => {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'version', version: 6 }),
+            signal: AbortSignal.timeout(3000),
+        });
+        return { connected: res.ok };
     },
 
     getApiUrl: () => API_URL,

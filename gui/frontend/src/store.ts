@@ -50,7 +50,6 @@ export const useLecternStore = create<LecternStore>()(
         sessionId: state.sessionId,
         totalSessionSpend: state.totalSessionSpend,
         deckName: state.deckName,
-        availableDecks: state.availableDecks,
         densityPreferences: state.densityPreferences,
       }),
     }

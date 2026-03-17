@@ -6,8 +6,19 @@ import type { Card } from '../api';
 
 // Mock framer-motion
 vi.mock('framer-motion', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const MockComponent = ({ children, onClick, className, title, disabled }: any) => {
+    const MockComponent = ({
+        children,
+        onClick,
+        className,
+        title,
+        disabled,
+    }: {
+        children?: React.ReactNode;
+        onClick?: React.MouseEventHandler<HTMLButtonElement>;
+        className?: string;
+        title?: string;
+        disabled?: boolean;
+    }) => {
         return React.createElement('button', { onClick, className, title, disabled }, children);
     };
 
@@ -16,8 +27,8 @@ vi.mock('framer-motion', () => {
             div: MockComponent,
             button: MockComponent,
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
+        AnimatePresence: ({ children }: { children: React.ReactNode }) =>
+            React.createElement(React.Fragment, null, children),
     };
 });
 

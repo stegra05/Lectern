@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadSession, recoverSessionOnRefresh, processGenerationEvent } from '../logic/generation';
 import { api } from '../api';
+import type { Step } from '../store-types';
+import type { Phase } from '../components/PhaseIndicator';
+import type { StoreState } from '../store-types';
 
 // Mock dependencies
 vi.mock('../api', () => ({
@@ -28,11 +31,11 @@ vi.mock('../utils/uid', () => ({
 }));
 
 describe('generation logic', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let setMock: any;
+    type StoreSetter = (partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void;
+    let setMock: StoreSetter;
 
     beforeEach(() => {
-        setMock = vi.fn();
+        setMock = vi.fn() as unknown as StoreSetter;
         vi.clearAllMocks();
         localStorage.clear();
     });
@@ -40,7 +43,11 @@ describe('generation logic', () => {
     describe('loadSession', () => {
         it('prefers persisted total_pages metadata over card max', async () => {
             vi.mocked(api.getSession).mockResolvedValue({
+                id: 'history-entry-1',
                 cards: [{ slide_number: 3, front: 'A', back: 'B' }],
+                logs: [],
+                status: 'completed',
+                session_id: 'test-session',
                 deck_name: 'Test Deck',
                 total_pages: 12,
             });
@@ -59,7 +66,11 @@ describe('generation logic', () => {
                 { slide_number: 3, front: 'E', back: 'F' }, // Max is 5
             ];
             vi.mocked(api.getSession).mockResolvedValue({
+                id: 'history-entry-2',
                 cards: mockCards,
+                logs: [],
+                status: 'completed',
+                session_id: 'test-session',
                 deck_name: 'Test Deck',
             });
 
@@ -74,7 +85,11 @@ describe('generation logic', () => {
 
         it('handles sessions with no cards', async () => {
             vi.mocked(api.getSession).mockResolvedValue({
+                id: 'history-entry-3',
                 cards: [],
+                logs: [],
+                status: 'completed',
+                session_id: 'empty-session',
                 deck_name: 'Empty Deck',
             });
 
@@ -91,7 +106,11 @@ describe('generation logic', () => {
         it('derives totalPages for active session', async () => {
             localStorage.setItem('lectern_active_session_id', 'active-session');
             vi.mocked(api.getSession).mockResolvedValue({
+                id: 'history-entry-active',
                 cards: [{ slide_number: 10 }],
+                logs: [],
+                status: 'completed',
+                session_id: 'active-session',
                 deck_name: 'Active Deck',
             });
 
@@ -130,6 +149,48 @@ describe('generation logic', () => {
             expect(result).toHaveProperty('totalPages');
             expect((result as { cards: unknown[] }).cards).toHaveLength(1);
             expect((result as { totalPages: number }).totalPages).toBe(10);
+        });
+    });
+
+    describe('processGenerationEvent validation', () => {
+        it('ignores malformed card payloads (does not mutate cards)', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'card',
+                    message: 'Card event',
+                    data: { not_a_card: true },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            // First call is log append; last call is the card handler state update.
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const prevState = {
+                cards: [],
+                totalPages: 0,
+                progress: { current: 0, total: 0 },
+            };
+
+            const result = update(prevState);
+            expect(result).toBe(prevState);
+        });
+
+        it('ignores malformed control snapshots (does not apply snapshot)', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'control_snapshot',
+                    message: 'snapshot',
+                    data: { bogus: true },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            // Only the log append call should happen; snapshot branch returns early.
+            expect(setFn).toHaveBeenCalledTimes(1);
         });
     });
 

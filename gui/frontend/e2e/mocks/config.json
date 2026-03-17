@@ -1,0 +1,8 @@
+{
+  "anki_url": "http://localhost:8765",
+  "basic_model": "Basic",
+  "cloze_model": "Cloze",
+  "gemini_model": "gemini-2.0-flash",
+  "tag_template": "lectern::{deck}",
+  "gemini_api_key_set": true
+}

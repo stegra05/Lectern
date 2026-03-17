@@ -113,6 +113,7 @@ export type GenerationActions = {
     appendCard: (card: Card) => void;
     handleGenerate: () => Promise<void>;
     handleCancel: () => void;
+    handleCancelAndReset: () => void;
     handleReset: () => void;
     handleCopyLogs: () => void;
     loadSession: (sessionId: string) => Promise<void>;

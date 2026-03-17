@@ -1,56 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Settings, Server } from 'lucide-react';
 import { clsx } from 'clsx';
-import { api } from '../api';
 import { GlassCard } from './GlassCard';
-
-interface AnkiConnectionInfo {
-    connected: boolean;
-    version: number | null;
-    version_ok: boolean;
-    error: string | null;
-}
+import type { AnkiStatus } from '../schemas/api';
 
 interface AnkiHealthPanelProps {
     isOpen: boolean;
     onClose: () => void;
     onOpenSettings?: () => void;
+    /** Anki status from parent (useAnkiStatusQuery). Keeps component presentational. */
+    status: AnkiStatus | undefined;
+    isLoading: boolean;
+    onRefetch: () => void;
+    lastChecked: Date | null;
 }
 
 export const AnkiHealthPanel: React.FC<AnkiHealthPanelProps> = ({
     isOpen,
     onClose,
     onOpenSettings,
+    status,
+    isLoading,
+    onRefetch,
+    lastChecked,
 }) => {
-    const [status, setStatus] = useState<AnkiConnectionInfo | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [lastChecked, setLastChecked] = useState<Date | null>(null);
-
-    const checkStatus = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const info = await api.getAnkiStatus();
-            setStatus(info);
-            setLastChecked(new Date());
-        } catch {
-            setStatus({
-                connected: false,
-                version: null,
-                version_ok: false,
-                error: 'Failed to check Anki status',
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (isOpen) {
-            checkStatus();
-        }
-    }, [isOpen, checkStatus]);
-
     if (!isOpen) return null;
 
     const getStatusIcon = () => {
@@ -221,7 +195,7 @@ export const AnkiHealthPanel: React.FC<AnkiHealthPanelProps> = ({
                                 {/* Actions */}
                                 <div className="flex gap-3">
                                     <button
-                                        onClick={checkStatus}
+                                        onClick={() => onRefetch()}
                                         disabled={isLoading}
                                         className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-surface hover:bg-surface/80 border border-border rounded-lg text-sm font-medium text-text-main transition-colors disabled:opacity-50"
                                     >

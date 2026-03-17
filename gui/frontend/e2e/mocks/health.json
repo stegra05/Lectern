@@ -1,0 +1,8 @@
+{
+  "status": "ok",
+  "anki_connected": true,
+  "gemini_configured": true,
+  "backend_ready": true,
+  "anki_version": "2.1.66",
+  "gemini_model": "gemini-2.0-flash"
+}

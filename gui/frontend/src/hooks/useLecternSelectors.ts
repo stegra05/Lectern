@@ -77,6 +77,62 @@ export const useConfirmModalState = () => useLecternStore(useShallow((s) => ({
 })));
 
 // ---------------------------------------------------------------------------
+// Home view selectors - for container pattern
+// ---------------------------------------------------------------------------
+
+/** State for source material */
+export const useSourceState = () => useLecternStore(useShallow((s) => ({
+    pdfFile: s.pdfFile,
+})));
+
+/** State for configuration */
+export const useConfigurationState = () => useLecternStore(useShallow((s) => ({
+    targetDeckSize: s.targetDeckSize,
+    focusPrompt: s.focusPrompt,
+})));
+
+/** State for estimation */
+export const useEstimationState = () => useLecternStore(useShallow((s) => ({
+    estimation: s.estimation,
+    isEstimating: s.isEstimating,
+    estimationError: s.estimationError,
+})));
+
+/** State for deck selection */
+export const useDeckState = () => useLecternStore(useShallow((s) => ({
+    deckName: s.deckName,
+})));
+
+/** State for generation validation */
+export const useGenerationValidation = () => useLecternStore(useShallow((s) => {
+    const sliderDisabled = s.isEstimating || (s.estimation?.suggested_card_count === undefined);
+    const canGenerate = !!s.pdfFile && !!s.deckName && !s.isEstimating && !sliderDisabled;
+
+    let disabledReason = '';
+    if (!s.pdfFile) disabledReason = 'Upload a PDF first';
+    else if (!s.deckName) disabledReason = 'Select a target deck above';
+    else if (s.isEstimating) disabledReason = 'Calculating cost estimate...';
+    else if (sliderDisabled) disabledReason = 'Estimation in progress...';
+
+    return {
+        canGenerate,
+        hasUnsyncedCards: s.cards.length > 0 && !s.syncSuccess,
+        isButtonDisabled: !canGenerate,
+        disabledReason,
+    };
+}));
+
+/** State for generation summary */
+export const useGenerationSummaryState = () => useLecternStore(useShallow((s) => ({
+    pdfFile: s.pdfFile,
+    deckName: s.deckName,
+    targetDeckSize: s.targetDeckSize,
+    estimation: s.estimation,
+    isEstimating: s.isEstimating,
+    availableDecks: s.availableDecks,
+})));
+
+// ---------------------------------------------------------------------------
 // Individual selectors for specific values (most granular)
 // ---------------------------------------------------------------------------
 
@@ -105,6 +161,16 @@ export const useLecternActions = () => useLecternStore(useShallow((s) => ({
     handleCopyLogs: s.handleCopyLogs,
     handleCancel: s.handleCancel,
     handleReset: s.handleReset,
+    handleGenerate: s.handleGenerate,
+    setPdfFile: s.setPdfFile,
+    setDeckName: s.setDeckName,
+    setAvailableDecks: s.setAvailableDecks,
+    setFocusPrompt: s.setFocusPrompt,
+    setTargetDeckSize: s.setTargetDeckSize,
+    setEstimation: s.setEstimation,
+    setIsEstimating: s.setIsEstimating,
+    setEstimationError: s.setEstimationError,
+    recommendTargetDeckSize: s.recommendTargetDeckSize,
 
     // Review actions
     handleDelete: s.handleDelete,
@@ -129,4 +195,13 @@ export const useLecternActions = () => useLecternStore(useShallow((s) => ({
     selectAllCards: s.selectAllCards,
     clearSelection: s.clearSelection,
     batchDeleteSelected: s.batchDeleteSelected,
+})));
+
+/** Actions specifically for home view container */
+export const useHomeActions = () => useLecternStore(useShallow((s) => ({
+    setPdfFile: s.setPdfFile,
+    setTargetDeckSize: s.setTargetDeckSize,
+    setFocusPrompt: s.setFocusPrompt,
+    setDeckName: s.setDeckName,
+    handleGenerate: s.handleGenerate,
 })));

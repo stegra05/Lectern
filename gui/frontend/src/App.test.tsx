@@ -1,8 +1,9 @@
-import { render, act } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import App from './App';
 import { useLecternStore } from './store';
 import { api } from './api';
+import { renderWithQueryClient } from './tests/test-utils';
 
 vi.mock('./hooks/useAppState', () => ({
     useAppState: () => ({
@@ -32,7 +33,7 @@ describe('App', () => {
             cost: 0.03,
             pages: 10,
             model: 'gemini-3-flash',
-            estimated_card_count: 25,
+            suggested_card_count: 25,
         });
     });
 
@@ -48,7 +49,7 @@ describe('App', () => {
         setPdfFile(pdf);
         setTargetDeckSize(20);
 
-        render(<App />);
+        renderWithQueryClient(<App />);
 
         // Wait for initial estimate
         await act(async () => {

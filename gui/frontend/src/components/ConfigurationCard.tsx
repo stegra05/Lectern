@@ -2,11 +2,41 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Calculator, FileSearch, Info, Lock, Upload } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useLecternStore } from '../store';
-import { computeTargetSliderConfig } from '../utils/density';
-import { translateError } from '../utils/errorMessages';
-import { useEstimationPhase, type EstimationPhase } from '../hooks/useEstimationPhase';
 import type { LucideIcon } from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type EstimationPhase = 'idle' | 'uploading' | 'analyzing' | 'calculating' | 'done';
+
+export interface EstimationDisplay {
+    phase: EstimationPhase;
+    suggestedCount: number | null;
+    documentType: 'slides' | 'script' | null;
+    error: { title: string; message: string; action?: string } | null;
+    isEstimating: boolean;
+}
+
+export interface SliderConfig {
+    min: number;
+    max: number;
+    disabled: boolean;
+    suggested?: number | null;
+}
+
+export interface ConfigurationCardProps {
+    targetDeckSize: number;
+    sliderConfig: SliderConfig;
+    focusPrompt: string;
+    estimation: EstimationDisplay;
+    onTargetDeckSizeChange: (value: number) => void;
+    onFocusPromptChange: (value: string) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Phase configuration for icons/labels
+// ---------------------------------------------------------------------------
 
 const PHASE_CONFIG: Record<EstimationPhase, { label: string; icon: LucideIcon }> = {
     idle: { label: '', icon: Upload },
@@ -16,15 +46,18 @@ const PHASE_CONFIG: Record<EstimationPhase, { label: string; icon: LucideIcon }>
     done: { label: '', icon: Upload },
 };
 
-export function ConfigurationCard() {
-    const targetDeckSize = useLecternStore((s) => s.targetDeckSize);
-    const setTargetDeckSize = useLecternStore((s) => s.setTargetDeckSize);
-    const focusPrompt = useLecternStore((s) => s.focusPrompt);
-    const setFocusPrompt = useLecternStore((s) => s.setFocusPrompt);
-    const estimation = useLecternStore((s) => s.estimation);
-    const isEstimating = useLecternStore((s) => s.isEstimating);
-    const estimationError = useLecternStore((s) => s.estimationError);
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
+export function ConfigurationCard({
+    targetDeckSize,
+    sliderConfig,
+    focusPrompt,
+    estimation,
+    onTargetDeckSizeChange,
+    onFocusPromptChange,
+}: ConfigurationCardProps) {
     const [inputValue, setInputValue] = useState(String(targetDeckSize));
 
     // Sync input when targetDeckSize changes from elsewhere (e.g., slider)
@@ -32,8 +65,8 @@ export function ConfigurationCard() {
         setInputValue(String(targetDeckSize));
     }, [targetDeckSize]);
 
-    const estimationPhase = useEstimationPhase(isEstimating);
-    const sliderConfig = computeTargetSliderConfig(estimation?.suggested_card_count);
+    const { phase, suggestedCount, documentType, error, isEstimating } = estimation;
+    const PhaseIcon = PHASE_CONFIG[phase].icon;
 
     return (
         <div className="space-y-6">
@@ -60,7 +93,7 @@ export function ConfigurationCard() {
                             onBlur={() => {
                                 const val = parseInt(inputValue, 10);
                                 const finalVal = isNaN(val) || val < 1 ? 1 : val;
-                                setTargetDeckSize(finalVal);
+                                onTargetDeckSizeChange(finalVal);
                                 setInputValue(String(finalVal));
                             }}
                             className={clsx(
@@ -80,7 +113,7 @@ export function ConfigurationCard() {
                             step="1"
                             value={targetDeckSize}
                             disabled={sliderConfig.disabled}
-                            onChange={(e) => setTargetDeckSize(parseInt(e.target.value, 10))}
+                            onChange={(e) => onTargetDeckSizeChange(parseInt(e.target.value, 10))}
                             className="flex-1 h-1 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
                         />
                     </div>
@@ -94,42 +127,36 @@ export function ConfigurationCard() {
                                     animate={{ opacity: [0.5, 1, 0.5] }}
                                     transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                                 >
-                                    {estimationPhase === 'uploading' && <Upload className="w-2.5 h-2.5" />}
-                                    {estimationPhase === 'analyzing' && <FileSearch className="w-2.5 h-2.5" />}
-                                    {estimationPhase === 'calculating' && <Calculator className="w-2.5 h-2.5" />}
-                                    {(estimationPhase === 'idle' || estimationPhase === 'done') && <Upload className="w-2.5 h-2.5" />}
-                                    {PHASE_CONFIG[estimationPhase].label || 'Estimating...'}
+                                    <PhaseIcon className="w-2.5 h-2.5" />
+                                    {PHASE_CONFIG[phase].label || 'Estimating...'}
                                 </motion.span>
                             ) : (
-                                <span>{sliderConfig.disabled ? '' : estimation?.suggested_card_count}</span>
+                                <span>{sliderConfig.disabled ? '' : suggestedCount}</span>
                             )}
                         </div>
                         <span>{sliderConfig.disabled ? '' : sliderConfig.max}</span>
                     </div>
 
-                    {estimationError && !isEstimating && (() => {
-                        const friendlyErr = translateError(estimationError, 'estimation');
-                        return (
-                            <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-                                <div className="flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-red-300">{friendlyErr.title}</p>
-                                        <p className="text-xs text-red-200/80 mt-0.5">{friendlyErr.message}</p>
-                                        {friendlyErr.action && (
-                                            <p className="text-xs text-primary mt-1">{friendlyErr.action}</p>
-                                        )}
-                                    </div>
+                    {error && !isEstimating && (
+                        <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <div className="flex items-start gap-2">
+                                <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-red-300">{error.title}</p>
+                                    <p className="text-xs text-red-200/80 mt-0.5">{error.message}</p>
+                                    {error.action && (
+                                        <p className="text-xs text-primary mt-1">{error.action}</p>
+                                    )}
                                 </div>
                             </div>
-                        );
-                    })()}
+                        </div>
+                    )}
 
-                    {estimation?.suggested_card_count !== undefined && (
+                    {suggestedCount !== null && suggestedCount !== undefined && (
                         <div className="mt-2 flex items-center gap-2 text-[11px] text-text-muted">
                             <Info className="w-3 h-3 text-primary" />
                             <span>
-                                AI suggests <strong className="text-primary">{estimation.suggested_card_count}</strong> based on {estimation.document_type === 'script' ? 'text density' : 'slide count'}.
+                                AI suggests <strong className="text-primary">{suggestedCount}</strong> based on {documentType === 'script' ? 'text density' : 'slide count'}.
                             </span>
                         </div>
                     )}
@@ -139,7 +166,7 @@ export function ConfigurationCard() {
                     <label className="block text-xs font-semibold text-text-muted mb-3 uppercase tracking-wider">Focus Guidance <span className="opacity-50 lowercase tracking-normal font-normal">(Optional)</span></label>
                     <textarea
                         value={focusPrompt}
-                        onChange={(e) => setFocusPrompt(e.target.value)}
+                        onChange={(e) => onFocusPromptChange(e.target.value)}
                         placeholder="E.g. 'Focus on clinical formulas' or 'Prioritize case studies'"
                         className="w-full bg-surface/30 border border-border/30 rounded-lg p-4 text-sm min-h-[100px] outline-none transition-all focus:ring-1 focus:ring-primary/50 focus:bg-surface/50 focus:border-primary/30 placeholder:text-text-muted/70 resize-none leading-relaxed"
                     />

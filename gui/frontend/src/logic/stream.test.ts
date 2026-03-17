@@ -3,6 +3,9 @@ import { processStreamEvent } from './stream';
 import type { ProgressEvent } from '../api';
 import type { StoreState } from '../store-types';
 
+type StoreSetter = (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void;
+type SetterFn = (state: StoreState) => Partial<StoreState> | StoreState;
+
 // Mock store state factory
 function createMockState(overrides: Partial<StoreState> = {}): StoreState {
   return {
@@ -11,7 +14,6 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     deckName: '',
     availableDecks: [],
     focusPrompt: '',
-    sourceType: 'auto',
     targetDeckSize: 50,
     densityPreferences: { per1k: null, perSlide: null },
     logs: [],
@@ -25,6 +27,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     isEstimating: false,
     estimationError: null,
     totalPages: 0,
+    coverageData: null,
     isHistorical: false,
     editingIndex: null,
     editForm: null,
@@ -35,7 +38,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     syncLogs: [],
     confirmModal: { isOpen: false, type: 'lectern', index: 0 },
     searchQuery: '',
-    sortBy: 'slide',
+    sortBy: 'creation',
     isMultiSelectMode: false,
     selectedCards: new Set(),
     lastSelectedUid: null,
@@ -46,6 +49,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     deletedCards: [],
     batchDeletedCards: [],
     totalSessionSpend: 0,
+    lastSnapshotTimestamp: null,
     ...overrides,
   };
 }
@@ -67,13 +71,14 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, { logKey: 'logs', progressKey: 'progress' });
+      processStreamEvent(event, mockSet as unknown as StoreSetter, { logKey: 'logs', progressKey: 'progress' });
 
       // Find the call that appended to logs
-      const logAppendCall = mockSet.mock.calls.find(
+      const logAppendCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](mockState).logs !== undefined
       );
       expect(logAppendCall).toBeDefined();
+      if (!logAppendCall) throw new Error('Expected log append call');
       const result = logAppendCall[0](mockState);
       expect(result.logs).toHaveLength(1);
       expect(result.logs?.[0]).toEqual(event);
@@ -86,12 +91,13 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, { logKey: 'syncLogs', progressKey: 'syncProgress' });
+      processStreamEvent(event, mockSet as unknown as StoreSetter, { logKey: 'syncLogs', progressKey: 'syncProgress' });
 
-      const logAppendCall = mockSet.mock.calls.find(
+      const logAppendCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](mockState).syncLogs !== undefined
       );
       expect(logAppendCall).toBeDefined();
+      if (!logAppendCall) throw new Error('Expected sync log append call');
       const result = logAppendCall[0](mockState);
       expect(result.syncLogs).toHaveLength(1);
       expect(result.syncLogs?.[0]).toEqual(event);
@@ -109,15 +115,16 @@ describe('processStreamEvent', () => {
 
       const result = processStreamEvent(
         event,
-        mockSet,
+        mockSet as unknown as StoreSetter,
         { logKey: 'logs', progressKey: 'progress' }
       );
 
       expect(result).toBe(true);
-      const progressCall = mockSet.mock.calls.find(
+      const progressCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](mockState).progress !== undefined
       );
       expect(progressCall).toBeDefined();
+      if (!progressCall) throw new Error('Expected progress call');
       const state = progressCall[0](mockState);
       expect(state.progress).toEqual({ current: 0, total: 100 });
     });
@@ -130,15 +137,16 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, {
+      processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'syncLogs',
         progressKey: 'syncProgress',
       });
 
-      const progressCall = mockSet.mock.calls.find(
+      const progressCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](mockState).syncProgress !== undefined
       );
       expect(progressCall).toBeDefined();
+      if (!progressCall) throw new Error('Expected sync progress call');
       const state = progressCall[0](mockState);
       expect(state.syncProgress).toEqual({ current: 0, total: 50 });
     });
@@ -151,15 +159,16 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, {
+      processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'logs',
         progressKey: 'progress',
       });
 
-      const conceptCall = mockSet.mock.calls.find(
+      const conceptCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](mockState).conceptProgress !== undefined
       );
       expect(conceptCall).toBeDefined();
+      if (!conceptCall) throw new Error('Expected concept progress call');
       const state = conceptCall[0](mockState);
       expect(state.conceptProgress).toEqual({ current: 0, total: 20 });
     });
@@ -172,7 +181,7 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      const result = processStreamEvent(event, mockSet, {
+      const result = processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'logs',
         progressKey: 'progress',
       });
@@ -194,15 +203,16 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, {
+      processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'logs',
         progressKey: 'progress',
       });
 
-      const progressCall = mockSet.mock.calls.find(
+      const progressCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](stateWithProgress).progress !== undefined
       );
       expect(progressCall).toBeDefined();
+      if (!progressCall) throw new Error('Expected progress call');
       const state = progressCall[0](stateWithProgress);
       expect(state.progress).toEqual({ current: 50, total: 100 });
     });
@@ -219,15 +229,16 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, {
+      processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'logs',
         progressKey: 'progress',
       });
 
-      const progressCall = mockSet.mock.calls.find(
+      const progressCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](stateWithProgress).progress !== undefined
       );
       expect(progressCall).toBeDefined();
+      if (!progressCall) throw new Error('Expected progress call');
       const state = progressCall[0](stateWithProgress);
       expect(state.progress).toEqual({ current: 50, total: 200 });
     });
@@ -244,15 +255,16 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, {
+      processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'syncLogs',
         progressKey: 'syncProgress',
       });
 
-      const progressCall = mockSet.mock.calls.find(
+      const progressCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](stateWithProgress).syncProgress !== undefined
       );
       expect(progressCall).toBeDefined();
+      if (!progressCall) throw new Error('Expected sync progress call');
       const state = progressCall[0](stateWithProgress);
       expect(state.syncProgress).toEqual({ current: 10, total: 30 });
     });
@@ -269,15 +281,16 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, {
+      processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'logs',
         progressKey: 'progress',
       });
 
-      const conceptCall = mockSet.mock.calls.find(
+      const conceptCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](stateWithConcept).conceptProgress !== undefined
       );
       expect(conceptCall).toBeDefined();
+      if (!conceptCall) throw new Error('Expected concept progress call');
       const state = conceptCall[0](stateWithConcept);
       expect(state.conceptProgress).toEqual({ current: 15, total: 20 });
     });
@@ -290,7 +303,7 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      const result = processStreamEvent(event, mockSet, {
+      const result = processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'logs',
         progressKey: 'progress',
       });
@@ -307,7 +320,7 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      const result = processStreamEvent(event, mockSet, {
+      const result = processStreamEvent(event, mockSet as unknown as StoreSetter, {
         logKey: 'logs',
         progressKey: 'progress',
       });
@@ -322,12 +335,13 @@ describe('processStreamEvent', () => {
         timestamp: Date.now(),
       };
 
-      processStreamEvent(event, mockSet, { logKey: 'logs', progressKey: 'progress' });
+      processStreamEvent(event, mockSet as unknown as StoreSetter, { logKey: 'logs', progressKey: 'progress' });
 
-      const logAppendCall = mockSet.mock.calls.find(
+      const logAppendCall = (mockSet.mock.calls as unknown as Array<[SetterFn]>).find(
         (call) => call[0](mockState).logs !== undefined
       );
       expect(logAppendCall).toBeDefined();
+      if (!logAppendCall) throw new Error('Expected log append call');
       const result = logAppendCall[0](mockState);
       expect(result.logs).toHaveLength(1);
     });

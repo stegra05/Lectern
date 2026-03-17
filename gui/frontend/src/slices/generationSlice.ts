@@ -139,6 +139,11 @@ export const createGenerationActions = (
   },
   handleGenerate: () => generationLogic.handleGenerate(set, get),
   handleCancel: () => generationLogic.handleCancel(set, get),
+  handleCancelAndReset: () =>
+    generationLogic.handleCancelAndReset(set, get, () => {
+      const currentState = get();
+      set({ ...getInitialState(), ...preservePersistedState(currentState) });
+    }),
   handleReset: () => {
     const currentState = get();
     set({ ...getInitialState(), ...preservePersistedState(currentState) });

@@ -91,7 +91,7 @@ describe('useTrickleProgress', () => {
 
     describe('cleanup', () => {
         it('cleans up intervals on unmount', () => {
-            const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+            const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
 
             const { unmount } = renderHook(() => useTrickleProgress(50));
 

@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HomeView } from '../views/HomeView';
 import { useLecternStore } from '../store';
+import type { Estimation } from '../api';
+import type { LecternStore } from '../store-types';
 
 vi.mock('../store', () => ({
     useLecternStore: vi.fn()
@@ -13,6 +14,12 @@ vi.mock('../hooks/useEstimationLogic', () => ({
     useEstimationLogic: vi.fn(),
 }));
 
+// Mock React Query hooks used by HomeView so tests don't require QueryClientProvider
+vi.mock('../queries', () => ({
+    useDecksQuery: vi.fn(() => ({ data: { decks: [] }, isLoading: false })),
+    useCreateDeckMutation: vi.fn(() => ({ mutateAsync: vi.fn(async () => ({})) })),
+}));
+
 // Mock ResizeObserver for Framer Motion
 globalThis.ResizeObserver = class {
     observe() { }
@@ -21,7 +28,7 @@ globalThis.ResizeObserver = class {
 };
 
 describe('HomeView', () => {
-    let mockStore: any;
+    let mockStore: Partial<LecternStore>;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -34,20 +41,22 @@ describe('HomeView', () => {
             setDeckName: vi.fn(),
             focusPrompt: '',
             setFocusPrompt: vi.fn(),
-            sourceType: 'auto',
-            setSourceType: vi.fn(),
             targetDeckSize: 20,
             setTargetDeckSize: vi.fn(),
             estimation: null,
             isEstimating: false,
             estimationError: null,
+            cards: [],
+            syncSuccess: false,
             totalSessionSpend: 0,
             addToSessionSpend: vi.fn(),
             availableDecks: [],
             setAvailableDecks: vi.fn(),
         };
 
-        vi.mocked(useLecternStore).mockImplementation((selector: any) => selector(mockStore));
+        vi.mocked(useLecternStore).mockImplementation((selector: (s: LecternStore) => unknown) =>
+            selector(mockStore as LecternStore)
+        );
     });
 
     const defaultProps = {
@@ -66,8 +75,16 @@ describe('HomeView', () => {
         mockStore.pdfFile = new File([''], 'test.pdf');
         mockStore.deckName = 'Test Deck';
         mockStore.estimation = {
-            pages: 10, cost: 0.01, model: 'gemini', suggested_card_count: 20
-        };
+            tokens: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            pages: 10,
+            cost: 0.01,
+            model: 'gemini',
+            suggested_card_count: 20,
+        } as Estimation;
 
         render(<HomeView {...defaultProps} />);
         expect(screen.getByRole('button', { name: /Start Generation/i })).not.toBeDisabled();
@@ -77,14 +94,15 @@ describe('HomeView', () => {
         mockStore.pdfFile = new File([''], 'test.pdf');
         mockStore.deckName = 'Test Deck';
         mockStore.estimation = {
-            cost: 0.03,
+            tokens: 0,
             input_tokens: 1000,
             output_tokens: 500,
+            cost: 0.03,
             input_cost: 0.01,
             output_cost: 0.02,
             pages: 10,
             model: 'gemini-pro'
-        };
+        } as Estimation;
 
         render(<HomeView {...defaultProps} />);
         expect(screen.getByText('$0.030')).toBeInTheDocument();
@@ -111,8 +129,16 @@ describe('HomeView', () => {
         mockStore.pdfFile = new File([''], 'test.pdf');
         mockStore.deckName = 'Test Deck';
         mockStore.estimation = {
-            pages: 10, cost: 0.01, model: 'gemini', suggested_card_count: 20
-        };
+            tokens: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            input_cost: 0,
+            output_cost: 0,
+            pages: 10,
+            cost: 0.01,
+            model: 'gemini',
+            suggested_card_count: 20,
+        } as Estimation;
 
         render(<HomeView {...defaultProps} />);
         const btn = screen.getByRole('button', { name: /Start Generation/i });

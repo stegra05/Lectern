@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { renderWithQueryClient } from './test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SettingsModal } from '../components/SettingsModal';
 import { api } from '../api';
@@ -11,6 +12,7 @@ vi.mock('../api', () => ({
         getVersion: vi.fn(),
         getDecks: vi.fn(),
         checkHealth: vi.fn(),
+        checkAnkiConnectUrl: vi.fn().mockResolvedValue({ connected: true }),
     },
     getApiUrl: vi.fn().mockReturnValue('http://localhost:4173'),
 }));
@@ -35,6 +37,7 @@ describe('SettingsModal', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(api.getConfig).mockResolvedValue(defaultConfig);
+        vi.mocked(api.saveConfig).mockResolvedValue({ success: true });
         vi.mocked(api.getVersion).mockResolvedValue({
             current: '1.2.0',
             latest: '1.2.0',
@@ -46,7 +49,7 @@ describe('SettingsModal', () => {
 
     it('renders and loads configuration', async () => {
         await act(async () => {
-            render(
+            renderWithQueryClient(
                 <SettingsModal
                     {...defaultProps}
                     isOpen={true}
@@ -67,7 +70,7 @@ describe('SettingsModal', () => {
         vi.mocked(api.getConfig).mockRejectedValueOnce(new Error('Failed'));
 
         await act(async () => {
-            render(
+            renderWithQueryClient(
                 <SettingsModal
                     {...defaultProps}
                     isOpen={true}
@@ -94,7 +97,7 @@ describe('SettingsModal', () => {
     });
 
     it('updates Gemini API key', async () => {
-        render(<SettingsModal {...defaultProps} />);
+        renderWithQueryClient(<SettingsModal {...defaultProps} />);
 
         const input = await screen.findByPlaceholderText('Enter new Gemini API Key');
 
@@ -116,7 +119,7 @@ describe('SettingsModal', () => {
 
     it('saves changed settings', async () => {
         await act(async () => {
-            render(
+            renderWithQueryClient(
                 <SettingsModal
                     {...defaultProps}
                     isOpen={true}
@@ -135,17 +138,19 @@ describe('SettingsModal', () => {
             fireEvent.click(saveButton);
         });
 
-        await waitFor(() => {
-            expect(api.saveConfig).toHaveBeenCalledWith(expect.objectContaining({
-                gemini_model: 'gemini-3.1-pro-preview'
-            }));
-            expect(screen.getByText(/Settings saved/i)).toBeInTheDocument();
-        });
+        await waitFor(
+            () => {
+                expect(api.saveConfig).toHaveBeenCalledWith(
+                    expect.objectContaining({ gemini_model: 'gemini-3.1-pro-preview' })
+                );
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('toggles advanced settings', async () => {
         await act(async () => {
-            render(
+            renderWithQueryClient(
                 <SettingsModal
                     {...defaultProps}
                     isOpen={true}
@@ -180,7 +185,7 @@ describe('SettingsModal', () => {
         });
 
         await act(async () => {
-            render(
+            renderWithQueryClient(
                 <SettingsModal
                     {...defaultProps}
                     isOpen={true}

@@ -1,70 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, BookOpen, Settings, Sun, Moon } from 'lucide-react';
-import { clsx } from 'clsx';
-import { api } from './api';
-import { SettingsModal } from './components/SettingsModal';
+import { AnimatePresence } from 'framer-motion';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { Toast, ToastContainer } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import { ConfirmModal } from './components/ConfirmModal';
-import { AnkiHealthPanel } from './components/AnkiHealthPanel';
+import { AppHeader } from './components/AppHeader';
+import { ModalOrchestrator } from './components/ModalOrchestrator';
 
 import { useAppState } from './hooks/useAppState';
+import { useAnkiStatusQuery } from './queries';
 import { useLecternStore } from './store';
 import { useHistory } from './hooks/useHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 import { HomeView } from './views/HomeView';
 import { ProgressView } from './views/ProgressView';
-import { HistoryModal } from './components/HistoryModal';
-import { Clock } from 'lucide-react';
-
-// --- Sub-components ---
-// ... (StatusDot and HealthStatus omitted for brevity, I'll use targetContent for precise matching)
-
-const StatusDot = ({ label, active }: { label: string, active: boolean }) => (
-  <div className="flex items-center gap-2">
-    <div className={clsx("w-2 h-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]", active ? "bg-primary shadow-primary/50" : "bg-red-500 shadow-red-500/50")} />
-    <span className={clsx("text-xs font-medium tracking-wide", active ? "text-text-main" : "text-text-muted")}>
-      {label}
-    </span>
-  </div>
-);
-
-interface HealthStatusProps {
-  health: import('./api').HealthStatus | null;
-  isChecking: boolean;
-  onRefresh: () => void;
-  onAnkiClick: () => void;
-}
-
-const HealthStatus = ({ health, isChecking, onRefresh, onAnkiClick }: HealthStatusProps) => (
-  <div className="flex items-center gap-3 bg-surface/50 px-4 py-2 rounded-full border border-border backdrop-blur-sm">
-    <button
-      onClick={onAnkiClick}
-      className="hover:opacity-80 transition-opacity"
-      title="View AnkiConnect status"
-    >
-      <StatusDot label="Anki" active={health?.anki_connected ?? false} />
-    </button>
-    <div className="w-px h-4 bg-border" />
-    <StatusDot label="Gemini" active={health?.gemini_configured ?? false} />
-    <button
-      onClick={onRefresh}
-      disabled={isChecking}
-      className="ml-2 text-text-muted hover:text-primary transition-colors disabled:opacity-50"
-      title="Refresh status"
-    >
-      <svg className={clsx("w-3 h-3", isChecking && "animate-spin")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-    </button>
-  </div>
-);
-
-
 // --- Main App ---
 
 
@@ -84,6 +33,7 @@ function App() {
 
   // Anki health panel state
   const [isAnkiHealthOpen, setIsAnkiHealthOpen] = useState(false);
+  const { data: ankiStatus, isLoading: ankiStatusLoading, refetch: refetchAnkiStatus, dataUpdatedAt: ankiStatusUpdatedAt } = useAnkiStatusQuery(isAnkiHealthOpen);
 
   // Unsynced cards confirmation state
   const [isUnsyncedConfirmOpen, setIsUnsyncedConfirmOpen] = useState(false);
@@ -94,9 +44,8 @@ function App() {
   const syncSuccess = useLecternStore((s) => s.syncSuccess);
 
   const step = useLecternStore((s) => s.step);
-  const sessionId = useLecternStore((s) => s.sessionId);
   const handleGenerate = useLecternStore((s) => s.handleGenerate);
-  const handleReset = useLecternStore((s) => s.handleReset);
+  const handleCancelAndReset = useLecternStore((s) => s.handleCancelAndReset);
   const loadSession = useLecternStore((s) => s.loadSession);
   const recoverSessionOnRefresh = useLecternStore((s) => s.recoverSessionOnRefresh);
 
@@ -209,7 +158,7 @@ function App() {
       <ErrorBoundary>
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             <p className="text-text-muted text-sm font-mono tracking-wider animate-pulse">INITIALIZING LECTERN...</p>
           </div>
         </div>
@@ -227,67 +176,20 @@ function App() {
         </div>
 
         <div className="relative w-full max-w-[95%] mx-auto p-6 lg:p-8 pt-6 lg:pt-10">
-          <header className="mb-8 flex items-center justify-between">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex flex-col"
-            >
-              <button
-                onClick={() => {
-                  if (step !== 'dashboard') {
-                    api.stopGeneration(sessionId ?? undefined);
-                    handleReset();
-                  }
-                }}
-                className="group text-left transition-transform active:scale-95"
-              >
-                <h1 className="text-5xl font-bold tracking-tight text-text-main group-hover:text-primary transition-colors">
-                  Lectern<span className="text-primary group-hover:text-text-main transition-colors">.</span>
-                </h1>
-                <div className="flex items-center gap-2 mt-2">
-                  <BookOpen className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
-                  <p className="text-text-muted font-medium tracking-wide group-hover:text-primary/70 transition-colors uppercase text-xs">AI-POWERED ANKI GENERATOR</p>
-                </div>
-              </button>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-6"
-            >
-              <div className="flex items-center gap-3">
-                <HealthStatus
-                  health={health}
-                  isChecking={isRefreshingStatus}
-                  onRefresh={refreshHealth}
-                  onAnkiClick={() => setIsAnkiHealthOpen(true)}
-                />
-                <button
-                  onClick={() => setIsHistoryOpen(true)}
-                  className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
-                  title="Recent Sessions"
-                >
-                  <Clock className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={toggleTheme}
-                  className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
-                  title="Toggle Theme"
-                >
-                  {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                </button>
-                <button
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="p-3 bg-surface/50 hover:bg-surface border border-border rounded-full transition-colors text-text-muted hover:text-primary"
-                  title="Settings"
-                >
-                  <Settings className="w-5 h-5" />
-                </button>
-              </div>
-            </motion.div>
-          </header>
+          <AppHeader
+            health={health}
+            isCheckingHealth={isCheckingHealth}
+            isRefreshingStatus={isRefreshingStatus}
+            theme={theme}
+            onLogoClick={() => {
+              if (step !== 'dashboard') handleCancelAndReset();
+            }}
+            onRefreshHealth={refreshHealth}
+            onHistoryClick={() => setIsHistoryOpen(true)}
+            onSettingsClick={() => setIsSettingsOpen(true)}
+            onThemeToggle={toggleTheme}
+            onAnkiClick={() => setIsAnkiHealthOpen(true)}
+          />
 
           <main className="relative">
             <AnimatePresence mode="wait">
@@ -306,47 +208,45 @@ function App() {
           </main>
         </div>
 
-        <HistoryModal
-          isOpen={isHistoryOpen}
-          onClose={() => setIsHistoryOpen(false)}
-          history={history}
-          clearAllHistory={clearAllHistory}
-          deleteHistoryEntry={deleteHistoryEntry}
-          batchDeleteHistory={batchDeleteHistory}
-          loadSession={loadSession}
-        />
-
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          totalSessionSpend={totalSessionSpend}
+        <ModalOrchestrator
+          settings={{
+            isOpen: isSettingsOpen,
+            totalSessionSpend,
+          }}
+          history={{
+            isOpen: isHistoryOpen,
+            entries: history ?? [],
+          }}
+          shortcuts={{
+            isOpen: isShortcutsModalOpen,
+            config: shortcuts,
+          }}
+          unsyncedConfirm={{
+            isOpen: isUnsyncedConfirmOpen,
+            cardCount: cards.length,
+          }}
+          ankiHealth={{
+            isOpen: isAnkiHealthOpen,
+            status: ankiStatus,
+            isLoading: ankiStatusLoading,
+            lastChecked: ankiStatusUpdatedAt ? new Date(ankiStatusUpdatedAt) : null,
+          }}
+          onCloseSettings={() => setIsSettingsOpen(false)}
           onResetSessionSpend={resetSessionSpend}
-        />
-
-        <KeyboardShortcutsModal
-          isOpen={isShortcutsModalOpen}
-          onClose={() => setIsShortcutsModalOpen(false)}
-          shortcuts={shortcuts}
-        />
-
-        <ConfirmModal
-          isOpen={isUnsyncedConfirmOpen}
-          title="Unsynced Cards"
-          description={`You have ${cards.length} card${cards.length !== 1 ? 's' : ''} that haven't been synced to Anki. Starting a new session will discard these cards. Continue anyway?`}
-          confirmText="Start New Session"
-          cancelText="Cancel"
-          variant="destructive"
-          onConfirm={handleConfirmGenerate}
-          onClose={handleCancelGenerate}
-        />
-
-        <AnkiHealthPanel
-          isOpen={isAnkiHealthOpen}
-          onClose={() => setIsAnkiHealthOpen(false)}
-          onOpenSettings={() => {
+          onCloseHistory={() => setIsHistoryOpen(false)}
+          onClearAllHistory={clearAllHistory}
+          onDeleteHistoryEntry={deleteHistoryEntry}
+          onBatchDeleteHistory={(ids) => batchDeleteHistory({ ids })}
+          onLoadSession={loadSession}
+          onCloseShortcuts={() => setIsShortcutsModalOpen(false)}
+          onConfirmUnsynced={handleConfirmGenerate}
+          onCancelUnsynced={handleCancelGenerate}
+          onCloseAnkiHealth={() => setIsAnkiHealthOpen(false)}
+          onOpenSettingsFromAnki={() => {
             setIsAnkiHealthOpen(false);
             setIsSettingsOpen(true);
           }}
+          onRefetchAnkiStatus={() => refetchAnkiStatus()}
         />
 
         <StoreToasts />

@@ -5,6 +5,13 @@ import { applyControlSnapshot } from './snapshot';
 import { stampUid, stampUids, reconcileCardUids } from '../utils/uid';
 import { useLecternStore } from '../store';
 import { deriveMaxSlideNumber, normalizeCardMetadata, normalizeCardsMetadata } from '../utils/cardMetadata';
+import {
+    validateCardEventData,
+    validateCardsReplacedData,
+    validateControlSnapshotData,
+    validateGenerationDoneData,
+    validateStepEndData,
+} from '../schemas/sse';
 
 const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
@@ -36,21 +43,27 @@ export const processGenerationEvent = (
 
     // CONTROL PLANE: snapshot drives phase/progress authoritatively
     if (event.type === 'control_snapshot') {
-        const snapshot = event.data as ControlSnapshot;
+        const snapshot = validateControlSnapshotData(event.data);
+        if (!snapshot) {
+            useLecternStore.getState().addToast('warning', 'Ignored malformed control snapshot', 5000);
+            return;
+        }
         set((state) => {
             // Reject stale snapshots
             if (state.lastSnapshotTimestamp && snapshot.timestamp <= state.lastSnapshotTimestamp) {
                 return state;
             }
-            return applyControlSnapshot(snapshot);
+            return applyControlSnapshot(snapshot as unknown as ControlSnapshot);
         });
         return;
     }
 
     if (event.type === 'card') {
         set((prev) => {
-            const raw = (event.data as { card: Card }).card;
-            const normalizedCard = normalizeCardMetadata(raw);
+            const payload = validateCardEventData(event.data);
+            if (!payload) return prev;
+
+            const normalizedCard = normalizeCardMetadata(payload.card as unknown as Card);
             // Prefer backend uid; fall back to client stampUid for legacy compatibility
             const cardWithUid = normalizedCard.uid
                 ? { ...normalizedCard, _uid: normalizedCard.uid }
@@ -66,13 +79,15 @@ export const processGenerationEvent = (
 
     if (event.type === 'cards_replaced') {
         set((prev) => {
-            const payload = (event.data as { cards?: Card[]; coverage_data?: CoverageData } | undefined) || undefined;
-            const normalized = normalizeCardsMetadata(payload?.cards || []);
+            const payload = validateCardsReplacedData(event.data);
+            if (!payload) return prev;
+
+            const normalized = normalizeCardsMetadata((payload.cards as unknown as Card[]) || []);
             const reconciled = reconcileCardUids(prev.cards, normalized);
             return {
                 cards: reconciled,
                 totalPages: deriveTotalPages(reconciled, prev.totalPages),
-                coverageData: payload?.coverage_data ?? prev.coverageData,
+                coverageData: (payload.coverage_data as unknown as CoverageData | undefined) ?? prev.coverageData,
             };
         });
         return;
@@ -88,11 +103,11 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'step_end') {
-        const data = (event.data as { page_count?: number; coverage_data?: CoverageData } | undefined) || undefined;
+        const data = validateStepEndData(event.data);
         if (data?.page_count || data?.coverage_data) {
             set((prev) => ({
                 totalPages: data.page_count ?? prev.totalPages,
-                coverageData: data.coverage_data ?? prev.coverageData,
+                coverageData: (data.coverage_data as unknown as CoverageData | undefined) ?? prev.coverageData,
             }));
         }
         return;
@@ -112,11 +127,12 @@ export const processGenerationEvent = (
         }
 
         store.addToast('success', `Generation complete — ${cardCount} cards`);
+        const doneData = validateGenerationDoneData(event.data);
         set((prev) => ({
             step: 'done',
             isCancelling: false,
-            totalPages: (event.data as { total_pages?: number } | undefined)?.total_pages ?? prev.totalPages,
-            coverageData: (event.data as { coverage_data?: CoverageData } | undefined)?.coverage_data ?? prev.coverageData,
+            totalPages: doneData?.total_pages ?? prev.totalPages,
+            coverageData: (doneData?.coverage_data as unknown as CoverageData | undefined) ?? prev.coverageData,
         }));
         return;
     }
@@ -194,13 +210,16 @@ export const handleGenerate = async (
         if (sessionId && currentPhase !== 'complete' && currentPhase !== 'idle') {
             try {
                 const session: SessionData = await api.getSession(sessionId);
-                if (session && !session.not_found) {
+                if (session.not_found) {
+                    // Nothing to recover from the backend.
+                    // Fall through to local error handling below.
+                } else {
                     const cards = stampUids(normalizeCardsMetadata(session.cards || []));
                     const isErrorState = session.status === 'error';
                     
                     set({
                         cards,
-                        logs: (session.logs as import('../api').ProgressEvent[]) || [],
+                        logs: session.logs ?? [],
                         totalPages: deriveTotalPages(cards, session.total_pages),
                         coverageData: session.coverage_data || null,
                         deckName: session.deck_name || session.deck || deckName,
@@ -239,6 +258,18 @@ export const handleCancel = (
     api.stopGeneration(sessionId ?? undefined);
 };
 
+export const handleCancelAndReset = (
+    _set: (partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
+    get: () => LecternStore,
+    doReset: () => void
+) => {
+    const { sessionId, step } = get();
+    if (step !== 'dashboard') {
+        api.stopGeneration(sessionId ?? undefined);
+    }
+    doReset();
+};
+
 export const loadSession = async (
     sessionId: string,
     set: (partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void
@@ -246,10 +277,13 @@ export const loadSession = async (
     try {
         set({ step: 'generating' });
         const session: SessionData = await api.getSession(sessionId);
+        if (session.not_found) {
+            throw new Error(`Session not found: ${sessionId}`);
+        }
         const cards = stampUids(normalizeCardsMetadata(session.cards || []));
         set({
             cards,
-            logs: (session.logs as import('../api').ProgressEvent[]) || [],
+            logs: session.logs ?? [],
             totalPages: deriveTotalPages(cards, session.total_pages),
             coverageData: session.coverage_data || null,
             deckName: session.deck_name || session.deck || '',
@@ -274,6 +308,9 @@ export const recoverSessionOnRefresh = async (
     try {
         const snapshot: SessionData = await api.getSession(sessionId);
         localStorage.removeItem(ACTIVE_SESSION_KEY);
+        if (snapshot.not_found) {
+            throw new Error(`Session not found: ${sessionId}`);
+        }
         const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
         set({
             sessionId,

@@ -64,7 +64,6 @@ export const recomputeCost = (base: EstimationBase, targetCards: number): Estima
         pages: base.pages,
         text_chars: base.textChars,
         model: base.model,
-        estimated_card_count: targetCards,
         suggested_card_count: base.suggestedCardCount,
         image_count: base.imageCount,
     };

@@ -1,0 +1,14 @@
+{
+  "tokens": 15000,
+  "input_tokens": 10000,
+  "output_tokens": 5000,
+  "input_cost": 0.003,
+  "output_cost": 0.015,
+  "cost": 0.018,
+  "pages": 10,
+  "text_chars": 25000,
+  "model": "gemini-2.0-flash",
+  "suggested_card_count": 25,
+  "image_count": 10,
+  "document_type": "lecture_slides"
+}

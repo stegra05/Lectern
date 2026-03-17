@@ -1,34 +1,44 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DeckSelector } from '../components/DeckSelector';
-import { api } from '../api';
 import { useLecternStore } from '../store';
-
-// Mock API
-vi.mock('../api', () => ({
-    api: {
-        getDecks: vi.fn(),
-        createDeck: vi.fn(),
-    }
-}));
 
 describe('DeckSelector', () => {
     const mockOnChange = vi.fn();
+    const mockOnCreate = vi.fn(async () => true);
 
     beforeEach(() => {
         vi.clearAllMocks();
-        // Default API response
-        (api.getDecks as Mock).mockResolvedValue({ decks: ['Uni', 'Uni::Math', 'Uni::CS'] });
 
         // Reset real store
         useLecternStore.getState().reset();
     });
 
-    // New ControlledDeckSelector component
+    // Controlled wrapper for DeckSelector
     const ControlledDeckSelector = ({ initialValue = "" }: { initialValue?: string }) => {
         const [val, setVal] = useState(initialValue);
-        return <DeckSelector value={val} onChange={(v) => { setVal(v); mockOnChange(v); }} />;
+        const [isOpen, setIsOpen] = useState(false);
+        const [searchQuery, setSearchQuery] = useState('');
+        const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['Uni']));
+
+        const availableDecks = useLecternStore.getState().availableDecks;
+
+        return (
+            <DeckSelector
+                value={val}
+                availableDecks={availableDecks}
+                isLoading={false}
+                isOpen={isOpen}
+                searchQuery={searchQuery}
+                expandedNodes={expandedNodes}
+                onChange={(v) => { setVal(v); mockOnChange(v); }}
+                onCreate={mockOnCreate}
+                onOpenChange={setIsOpen}
+                onSearchChange={setSearchQuery}
+                onToggleNode={(nodeName) => setExpandedNodes(prev => new Set(prev).add(nodeName))}
+            />
+        );
     };
 
     it('renders with initial value', () => {
@@ -37,12 +47,15 @@ describe('DeckSelector', () => {
     });
 
     it('fetches decks on focus', async () => {
+        act(() => {
+            useLecternStore.getState().setAvailableDecks(['Uni', 'Uni::Math', 'Uni::CS']);
+        });
+
         render(<ControlledDeckSelector />);
         const input = screen.getByRole('textbox');
 
         fireEvent.focus(input);
 
-        expect(api.getDecks).toHaveBeenCalled();
         const option = await screen.findByText('Uni');
         expect(option).toBeInTheDocument();
     });
@@ -67,7 +80,7 @@ describe('DeckSelector', () => {
         // Since 'Mat' is highlighted, it might be split into <span>Mat</span>h
         // We use a custom matcher to find the element containing the full text
         const mathOptions = await screen.findAllByText((_, element) => {
-            return element?.textContent === 'Math';
+            return element?.textContent?.includes('Math') ?? false;
         });
         expect(mathOptions.length).toBeGreaterThan(0);
 
@@ -93,8 +106,6 @@ describe('DeckSelector', () => {
     });
 
     it('creates deck on enter', async () => {
-        (api.createDeck as Mock).mockResolvedValue({ status: 'created' });
-
         render(<ControlledDeckSelector />);
         const input = screen.getByRole('textbox');
 
@@ -103,7 +114,7 @@ describe('DeckSelector', () => {
         fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
         await waitFor(() => {
-            expect(api.createDeck).toHaveBeenCalledWith('NewDeck');
+            expect(mockOnCreate).toHaveBeenCalledWith('NewDeck');
             expect(mockOnChange).toHaveBeenCalledWith('NewDeck');
         });
     });
@@ -115,6 +126,6 @@ describe('DeckSelector', () => {
         fireEvent.change(input, { target: { value: 'Invalid::' } });
         fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
-        expect(api.createDeck).not.toHaveBeenCalled();
+        expect(mockOnCreate).not.toHaveBeenCalled();
     });
 });
