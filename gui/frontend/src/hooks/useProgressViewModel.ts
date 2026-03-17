@@ -3,15 +3,30 @@ import { useShallow } from 'zustand/shallow';
 import { useLecternStore } from '../store';
 import { useLecternActions } from './useLecternSelectors';
 
-import { calculateProgressPercentage } from '../logic/progress';
+import {
+    selectStep,
+    selectCurrentPhase,
+    selectProgress,
+    selectConceptProgress,
+    selectSetupStepsCompleted,
+    selectCards,
+    selectIsSyncing,
+    selectSyncSuccess,
+    selectSyncPartialFailure,
+    selectSyncProgress,
+    selectSyncLogs,
+    selectSortBy,
+    selectSearchQuery,
+    selectIsMultiSelectMode,
+    selectSelectedCards,
+    selectProgressPct,
+} from '../selectors';
 
 export function useProgressViewModel() {
     const actions = useLecternActions();
     
-    // Select specific state slice with shallow comparison
+    // Subscribe to all needed raw state via shallow comparison
     const stateSlice = useLecternStore(useShallow((s) => ({
-        step: s.step,
-        currentPhase: s.currentPhase,
         isCancelling: s.isCancelling,
         isHistorical: s.isHistorical,
         sessionId: s.sessionId,
@@ -20,43 +35,37 @@ export function useProgressViewModel() {
         isError: s.isError,
         logs: s.logs,
         copied: s.copied,
-        progress: s.progress,
-        conceptProgress: s.conceptProgress,
-        setupStepsCompleted: s.setupStepsCompleted,
-        cards: s.cards,
         editingIndex: s.editingIndex,
         editForm: s.editForm,
-        isSyncing: !!s.isSyncing,
-        syncSuccess: s.syncSuccess,
-        syncPartialFailure: s.syncPartialFailure,
-        syncProgress: s.syncProgress,
-        syncLogs: s.syncLogs,
-        sortBy: s.sortBy,
-        searchQuery: s.searchQuery,
-        isMultiSelectMode: s.isMultiSelectMode,
-        selectedCards: s.selectedCards,
         confirmModal: s.confirmModal,
     })));
 
-    const progressPct =
-        stateSlice.step !== 'generating' && stateSlice.step !== 'done'
-            ? 0
-            : calculateProgressPercentage({
-                  currentPhase: stateSlice.currentPhase,
-                  step: stateSlice.step as 'generating' | 'done',
-                  cardsLength: stateSlice.cards.length,
-                  progressTotal: stateSlice.progress.total,
-                  progressCurrent: stateSlice.progress.current,
-                  conceptProgress: stateSlice.conceptProgress,
-                  setupStepsCompleted: stateSlice.setupStepsCompleted,
-              });
+    // Individual selector subscriptions for derived or potentially stable values
+    const step = useLecternStore(selectStep);
+    const currentPhase = useLecternStore(selectCurrentPhase);
+    const progress = useLecternStore(selectProgress);
+    const conceptProgress = useLecternStore(selectConceptProgress);
+    const setupStepsCompleted = useLecternStore(selectSetupStepsCompleted);
+    const allCards = useLecternStore(selectCards);
+    const progressPct = useLecternStore(selectProgressPct);
+    
+    const isSyncing = useLecternStore(selectIsSyncing);
+    const syncSuccess = useLecternStore(selectSyncSuccess);
+    const syncPartialFailure = useLecternStore(selectSyncPartialFailure);
+    const syncProgress = useLecternStore(selectSyncProgress);
+    const syncLogs = useLecternStore(selectSyncLogs);
+    
+    const sortBy = useLecternStore(selectSortBy);
+    const searchQuery = useLecternStore(selectSearchQuery);
+    const isMultiSelectMode = useLecternStore(selectIsMultiSelectMode);
+    const selectedCards = useLecternStore(selectSelectedCards);
 
     return useMemo(() => ({
         // State
         state: {
             session: {
-                step: stateSlice.step,
-                currentPhase: stateSlice.currentPhase,
+                step,
+                currentPhase,
                 isCancelling: stateSlice.isCancelling,
                 isHistorical: stateSlice.isHistorical,
                 sessionId: stateSlice.sessionId,
@@ -69,32 +78,32 @@ export function useProgressViewModel() {
                 copied: stateSlice.copied,
             },
             progress: {
-                progress: stateSlice.progress,
-                conceptProgress: stateSlice.conceptProgress,
-                setupStepsCompleted: stateSlice.setupStepsCompleted,
+                progress,
+                conceptProgress,
+                setupStepsCompleted,
                 progressPct,
             },
             cards: {
-                cards: stateSlice.cards,
+                cards: allCards,
                 editingIndex: stateSlice.editingIndex,
                 editForm: stateSlice.editForm,
             },
             sync: {
-                isSyncing: stateSlice.isSyncing,
-                syncSuccess: stateSlice.syncSuccess,
-                syncPartialFailure: stateSlice.syncPartialFailure,
-                syncProgress: stateSlice.syncProgress,
-                syncLogs: stateSlice.syncLogs,
+                isSyncing,
+                syncSuccess,
+                syncPartialFailure,
+                syncProgress,
+                syncLogs,
             },
             ui: {
-                sortBy: stateSlice.sortBy,
-                searchQuery: stateSlice.searchQuery,
-                isMultiSelectMode: stateSlice.isMultiSelectMode,
-                selectedCards: stateSlice.selectedCards,
+                sortBy,
+                searchQuery,
+                isMultiSelectMode,
+                selectedCards,
                 confirmModal: stateSlice.confirmModal,
             }
         },
         // Actions
         actions,
-    }), [stateSlice, actions, progressPct]);
+    }), [stateSlice, actions, step, currentPhase, progress, conceptProgress, setupStepsCompleted, allCards, progressPct, isSyncing, syncSuccess, syncPartialFailure, syncProgress, syncLogs, sortBy, searchQuery, isMultiSelectMode, selectedCards]);
 }

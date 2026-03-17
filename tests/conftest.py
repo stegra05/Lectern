@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Generator
 
 import pytest
+import httpx
 
 
 # --- Anki Connector Fixtures ---
@@ -22,33 +23,34 @@ def mock_anki_response() -> MagicMock:
     """Create a mock Anki API response with configurable result/error."""
     response = MagicMock()
     response.json.return_value = {"result": None, "error": None}
+    response.raise_for_status = MagicMock()
     return response
 
 
 @pytest.fixture
-def mock_requests_post(
+def mock_httpx_post(
     mock_anki_response: MagicMock,
-) -> Generator[MagicMock, None, None]:
-    """Mock requests.post for AnkiConnect API calls."""
-    with patch("requests.post") as mock_post:
+) -> Generator[AsyncMock, None, None]:
+    """Mock httpx.AsyncClient.post for AnkiConnect API calls."""
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_anki_response
         yield mock_post
 
 
 @pytest.fixture
 def mock_anki_connected(
-    mock_requests_post: MagicMock, mock_anki_response: MagicMock
-) -> MagicMock:
+    mock_httpx_post: AsyncMock, mock_anki_response: MagicMock
+) -> AsyncMock:
     """Configure Anki mock for successful connection."""
     mock_anki_response.json.return_value = {"result": 6, "error": None}
-    return mock_requests_post
+    return mock_httpx_post
 
 
 @pytest.fixture
-def mock_anki_disconnected(mock_requests_post: MagicMock) -> MagicMock:
+def mock_anki_disconnected(mock_httpx_post: AsyncMock) -> AsyncMock:
     """Configure Anki mock for connection failure."""
-    mock_requests_post.side_effect = Exception("Connection refused")
-    return mock_requests_post
+    mock_httpx_post.side_effect = httpx.RequestError("Connection refused")
+    return mock_httpx_post
 
 
 # --- AI Client Fixtures ---
@@ -57,7 +59,7 @@ def mock_anki_disconnected(mock_requests_post: MagicMock) -> MagicMock:
 @pytest.fixture
 def mock_ai_client() -> Generator[MagicMock, None, None]:
     """Mock AI client for Gemini API calls."""
-    with patch("lectern.ai_client.AIClient") as mock_client_class:
+    with patch("lectern.ai_client.LecternAIClient") as mock_client_class:
         mock_client = MagicMock()
         mock_client.generate_content = AsyncMock(return_value={"text": "Test response"})
         mock_client_class.return_value = mock_client
@@ -162,7 +164,7 @@ def temp_config_dir(temp_state_dir: Path) -> Generator[Path, None, None]:
 @pytest.fixture
 def mock_history_manager() -> Generator[MagicMock, None, None]:
     """Mock HistoryManager for testing."""
-    with patch("lectern.utils.history_manager.HistoryManager") as mock_mgr_class:
+    with patch("lectern.utils.history.HistoryManager") as mock_mgr_class:
         mock_mgr = MagicMock()
         mock_mgr.get_all.return_value = []
         mock_mgr.add_entry.return_value = "test-entry-id"

@@ -34,22 +34,8 @@ class ExportResult:
     error: Optional[str] = None
 
 
-def resolve_model_name(card_model: str, fallback_model: str) -> str:
-    """Resolve AI-generated model names to configured Anki models.
-
-    Maps generic names like "Basic" or "Cloze" to the user's configured
-    note types (e.g., "Basic").
-
-    If Anki uses localized names (e.g. "Einfach"), this function auto-detects
-    them matching the field signature.
-
-    Parameters:
-        card_model: Model name from AI or card data
-        fallback_model: Default model to use if card_model is empty
-
-    Returns:
-        Resolved Anki model name
-    """
+async def resolve_model_name(card_model: str, fallback_model: str) -> str:
+    """Resolve AI-generated model names to configured Anki models."""
     model = str(card_model or "").strip() or str(fallback_model).strip()
     lower_model = model.lower()
 
@@ -62,10 +48,9 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
         resolved = model
 
     # 2. Validation and localized auto-detection
-    if not _model_exists_in_anki(resolved):
+    if not await _model_exists_in_anki(resolved):
         # Localized fallback logic:
-        # If Anki doesn't have "Basic" but has "Einfach", we want to find it.
-        builtins = _get_detected_builtins()
+        builtins = await _get_detected_builtins()
 
         # Determine if we are looking for a Basic or Cloze variant
         is_cloze = "cloze" in lower_model
@@ -75,7 +60,7 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
         if (
             localized_name
             and localized_name != resolved
-            and _model_exists_in_anki(localized_name)
+            and await _model_exists_in_anki(localized_name)
         ):
             logger.info(
                 "Auto-resolved '%s' to localized Anki model '%s'",
@@ -97,19 +82,19 @@ def resolve_model_name(card_model: str, fallback_model: str) -> str:
     return resolved
 
 
-def _get_detected_builtins() -> Dict[str, str]:
+async def _get_detected_builtins() -> Dict[str, str]:
     """Get or populate the cache of detected built-in model names."""
     global _detected_builtins_cache
     if _detected_builtins_cache is None:
-        _detected_builtins_cache = detect_builtin_models()
+        _detected_builtins_cache = await detect_builtin_models()
     return _detected_builtins_cache
 
 
-def _model_exists_in_anki(name: str) -> bool:
+async def _model_exists_in_anki(name: str) -> bool:
     """Return True if *name* is a valid Anki note type (cached per session)."""
     global _anki_models_cache
     if _anki_models_cache is None:
-        _anki_models_cache = get_model_names()  # [] on connection failure
+        _anki_models_cache = await get_model_names()  # [] on connection failure
         if _anki_models_cache:
             logger.debug("Anki models cache loaded: %s", _anki_models_cache)
     # If we couldn't reach Anki, allow anything (export will fail anyway).
@@ -124,20 +109,7 @@ def build_card_tags(
     slide_set_name: str,
     additional_tags: List[str],
 ) -> List[str]:
-    """Build hierarchical tags for a card.
-
-    Builds a 3-level hierarchical tag (Deck::SlideSet::Topic) plus any
-    user-provided and default flat tags.
-
-    Parameters:
-        card: Card data from AI (uses 'slide_topic' for topic level)
-        deck_name: Target Anki deck name
-        slide_set_name: Inferred slide set name
-        additional_tags: User-provided tags to append as flat tags
-
-    Returns:
-        List of tags: one hierarchical tag + any additional flat tags
-    """
+    """Build hierarchical tags for a card."""
     # Merge user tags with default tag, preserving order and removing duplicates
     extra_tags = list(dict.fromkeys(additional_tags))
 
@@ -158,28 +130,14 @@ def build_card_tags(
     )
 
 
-def export_card_to_anki(
+async def export_card_to_anki(
     card: Dict[str, Any],
     deck_name: str,
     slide_set_name: str,
     fallback_model: str,
     additional_tags: List[str],
 ) -> ExportResult:
-    """Export a single card to Anki.
-
-    This is the unified export logic used by both CLI and GUI code paths.
-    Handles model resolution, tag building, and note creation.
-
-    Parameters:
-        card: Card data from AI generation
-        deck_name: Target Anki deck name
-        slide_set_name: Inferred slide set name for hierarchical tags
-        fallback_model: Model to use if card doesn't specify one
-        additional_tags: User-provided tags to merge with AI tags
-
-    Returns:
-        ExportResult with success status, note_id, and any errors
-    """
+    """Export a single card to Anki (Async)."""
     try:
 
         def to_note_fields(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -206,7 +164,7 @@ def export_card_to_anki(
             return {}
 
         # 1. Resolve model
-        card_model = resolve_model_name(
+        card_model = await resolve_model_name(
             card.get("model_name", ""),
             fallback_model,
         )
@@ -223,7 +181,7 @@ def export_card_to_anki(
         )
 
         # 4. Create note
-        note_id = add_note(deck_name, card_model, note_fields, final_tags)
+        note_id = await add_note(deck_name, card_model, note_fields, final_tags)
 
         return ExportResult(
             success=True,

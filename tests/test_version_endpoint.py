@@ -2,18 +2,22 @@ import pytest
 from fastapi.testclient import TestClient
 from gui.backend.main import app
 import unittest.mock as mock
+import httpx
 
 client = TestClient(app)
 
 
 def test_version_endpoint_success():
-    # Mock requests.get to simulate GitHub API
-    with mock.patch("requests.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {
-            "tag_name": "v9.9.9",
-            "html_url": "https://github.com/stegra05/Lectern/releases/tag/v9.9.9",
-        }
+    # Mock httpx.AsyncClient.get to simulate GitHub API
+    mock_response = mock.MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "tag_name": "v9.9.9",
+        "html_url": "https://github.com/stegra05/Lectern/releases/tag/v9.9.9",
+    }
+
+    with mock.patch("httpx.AsyncClient.get", new_callable=mock.AsyncMock) as mock_get:
+        mock_get.return_value = mock_response
 
         response = client.get("/version")
         assert response.status_code == 200
@@ -25,8 +29,8 @@ def test_version_endpoint_success():
 
 
 def test_version_endpoint_failure():
-    # Mock requests.get to simulate failure
-    with mock.patch("requests.get") as mock_get:
+    # Mock httpx.AsyncClient.get to simulate failure
+    with mock.patch("httpx.AsyncClient.get", new_callable=mock.AsyncMock) as mock_get:
         mock_get.side_effect = Exception("Network error")
 
         response = client.get("/version")

@@ -48,6 +48,18 @@ class SessionManager:
             self._latest_session_id = session_id
         return session
 
+    def restore_session(self, session_id: str, pdf_path: str) -> SessionState:
+        """Restore in-memory session tracking for resumption."""
+        session = SessionState(
+            session_id=session_id,
+            pdf_path=pdf_path,
+            status="resuming",
+        )
+        with self._lock:
+            self._sessions[session_id] = session
+            self._latest_session_id = session_id
+        return session
+
     def get_session(self, session_id: str) -> Optional[SessionState]:
         with self._lock:
             session = self._sessions.get(session_id)

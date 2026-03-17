@@ -1,5 +1,4 @@
-import { memo, useRef, useState, useEffect } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { memo, useRef, useEffect } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { CardItem } from './CardItem';
 import { CardSkeleton } from './CardSkeleton';
@@ -25,10 +24,6 @@ interface CardListProps {
     onSelectAll: () => void;
     onClearSelection: () => void;
 }
-
-// Check if we're in a test environment (browser-safe)
-const isTestEnvironment =
-    typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';
 
 /**
  * Render a single card item - extracted to avoid duplication
@@ -89,9 +84,9 @@ function RenderCardItem({
 }
 
 /**
- * Virtualized card list component using @tanstack/react-virtual.
- * Only renders visible cards for optimal performance with large lists.
- * Falls back to non-virtualized rendering in test environments.
+ * Standard card list component.
+ * Virtualization was removed due to stability issues with absolute positioning 
+ * causing cards to stack on top of each other. React handles 100-300 memoized nodes easily.
  */
 export const CardList = memo(function CardList({
     cards,
@@ -114,49 +109,17 @@ export const CardList = memo(function CardList({
     onClearSelection,
 }: CardListProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
-    const [canVirtualize, setCanVirtualize] = useState(!isTestEnvironment);
 
-    // eslint-disable-next-line react-hooks/incompatible-library
-    const virtualizer = useVirtualizer({
-        count: sortedCards.length,
-        getScrollElement: () => scrollRef.current,
-        estimateSize: () => 200,
-        overscan: 5,
-        getItemKey: (index) => sortedCards[index]?._uid ?? `card-${index}`,
-    });
-
-    const items = virtualizer.getVirtualItems();
-
-    // Check if the container has a valid height for virtualization
+    // Auto-scroll to bottom during generation if user is at the bottom
     useEffect(() => {
-        if (isTestEnvironment) {
-            setCanVirtualize(false);
-            return;
-        }
-
-        const checkHeight = () => {
-            if (scrollRef.current) {
-                const height = scrollRef.current.clientHeight;
-                setCanVirtualize(height > 0);
+        if (isGenerating && scrollRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+            const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+            if (isNearBottom) {
+                scrollRef.current.scrollTop = scrollHeight;
             }
-        };
-
-        checkHeight();
-
-        // Re-check on resize
-        const observer = new ResizeObserver(checkHeight);
-        if (scrollRef.current) {
-            observer.observe(scrollRef.current);
         }
-
-        return () => observer.disconnect();
-    }, []);
-
-    // During generation with few cards, skip virtualization for stability. Enable after done or 50+ cards.
-    const shouldVirtualize =
-        canVirtualize &&
-        items.length > 0 &&
-        (step === 'done' || sortedCards.length >= 50);
+    }, [sortedCards.length, isGenerating]);
 
     return (
         <div
@@ -192,81 +155,29 @@ export const CardList = memo(function CardList({
                 </div>
             )}
 
-            {/* Card list - virtualized or direct rendering */}
+            {/* Card list */}
             {sortedCards.length > 0 && (
-                shouldVirtualize ? (
-                    /* Virtualized rendering for production */
-                    <div
-                        style={{
-                            height: virtualizer.getTotalSize() > 0 ? `${virtualizer.getTotalSize()}px` : 'auto',
-                            position: 'relative',
-                        }}
-                    >
-                        {items.map((virtualItem) => {
-                            const card = sortedCards[virtualItem.index];
-                            const stableKey = card._uid || `card-fallback-${virtualItem.index}`;
-                            const originalIndex = card._uid ? (uidToIndex.get(card._uid) ?? -1) : -1;
-                            const isEditing = editingIndex === originalIndex;
-                            const isSelected = card._uid ? selectedCards.has(card._uid) : false;
-
-                            return (
-                                <div
-                                    key={stableKey}
-                                    data-index={virtualItem.index}
-                                    ref={virtualizer.measureElement}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: '100%',
-                                        transform: `translateY(${virtualItem.start}px)`,
-                                    }}
-                                    className="pb-4"
-                                >
-                                    <CardItem
-                                        card={card}
-                                        originalIndex={originalIndex}
-                                        isEditing={isEditing}
-                                        isSelected={isSelected}
-                                        isMultiSelectMode={isMultiSelectMode}
-                                        step={step}
-                                        editForm={isEditing ? editForm : null}
-                                        onStartEdit={onStartEdit}
-                                        onCancelEdit={onCancelEdit}
-                                        onSaveEdit={onSaveEdit}
-                                        onFieldChange={onFieldChange}
-                                        onSetConfirmModal={onSetConfirmModal}
-                                        onToggleSelection={onToggleSelection}
-                                        onSelectRange={onSelectRange}
-                                    />
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    /* Direct rendering for tests/fallback */
-                    <div className="space-y-4">
-                        {sortedCards.map((card, index) => (
-                            <RenderCardItem
-                                key={card._uid || `card-fallback-${index}`}
-                                card={card}
-                                uidToIndex={uidToIndex}
-                                editingIndex={editingIndex}
-                                editForm={editForm}
-                                isMultiSelectMode={isMultiSelectMode}
-                                selectedCards={selectedCards}
-                                step={step}
-                                onStartEdit={onStartEdit}
-                                onCancelEdit={onCancelEdit}
-                                onSaveEdit={onSaveEdit}
-                                onFieldChange={onFieldChange}
-                                onSetConfirmModal={onSetConfirmModal}
-                                onToggleSelection={onToggleSelection}
-                                onSelectRange={onSelectRange}
-                            />
-                        ))}
-                    </div>
-                )
+                <div className="space-y-4">
+                    {sortedCards.map((card, index) => (
+                        <RenderCardItem
+                            key={card._uid || `card-fallback-${index}`}
+                            card={card}
+                            uidToIndex={uidToIndex}
+                            editingIndex={editingIndex}
+                            editForm={editForm}
+                            isMultiSelectMode={isMultiSelectMode}
+                            selectedCards={selectedCards}
+                            step={step}
+                            onStartEdit={onStartEdit}
+                            onCancelEdit={onCancelEdit}
+                            onSaveEdit={onSaveEdit}
+                            onFieldChange={onFieldChange}
+                            onSetConfirmModal={onSetConfirmModal}
+                            onToggleSelection={onToggleSelection}
+                            onSelectRange={onSelectRange}
+                        />
+                    ))}
+                </div>
             )}
 
             {/* Empty State - only show when not in active generation */}

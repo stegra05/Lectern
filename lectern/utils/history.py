@@ -100,3 +100,7 @@ class HistoryManager:
     def update_session_logs(self, session_id: str, logs: List[Dict[str, Any]]) -> bool:
         """Update logs for a session."""
         return self.db.update_session_logs(session_id, logs)
+
+    def update_session_phase(self, session_id: str, phase: str) -> bool:
+        """Update the current phase for a session."""
+        return self.db.update_session_phase(session_id, phase)

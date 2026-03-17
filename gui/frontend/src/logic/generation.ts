@@ -41,6 +41,29 @@ export const processGenerationEvent = (
         return;
     }
 
+    if (event.type === 'session_resumed') {
+        const data = event.data as {
+            session_id: string;
+            cards?: Card[];
+            coverage_data?: CoverageData;
+            total_pages?: number;
+            current_phase?: string;
+        } | undefined;
+        if (data) {
+            const cards = stampUids(normalizeCardsMetadata(data.cards || []));
+            const phase = (data.current_phase as Phase) || 'idle';
+            set(() => ({
+                sessionId: data.session_id,
+                cards,
+                coverageData: data.coverage_data || null,
+                totalPages: data.total_pages || 0,
+                currentPhase: phase,
+                isResuming: false,
+            }));
+        }
+        return;
+    }
+
     // CONTROL PLANE: snapshot drives phase/progress authoritatively
     if (event.type === 'control_snapshot') {
         const snapshot = validateControlSnapshotData(event.data);
@@ -180,6 +203,7 @@ export const handleGenerate = async (
         sessionId: null,
         isError: false,
         isCancelling: false,
+        isResuming: false,
         isHistorical: false,
         currentPhase: 'idle',
         setupStepsCompleted: 0,
@@ -245,6 +269,59 @@ export const handleGenerate = async (
                 { type: 'error', message: errorMessage, timestamp: Date.now() },
             ],
             isError: true,
+        }));
+    }
+};
+
+export const handleResume = async (
+    sessionId: string,
+    pdfFile: File,
+    set: (partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void,
+    get: () => LecternStore
+) => {
+    const state = get();
+    if (!pdfFile || !state.deckName) return;
+
+    set({
+        step: 'generating',
+        logs: [],
+        progress: { current: 0, total: 0 },
+        sessionId,
+        isError: false,
+        isCancelling: false,
+        isResuming: true,
+        isHistorical: false,
+        currentPhase: 'idle',
+        setupStepsCompleted: 0,
+        lastSnapshotTimestamp: null,
+    });
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+    }
+
+    try {
+        await api.generate(
+            {
+                pdf_file: pdfFile,
+                deck_name: state.deckName,
+                focus_prompt: state.focusPrompt,
+                target_card_count: state.targetDeckSize,
+                session_id: sessionId,
+            },
+            (event) => processGenerationEvent(event, set)
+        );
+    } catch (e: unknown) {
+        const error = e as Error;
+        console.error("Network error or disconnect during resume:", error);
+
+        const errorMessage = (e as { message?: string })?.message || 'Network error';
+        set((prev) => ({
+            logs: [
+                ...prev.logs,
+                { type: 'error', message: errorMessage, timestamp: Date.now() },
+            ],
+            isError: true,
+            isResuming: false,
         }));
     }
 };

@@ -29,7 +29,9 @@ def test_critical_endpoints_have_typed_response_schemas():
 
     for path, method in critical_routes:
         schema = _response_schema(spec, path, method)
-        assert schema != {}, f"{method.upper()} {path} should not expose an empty schema"
+        assert (
+            schema != {}
+        ), f"{method.upper()} {path} should not expose an empty schema"
         assert (
             "$ref" in schema
             or "anyOf" in schema

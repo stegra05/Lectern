@@ -88,7 +88,9 @@ class CardQualityContext:
     ) -> "CardQualityContext":
         front = _strip_markup(_get_card_front(card))
         back = _strip_markup(_get_card_back(card))
-        text = _strip_markup(str(card.get("text") or _get_card_field(card, "Text") or ""))
+        text = _strip_markup(
+            str(card.get("text") or _get_card_field(card, "Text") or "")
+        )
         answer_text = text or back
         return cls(
             card=card,
@@ -128,7 +130,10 @@ class CardQualityRule(Protocol):
 
 class PromptTextRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.has_prompt_text:
             acc.add(weights.prompt_present_bonus)
@@ -139,7 +144,10 @@ class PromptTextRule:
 
 class AnswerTextRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.answer_text:
             acc.add(weights.answer_present_bonus)
@@ -150,7 +158,10 @@ class AnswerTextRule:
 
 class SourcePagesRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.source_pages:
             acc.add(weights.source_pages_present_bonus)
@@ -161,7 +172,10 @@ class SourcePagesRule:
 
 class ConceptIdsRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.concept_ids:
             acc.add(weights.concept_ids_present_bonus)
@@ -172,7 +186,10 @@ class ConceptIdsRule:
 
 class RelationKeysRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.relation_keys:
             acc.add(weights.relation_keys_present_bonus)
@@ -180,7 +197,10 @@ class RelationKeysRule:
 
 class RationaleRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.rationale:
             acc.add(weights.rationale_present_bonus)
@@ -191,7 +211,10 @@ class RationaleRule:
 
 class SourceExcerptRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.source_excerpt:
             acc.add(weights.source_excerpt_present_bonus)
@@ -202,7 +225,10 @@ class SourceExcerptRule:
 
 class SlideNumberRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.has_slide_number:
             acc.add(weights.slide_number_bonus)
@@ -210,7 +236,10 @@ class SlideNumberRule:
 
 class LongFrontRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if len(ctx.front) > weights.long_front_threshold:
             acc.flag("long_front")
@@ -219,7 +248,10 @@ class LongFrontRule:
 
 class LongAnswerRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if len(ctx.answer_text) > weights.long_answer_threshold:
             acc.flag("long_answer")
@@ -228,7 +260,10 @@ class LongAnswerRule:
 
 class BroadGroundingRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if len(ctx.source_pages) > weights.broad_grounding_threshold:
             acc.flag("broad_grounding")
@@ -237,7 +272,10 @@ class BroadGroundingRule:
 
 class HighPriorityConceptRule:
     def apply(
-        self, ctx: CardQualityContext, acc: CardQualityAccumulator, weights: CardQualityWeights
+        self,
+        ctx: CardQualityContext,
+        acc: CardQualityAccumulator,
+        weights: CardQualityWeights,
     ) -> None:
         if ctx.high_priority_ids.intersection(ctx.concept_ids):
             acc.add(weights.high_priority_concept_bonus)

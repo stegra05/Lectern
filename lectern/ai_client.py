@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import os
 import random
 import re
 import time
+import asyncio
 import json
+import inspect
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type
 
 from google import genai  # type: ignore
@@ -29,6 +33,37 @@ from lectern.ai_schemas import (
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class UploadedDocument:
+    """Result of uploading a document to Gemini Files API."""
+
+    uri: str
+    mime_type: str = "application/pdf"
+    duration_ms: int = 0
+    retries: int = 0
+    file_size_bytes: int | None = None
+
+    def to_dict(self) -> dict[str, str]:
+        """Return legacy dict format for backward compatibility."""
+        return {"uri": self.uri, "mime_type": self.mime_type}
+
+
+class DocumentUploadError(Exception):
+    """Raised when document upload fails after all retries."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        user_message: str,
+        original_error: Exception | None = None,
+    ):
+        super().__init__(message)
+        self.user_message = user_message
+        self.original_error = original_error
+
 
 # Rate limiting configuration
 RATE_LIMIT_MAX_RETRIES = 5
@@ -130,9 +165,12 @@ class LecternAIClient:
             ],
         )
 
-        self._chat = self._client.chats.create(
+        # NOTE(ChatInit): Depending on SDK version, aio.chats.create() may return
+        # either a Chat object or an awaitable that resolves to one.
+        self._chat: Any = self._client.aio.chats.create(
             model=self._model_name, config=self._generation_config
         )
+        self._pending_history_serialized: list[dict[str, Any]] | None = None
         self._thinking_supported: bool = _model_supports_thinking(self._model_name)
         self._warnings: list[str] = []
         self._last_parse_error: str = ""
@@ -208,14 +246,18 @@ class LecternAIClient:
             return None
 
     def _parse_structured_response(
-        self, response: Any, model_class: Type[BaseModel]
+        self,
+        response: Any,
+        model_class: Type[BaseModel],
     ) -> Dict[str, Any] | None:
         """Prefer SDK parsed output, then strict JSON text fallback."""
         self._last_parse_error = ""
 
         parsed_payload = getattr(response, "parsed", None)
         if parsed_payload is not None:
-            parsed_result = self._validate_structured_payload(parsed_payload, model_class)
+            parsed_result = self._validate_structured_payload(
+                parsed_payload, model_class
+            )
             if parsed_result is not None:
                 return parsed_result
 
@@ -245,14 +287,6 @@ class LecternAIClient:
         if language and language != self._prompt_config.language:
             logger.info(f"[AI] Updating output language to: {language}")
             self._prompt_config.language = language
-            # We can't easily update the system instruction of an active chat in
-            # google-genai without creating a new chat or sending it as a new message.
-            # However, for the *next* turns, we can rely on the repetitive nature of our prompts
-            # which now include the language instruction in generation/reflection methods too.
-            #
-            # Ideally, we would recreate the chat, but that loses history.
-            # For now, we rely on the per-turn prompts in PromptBuilder to enforce it
-            # if session was already started.
 
     def _thinking_config_for(self, phase: str) -> types.ThinkingConfig | None:
         if not self._thinking_supported:
@@ -273,8 +307,9 @@ class LecternAIClient:
         fields.pop("thinking_config", None)
         return type(call_config)(**fields)
 
-    def _send_with_thinking_fallback(self, message: Any, call_config: Any) -> Any:
+    async def _send_with_thinking_fallback(self, message: Any, call_config: Any) -> Any:
         """Send a message; if thinking_level is rejected, retry without it."""
+        await self._ensure_chat()
         has_thinking = call_config.thinking_config is not None
         logger.debug(
             "[AI] send_message: model=%s, thinking=%s, config_keys=%s",
@@ -283,7 +318,7 @@ class LecternAIClient:
             [k for k, v in call_config.model_dump(exclude_none=True).items()],
         )
         try:
-            return self._chat.send_message(message=message, config=call_config)
+            return await self._chat.send_message(message=message, config=call_config)
         except Exception as exc:
             err_text = str(exc).lower()
             # Catch known "thinking parameter not supported" or INVALID_ARGUMENT related to it
@@ -304,8 +339,16 @@ class LecternAIClient:
                     "Continuing without it — results may be less thorough."
                 )
                 clean_config = self._strip_thinking(call_config)
-                return self._chat.send_message(message=message, config=clean_config)
+                return await self._chat.send_message(
+                    message=message, config=clean_config
+                )
             raise
+
+    async def _ensure_chat(self) -> None:
+        """Resolve coroutine-returning chat creation before chat usage."""
+        if inspect.isawaitable(self._chat):
+            self._chat = await self._chat
+            self._pending_history_serialized = None
 
     def set_slide_set_context(self, deck_name: str, slide_set_name: str) -> None:
         self._slide_set_context = {
@@ -410,19 +453,19 @@ class LecternAIClient:
         delay = max(0.1, delay + jitter)
         return delay
 
-    def _with_retry(
+    async def _with_retry(
         self,
         operation_name: str,
         fn: Any,
         retries: int = RATE_LIMIT_MAX_RETRIES,
         base_delay_s: float = RATE_LIMIT_BASE_DELAY,
     ) -> Any:
-        """Execute a callable with exponential backoff and rate limit handling."""
+        """Execute an async callable with exponential backoff and rate limit handling."""
         last_exception: Exception | None = None
 
         for attempt in range(1, retries + 1):
             try:
-                return fn()
+                return await fn()
             except Exception as exc:
                 last_exception = exc
 
@@ -465,32 +508,106 @@ class LecternAIClient:
                         sleep_seconds,
                     )
 
-                time.sleep(sleep_seconds)
+                await asyncio.sleep(sleep_seconds)
 
         # Should not reach here, but satisfy type checker
         raise RuntimeError(f"{operation_name} failed: {last_exception}")
 
-    def upload_pdf(self, pdf_path: str, retries: int = 3) -> Dict[str, str]:
-        """Upload a PDF to Gemini Files API and return metadata."""
+    async def upload_document(
+        self,
+        pdf_path: str,
+        retries: int = 3,
+        validate_file: bool = True,
+    ) -> UploadedDocument:
+        """Upload a PDF to Gemini Files API with full error handling and timing.
 
-        def _upload() -> Any:
-            return self._client.files.upload(file=pdf_path)
+        Args:
+            pdf_path: Path to the PDF file to upload.
+            retries: Number of retry attempts for transient failures.
+            validate_file: If True, validate file exists and is non-empty before upload.
 
-        uploaded = self._with_retry("PDF upload", _upload, retries=retries)
+        Returns:
+            UploadedDocument with upload metadata including timing and retry count.
+
+        Raises:
+            DocumentUploadError: If upload fails after all retries or file is invalid.
+        """
+        # Pre-validation
+        if validate_file:
+            if not os.path.exists(pdf_path):
+                raise DocumentUploadError(
+                    f"File not found: {pdf_path}",
+                    user_message=f"The file could not be found: {os.path.basename(pdf_path)}",
+                )
+            file_size = os.path.getsize(pdf_path)
+            if file_size == 0:
+                raise DocumentUploadError(
+                    f"File is empty (0 bytes): {pdf_path}",
+                    user_message="The uploaded file is empty (0 bytes).",
+                )
+        else:
+            file_size = None
+
+        start_time = time.perf_counter()
+        # Note: attempt_count relies on _with_retry calling _upload sequentially.
+        # If _with_retry is ever parallelized, this will need to be made thread-safe.
+        attempt_count = 0
+        last_error: Exception | None = None
+
+        async def _upload() -> Any:
+            nonlocal attempt_count
+            attempt_count += 1
+            return await self._client.aio.files.upload(file=pdf_path)
+
+        try:
+            uploaded = await self._with_retry("PDF upload", _upload, retries=retries)
+        except Exception as exc:
+            last_error = exc
+            raise DocumentUploadError(
+                f"PDF upload failed after {retries} attempts: {exc}",
+                user_message=f"Failed to upload the PDF. Please try again. ({type(exc).__name__})",
+                original_error=exc,
+            ) from exc
+
         uri = str(getattr(uploaded, "uri", "") or "")
         mime_type = str(getattr(uploaded, "mime_type", "") or "application/pdf")
-        if not uri:
-            raise RuntimeError("PDF upload returned no URI.")
-        return {"uri": uri, "mime_type": mime_type}
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
 
-    def _concept_map_for_parts(self, parts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if not uri:
+            raise DocumentUploadError(
+                "PDF upload returned no URI.",
+                user_message="The upload completed but returned an invalid response.",
+            )
+
+        return UploadedDocument(
+            uri=uri,
+            mime_type=mime_type,
+            duration_ms=duration_ms,
+            retries=max(0, attempt_count - 1),
+            file_size_bytes=file_size,
+        )
+
+    async def upload_pdf(self, pdf_path: str, retries: int = 3) -> Dict[str, str]:
+        """Upload a PDF to Gemini Files API and return metadata.
+
+        This is a backward-compatible wrapper around upload_document().
+        Note: Skips local file validation to maintain original behavior.
+        """
+        result = await self.upload_document(
+            pdf_path, retries=retries, validate_file=False
+        )
+        return result.to_dict()
+
+    async def _concept_map_for_parts(
+        self, parts: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         update: dict[str, Any] = {"response_schema": _CONCEPT_MAP_SCHEMA}
         thinking = self._thinking_config_for("concept_map")
         if thinking is not None:
             update["thinking_config"] = thinking
         call_config = self._generation_config.model_copy(update=update)
 
-        response = self._send_with_thinking_fallback(parts, call_config)
+        response = await self._send_with_thinking_fallback(parts, call_config)
 
         text = response.text or ""
         text_snippet = text[:200].replace("\n", " ")
@@ -505,8 +622,10 @@ class LecternAIClient:
             return data
         return {"concepts": []}
 
-    def concept_map_from_file(
-        self, file_uri: str, mime_type: str = "application/pdf"
+    async def concept_map_from_file(
+        self,
+        file_uri: str,
+        mime_type: str = "application/pdf",
     ) -> Dict[str, Any]:
         prompt = self._prompt_builder.concept_map()
         parts = _compose_native_file_content(
@@ -515,16 +634,16 @@ class LecternAIClient:
         logger.debug(
             f"[Chat/ConceptMap] native parts={len(parts)} prompt_len={len(prompt)}"
         )
-        return self._concept_map_for_parts(parts)
+        return await self._concept_map_for_parts(parts)
 
-    def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def concept_map(self, pdf_content: List[Dict[str, Any]]) -> Dict[str, Any]:
         prompt = self._prompt_builder.concept_map()
 
         parts = _compose_multimodal_content(pdf_content, prompt)
         logger.debug(f"[Chat/ConceptMap] parts={len(parts)} prompt_len={len(prompt)}")
-        return self._concept_map_for_parts(parts)
+        return await self._concept_map_for_parts(parts)
 
-    def count_tokens_for_pdf(
+    async def count_tokens_for_pdf(
         self,
         *,
         file_uri: str,
@@ -536,12 +655,12 @@ class LecternAIClient:
             file_uri=file_uri, prompt=prompt, mime_type=mime_type
         )
 
-        def _count() -> int:
-            return self.count_tokens(content)
+        async def _count() -> int:
+            return await self.count_tokens(content)
 
-        return int(self._with_retry("Token counting", _count, retries=retries))
+        return int(await self._with_retry("Token counting", _count, retries=retries))
 
-    def generate_more_cards(
+    async def generate_more_cards(
         self,
         limit: int,
         examples: str = "",
@@ -588,7 +707,7 @@ class LecternAIClient:
             update["thinking_config"] = thinking
         call_config = self._generation_config.model_copy(update=update)
 
-        response = self._send_with_thinking_fallback(prompt, call_config)
+        response = await self._send_with_thinking_fallback(prompt, call_config)
 
         text = response.text or ""
         text_snippet = text[:200].replace("\n", " ")
@@ -604,7 +723,7 @@ class LecternAIClient:
             return {"cards": cards, "done": done, "parse_error": ""}
         return {"cards": [], "done": True, "parse_error": self._last_parse_error}
 
-    def reflect(
+    async def reflect(
         self,
         limit: int,
         reflection_prompt: str | None = None,
@@ -626,7 +745,7 @@ class LecternAIClient:
             update["thinking_config"] = thinking
         call_config = self._generation_config.model_copy(update=update)
 
-        response = self._send_with_thinking_fallback(prompt, call_config)
+        response = await self._send_with_thinking_fallback(prompt, call_config)
 
         text = response.text or ""
         text_snippet = text[:200].replace("\n", " ")
@@ -653,7 +772,9 @@ class LecternAIClient:
         }
 
     def _safe_parse_json(
-        self, text: str, model_class: Type[BaseModel]
+        self,
+        text: str,
+        model_class: Type[BaseModel],
     ) -> Dict[str, Any] | None:
         """Backward-compatible helper used by tests; strict JSON only."""
         mock_response = type("MockResponse", (), {"parsed": None, "text": text})()
@@ -663,6 +784,10 @@ class LecternAIClient:
         """Export chat history as a list of dicts."""
         serialized = []
         try:
+            if inspect.isawaitable(self._chat):
+                if self._pending_history_serialized is not None:
+                    return self._pending_history_serialized
+                return []
             for item in self._chat.history:
                 serialized.append(item.model_dump(exclude_none=True))
         except Exception as e:
@@ -674,7 +799,10 @@ class LecternAIClient:
         """Restore chat history from a list of dicts."""
         try:
             parsed_history = [types.Content(**item) for item in history]
-            self._chat = self._client.chats.create(
+            self._pending_history_serialized = [
+                item.model_dump(exclude_none=True) for item in parsed_history
+            ]
+            self._chat = self._client.aio.chats.create(
                 model=self._model_name,
                 config=self._generation_config,
                 history=parsed_history,
@@ -683,13 +811,13 @@ class LecternAIClient:
         except Exception as e:
             logger.debug(f"[AI] Failed to restore history: {e}")
 
-    def count_tokens(self, content: List[Any]) -> int:
+    async def count_tokens(self, content: List[Any]) -> int:
         """Count tokens for a given content list."""
         try:
             parsed_content = [
                 types.Content(**c) if isinstance(c, dict) else c for c in content
             ]
-            response = self._client.models.count_tokens(
+            response = await self._client.aio.models.count_tokens(
                 model=self._model_name,
                 contents=parsed_content,
                 # config=self._generation_config  # NOTE: generating config (with system_instruction) breaks count_tokens

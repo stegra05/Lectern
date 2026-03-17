@@ -69,6 +69,7 @@ export interface GenerateRequest {
     context_deck?: string;
     focus_prompt?: string;
     target_card_count?: number;
+    session_id?: string;
 }
 
 export type SnapshotStatus =
@@ -313,6 +314,9 @@ export const api = {
         formData.append("focus_prompt", req.focus_prompt || "");
         if (req.target_card_count !== undefined) {
             formData.append("target_card_count", String(req.target_card_count));
+        }
+        if (req.session_id) {
+            formData.append("session_id", req.session_id);
         }
 
         const { response } = await apiClient.POST('/generate', {

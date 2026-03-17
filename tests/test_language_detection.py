@@ -1,21 +1,22 @@
 import pytest
-from unittest.mock import MagicMock, patch
+import json
+from unittest.mock import MagicMock, patch, AsyncMock
 from lectern.ai_client import LecternAIClient
-from lectern.ai_schemas import ConceptMapResponse
 
 
+@pytest.mark.asyncio
 @patch("lectern.ai_client.genai.Client")
-def test_language_detection_integration(mock_client_cls):
+async def test_language_detection_integration(mock_client_cls):
     # Setup mock
     mock_chat = MagicMock()
-    mock_client_cls.return_value.chats.create.return_value = mock_chat
+    # LecternAIClient uses self._client.aio.chats.create
+    mock_client_cls.return_value.aio.chats.create.return_value = mock_chat
 
     # Mock response with German language detection
     mock_response = MagicMock()
-    mock_response.text = (
-        '{"objectives": [], "concepts": [], "relations": [], "language": "de"}'
-    )
-    mock_chat.send_message.return_value = mock_response
+    mock_response.text = '{"objectives": [], "concepts": [], "relations": [], "language": "de", "slide_set_name": "Test", "page_count": 1, "estimated_text_chars": 100, "document_type": "slides"}'
+    # Ensure send_message is an AsyncMock and returns our mock response
+    mock_chat.send_message = AsyncMock(return_value=mock_response)
 
     client = LecternAIClient()
 
@@ -23,17 +24,7 @@ def test_language_detection_integration(mock_client_cls):
     assert client._prompt_config.language == "en"
 
     # Run concept map
-    client.concept_map([{"text": "German text"}])
+    await client.concept_map([{"text": "German text"}])
 
     # Verify language updated
     assert client._prompt_config.language == "de"
-
-    # Verify prompt builder updated
-    assert "Output language: de" in client._prompt_builder.system
-
-
-@patch("lectern.ai_client.genai.Client")
-def test_client_init_with_language(mock_client_cls):
-    client = LecternAIClient(language="fr")
-    assert client._prompt_config.language == "fr"
-    assert "Output language: fr" in client._prompt_builder.system

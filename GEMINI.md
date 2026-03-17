@@ -39,7 +39,7 @@ Vibe coding breeds God components—files where UI rendering, business logic, st
 | **Service** | Business rules, orchestration | `lectern_service.py`, `gui/backend/service.py` |
 | **Client** | Data fetching, external APIs | `ai_client.py`, `anki_connector.py`, `api.ts` |
 
-If a file does more than one of these jobs, it must be split. The known violator is `lectern_service.py` (identified monolith—cost estimation and media-upload logic should be extracted).
+If a file does more than one of these jobs, it must be split. The known violator is `lectern_service.py` (identified monolith—cost estimation logic should be extracted).
 
 ### Law 3: Single Source of Truth
 
@@ -336,7 +336,7 @@ This section captures critical "tribal knowledge" and architectural decisions de
 
 18. **Coverage Targets:** The project aims for **85%+ backend** and **90%+ frontend** test coverage. Mocking `AnkiConnect` and Gemini API responses is the standard pattern for sustainable tests.
 19. **Snapshot Testing:** GUI components (like `SettingsModal`) are tested via Vitest snapshots and state checks to ensure UI logic doesn't drift.
-20. **Monolith Audit:** `lectern_service.py` is identified as a monolith. Future work involves extracting `cost_estimation` and cleaning up speculative media-upload logic.
+20. **Monolith Audit:** `lectern_service.py` is identified as a monolith. Future work involves extracting `cost_estimation`.
 
 ---
 
@@ -344,7 +344,7 @@ This section captures critical "tribal knowledge" and architectural decisions de
 
 - **Multi-Document Input:** Requested but deferred due to token budget and UX complexity.
 - **Resume System:** The GUI currently generates a new session ID for every run, making the "resume from checkpoint" logic potentially unreachable.
-- **Media Output:** The schema supports images in cards (`media` field), but Gemini rarely outputs them with current prompts.
+- **Media Output:** AI-generated flashcards are text-only by design. Users can add images/media manually via Anki after sync.
 
 ---
 

@@ -74,35 +74,30 @@ class TestValidatePdf:
 class TestValidateAnkiConnection:
     """Tests for validate_anki_connection generator."""
 
+    @pytest.mark.asyncio
     @patch("lectern.validation.check_connection")
-    def test_success_when_connected(self, mock_check):
+    async def test_success_when_connected(self, mock_check):
         """Test successful connection validation."""
         mock_check.return_value = True
 
-        events = list(validate_anki_connection(skip_export=False))
+        events = []
+        async for event in validate_anki_connection(skip_export=False):
+            events.append(event)
 
         assert len(events) == 2
         assert events[0]["type"] == "step_start"
         assert events[1]["type"] == "step_end"
         assert events[1]["data"]["success"] is True
 
-        # Generator should return True - use proper way to get return value
-        gen = validate_anki_connection(skip_export=False)
-        result = None
-        try:
-            while True:
-                next(gen)
-        except StopIteration as e:
-            result = e.value
-        assert result is True
-
+    @pytest.mark.asyncio
     @patch("lectern.validation.check_connection")
-    def test_offline_mode_allowed(self, mock_check):
+    async def test_offline_mode_allowed(self, mock_check):
         """Test offline mode when skip_export is True."""
         mock_check.return_value = False
 
-        gen = validate_anki_connection(skip_export=True)
-        events = list(gen)
+        events = []
+        async for event in validate_anki_connection(skip_export=True):
+            events.append(event)
 
         # Should have step_start, step_end (unreachable), step_end (offline), warning
         assert len(events) == 4
@@ -111,21 +106,15 @@ class TestValidateAnkiConnection:
         assert events[2]["data"]["success"] is True  # Offline mode enabled
         assert events[3]["type"] == "warning"
 
-        # Generator should return True (offline mode OK)
-        gen = validate_anki_connection(skip_export=True)
-        try:
-            while True:
-                next(gen)
-        except StopIteration as e:
-            assert e.value is True
-
+    @pytest.mark.asyncio
     @patch("lectern.validation.check_connection")
-    def test_fails_when_not_connected_and_export_required(self, mock_check):
+    async def test_fails_when_not_connected_and_export_required(self, mock_check):
         """Test failure when not connected and export is required."""
         mock_check.return_value = False
 
-        gen = validate_anki_connection(skip_export=False)
-        events = list(gen)
+        events = []
+        async for event in validate_anki_connection(skip_export=False):
+            events.append(event)
 
         assert len(events) == 3
         assert events[0]["type"] == "step_start"
@@ -133,11 +122,3 @@ class TestValidateAnkiConnection:
         assert events[1]["data"]["success"] is False
         assert events[2]["type"] == "error"
         assert "Could not connect to AnkiConnect" in events[2]["message"]
-
-        # Generator should return False
-        gen = validate_anki_connection(skip_export=False)
-        try:
-            while True:
-                next(gen)
-        except StopIteration as e:
-            assert e.value is False

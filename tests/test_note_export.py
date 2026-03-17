@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from lectern.utils.note_export import (
     resolve_model_name,
     build_card_tags,
@@ -21,71 +21,89 @@ def reset_caches():
 
 
 # Test resolve_model_name
-@patch("lectern.utils.note_export.get_model_names", return_value=[])
-def test_resolve_model_name_basic(_mock_models):
+@pytest.mark.asyncio
+@patch(
+    "lectern.utils.note_export.get_model_names", new_callable=AsyncMock, return_value=[]
+)
+async def test_resolve_model_name_basic(_mock_models):
     """Test resolution of 'Basic' model variants (no Anki connection)."""
-    assert resolve_model_name("Basic", "fallback") == config.DEFAULT_BASIC_MODEL
-    assert resolve_model_name("basic", "fallback") == config.DEFAULT_BASIC_MODEL
+    assert await resolve_model_name("Basic", "fallback") == config.DEFAULT_BASIC_MODEL
+    assert await resolve_model_name("basic", "fallback") == config.DEFAULT_BASIC_MODEL
     assert (
-        resolve_model_name(config.DEFAULT_BASIC_MODEL, "fallback")
+        await resolve_model_name(config.DEFAULT_BASIC_MODEL, "fallback")
         == config.DEFAULT_BASIC_MODEL
     )
 
 
-@patch("lectern.utils.note_export.get_model_names", return_value=[])
-def test_resolve_model_name_cloze(_mock_models):
+@pytest.mark.asyncio
+@patch(
+    "lectern.utils.note_export.get_model_names", new_callable=AsyncMock, return_value=[]
+)
+async def test_resolve_model_name_cloze(_mock_models):
     """Test resolution of 'Cloze' model variants (no Anki connection)."""
-    assert resolve_model_name("Cloze", "fallback") == config.DEFAULT_CLOZE_MODEL
-    assert resolve_model_name("cloze", "fallback") == config.DEFAULT_CLOZE_MODEL
+    assert await resolve_model_name("Cloze", "fallback") == config.DEFAULT_CLOZE_MODEL
+    assert await resolve_model_name("cloze", "fallback") == config.DEFAULT_CLOZE_MODEL
     assert (
-        resolve_model_name(config.DEFAULT_CLOZE_MODEL, "fallback")
+        await resolve_model_name(config.DEFAULT_CLOZE_MODEL, "fallback")
         == config.DEFAULT_CLOZE_MODEL
     )
 
 
-@patch("lectern.utils.note_export.get_model_names", return_value=[])
-def test_resolve_model_name_fallback(_mock_models):
+@pytest.mark.asyncio
+@patch(
+    "lectern.utils.note_export.get_model_names", new_callable=AsyncMock, return_value=[]
+)
+async def test_resolve_model_name_fallback(_mock_models):
     """Test fallback when model is empty or None (no Anki connection)."""
-    assert resolve_model_name("", "MyFallback") == "MyFallback"
-    assert resolve_model_name(None, "MyFallback") == "MyFallback"
-    assert resolve_model_name("   ", "MyFallback") == "MyFallback"
+    assert await resolve_model_name("", "MyFallback") == "MyFallback"
+    assert await resolve_model_name(None, "MyFallback") == "MyFallback"
+    assert await resolve_model_name("   ", "MyFallback") == "MyFallback"
 
 
-@patch("lectern.utils.note_export.get_model_names", return_value=[])
-def test_resolve_model_name_custom(_mock_models):
+@pytest.mark.asyncio
+@patch(
+    "lectern.utils.note_export.get_model_names", new_callable=AsyncMock, return_value=[]
+)
+async def test_resolve_model_name_custom(_mock_models):
     """Test that unknown models are passed through (no Anki connection)."""
-    assert resolve_model_name("CustomModel", "fallback") == "CustomModel"
+    assert await resolve_model_name("CustomModel", "fallback") == "CustomModel"
 
 
+@pytest.mark.asyncio
 @patch(
     "lectern.utils.note_export.get_model_names",
+    new_callable=AsyncMock,
     return_value=["Basic", "Cloze", "MyCustom"],
 )
-def test_resolve_model_name_anki_validation(_mock_models):
+async def test_resolve_model_name_anki_validation(_mock_models):
     """Test that configured model names are validated against Anki."""
     # A model that exists in Anki passes through
-    assert resolve_model_name("MyCustom", "fallback") == "MyCustom"
+    assert await resolve_model_name("MyCustom", "fallback") == "MyCustom"
     # A model that does NOT exist falls back to "Basic"
-    assert resolve_model_name("NonExistent", "fallback") == "Basic"
+    assert await resolve_model_name("NonExistent", "fallback") == "Basic"
 
 
+@pytest.mark.asyncio
 @patch(
-    "lectern.utils.note_export.get_model_names", return_value=["Einfach", "Lückentext"]
+    "lectern.utils.note_export.get_model_names",
+    new_callable=AsyncMock,
+    return_value=["Einfach", "Lückentext"],
 )
 @patch(
     "lectern.utils.note_export.detect_builtin_models",
+    new_callable=AsyncMock,
     return_value={"basic": "Einfach", "cloze": "Lückentext"},
 )
-def test_resolve_model_name_localized(mock_detect, mock_get_names):
+async def test_resolve_model_name_localized(mock_detect, mock_get_names):
     """Test that generic names resolve to localized Anki names via detection."""
     # "Basic" (English) should resolve to "Einfach" (German)
-    assert resolve_model_name("Basic", "fallback") == "Einfach"
+    assert await resolve_model_name("Basic", "fallback") == "Einfach"
 
     # "Cloze" (English) should resolve to "Lückentext" (German)
-    assert resolve_model_name("Cloze", "fallback") == "Lückentext"
+    assert await resolve_model_name("Cloze", "fallback") == "Lückentext"
 
     # Case-insensitive resolution
-    assert resolve_model_name("basic", "fallback") == "Einfach"
+    assert await resolve_model_name("basic", "fallback") == "Einfach"
 
 
 # Test build_card_tags
@@ -137,11 +155,12 @@ def test_build_card_tags_dedup(mock_build_hierarchical):
 
 
 # Test export_card_to_anki
-@patch("lectern.utils.note_export.detect_builtin_models")
-@patch("lectern.utils.note_export.get_model_names")
-@patch("lectern.utils.note_export.add_note")
+@pytest.mark.asyncio
+@patch("lectern.utils.note_export.detect_builtin_models", new_callable=AsyncMock)
+@patch("lectern.utils.note_export.get_model_names", new_callable=AsyncMock)
+@patch("lectern.utils.note_export.add_note", new_callable=AsyncMock)
 @patch("lectern.utils.note_export.build_hierarchical_tags")
-def test_export_card_to_anki_success(
+async def test_export_card_to_anki_success(
     mock_build_tags, mock_add_note, mock_get_models, mock_detect_builtins
 ):
     """Test successful card export."""
@@ -158,7 +177,7 @@ def test_export_card_to_anki_success(
         "tags": ["tag1"],
     }
 
-    result = export_card_to_anki(
+    result = await export_card_to_anki(
         card=card,
         deck_name="Deck",
         slide_set_name="Set",
@@ -178,9 +197,10 @@ def test_export_card_to_anki_success(
     assert args[1] == config.DEFAULT_BASIC_MODEL
 
 
-@patch("lectern.utils.note_export.add_note")
+@pytest.mark.asyncio
+@patch("lectern.utils.note_export.add_note", new_callable=AsyncMock)
 @patch("lectern.utils.note_export.build_hierarchical_tags")
-def test_export_card_to_anki_minimal(mock_build_tags, mock_add_note):
+async def test_export_card_to_anki_minimal(mock_build_tags, mock_add_note):
     """Test export without optional fields."""
     mock_add_note.return_value = 12345
 
@@ -190,7 +210,7 @@ def test_export_card_to_anki_minimal(mock_build_tags, mock_add_note):
         "back": "A",
     }
 
-    result = export_card_to_anki(
+    result = await export_card_to_anki(
         card=card,
         deck_name="Deck",
         slide_set_name="Set",
@@ -201,13 +221,14 @@ def test_export_card_to_anki_minimal(mock_build_tags, mock_add_note):
     assert result.success is True
 
 
-@patch("lectern.utils.note_export.add_note")
-def test_export_card_to_anki_failure(mock_add_note):
+@pytest.mark.asyncio
+@patch("lectern.utils.note_export.add_note", new_callable=AsyncMock)
+async def test_export_card_to_anki_failure(mock_add_note):
     """Test handling of AnkiConnect errors."""
     mock_add_note.side_effect = RuntimeError("Anki Error")
 
     card = {"model_name": "Basic", "front": "", "back": ""}
-    result = export_card_to_anki(
+    result = await export_card_to_anki(
         card=card,
         deck_name="Deck",
         slide_set_name="Set",

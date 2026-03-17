@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Trash2, Check, X, ChevronRight } from 'lucide-react';
+import { Clock, Trash2, Check, X, ChevronRight, RotateCcw } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import type { HistoryEntry } from '../api';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -13,6 +13,7 @@ interface HistoryModalProps {
     deleteHistoryEntry: (id: string) => void;
     batchDeleteHistory: (params: { ids?: string[]; status?: string }) => void;
     loadSession: (sessionId: string) => void;
+    onResume: (sessionId: string, filename: string) => void;
 }
 
 type FilterType = 'all' | 'completed' | 'draft' | 'error' | 'cancelled';
@@ -33,6 +34,7 @@ export function HistoryModal({
     deleteHistoryEntry,
     batchDeleteHistory,
     loadSession,
+    onResume,
 }: HistoryModalProps) {
     const [historyFilter, setHistoryFilter] = useState<FilterType>(() => {
         const saved = localStorage.getItem('lectern-history-filter');
@@ -284,6 +286,21 @@ export function HistoryModal({
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                             </button>
+                                            {['draft', 'error', 'cancelled'].includes(entry.status) && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onResume(entry.session_id, entry.filename);
+                                                        onClose();
+                                                    }}
+                                                    aria-label={`Resume session: ${entry.filename}`}
+                                                    title="Resume Session"
+                                                    className="absolute bottom-2 right-2 px-2 py-1 text-xs text-primary hover:bg-primary/10 rounded-md opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 border border-primary/30 hover:border-primary/50"
+                                                >
+                                                    <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                                                    Resume
+                                                </button>
+                                            )}
                                         </div>
                                     ))
                                 )}

@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 import os
+import asyncio
 from dataclasses import dataclass
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, AsyncGenerator, List, Optional
 
 from lectern.anki_connector import sample_examples_from_deck
 from lectern.ai_client import LecternAIClient
@@ -60,23 +61,12 @@ class ConceptPhaseHandler:
         self.model_name = model_name
         self.focus_prompt = focus_prompt
 
-    def run(
+    async def run(
         self,
         file_size: int,
         context_deck: str = "",
-    ) -> Generator[Dict[str, Any], None, ConceptPhaseResult]:
-        """Run the concept phase: sample examples, init AI, upload PDF, build concept map.
-
-        Args:
-            file_size: Size of the PDF file in bytes (for progress estimation).
-            context_deck: Optional deck to sample examples from.
-
-        Yields:
-            ServiceEvent dicts for progress reporting.
-
-        Returns:
-            ConceptPhaseResult with concept map, slide set name, and AI client.
-        """
+    ) -> AsyncGenerator[Dict[str, Any], ConceptPhaseResult]:
+        """Run the concept phase (Async)."""
         # Sample examples from deck
         examples = ""
         yield {
@@ -86,7 +76,7 @@ class ConceptPhaseHandler:
         }
         try:
             deck_for_examples = context_deck or self.deck_name
-            examples = sample_examples_from_deck(
+            examples = await sample_examples_from_deck(
                 deck_name=deck_for_examples, sample_size=5
             )
             if examples.strip():
@@ -141,7 +131,7 @@ class ConceptPhaseHandler:
             "data": {},
         }
         try:
-            uploaded_pdf = ai.upload_pdf(self.pdf_path)
+            uploaded_pdf = await ai.upload_pdf(self.pdf_path)
             yield {
                 "type": "step_end",
                 "message": "PDF Uploaded",
@@ -158,18 +148,11 @@ class ConceptPhaseHandler:
                 "message": f"Native PDF upload failed: {e}",
                 "data": {"recoverable": False},
             }
-            return ConceptPhaseResult(
-                success=False,
-                concept_map={},
-                slide_set_name="",
-                pages=[],
-                total_text_chars=0,
-                uploaded_pdf={},
-            )
+            return
 
         # Build concept map
         concept_map: Dict[str, Any] = {}
-        metadata = extract_pdf_metadata(pdf_path)
+        metadata = await asyncio.to_thread(extract_pdf_metadata, self.pdf_path)
         actual_pages = metadata["page_count"]
         actual_text_chars = metadata["text_chars"]
         estimated_pages = actual_pages
@@ -194,7 +177,7 @@ class ConceptPhaseHandler:
         total_text_chars = 0
 
         try:
-            raw_concept_map = ai.concept_map_from_file(
+            raw_concept_map = await ai.concept_map_from_file(
                 file_uri=uploaded_pdf["uri"],
                 mime_type=uploaded_pdf.get("mime_type", "application/pdf"),
             )
@@ -202,7 +185,7 @@ class ConceptPhaseHandler:
 
             if not concept_map:
                 try:
-                    legacy_map = ai.concept_map([])
+                    legacy_map = await ai.concept_map([])
                     if isinstance(legacy_map, dict):
                         concept_map = legacy_map
                 except Exception as e:
@@ -214,7 +197,10 @@ class ConceptPhaseHandler:
             metadata_chars = actual_text_chars
 
             page_delta_limit = max(5, int(actual_pages * 0.25))
-            if advised_pages > 0 and abs(advised_pages - actual_pages) <= page_delta_limit:
+            if (
+                advised_pages > 0
+                and abs(advised_pages - actual_pages) <= page_delta_limit
+            ):
                 metadata_pages = advised_pages
 
             if advised_chars > 0:
@@ -289,7 +275,7 @@ class ConceptPhaseHandler:
             slide_set_name=slide_set_name,
         )
 
-        return ConceptPhaseResult(
+        yield ConceptPhaseResult(
             success=True,
             concept_map=concept_map,
             slide_set_name=slide_set_name,
@@ -313,21 +299,11 @@ class ExportPhaseHandler:
         self.slide_set_name = slide_set_name
         self.additional_tags = additional_tags
 
-    def run(
+    async def run(
         self,
         cards: List[Dict[str, Any]],
-    ) -> Generator[Dict[str, Any], None, ExportPhaseResult]:
-        """Export cards to Anki.
-
-        Args:
-            cards: List of card dictionaries to export.
-
-        Yields:
-            ServiceEvent dicts for progress reporting.
-
-        Returns:
-            ExportPhaseResult with counts of created and failed notes.
-        """
+    ) -> AsyncGenerator[Dict[str, Any], ExportPhaseResult]:
+        """Export cards to Anki (Async)."""
         yield {
             "type": "step_start",
             "message": f"Create {len(cards)} notes in Anki",
@@ -343,7 +319,7 @@ class ExportPhaseHandler:
         failed = 0
 
         for idx, card in enumerate(cards, start=1):
-            result = export_card_to_anki(
+            result = await export_card_to_anki(
                 card=card,
                 deck_name=self.deck_name,
                 slide_set_name=self.slide_set_name,
@@ -378,7 +354,7 @@ class ExportPhaseHandler:
             "data": {"success": True, "created": created, "failed": failed},
         }
 
-        return ExportPhaseResult(
+        yield ExportPhaseResult(
             success=True,
             created=created,
             failed=failed,

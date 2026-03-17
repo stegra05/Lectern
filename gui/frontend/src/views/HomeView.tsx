@@ -1,8 +1,8 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { SourceMaterialCard } from '../components/SourceMaterialCard';
 import { ConfigurationCard, type EstimationDisplay, type SliderConfig } from '../components/ConfigurationCard';
-import { GenerationSummaryCard, type CostDisplay, type SummaryInfo, type ValidationState } from '../components/GenerationSummaryCard';
+import { GenerationSummaryCard, type ValidationState } from '../components/GenerationSummaryCard';
 import type { DeckSelectorProps } from '../components/DeckSelector';
 import type { HealthStatus } from '../hooks/useAppState';
 import { useEstimationLogic } from '../hooks/useEstimationLogic';
@@ -16,6 +16,8 @@ import {
     useDeckState,
     useGenerationValidation,
     useHomeActions,
+    useSummaryInfo,
+    useCostDisplay,
 } from '../hooks/useLecternSelectors';
 import { useDecksQuery, useCreateDeckMutation } from '../queries';
 
@@ -49,6 +51,9 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
     const deckState = useDeckState();
     const validation = useGenerationValidation();
 
+    // Derived state via memoized selectors
+    const summaryInfo = useSummaryInfo();
+    const costDisplay = useCostDisplay();
     // Actions
     const actions = useHomeActions();
 
@@ -59,7 +64,7 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
     const [isDeckOpen, setIsDeckOpen] = useState(false);
     const [deckSearchQuery, setDeckSearchQuery] = useState('');
     const [expandedDeckNodes, setExpandedDeckNodes] = useState<Set<string>>(new Set());
-    const [matchedDeckNodes, setMatchedDeckNodes] = useState<Set<string>>(new Set());
+    const matchedDeckNodesRef = useRef<Set<string>>(new Set());
 
     // Cost warning state
     const [attemptedSubmit, setAttemptedSubmit] = useState(false);
@@ -91,13 +96,12 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
 
     // Auto-expand matched tree nodes while searching (preserves manual expansion state).
     useEffect(() => {
-        if (!deckSearchQuery.trim() || matchedDeckNodes.size === 0) return;
+        if (!deckSearchQuery.trim() || matchedDeckNodesRef.current.size === 0) return;
 
-        /* eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync controlled expansion with derived search matches */
         setExpandedDeckNodes(prev => {
             let changed = false;
             const next = new Set(prev);
-            for (const nodeName of matchedDeckNodes) {
+            for (const nodeName of matchedDeckNodesRef.current) {
                 if (!next.has(nodeName)) {
                     next.add(nodeName);
                     changed = true;
@@ -105,7 +109,7 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
             }
             return changed ? next : prev;
         });
-    }, [deckSearchQuery, matchedDeckNodes]);
+    }, [deckSearchQuery]);
 
     // ---------------------------------------------------------------------------
     // Computed values (derived state)
@@ -133,28 +137,6 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
             : null,
         isEstimating: estimationState.isEstimating,
     }), [estimationPhase, estimationState]);
-
-    // Cost display for GenerationSummaryCard
-    const costDisplay = useMemo((): CostDisplay | null => {
-        const est = estimationState.estimation;
-        if (!est) return null;
-        return {
-            total: est.cost,
-            inputTokens: est.input_tokens,
-            outputTokens: est.output_tokens,
-            inputCost: est.input_cost,
-            outputCost: est.output_cost,
-            model: est.model,
-        };
-    }, [estimationState.estimation]);
-
-    // Summary info for GenerationSummaryCard
-    const summaryInfo = useMemo((): SummaryInfo => ({
-        fileName: sourceState.pdfFile?.name ?? null,
-        deckName: deckState.deckName,
-        cardCount: configState.targetDeckSize,
-        sourceType: estimationState.estimation?.document_type ?? 'auto',
-    }), [sourceState.pdfFile?.name, deckState.deckName, configState.targetDeckSize, estimationState.estimation?.document_type]);
 
     // Should show cost warning
     const shouldShowCostWarning = useMemo(() => {
@@ -232,7 +214,9 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
         onOpenChange: setIsDeckOpen,
         onSearchChange: setDeckSearchQuery,
         onToggleNode: handleToggleDeckNode,
-        onSearchMatchesChange: setMatchedDeckNodes,
+        onSearchMatchesChange: (matches) => {
+            matchedDeckNodesRef.current = matches;
+        },
     }), [
         deckState.deckName,
         availableDecks,
@@ -243,7 +227,6 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
         actions.setDeckName,
         handleCreateDeck,
         handleToggleDeckNode,
-        setMatchedDeckNodes,
     ]);
 
     // ---------------------------------------------------------------------------

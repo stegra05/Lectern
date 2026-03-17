@@ -5,12 +5,26 @@ import logging
 import os
 import time
 import uuid
+import asyncio
 from dataclasses import dataclass, field, replace as dataclass_replace
-from typing import Any, Dict, Generator, List, Optional, Callable, Literal, Iterable
+from typing import (
+    Any,
+    Dict,
+    AsyncGenerator,
+    List,
+    Optional,
+    Callable,
+    Literal,
+    Iterable,
+)
 
 from lectern import config
-from lectern.anki_connector import check_connection, get_connection_info, sample_examples_from_deck
-from lectern.ai_client import LecternAIClient
+from lectern.anki_connector import (
+    check_connection,
+    get_connection_info,
+    sample_examples_from_deck,
+)
+from lectern.ai_client import LecternAIClient, DocumentUploadError
 
 from lectern.cost_estimator import (
     derive_effective_target,
@@ -68,7 +82,7 @@ class LecternGenerationService:
     Yields ServiceEvent objects to allow UIs (CLI/GUI) to render progress.
     """
 
-    def run(
+    async def run(
         self,
         pdf_path: str,
         deck_name: str,
@@ -81,7 +95,7 @@ class LecternGenerationService:
         target_card_count: Optional[int] = None,
         session_id: Optional[str] = None,
         entry_id: Optional[str] = None,
-    ) -> Generator[ServiceEvent, None, None]:
+    ) -> AsyncGenerator[ServiceEvent, None]:
 
         cfg = GenerationConfig(
             pdf_path=pdf_path,
@@ -98,14 +112,15 @@ class LecternGenerationService:
         )
 
         start_time = time.perf_counter()
-        return self._generate_stream(cfg, start_time, cfg.entry_id)
+        async for event in self._generate_stream(cfg, start_time, cfg.entry_id):
+            yield event
 
-    def _generate_stream(
+    async def _generate_stream(
         self,
         cfg: GenerationConfig,
         start_time: float,
         history_id: str | None = None,
-    ) -> Generator[ServiceEvent, None, None]:
+    ) -> AsyncGenerator[ServiceEvent, None]:
         # Generate session_id if missing to ensure stable control snapshots
         if not cfg.session_id:
             cfg = dataclass_replace(cfg, session_id=uuid.uuid4().hex)
@@ -115,7 +130,9 @@ class LecternGenerationService:
             tracker = SnapshotTracker(cfg.session_id)
             history_mgr = HistoryManager()
 
-            def _yield_with_snapshot(event: ServiceEvent):
+            async def _yield_with_snapshot(
+                event: ServiceEvent,
+            ) -> AsyncGenerator[ServiceEvent, None]:
                 """Process event through tracker and yield both if snapshot is ready."""
                 # Track state
                 snapshot = tracker.process_event(
@@ -133,35 +150,37 @@ class LecternGenerationService:
 
             # 1. Initialization and Validation
             if not os.path.exists(cfg.pdf_path):
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "error",
                         f"PDF path not found: {cfg.pdf_path}",
                         {"recoverable": False},
                     )
-                )
+                ):
+                    yield ev
                 return
 
             file_size = os.path.getsize(cfg.pdf_path)
             if file_size == 0:
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "error",
                         "The uploaded PDF is empty (0 bytes).",
                         {"recoverable": False},
                     )
-                )
+                ):
+                    yield ev
                 return
 
-            # Extract metadata early for stable progress bar and pacing
-            metadata = extract_pdf_metadata(cfg.pdf_path)
+            # Extract metadata early for stable progress bar and pacing (CPU-bound)
+            metadata = await asyncio.to_thread(extract_pdf_metadata, cfg.pdf_path)
             actual_pages = metadata["page_count"]
             actual_text_chars = metadata["text_chars"]
             actual_image_count = metadata["image_count"]
 
             # Sanity check AnkiConnect / collection before any Anki-dependent work
             if not cfg.skip_export:
-                anki_info = get_connection_info()
+                anki_info = await get_connection_info()
                 anki_ready = bool(
                     anki_info.get("connected")
                     and anki_info.get("collection_available", False)
@@ -171,15 +190,16 @@ class LecternGenerationService:
                         "AnkiConnect collection is not available yet."
                     )
                     if config.DEBUG:
-                        yield from _yield_with_snapshot(
+                        async for ev in _yield_with_snapshot(
                             ServiceEvent(
                                 "warning",
                                 f"Anki unavailable ({reason}), but DEBUG is ON. Proceeding with skip_export=True.",
                             )
-                        )
+                        ):
+                            yield ev
                         cfg = dataclass_replace(cfg, skip_export=True)
                     else:
-                        yield from _yield_with_snapshot(
+                        async for ev in _yield_with_snapshot(
                             ServiceEvent(
                                 "error",
                                 f"Could not use AnkiConnect: {reason}",
@@ -188,45 +208,55 @@ class LecternGenerationService:
                                     "error_kind": anki_info.get("error_kind"),
                                 },
                             )
+                        ):
+                            yield ev
+                        await asyncio.to_thread(
+                            history_mgr.update_entry, history_id, status="error"
                         )
-                        history_mgr.update_entry(history_id, status="error")
                         return
                 else:
-                    yield from _yield_with_snapshot(
+                    async for ev in _yield_with_snapshot(
                         ServiceEvent(
                             "step_end", "AnkiConnect Connected", {"success": True}
                         )
-                    )
+                    ):
+                        yield ev
 
             # Emit start event
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "step_start", "Extracting images and text", {"phase": "concept"}
                 )
-            )
+            ):
+                yield ev
 
             # 2. Sample style examples
             examples = ""
-            yield from _yield_with_snapshot(ServiceEvent("step_start", "Sample examples from deck"))
+            async for ev in _yield_with_snapshot(
+                ServiceEvent("step_start", "Sample examples from deck")
+            ):
+                yield ev
             examples_started_at = time.perf_counter()
             try:
                 if not cfg.skip_export:
                     deck_for_examples = cfg.context_deck or cfg.deck_name
-                    examples = sample_examples_from_deck(
+                    examples = await sample_examples_from_deck(
                         deck_name=deck_for_examples, sample_size=5
                     )
                 if examples.strip():
-                    yield from _yield_with_snapshot(
+                    async for ev in _yield_with_snapshot(
                         ServiceEvent("info", "Loaded style examples from Anki")
-                    )
+                    ):
+                        yield ev
                 elif cfg.skip_export:
-                    yield from _yield_with_snapshot(
+                    async for ev in _yield_with_snapshot(
                         ServiceEvent(
                             "info",
                             "Skipping style example sampling (Anki unavailable / draft mode).",
                         )
-                    )
-                yield from _yield_with_snapshot(
+                    ):
+                        yield ev
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_end",
                         "Examples Loaded",
@@ -235,17 +265,19 @@ class LecternGenerationService:
                             "duration_ms": self._elapsed_ms(examples_started_at),
                         },
                     )
-                )
+                ):
+                    yield ev
             except Exception as e:
                 user_msg, _ = capture_exception(e, "Sample examples")
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "error",
                         f"Failed to sample examples: {user_msg}",
                         {"recoverable": True},
                     )
-                )
-                yield from _yield_with_snapshot(
+                ):
+                    yield ev
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_end",
                         "Examples Failed",
@@ -254,7 +286,8 @@ class LecternGenerationService:
                             "duration_ms": self._elapsed_ms(examples_started_at),
                         },
                     )
-                )
+                ):
+                    yield ev
 
             # 3b. Native flow: PDF title resolved via concept map; fallback uses filename.
             pdf_filename = os.path.splitext(os.path.basename(cfg.pdf_path))[0]
@@ -262,22 +295,26 @@ class LecternGenerationService:
 
             # 4. AI Session Init
             if self._should_stop(cfg.stop_check):
-                history_mgr.update_entry(history_id, status="cancelled")
-                yield from _yield_with_snapshot(
-                    self._cancelled_event("ai_session_init", start_time)
+                await asyncio.to_thread(
+                    history_mgr.update_entry, history_id, status="cancelled"
                 )
+                async for ev in _yield_with_snapshot(
+                    self._cancelled_event("ai_session_init", start_time)
+                ):
+                    yield ev
                 return
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent("step_start", "Start AI session")
-            )
+            ):
+                yield ev
             session_started_at = time.perf_counter()
             ai = LecternAIClient(
                 model_name=cfg.model_name,
                 focus_prompt=cfg.focus_prompt,
                 slide_set_context=None,
             )
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "step_end",
                     "Session Started",
@@ -287,44 +324,44 @@ class LecternGenerationService:
                         "ai_log_path": getattr(ai, "log_path", ""),
                     },
                 )
-            )
+            ):
+                yield ev
 
             # 4b. Native PDF extraction & upload
             upload_path = cfg.pdf_path
 
             uploaded_pdf: Dict[str, str] = {}
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent("step_start", "Upload PDF to Gemini")
-            )
-            upload_started_at = time.perf_counter()
+            ):
+                yield ev
             try:
-                uploaded_pdf = ai.upload_pdf(upload_path)
-                yield from _yield_with_snapshot(
+                uploaded_doc = await ai.upload_document(upload_path)
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_end",
                         "PDF Uploaded",
                         {
                             "success": True,
-                            "duration_ms": self._elapsed_ms(upload_started_at),
+                            "duration_ms": uploaded_doc.duration_ms,
                         },
                     )
-                )
-            except Exception as e:
-                user_msg, _ = capture_exception(e, "PDF upload")
-                yield from _yield_with_snapshot(
+                ):
+                    yield ev
+                uploaded_pdf = uploaded_doc.to_dict()
+            except DocumentUploadError as e:
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_end",
                         "PDF Upload Failed",
-                        {
-                            "success": False,
-                            "duration_ms": self._elapsed_ms(upload_started_at),
-                        },
+                        {"success": False},
                     )
-                )
-                yield from _yield_with_snapshot(
+                ):
+                    yield ev
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "error",
-                        f"Native PDF upload failed: {user_msg}",
+                        f"Native PDF upload failed: {e.user_message}",
                         {
                             "recoverable": False,
                             "terminal": True,
@@ -332,46 +369,53 @@ class LecternGenerationService:
                             "elapsed_ms": self._elapsed_ms(start_time),
                         },
                     )
+                ):
+                    yield ev
+                await asyncio.to_thread(
+                    history_mgr.update_entry, history_id, status="error"
                 )
-                history_mgr.update_entry(history_id, status="error")
                 return
-            finally:
-                pass
 
             # 5. Concept Map
             concept_map = {}
             if self._should_stop(cfg.stop_check):
-                history_mgr.update_entry(history_id, status="cancelled")
-                yield from _yield_with_snapshot(
-                    self._cancelled_event("concept_map", start_time)
+                await asyncio.to_thread(
+                    history_mgr.update_entry, history_id, status="cancelled"
                 )
+                async for ev in _yield_with_snapshot(
+                    self._cancelled_event("concept_map", start_time)
+                ):
+                    yield ev
                 return
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "step_start", "Build global concept map", {"phase": "concept"}
                 )
-            )
-            yield from _yield_with_snapshot(
+            ):
+                yield ev
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "progress_start",
                     "Analyzing slides",
                     {"total": actual_pages, "phase": "concept"},
                 )
-            )
+            ):
+                yield ev
             concept_started_at = time.perf_counter()
 
             # Emit initial progress using actual page count
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "progress_update",
                     "",
                     {"current": 0, "total": actual_pages, "phase": "concept"},
                 )
-            )
+            ):
+                yield ev
 
             try:
-                raw_concept_map = ai.concept_map_from_file(
+                raw_concept_map = await ai.concept_map_from_file(
                     file_uri=uploaded_pdf["uri"],
                     mime_type=uploaded_pdf.get("mime_type", "application/pdf"),
                 )
@@ -380,12 +424,12 @@ class LecternGenerationService:
                 )
                 if not concept_map:
                     try:
-                        legacy_map = ai.concept_map([])
+                        legacy_map = await ai.concept_map([])
                         if isinstance(legacy_map, dict):
                             concept_map = legacy_map
                     except Exception as e:
                         logger.debug("Legacy concept map fallback failed: %s", e)
-                
+
                 advised_pages = int(concept_map.get("page_count") or 0)
                 advised_chars = int(concept_map.get("estimated_text_chars") or 0)
                 metadata_pages = actual_pages
@@ -394,7 +438,10 @@ class LecternGenerationService:
                 # Treat model metadata as advisory only when reasonably close to
                 # deterministic PDF-derived metadata.
                 page_delta_limit = max(5, int(actual_pages * 0.25))
-                if advised_pages > 0 and abs(advised_pages - actual_pages) <= page_delta_limit:
+                if (
+                    advised_pages > 0
+                    and abs(advised_pages - actual_pages) <= page_delta_limit
+                ):
                     metadata_pages = advised_pages
 
                 if advised_chars > 0:
@@ -408,12 +455,12 @@ class LecternGenerationService:
 
                 if metadata_chars <= 0:
                     metadata_chars = metadata_pages * 800
-                
+
                 pages = [{} for _ in range(metadata_pages)]
                 total_text_chars = metadata_chars
 
                 # Emit final progress
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "progress_update",
                         "",
@@ -423,14 +470,18 @@ class LecternGenerationService:
                             "phase": "concept",
                         },
                     )
-                )
+                ):
+                    yield ev
 
-                initial_coverage = compute_coverage_data(
+                # CPU bound compute
+                initial_coverage = await asyncio.to_thread(
+                    compute_coverage_data,
                     cards=[],
                     concept_map=concept_map,
                     total_pages=metadata_pages,
                 )
-                yield from _yield_with_snapshot(
+
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_end",
                         "Concept Map Built",
@@ -443,15 +494,18 @@ class LecternGenerationService:
                             "relation_count": len(concept_map.get("relations") or []),
                         },
                     )
-                )
-                yield from _yield_with_snapshot(
+                ):
+                    yield ev
+                async for ev in _yield_with_snapshot(
                     ServiceEvent("info", "Concept Map built", {"map": concept_map})
-                )
+                ):
+                    yield ev
                 for w in ai.drain_warnings():
-                    yield from _yield_with_snapshot(ServiceEvent("warning", w))
+                    async for ev in _yield_with_snapshot(ServiceEvent("warning", w)):
+                        yield ev
             except Exception as e:
                 user_msg, _ = capture_exception(e, "Concept map")
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "error",
                         f"Concept map failed: {user_msg}",
@@ -460,8 +514,9 @@ class LecternGenerationService:
                             "stage": "concept_map",
                         },
                     )
-                )
-                yield from _yield_with_snapshot(
+                ):
+                    yield ev
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_end",
                         "Concept Map Failed",
@@ -470,7 +525,8 @@ class LecternGenerationService:
                             "duration_ms": self._elapsed_ms(concept_started_at),
                         },
                     )
-                )
+                ):
+                    yield ev
                 metadata_pages = actual_pages
                 pages = [{} for _ in range(metadata_pages)]
                 total_text_chars = actual_text_chars or (metadata_pages * 800)
@@ -485,9 +541,10 @@ class LecternGenerationService:
                 slide_set_name = (
                     pdf_filename.replace("_", " ").replace("-", " ").title()
                 )
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent("info", f"Slide Set Name: '{slide_set_name}'")
-            )
+            ):
+                yield ev
 
             # Build slide set context for AI
             slide_set_context = {
@@ -527,19 +584,21 @@ class LecternGenerationService:
             )
 
             if is_script_mode:
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "info",
                         f"Script mode: ~{total_cards_cap} cards target ({chars_per_page:.0f} chars/page)",
                     )
-                )
+                ):
+                    yield ev
             else:
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "info",
                         f"Slides mode: ~{total_cards_cap} cards target ({len(pages)} pages × {effective_target:.1f})",
                     )
-                )
+                ):
+                    yield ev
 
             # Batch sizing
             # Clamp batch size: at least 20, at most 50, targeting half the page count.
@@ -549,17 +608,19 @@ class LecternGenerationService:
             )
             actual_batch_size = int(batch_size)
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "progress_start",
                     "Generating Cards",
                     {"total": total_cards_cap, "label": "Generation"},
                 )
-            )
+            ):
+                yield ev
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent("step_start", "Generate cards", {"phase": "generating"})
-            )
+            ):
+                yield ev
             generation_started_at = time.perf_counter()
 
             # Orchestrate generation
@@ -578,14 +639,17 @@ class LecternGenerationService:
             )
 
             # Generation loop
-            for event in orchestrator.run_generation(ai_client=ai, config=gen_config):
-                yield from _yield_with_snapshot(
+            async for event in orchestrator.run_generation(
+                ai_client=ai, config=gen_config
+            ):
+                async for ev in _yield_with_snapshot(
                     SSEEmitter.domain_to_service_event(event)
-                )
+                ):
+                    yield ev
 
             all_cards = orchestrator.state.all_cards
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "step_end",
                     "Generation Phase Complete",
@@ -595,7 +659,8 @@ class LecternGenerationService:
                         "duration_ms": self._elapsed_ms(generation_started_at),
                     },
                 )
-            )
+            ):
+                yield ev
 
             # 7. Reflection Phase
             card_count = len(all_cards)
@@ -604,42 +669,46 @@ class LecternGenerationService:
                 rounds = dynamic_rounds = 1 if card_count < 50 else 2
 
             if rounds > 0 and not self._should_stop(cfg.stop_check):
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_start",
                         "Reflection and improvement",
                         {"phase": "reflecting"},
                     )
-                )
+                ):
+                    yield ev
                 reflection_started_at = time.perf_counter()
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "progress_start",
                         "Reflection",
                         {"total": rounds, "label": "Reflection Rounds"},
                     )
-                )
+                ):
+                    yield ev
 
                 ref_config = OrchRefConfig(
                     total_cards_cap=total_cards_cap,
                     rounds=rounds,
                     stop_check=cfg.stop_check,
                 )
-                for event in orchestrator.run_reflection(
+                async for event in orchestrator.run_reflection(
                     ai_client=ai, config=ref_config
                 ):
-                    yield from _yield_with_snapshot(
+                    async for ev in _yield_with_snapshot(
                         SSEEmitter.domain_to_service_event(event)
-                    )
+                    ):
+                        yield ev
 
                 all_cards = orchestrator.state.all_cards
 
-                reflected_coverage = compute_coverage_data(
+                reflected_coverage = await asyncio.to_thread(
+                    compute_coverage_data,
                     cards=all_cards,
                     concept_map=concept_map,
                     total_pages=len(pages),
                 )
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "step_end",
                         "Reflection Phase Complete",
@@ -649,14 +718,18 @@ class LecternGenerationService:
                             "coverage_data": reflected_coverage,
                         },
                     )
-                )
+                ):
+                    yield ev
 
             if not all_cards:
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent("warning", "No cards were generated.")
+                ):
+                    yield ev
+                await asyncio.to_thread(
+                    history_mgr.update_entry, history_id, status="error"
                 )
-                history_mgr.update_entry(history_id, status="error")
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "error",
                         "Generation completed without any usable cards.",
@@ -666,10 +739,12 @@ class LecternGenerationService:
                             "elapsed_ms": self._elapsed_ms(start_time),
                         },
                     )
-                )
+                ):
+                    yield ev
                 return
 
-            final_coverage = compute_coverage_data(
+            final_coverage = await asyncio.to_thread(
+                compute_coverage_data,
                 cards=all_cards,
                 concept_map=concept_map,
                 total_pages=len(pages),
@@ -678,12 +753,14 @@ class LecternGenerationService:
             # 8. Creation in Anki
             if cfg.skip_export:
                 # Draft Mode: Save state but don't export
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent("info", "Skipping Anki export (Draft Mode)")
-                )
+                ):
+                    yield ev
 
                 # IMPORTANT: Persist cards to DB so they survive app restart/refresh
-                history_mgr.sync_session_state(
+                await asyncio.to_thread(
+                    history_mgr.sync_session_state,
                     session_id=cfg.session_id or history_id,
                     cards=all_cards,
                     status="completed",
@@ -695,7 +772,7 @@ class LecternGenerationService:
                     coverage_data=final_coverage,
                 )
 
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "done",
                         "Draft Generation Complete",
@@ -712,27 +789,31 @@ class LecternGenerationService:
                             "terminal": True,
                         },
                     )
-                )
+                ):
+                    yield ev
                 return
 
             if self._should_stop(cfg.stop_check):
-                history_mgr.update_entry(history_id, status="cancelled")
-                yield from _yield_with_snapshot(
+                await asyncio.to_thread(
+                    history_mgr.update_entry, history_id, status="cancelled"
+                )
+                async for ev in _yield_with_snapshot(
                     self._cancelled_event(
                         "export", start_time, {"generated_cards": len(all_cards)}
                     )
-                )
+                ):
+                    yield ev
                 return
 
             # Re-check Anki right before export to avoid per-note warning spam if
             # Anki became unavailable during generation.
-            anki_export_info = get_connection_info()
+            anki_export_info = await get_connection_info()
             if not (
                 anki_export_info.get("connected")
                 and anki_export_info.get("collection_available", False)
             ):
                 reason = anki_export_info.get("error") or "AnkiConnect unavailable."
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent(
                         "error",
                         f"Export skipped: {reason}",
@@ -744,60 +825,68 @@ class LecternGenerationService:
                             "elapsed_ms": self._elapsed_ms(start_time),
                         },
                     )
+                ):
+                    yield ev
+                await asyncio.to_thread(
+                    history_mgr.update_entry, history_id, status="error"
                 )
-                history_mgr.update_entry(history_id, status="error")
                 return
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "step_start",
                     f"Create {len(all_cards)} notes in Anki",
                     {"phase": "exporting"},
                 )
-            )
-            yield from _yield_with_snapshot(
+            ):
+                yield ev
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "progress_start",
                     "Exporting",
                     {"total": len(all_cards), "label": "Notes", "phase": "exporting"},
                 )
-            )
+            ):
+                yield ev
             export_started_at = time.perf_counter()
 
             created = 0
             failed = 0
 
             for idx, card in enumerate(all_cards, start=1):
-                result = export_card_to_anki(
+                result = await export_card_to_anki(
                     card=card,
                     deck_name=cfg.deck_name,
                     slide_set_name=slide_set_name,
-                    fallback_model=config.DEFAULT_BASIC_MODEL,  # NOTE: Anki note type, not Gemini model
+                    fallback_model=config.DEFAULT_BASIC_MODEL,
                     additional_tags=cfg.tags,
                 )
 
                 if result.success:
                     created += 1
-                    yield from _yield_with_snapshot(
+                    async for ev in _yield_with_snapshot(
                         ServiceEvent(
                             "note",
                             f"Created note {result.note_id}",
                             {"id": result.note_id},
                         )
-                    )
+                    ):
+                        yield ev
                 else:
                     failed += 1
-                    yield from _yield_with_snapshot(
+                    async for ev in _yield_with_snapshot(
                         ServiceEvent(
                             "warning", f"Failed to create note: {result.error}"
                         )
-                    )
+                    ):
+                        yield ev
 
-                yield from _yield_with_snapshot(
+                async for ev in _yield_with_snapshot(
                     ServiceEvent("progress_update", "", {"current": created + failed})
-                )
+                ):
+                    yield ev
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "step_end",
                     "Export Complete",
@@ -808,10 +897,12 @@ class LecternGenerationService:
                         "duration_ms": self._elapsed_ms(export_started_at),
                     },
                 )
-            )
+            ):
+                yield ev
 
             # Persist final state (including any note IDs created)
-            history_mgr.sync_session_state(
+            await asyncio.to_thread(
+                history_mgr.sync_session_state,
                 session_id=cfg.session_id or history_id,
                 cards=all_cards,
                 status="completed",
@@ -824,7 +915,7 @@ class LecternGenerationService:
             )
 
             elapsed = time.perf_counter() - start_time
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "done",
                     "Job Complete",
@@ -840,17 +931,20 @@ class LecternGenerationService:
                         "terminal": True,
                     },
                 )
-            )
+            ):
+                yield ev
 
         except Exception as e:
             user_msg, _ = capture_exception(e, "Generation run")
             # Fallback history update if history_mgr exists
             try:
-                HistoryManager().update_entry(history_id, status="error")
+                await asyncio.to_thread(
+                    HistoryManager().update_entry, history_id, status="error"
+                )
             except:
                 pass
 
-            yield from _yield_with_snapshot(
+            async for ev in _yield_with_snapshot(
                 ServiceEvent(
                     "error",
                     f"Critical error: {user_msg}",
@@ -861,7 +955,8 @@ class LecternGenerationService:
                         "elapsed_ms": self._elapsed_ms(start_time),
                     },
                 )
-            )
+            ):
+                yield ev
             # Do not raise; let the generator exit gracefully so the frontend sees the error event
             return
 

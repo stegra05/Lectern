@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from gui.backend.main import app
 
@@ -8,7 +8,7 @@ client = TestClient(app)
 
 @pytest.fixture
 def mock_delete_notes():
-    with patch("gui.backend.main.delete_notes") as mock:
+    with patch("lectern.anki_connector.delete_notes", new_callable=AsyncMock) as mock:
         yield mock
 
 

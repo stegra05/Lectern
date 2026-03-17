@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generator, List, Optional
+from typing import Any, Callable, Dict, AsyncGenerator, List, Optional
 
 from lectern.ai_pacing import PacingState
 from lectern.coverage import (
@@ -178,11 +178,11 @@ class SessionOrchestrator:
 
     # --- Main Loop: Generation ---
 
-    def run_generation(
+    async def run_generation(
         self,
         ai_client: Any,  # LecternAIClient
         config: GenerationConfig,
-    ) -> Generator[DomainEvent, None, None]:
+    ) -> AsyncGenerator[DomainEvent, None]:
         """
         Run the generation loop. The orchestrator OWNS this loop.
 
@@ -232,7 +232,7 @@ class SessionOrchestrator:
                 )
 
                 # Pure AI call (no side effects)
-                out = ai_client.generate_more_cards(
+                out = await ai_client.generate_more_cards(
                     limit=limit,
                     examples=config.examples if len(self.state.all_cards) == 0 else "",
                     avoid_fronts=recent_keys,
@@ -342,11 +342,11 @@ class SessionOrchestrator:
 
     # --- Main Loop: Reflection ---
 
-    def run_reflection(
+    async def run_reflection(
         self,
         ai_client: Any,
         config: ReflectionConfig,
-    ) -> Generator[DomainEvent, None, None]:
+    ) -> AsyncGenerator[DomainEvent, None]:
         """
         Run the reflection loop. The orchestrator OWNS this loop.
         """
@@ -382,7 +382,7 @@ class SessionOrchestrator:
 
                 cards_to_refine_json = json.dumps(cards_to_refine, ensure_ascii=False)
 
-                out = ai_client.reflect(
+                out = await ai_client.reflect(
                     limit=batch_size,
                     all_card_fronts=collect_card_fronts(self.state.all_cards)[-200:],
                     cards_to_refine_json=cards_to_refine_json,

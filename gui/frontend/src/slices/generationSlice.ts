@@ -15,6 +15,7 @@ export const getGenerationState = () => ({
   currentPhase: "idle" as Phase,
   isError: false,
   isCancelling: false,
+  isResuming: false,
   estimation: null as import("../api").Estimation | null,
   isEstimating: false,
   estimationError: null as string | null,
@@ -135,6 +136,7 @@ export const createGenerationActions = (
     set({ ...getInitialState(), ...preservePersistedState(currentState) });
   },
   handleGenerate: () => generationLogic.handleGenerate(set, get),
+  handleResume: (sessionId, pdfFile) => generationLogic.handleResume(sessionId, pdfFile, set, get),
   handleCancel: () => generationLogic.handleCancel(set, get),
   handleCancelAndReset: () =>
     generationLogic.handleCancelAndReset(set, get, () => {

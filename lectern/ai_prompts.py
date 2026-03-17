@@ -15,6 +15,7 @@ FORMATTING_RULES = (
     "- Use HTML for non-math emphasis: <b>...</b> or <strong>...</strong>; italics with <i>...</i> or <em>...</em>.\n"
     "- For math bold: \\textbf{...} (text), \\mathbf{...} or \\boldsymbol{...} (symbols). Do not use HTML inside math.\n"
     "- Never use Markdown (no **bold**, headers, or code fences).\n"
+    "- Do not include images, <img> tags, or Markdown image syntax in card content.\n"
     "- JSON must escape backslashes (e.g., \\\\frac, \\\\alpha).\n"
 )
 

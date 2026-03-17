@@ -101,7 +101,9 @@ const { defaultState, storeState } = vi.hoisted(() => {
 });
 
 const mockUseLecternStore = vi.fn((selector: ((s: typeof storeState) => unknown) | undefined) => {
-    return selector ? selector(storeState) : storeState;
+    // Pass a shallow clone to selectors to ensure reselect (and other memoized selectors)
+    // recognize that the state might have been mutated in-place in tests.
+    return selector ? selector({ ...storeState }) : storeState;
 });
 
 vi.mock('../store', () => ({

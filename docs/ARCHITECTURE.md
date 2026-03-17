@@ -188,6 +188,8 @@ Abstract representation decoupled from Anki's internal format:
 }
 ```
 
+> **Note:** AI-generated cards are text-only by design. Images from PDFs are used for AI context only and are not embedded in generated cards. Users can add media manually in Anki.
+
 ### Concept Map
 
 Global context object guiding coherent generation:

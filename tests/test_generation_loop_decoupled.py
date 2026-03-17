@@ -1,7 +1,7 @@
 """Tests for decoupled generation loop - no HTTP/SSE mocking required."""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 from lectern.orchestration.session_orchestrator import (
     SessionOrchestrator,
@@ -80,15 +80,18 @@ class TestSessionOrchestrator:
 class TestGenerationLoopPure:
     """Test generation loop without SSE/HTTP mocking."""
 
-    def test_yields_card_events_with_uuids(self):
+    @pytest.mark.asyncio
+    async def test_yields_card_events_with_uuids(self):
         ai = MagicMock()
-        ai.generate_more_cards.return_value = {
-            "cards": [
-                {"front": "Q1", "back": "A1", "source_pages": [1]},
-                {"front": "Q2", "back": "A2", "source_pages": [2]},
-            ],
-            "done": False,
-        }
+        ai.generate_more_cards = AsyncMock(
+            return_value={
+                "cards": [
+                    {"front": "Q1", "back": "A1", "source_pages": [1]},
+                    {"front": "Q2", "back": "A2", "source_pages": [2]},
+                ],
+                "done": False,
+            }
+        )
         ai.drain_warnings.return_value = []
 
         orchestrator = SessionOrchestrator()
@@ -105,7 +108,9 @@ class TestGenerationLoopPure:
             examples="",
         )
 
-        events = list(orchestrator.run_generation(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_generation(ai_client=ai, config=config)
+        ]
 
         card_events = [e for e in events if isinstance(e, CardGeneratedEvent)]
         assert len(card_events) == 2
@@ -115,9 +120,10 @@ class TestGenerationLoopPure:
             assert "uid" in event.card
             assert len(event.card["uid"]) == 36
 
-    def test_stops_on_user_cancel(self):
+    @pytest.mark.asyncio
+    async def test_stops_on_user_cancel(self):
         ai = MagicMock()
-        ai.generate_more_cards.return_value = {"cards": [], "done": False}
+        ai.generate_more_cards = AsyncMock(return_value={"cards": [], "done": False})
         ai.drain_warnings.return_value = []
 
         stop_flag = [False]
@@ -143,7 +149,7 @@ class TestGenerationLoopPure:
         )
 
         events = []
-        for event in orchestrator.run_generation(ai_client=ai, config=config):
+        async for event in orchestrator.run_generation(ai_client=ai, config=config):
             events.append(event)
             if len(events) == 2:  # After batch started and before generation
                 pass
@@ -152,12 +158,15 @@ class TestGenerationLoopPure:
         assert len(stop_events) >= 1
         assert stop_events[0].reason == "user_cancel"
 
-    def test_yields_batch_events(self):
+    @pytest.mark.asyncio
+    async def test_yields_batch_events(self):
         ai = MagicMock()
-        ai.generate_more_cards.return_value = {
-            "cards": [{"front": "Q1", "back": "A1"}],
-            "done": True,
-        }
+        ai.generate_more_cards = AsyncMock(
+            return_value={
+                "cards": [{"front": "Q1", "back": "A1"}],
+                "done": True,
+            }
+        )
         ai.drain_warnings.return_value = []
 
         orchestrator = SessionOrchestrator()
@@ -174,7 +183,9 @@ class TestGenerationLoopPure:
             examples="",
         )
 
-        events = list(orchestrator.run_generation(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_generation(ai_client=ai, config=config)
+        ]
 
         # Check for batch events specifically (excluding coverage events)
         started_events = [
@@ -189,9 +200,10 @@ class TestGenerationLoopPure:
         assert len(completed_events) >= 1
         assert completed_events[0].cards_added == 1
 
-    def test_handles_warnings_from_ai(self):
+    @pytest.mark.asyncio
+    async def test_handles_warnings_from_ai(self):
         ai = MagicMock()
-        ai.generate_more_cards.return_value = {"cards": [], "done": True}
+        ai.generate_more_cards = AsyncMock(return_value={"cards": [], "done": True})
         ai.drain_warnings.return_value = ["Warning 1", "Warning 2"]
 
         orchestrator = SessionOrchestrator()
@@ -208,7 +220,9 @@ class TestGenerationLoopPure:
             examples="",
         )
 
-        events = list(orchestrator.run_generation(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_generation(ai_client=ai, config=config)
+        ]
 
         warning_events = [e for e in events if isinstance(e, WarningEmittedEvent)]
         # Should have at least the2 warnings from AI
@@ -216,9 +230,10 @@ class TestGenerationLoopPure:
         assert warning_events[0].message == "Warning 1"
         assert warning_events[1].message == "Warning 2"
 
-    def test_handles_errors_gracefully(self):
+    @pytest.mark.asyncio
+    async def test_handles_errors_gracefully(self):
         ai = MagicMock()
-        ai.generate_more_cards.side_effect = Exception("AI failure")
+        ai.generate_more_cards = AsyncMock(side_effect=Exception("AI failure"))
 
         orchestrator = SessionOrchestrator()
         orchestrator.state.pages = [{"number": i} for i in range(5)]
@@ -234,7 +249,9 @@ class TestGenerationLoopPure:
             examples="",
         )
 
-        events = list(orchestrator.run_generation(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_generation(ai_client=ai, config=config)
+        ]
 
         error_events = [e for e in events if isinstance(e, ErrorOccurredEvent)]
         assert len(error_events) == 1
@@ -243,12 +260,15 @@ class TestGenerationLoopPure:
 
         assert error_events[0].stage == "generation"
 
-    def test_stops_on_coverage_threshold(self):
+    @pytest.mark.asyncio
+    async def test_stops_on_coverage_threshold(self):
         ai = MagicMock()
-        ai.generate_more_cards.return_value = {
-            "cards": [{"front": "Q1", "back": "A1"}],
-            "done": True,
-        }
+        ai.generate_more_cards = AsyncMock(
+            return_value={
+                "cards": [{"front": "Q1", "back": "A1"}],
+                "done": True,
+            }
+        )
         ai.drain_warnings.return_value = []
 
         # Create concept map with high priority concepts
@@ -272,7 +292,9 @@ class TestGenerationLoopPure:
             examples="",
         )
 
-        events = list(orchestrator.run_generation(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_generation(ai_client=ai, config=config)
+        ]
 
         threshold_events = [
             e for e in events if isinstance(e, CoverageThresholdMetEvent)
@@ -288,15 +310,18 @@ class TestGenerationLoopPure:
 class TestReflectionLoopPure:
     """Test reflection loop without SSE/HTTP mocking."""
 
-    def test_yields_reflection_events(self):
+    @pytest.mark.asyncio
+    async def test_yields_reflection_events(self):
         ai = MagicMock()
-        ai.reflect.return_value = {
-            "cards": [
-                {"front": "Q1_refined", "back": "A1_refined", "source_pages": [1]},
-            ],
-            "reflection": "Improved cards",
-            "done": False,
-        }
+        ai.reflect = AsyncMock(
+            return_value={
+                "cards": [
+                    {"front": "Q1_refined", "back": "A1_refined", "source_pages": [1]},
+                ],
+                "reflection": "Improved cards",
+                "done": False,
+            }
+        )
         ai.drain_warnings.return_value = []
 
         orchestrator = SessionOrchestrator()
@@ -316,7 +341,9 @@ class TestReflectionLoopPure:
             stop_check=None,
         )
 
-        events = list(orchestrator.run_reflection(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_reflection(ai_client=ai, config=config)
+        ]
 
         round_started = [
             e for e in events if isinstance(e, ReflectionRoundStartedEvent)
@@ -336,9 +363,12 @@ class TestReflectionLoopPure:
 
         assert round_completed[0].cards_changed is True
 
-    def test_stops_on_user_cancel_during_reflection(self):
+    @pytest.mark.asyncio
+    async def test_stops_on_user_cancel_during_reflection(self):
         ai = MagicMock()
-        ai.reflect.return_value = {"cards": [], "reflection": "", "done": False}
+        ai.reflect = AsyncMock(
+            return_value={"cards": [], "reflection": "", "done": False}
+        )
         ai.drain_warnings.return_value = []
 
         # Stop check that returns True after first call
@@ -361,16 +391,19 @@ class TestReflectionLoopPure:
             hard_cap_padding=5,
             stop_check=stop_check,
         )
-        events = list(orchestrator.run_reflection(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_reflection(ai_client=ai, config=config)
+        ]
 
         # Should have a ReflectionRoundStartedEvent and ReflectionStoppedEvent
         stop_events = [e for e in events if isinstance(e, ReflectionStoppedEvent)]
         assert len(stop_events) >= 1
         assert stop_events[0].reason == "user_cancel"
 
-    def test_handles_reflection_errors(self):
+    @pytest.mark.asyncio
+    async def test_handles_reflection_errors(self):
         ai = MagicMock()
-        ai.reflect.side_effect = Exception("Reflection error")
+        ai.reflect = AsyncMock(side_effect=Exception("Reflection error"))
         orchestrator = SessionOrchestrator()
         orchestrator.state.pages = [{"number": i} for i in range(5)]
         orchestrator.state.concept_map = {}
@@ -383,7 +416,9 @@ class TestReflectionLoopPure:
             hard_cap_padding=5,
             stop_check=None,
         )
-        events = list(orchestrator.run_reflection(ai_client=ai, config=config))
+        events = [
+            e async for e in orchestrator.run_reflection(ai_client=ai, config=config)
+        ]
         warning_events = [e for e in events if isinstance(e, WarningEmittedEvent)]
         assert len(warning_events) >= 1
         assert "Reflection error" in warning_events[0].message

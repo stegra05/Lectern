@@ -1,15 +1,11 @@
 import pytest
-from unittest.mock import patch, MagicMock
+import httpx
+import asyncio
+from unittest.mock import patch, MagicMock, AsyncMock
 from lectern import anki_connector
 from lectern.anki_connector import AnkiTransportError, AnkiApiError
 
 # --- Fixtures ---
-
-
-@pytest.fixture
-def mock_requests_post():
-    with patch("requests.post") as mock_post:
-        yield mock_post
 
 
 @pytest.fixture(autouse=True)
@@ -23,29 +19,34 @@ def clear_model_caches():
 # --- Tests ---
 
 
-def test_check_connection_success(mock_requests_post):
+@pytest.mark.asyncio
+async def test_check_connection_success(mock_httpx_post):
     # Mock successful version response
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": 6, "error": None}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
-    assert anki_connector.check_connection() is True
+    assert await anki_connector.check_connection() is True
 
 
-def test_check_connection_failure(mock_requests_post):
+@pytest.mark.asyncio
+async def test_check_connection_failure(mock_httpx_post):
     # Mock connection error
-    mock_requests_post.side_effect = Exception("Connection refused")
+    mock_httpx_post.side_effect = httpx.RequestError("Connection refused")
 
-    assert anki_connector.check_connection() is False
+    assert await anki_connector.check_connection() is False
 
 
-def test_add_note_success(mock_requests_post):
+@pytest.mark.asyncio
+async def test_add_note_success(mock_httpx_post):
     # Mock addNote response
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": 12345, "error": None}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
-    note_id = anki_connector.add_note(
+    note_id = await anki_connector.add_note(
         deck_name="Test Deck",
         model_name="Basic",
         fields={"Front": "Q", "Back": "A"},
@@ -53,38 +54,47 @@ def test_add_note_success(mock_requests_post):
     )
 
     assert note_id == 12345
-    mock_requests_post.assert_called_once()
+    mock_httpx_post.assert_called_once()
 
 
-def test_add_note_error(mock_requests_post):
+@pytest.mark.asyncio
+async def test_add_note_error(mock_httpx_post):
     # Mock API error
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": None, "error": "Deck not found"}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
     with pytest.raises(AnkiApiError, match="Deck not found"):
-        anki_connector.add_note("Bad Deck", "Basic", {}, [])
+        await anki_connector.add_note("Bad Deck", "Basic", {}, [])
 
 
-def test_get_deck_names(mock_requests_post):
+@pytest.mark.asyncio
+async def test_get_deck_names(mock_httpx_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": ["Default", "Math"], "error": None}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
-    decks = anki_connector.get_deck_names()
+    decks = await anki_connector.get_deck_names()
     assert "Math" in decks
     assert len(decks) == 2
 
 
-def test_get_connection_info_collection_available(mock_requests_post):
+@pytest.mark.asyncio
+async def test_get_connection_info_collection_available(mock_httpx_post):
     """Connection info includes collection readiness when deckNames works."""
     mock_version = MagicMock()
     mock_version.json.return_value = {"result": 6, "error": None}
+    mock_version.raise_for_status = MagicMock()
+
     mock_decks = MagicMock()
     mock_decks.json.return_value = {"result": ["Default"], "error": None}
-    mock_requests_post.side_effect = [mock_version, mock_decks]
+    mock_decks.raise_for_status = MagicMock()
 
-    info = anki_connector.get_connection_info()
+    mock_httpx_post.side_effect = [mock_version, mock_decks]
+
+    info = await anki_connector.get_connection_info()
 
     assert info["connected"] is True
     assert info["version_ok"] is True
@@ -92,18 +102,23 @@ def test_get_connection_info_collection_available(mock_requests_post):
     assert info["error_kind"] is None
 
 
-def test_get_connection_info_collection_unavailable_api_error(mock_requests_post):
+@pytest.mark.asyncio
+async def test_get_connection_info_collection_unavailable_api_error(mock_httpx_post):
     """Connection info classifies API-level collection errors."""
     mock_version = MagicMock()
     mock_version.json.return_value = {"result": 6, "error": None}
+    mock_version.raise_for_status = MagicMock()
+
     mock_decks = MagicMock()
     mock_decks.json.return_value = {
         "result": None,
         "error": "collection is not available",
     }
-    mock_requests_post.side_effect = [mock_version, mock_decks]
+    mock_decks.raise_for_status = MagicMock()
 
-    info = anki_connector.get_connection_info()
+    mock_httpx_post.side_effect = [mock_version, mock_decks]
+
+    info = await anki_connector.get_connection_info()
 
     assert info["connected"] is True
     assert info["collection_available"] is False
@@ -111,11 +126,13 @@ def test_get_connection_info_collection_unavailable_api_error(mock_requests_post
     assert "collection is not available" in (info["error"] or "")
 
 
-def test_sample_examples_from_deck(mock_requests_post):
+@pytest.mark.asyncio
+async def test_sample_examples_from_deck(mock_httpx_post):
     # This function makes two calls: findNotes then notesInfo
 
     mock_response_find = MagicMock()
     mock_response_find.json.return_value = {"result": [101], "error": None}
+    mock_response_find.raise_for_status = MagicMock()
 
     mock_response_info = MagicMock()
     mock_response_info.json.return_value = {
@@ -127,64 +144,74 @@ def test_sample_examples_from_deck(mock_requests_post):
         ],
         "error": None,
     }
+    mock_response_info.raise_for_status = MagicMock()
 
-    mock_requests_post.side_effect = [mock_response_find, mock_response_info]
+    mock_httpx_post.side_effect = [mock_response_find, mock_response_info]
 
-    examples = anki_connector.sample_examples_from_deck("Test")
+    examples = await anki_connector.sample_examples_from_deck("Test")
     assert "Example 1 (Basic):" in examples
     assert "Front: Q1" in examples
     assert "Q1" in examples
     assert "A1" in examples
 
 
-def test_create_deck(mock_requests_post):
+@pytest.mark.asyncio
+async def test_create_deck(mock_httpx_post):
     mock_response = MagicMock()
     # Success: returns deck ID
     mock_response.json.return_value = {"result": 12345, "error": None}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
-    success = anki_connector.create_deck("New Deck")
+    success = await anki_connector.create_deck("New Deck")
     assert success is True
 
     # Error case: result is None (or _invoke raises RuntimeError)
     mock_response.json.return_value = {"result": None, "error": "Already exists"}
-    assert anki_connector.create_deck("New Deck") is False
+    assert await anki_connector.create_deck("New Deck") is False
 
 
-def test_delete_notes(mock_requests_post):
+@pytest.mark.asyncio
+async def test_delete_notes(mock_httpx_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": None, "error": None}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
-    anki_connector.delete_notes([1, 2, 3])
-    mock_requests_post.assert_called_once()
+    await anki_connector.delete_notes([1, 2, 3])
+    mock_httpx_post.assert_called_once()
 
 
-def test_update_note_fields(mock_requests_post):
+@pytest.mark.asyncio
+async def test_update_note_fields(mock_httpx_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": None, "error": None}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
-    anki_connector.update_note_fields(123, {"Front": "New Q"})
-    mock_requests_post.assert_called_once()
+    await anki_connector.update_note_fields(123, {"Front": "New Q"})
+    mock_httpx_post.assert_called_once()
 
 
-def test_get_model_field_names(mock_requests_post):
+@pytest.mark.asyncio
+async def test_get_model_field_names(mock_httpx_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"result": ["Front", "Back"], "error": None}
-    mock_requests_post.return_value = mock_response
+    mock_response.raise_for_status = MagicMock()
+    mock_httpx_post.return_value = mock_response
 
-    fields = anki_connector.get_model_field_names("Basic")
+    fields = await anki_connector.get_model_field_names("Basic")
     assert fields == ["Front", "Back"]
 
 
-@patch("lectern.anki_connector.get_model_names")
-@patch("lectern.anki_connector.get_model_field_names")
-def test_detect_builtin_models_localized(mock_get_fields, mock_get_names):
+@pytest.mark.asyncio
+@patch("lectern.anki_connector.get_model_names", new_callable=AsyncMock)
+@patch("lectern.anki_connector.get_model_field_names", new_callable=AsyncMock)
+async def test_detect_builtin_models_localized(mock_get_fields, mock_get_names):
     # Mock German locale: "Einfach" (Basic) and "Lückentext" (Cloze)
     mock_get_names.return_value = ["Einfach", "Lückentext", "Other"]
 
-    def side_effect(name):
+    async def side_effect(name):
         if name == "Einfach":
             return ["Front", "Back"]
         if name == "Lückentext":
@@ -193,7 +220,7 @@ def test_detect_builtin_models_localized(mock_get_fields, mock_get_names):
 
     mock_get_fields.side_effect = side_effect
 
-    detected = anki_connector.detect_builtin_models()
+    detected = await anki_connector.detect_builtin_models()
     assert detected["basic"] == "Einfach"
     assert detected["cloze"] == "Lückentext"
 
@@ -204,66 +231,70 @@ def test_detect_builtin_models_localized(mock_get_fields, mock_get_names):
 class TestNetworkTimeout:
     """Tests for network timeout handling."""
 
-    def test_invoke_timeout_on_connect(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_invoke_timeout_on_connect(self, mock_httpx_post):
         """Test that connection timeout raises AnkiTransportError."""
-        import requests
-
-        mock_requests_post.side_effect = requests.Timeout("Connection timed out")
+        mock_httpx_post.side_effect = httpx.ConnectTimeout("Connection timed out")
 
         with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
-            anki_connector._invoke("version")
+            await anki_connector._invoke("version")
 
-    def test_invoke_timeout_on_read(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_invoke_timeout_on_read(self, mock_httpx_post):
         """Test that read timeout raises AnkiTransportError."""
-        import requests
-
-        mock_requests_post.side_effect = requests.ReadTimeout("Read timed out")
+        mock_httpx_post.side_effect = httpx.ReadTimeout("Read timed out")
 
         with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
-            anki_connector._invoke("version")
+            await anki_connector._invoke("version")
 
-    def test_check_connection_handles_timeout(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_check_connection_handles_timeout(self, mock_httpx_post):
         """Test that check_connection returns False on timeout."""
-        import requests
+        mock_httpx_post.side_effect = httpx.TimeoutException("Timeout")
 
-        mock_requests_post.side_effect = requests.Timeout("Timeout")
-
-        assert anki_connector.check_connection() is False
+        assert await anki_connector.check_connection() is False
 
 
 class TestPartialResponse:
     """Tests for partial or malformed response handling."""
 
-    def test_non_json_response(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_non_json_response(self, mock_httpx_post):
         """Test that non-JSON response raises AnkiTransportError."""
         mock_response = MagicMock()
         mock_response.json.side_effect = ValueError("Invalid JSON")
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
         with pytest.raises(AnkiTransportError, match="non-JSON response"):
-            anki_connector._invoke("version")
+            await anki_connector._invoke("version")
 
-    def test_empty_response(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_empty_response(self, mock_httpx_post):
         """Test that empty response is handled."""
         mock_response = MagicMock()
         mock_response.json.side_effect = ValueError("Empty response")
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
         with pytest.raises(AnkiTransportError, match="non-JSON response"):
-            anki_connector._invoke("version")
+            await anki_connector._invoke("version")
 
-    def test_partial_json_response(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_partial_json_response(self, mock_httpx_post):
         """Test handling of partial JSON (missing fields)."""
         mock_response = MagicMock()
         # Response without 'result' key
         mock_response.json.return_value = {}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
         # Should not raise, returns None for missing result
-        result = anki_connector._invoke("version")
+        result = await anki_connector._invoke("version")
         assert result is None
 
-    def test_notes_info_with_invalid_data(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_notes_info_with_invalid_data(self, mock_httpx_post):
         """Test notes_info filters out invalid entries."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -275,9 +306,10 @@ class TestPartialResponse:
             ],
             "error": None,
         }
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
-        result = anki_connector.notes_info([1, 2])
+        result = await anki_connector.notes_info([1, 2])
         # Should only return valid dict entries
         assert len(result) == 2
         assert result[0]["noteId"] == 1
@@ -287,139 +319,149 @@ class TestPartialResponse:
 class TestRetryLogic:
     """Tests for retry behavior with transient failures."""
 
-    def test_retry_on_connection_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_retry_on_connection_error(self, mock_httpx_post):
         """Test that transient connection errors trigger retry."""
-        import requests
-
         # First two calls fail, third succeeds
         mock_response_success = MagicMock()
         mock_response_success.json.return_value = {"result": 6, "error": None}
+        mock_response_success.raise_for_status = MagicMock()
 
-        mock_requests_post.side_effect = [
-            requests.ConnectionError("Connection refused"),
-            requests.ConnectionError("Connection refused"),
+        mock_httpx_post.side_effect = [
+            httpx.ConnectError("Connection refused"),
+            httpx.ConnectError("Connection refused"),
             mock_response_success,
         ]
 
-        # Should succeed after retries
-        result = anki_connector._invoke("version")
-        assert result == 6
-        assert mock_requests_post.call_count == 3
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            # Should succeed after retries
+            result = await anki_connector._invoke("version")
+            assert result == 6
+            assert mock_httpx_post.call_count == 3
+            assert mock_sleep.call_count == 2
 
-    def test_retry_exhausted_raises_last_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_retry_exhausted_raises_last_error(self, mock_httpx_post):
         """Test that exhausted retries raise the last error."""
-        import requests
+        mock_httpx_post.side_effect = httpx.ConnectError("Connection refused")
 
-        mock_requests_post.side_effect = requests.ConnectionError("Connection refused")
-
-        with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
-            anki_connector._invoke("version")
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(AnkiTransportError, match="Failed to reach AnkiConnect"):
+                await anki_connector._invoke("version")
 
         # Should have tried MAX_RETRIES + 1 times (4 by default)
-        assert mock_requests_post.call_count == 4
+        assert mock_httpx_post.call_count == 4
 
-    def test_no_retry_on_api_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_no_retry_on_api_error(self, mock_httpx_post):
         """Test that API-level errors don't trigger retry."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": None, "error": "Deck not found"}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
         with pytest.raises(AnkiApiError, match="AnkiConnect error"):
-            anki_connector._invoke("addNote", {"note": {}})
+            await anki_connector._invoke("addNote", {"note": {}})
 
         # Should only call once (no retry on API error)
-        assert mock_requests_post.call_count == 1
+        assert mock_httpx_post.call_count == 1
 
-    def test_retry_with_exponential_backoff(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_retry_with_exponential_backoff(self, mock_httpx_post):
         """Test that retry uses exponential backoff."""
-        import requests
-        import time
-
         mock_response_success = MagicMock()
         mock_response_success.json.return_value = {"result": 6, "error": None}
+        mock_response_success.raise_for_status = MagicMock()
 
-        call_times = []
-
-        def track_calls(*args, **kwargs):
-            call_times.append(time.time())
-            if len(call_times) < 3:
-                raise requests.ConnectionError("Connection refused")
+        async def track_calls(*args, **kwargs):
+            if mock_httpx_post.call_count < 3:
+                raise httpx.ConnectError("Connection refused")
             return mock_response_success
 
-        mock_requests_post.side_effect = track_calls
+        mock_httpx_post.side_effect = track_calls
 
-        anki_connector._invoke("version")
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await anki_connector._invoke("version")
 
-        # Verify there were delays between retries
-        if len(call_times) >= 3:
-            # First retry delay should be ~0.5s
-            delay1 = call_times[1] - call_times[0]
-            delay2 = call_times[2] - call_times[1]
-            # Allow some tolerance for test execution
-            assert delay1 >= 0.3  # Initial delay ~0.5s
-            assert delay2 >= delay1 * 1.5  # Exponential backoff
+            # Verify there were delays between retries
+            assert mock_sleep.call_count == 2
+
+            # Check delays (0.5s, 1.0s)
+            delays = [call.args[0] for call in mock_sleep.call_args_list]
+            assert delays[0] == 0.5
+            assert delays[1] == 1.0
 
 
 class TestVersionMismatch:
     """Tests for version mismatch graceful degradation."""
 
-    def test_connection_info_old_version(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_connection_info_old_version(self, mock_httpx_post):
         """Test that old AnkiConnect version is detected gracefully."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": 5, "error": None}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
-        info = anki_connector.get_connection_info()
+        info = await anki_connector.get_connection_info()
 
         assert info["connected"] is True
         assert info["version"] == 5
         assert info["version_ok"] is False
         assert "too old" in info["error"]
 
-    def test_connection_info_version_6_ok(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_connection_info_version_6_ok(self, mock_httpx_post):
         """Test that version 6 is accepted."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": 6, "error": None}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
-        info = anki_connector.get_connection_info()
+        info = await anki_connector.get_connection_info()
 
         assert info["connected"] is True
         assert info["version"] == 6
         assert info["version_ok"] is True
         assert info["error"] is None
 
-    def test_connection_info_future_version(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_connection_info_future_version(self, mock_httpx_post):
         """Test that future versions are accepted."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": 10, "error": None}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
-        info = anki_connector.get_connection_info()
+        info = await anki_connector.get_connection_info()
 
         assert info["connected"] is True
         assert info["version"] == 10
         assert info["version_ok"] is True
 
-    def test_connection_info_invalid_version_type(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_connection_info_invalid_version_type(self, mock_httpx_post):
         """Test handling of non-integer version."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": "6.0", "error": None}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
-        info = anki_connector.get_connection_info()
+        info = await anki_connector.get_connection_info()
 
         assert info["connected"] is True
         assert info["version"] == "6.0"
         assert info["version_ok"] is False  # String is not valid
 
-    def test_connection_info_with_api_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_connection_info_with_api_error(self, mock_httpx_post):
         """Test handling when AnkiConnect returns an error."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": None, "error": "Some API error"}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
-        info = anki_connector.get_connection_info()
+        info = await anki_connector.get_connection_info()
 
         assert info["connected"] is False
         assert "AnkiConnect error" in info["error"]
@@ -428,39 +470,44 @@ class TestVersionMismatch:
 class TestGracefulDegradation:
     """Tests for functions that should degrade gracefully on errors."""
 
-    def test_get_deck_names_returns_empty_on_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_get_deck_names_returns_empty_on_error(self, mock_httpx_post):
         """Test get_deck_names returns empty list on failure."""
-        mock_requests_post.side_effect = Exception("Connection failed")
+        mock_httpx_post.side_effect = Exception("Connection failed")
 
-        result = anki_connector.get_deck_names()
+        result = await anki_connector.get_deck_names()
         assert result == []
 
-    def test_get_model_names_returns_empty_on_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_get_model_names_returns_empty_on_error(self, mock_httpx_post):
         """Test get_model_names returns empty list on failure."""
-        mock_requests_post.side_effect = Exception("Connection failed")
+        mock_httpx_post.side_effect = Exception("Connection failed")
 
-        result = anki_connector.get_model_names()
+        result = await anki_connector.get_model_names()
         assert result == []
 
-    def test_get_all_tags_returns_empty_on_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_get_all_tags_returns_empty_on_error(self, mock_httpx_post):
         """Test get_all_tags returns empty list on failure."""
-        mock_requests_post.side_effect = Exception("Connection failed")
+        mock_httpx_post.side_effect = Exception("Connection failed")
 
-        result = anki_connector.get_all_tags()
+        result = await anki_connector.get_all_tags()
         assert result == []
 
-    def test_sample_examples_returns_empty_on_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_sample_examples_returns_empty_on_error(self, mock_httpx_post):
         """Test sample_examples_from_deck returns empty string on failure."""
-        mock_requests_post.side_effect = Exception("Connection failed")
+        mock_httpx_post.side_effect = Exception("Connection failed")
 
-        result = anki_connector.sample_examples_from_deck("Test Deck")
+        result = await anki_connector.sample_examples_from_deck("Test Deck")
         assert result == ""
 
-    def test_detect_builtin_models_defaults_on_error(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_detect_builtin_models_defaults_on_error(self, mock_httpx_post):
         """Test detect_builtin_models returns defaults on failure."""
-        mock_requests_post.side_effect = Exception("Connection failed")
+        mock_httpx_post.side_effect = Exception("Connection failed")
 
-        result = anki_connector.detect_builtin_models()
+        result = await anki_connector.detect_builtin_models()
         assert result == {"basic": "Basic", "cloze": "Cloze"}
 
 
@@ -486,20 +533,21 @@ class TestExceptionHierarchy:
         exc = anki_connector.AnkiConnectError("Generic error", retriable=False)
         assert exc.retriable is False
 
-    def test_transport_error_inheritance_catch(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_transport_error_inheritance_catch(self, mock_httpx_post):
         """Test that AnkiTransportError can be caught as AnkiConnectError."""
-        import requests
-
-        mock_requests_post.side_effect = requests.ConnectionError("Connection refused")
+        mock_httpx_post.side_effect = httpx.ConnectError("Connection refused")
 
         with pytest.raises(anki_connector.AnkiConnectError):
-            anki_connector._invoke("version")
+            await anki_connector._invoke("version")
 
-    def test_api_error_inheritance_catch(self, mock_requests_post):
+    @pytest.mark.asyncio
+    async def test_api_error_inheritance_catch(self, mock_httpx_post):
         """Test that AnkiApiError can be caught as AnkiConnectError."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": None, "error": "Invalid action"}
-        mock_requests_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_httpx_post.return_value = mock_response
 
         with pytest.raises(anki_connector.AnkiConnectError):
-            anki_connector._invoke("invalidAction")
+            await anki_connector._invoke("invalidAction")

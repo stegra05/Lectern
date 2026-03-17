@@ -231,8 +231,8 @@ async def estimate_cost_with_base(
     image_count = metadata["image_count"]
 
     ai = LecternAIClient(model_name=model_name)
-    uploaded_pdf = ai.upload_pdf(pdf_path)
-    token_count = ai.count_tokens_for_pdf(
+    uploaded_pdf = await ai.upload_pdf(pdf_path)
+    token_count = await ai.count_tokens_for_pdf(
         file_uri=uploaded_pdf["uri"],
         mime_type=uploaded_pdf.get("mime_type", "application/pdf"),
         prompt="Analyze this PDF for card generation cost estimation.",
@@ -296,8 +296,8 @@ async def verify_image_token_cost(model_name: str | None = None) -> Dict[str, An
     )
 
     ai = LecternAIClient(model_name=model_name)
-    text_tokens = ai.count_tokens(text_only_content)
-    image_tokens = ai.count_tokens(image_content)
+    text_tokens = await ai.count_tokens(text_only_content)
+    image_tokens = await ai.count_tokens(image_content)
     delta = max(0, image_tokens - text_tokens)
 
     return {

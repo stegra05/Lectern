@@ -2,7 +2,7 @@
 AnkiConnect communication helpers.
 
 This module provides a thin, typed wrapper around the AnkiConnect HTTP API to
-add notes and store media files. It never manipulates the collection directly.
+add notes to Anki. It never manipulates the collection directly.
 """
 
 from __future__ import annotations
@@ -11,10 +11,10 @@ import base64
 import functools
 import logging
 import random
-import time
+import asyncio
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
-import requests
+import httpx
 
 from lectern import config as _config
 
@@ -87,14 +87,14 @@ def _with_retry(
 
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exception: Optional[AnkiTransportError] = None
             delay = initial_delay
             retried_attempts = 0
 
             for attempt in range(max_retries + 1):
                 try:
-                    result = func(*args, **kwargs)
+                    result = await func(*args, **kwargs)
                     if retried_attempts > 0:
                         logger.info(
                             "AnkiConnect recovered after %d retr%s.",
@@ -122,7 +122,7 @@ def _with_retry(
                                 max_retries,
                                 delay,
                             )
-                        time.sleep(delay)
+                        await asyncio.sleep(delay)
                         delay = min(delay * 2, MAX_RETRY_DELAY)
                         continue
                     # Final attempt exhausted - re-raise
@@ -132,14 +132,16 @@ def _with_retry(
                     raise
 
             # All retries exhausted
-            raise last_exception
+            if last_exception:
+                raise last_exception
+            raise RuntimeError("Exhausted retries without an error.")  # fallback
 
         return wrapper  # type: ignore
 
     return decorator
 
 
-def _invoke_once(
+async def _invoke_once(
     action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15
 ) -> Any:
     """Invoke an AnkiConnect action with the given parameters.
@@ -154,10 +156,16 @@ def _invoke_once(
 
     url = _config.ANKI_CONNECT_URL
     try:
-        response = requests.post(url, json=payload, timeout=timeout)
-    except requests.RequestException as exc:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, timeout=timeout)
+            response.raise_for_status()
+    except httpx.RequestError as exc:
         raise AnkiTransportError(
             f"Failed to reach AnkiConnect at {url}: {exc}"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise AnkiTransportError(
+            f"AnkiConnect returned HTTP error {exc.response.status_code}: {exc}"
         ) from exc
 
     try:
@@ -174,16 +182,18 @@ def _invoke_once(
 
 
 @_with_retry()
-def _invoke(action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15) -> Any:
+async def _invoke(
+    action: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15
+) -> Any:
     """Invoke AnkiConnect action with retry behavior for transport failures."""
-    return _invoke_once(action=action, params=params, timeout=timeout)
+    return await _invoke_once(action=action, params=params, timeout=timeout)
 
 
 # Minimum supported AnkiConnect version
 MIN_ANKICONNECT_VERSION = 6
 
 
-def check_connection() -> bool:
+async def check_connection() -> bool:
     """Return True if AnkiConnect is reachable and responding.
 
     NOTE(HealthProbe): This is used by high-frequency health polling and CI
@@ -192,13 +202,13 @@ def check_connection() -> bool:
     """
 
     try:
-        _invoke_once("version", None, timeout=1)
+        await _invoke_once("version", None, timeout=1)
         return True
     except Exception:
         return False
 
 
-def get_connection_info() -> Dict[str, Any]:
+async def get_connection_info() -> Dict[str, Any]:
     """Get detailed AnkiConnect connection information.
 
     Returns a dict with:
@@ -219,7 +229,7 @@ def get_connection_info() -> Dict[str, Any]:
     }
 
     try:
-        version = _invoke_once("version", None, timeout=3)
+        version = await _invoke_once("version", None, timeout=3)
         result["version"] = version
         result["version_ok"] = (
             isinstance(version, int) and version >= MIN_ANKICONNECT_VERSION
@@ -235,7 +245,7 @@ def get_connection_info() -> Dict[str, Any]:
 
         # Check collection readiness separately; this catches states like
         # "collection is not available" even when version endpoint works.
-        _invoke_once("deckNames", None, timeout=3)
+        await _invoke_once("deckNames", None, timeout=3)
         result["collection_available"] = True
 
     except AnkiTransportError as e:
@@ -251,20 +261,10 @@ def get_connection_info() -> Dict[str, Any]:
     return result
 
 
-def add_note(
+async def add_note(
     deck_name: str, model_name: str, fields: Dict[str, str], tags: List[str]
 ) -> int:
-    """Add a single note to Anki via AnkiConnect.
-
-    Parameters:
-        deck_name: Name of the destination deck.
-        model_name: Name of the note type/model (e.g., 'Basic', 'Cloze').
-        fields: Mapping from field name to value.
-        tags: Tags to attach to the note.
-
-    Returns:
-        The newly created note ID as an integer.
-    """
+    """Add a single note to Anki via AnkiConnect."""
 
     note = {
         "deckName": deck_name,
@@ -274,32 +274,31 @@ def add_note(
         "tags": tags,
     }
 
-    result = _invoke("addNote", {"note": note})
+    result = await _invoke("addNote", {"note": note})
     if not isinstance(result, int):
         raise AnkiApiError(f"Unexpected addNote result: {result}")
     return result
 
 
-def update_note_fields(note_id: int, fields: Dict[str, str]) -> None:
+async def update_note_fields(note_id: int, fields: Dict[str, str]) -> None:
     """Update fields of an existing Anki note via AnkiConnect."""
-    _invoke("updateNoteFields", {"note": {"id": note_id, "fields": fields}})
+    await _invoke("updateNoteFields", {"note": {"id": note_id, "fields": fields}})
 
 
-def delete_notes(note_ids: List[int]) -> None:
+async def delete_notes(note_ids: List[int]) -> None:
     """Delete notes from Anki by their IDs via AnkiConnect."""
-    _invoke("deleteNotes", {"notes": note_ids})
+    await _invoke("deleteNotes", {"notes": note_ids})
 
 
 def _escape_query_value(value: str) -> str:
     """Escape a value for inclusion in an AnkiConnect search query string."""
-
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def find_notes(query: str) -> List[int]:
+async def find_notes(query: str) -> List[int]:
     """Find note IDs matching an Anki search query string."""
 
-    result = _invoke("findNotes", {"query": query})
+    result = await _invoke("findNotes", {"query": query})
     if not isinstance(result, list):
         return []
     return [
@@ -309,21 +308,21 @@ def find_notes(query: str) -> List[int]:
     ]
 
 
-def notes_info(note_ids: List[int]) -> List[Dict[str, Any]]:
+async def notes_info(note_ids: List[int]) -> List[Dict[str, Any]]:
     """Return notesInfo for the given note IDs."""
 
     if not note_ids:
         return []
-    result = _invoke("notesInfo", {"notes": note_ids})
+    result = await _invoke("notesInfo", {"notes": note_ids})
     if not isinstance(result, list):
         return []
     return [ri for ri in result if isinstance(ri, dict)]
 
 
-def get_all_tags() -> List[str]:
+async def get_all_tags() -> List[str]:
     """Fetch all tags from Anki via AnkiConnect."""
     try:
-        result = _invoke("getTags")
+        result = await _invoke("getTags")
         if isinstance(result, list):
             return [str(t) for t in result]
         return []
@@ -332,10 +331,10 @@ def get_all_tags() -> List[str]:
         return []
 
 
-def get_deck_names() -> List[str]:
+async def get_deck_names() -> List[str]:
     """Fetch all deck names from Anki via AnkiConnect."""
     try:
-        result = _invoke("deckNames")
+        result = await _invoke("deckNames")
         if isinstance(result, list):
             return [str(name) for name in result]
         return []
@@ -344,10 +343,10 @@ def get_deck_names() -> List[str]:
         return []
 
 
-def get_model_names() -> List[str]:
+async def get_model_names() -> List[str]:
     """Fetch all note-type (model) names from Anki via AnkiConnect."""
     try:
-        result = _invoke("modelNames")
+        result = await _invoke("modelNames")
         if isinstance(result, list):
             return [str(name) for name in result]
         return []
@@ -356,12 +355,12 @@ def get_model_names() -> List[str]:
         return []
 
 
-def get_model_field_names(model_name: str) -> List[str]:
+async def get_model_field_names(model_name: str) -> List[str]:
     """Fetch field names for a specific Anki note type/model (cached)."""
     if model_name in _MODEL_FIELD_CACHE:
         return _MODEL_FIELD_CACHE[model_name]
     try:
-        result = _invoke("modelFieldNames", {"modelName": model_name})
+        result = await _invoke("modelFieldNames", {"modelName": model_name})
         if isinstance(result, list):
             fields = [str(name) for name in result]
             _MODEL_FIELD_CACHE[model_name] = fields
@@ -372,99 +371,75 @@ def get_model_field_names(model_name: str) -> List[str]:
         return []
 
 
-def detect_builtin_models() -> Dict[str, str]:
-    """Auto-detect localized names for Anki's built-in 'Basic' and 'Cloze' models.
-
-    Uses field signatures (e.g. 'Front'/'Back' or 'Text') to identify the models
-    even if their names are localized (e.g. 'Einfach' or 'Texte à trous').
-
-    Returns:
-        Mapping from canonical name ('basic', 'cloze') to actual localized name.
-        Defaults to English names if detection fails or Anki is unreachable.
-
-    Note:
-        Results are cached for the app lifecycle to avoid repeated AnkiConnect API calls.
-    """
+async def detect_builtin_models() -> Dict[str, str]:
+    """Auto-detect localized names for Anki's built-in 'Basic' and 'Cloze' models."""
     global _MODEL_DETECTION_CACHE
     if _MODEL_DETECTION_CACHE is not None:
         return _MODEL_DETECTION_CACHE
 
     detected = {"basic": "Basic", "cloze": "Cloze"}
-    # Track if we've found canonical matches to avoid overwriting with variants
     found_canonical_basic = False
     found_canonical_cloze = False
 
-    models = get_model_names()
+    models = await get_model_names()
     if not models:
         _MODEL_DETECTION_CACHE = detected
         return detected
 
     for name in models:
-        fields = get_model_field_names(name)
+        fields = await get_model_field_names(name)
         field_set = {f.strip() for f in fields}
 
         # Basic signature: contains Front and Back
         if "Front" in field_set and "Back" in field_set:
             if name == "Basic":
-                # Canonical match - always prefer this
                 detected["basic"] = name
                 found_canonical_basic = True
             elif not found_canonical_basic:
-                # Fallback for localized names (e.g., "Einfach")
                 detected["basic"] = name
 
         # Cloze signature: contains Text (and usually no Front/Back)
         if "Text" in field_set and "Front" not in field_set:
             if name == "Cloze":
-                # Canonical match - always prefer this
                 detected["cloze"] = name
                 found_canonical_cloze = True
             elif not found_canonical_cloze:
-                # Fallback for localized names
                 detected["cloze"] = name
 
     _MODEL_DETECTION_CACHE = detected
     return detected
 
 
-def create_deck(deck_name: str) -> bool:
-    """Create a new deck in Anki via AnkiConnect.
-
-    Returns:
-        True if successful, False otherwise.
-    """
+async def create_deck(deck_name: str) -> bool:
+    """Create a new deck in Anki via AnkiConnect."""
     try:
-        result = _invoke("createDeck", {"deck": deck_name})
-        # createDeck returns the ID of the deck (int) on success
+        result = await _invoke("createDeck", {"deck": deck_name})
         return isinstance(result, int)
     except Exception as exc:
         logger.warning("Failed to create deck '%s': %s", deck_name, exc)
         return False
 
 
-def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
-    """Sample a few notes' fields from a deck via AnkiConnect and format as examples.
-
-    Returns an empty string if no notes are found or an error occurs.
-    """
+async def sample_examples_from_deck(deck_name: str, sample_size: int = 5) -> str:
+    """Sample a few notes' fields from a deck via AnkiConnect and format as examples."""
 
     try:
         deck = _escape_query_value(deck_name)
         query = f'deck:"{deck}"'
-        ids = find_notes(query)
+        ids = await find_notes(query)
         if not ids:
             return ""
         if len(ids) > sample_size:
             ids = random.sample(ids, sample_size)
         else:
             ids = ids[:sample_size]
-        infos = notes_info(ids)
+        infos = await notes_info(ids)
         if not infos:
             return ""
 
         lines: List[str] = []
         for idx, info in enumerate(infos, start=1):
-            fields_obj = info.get("fields", {}) if isinstance(info, dict) else {}
+            fields_obj = info.get("fields", {})
             model_name = str(info.get("modelName") or "Card").strip()
             field_lines: List[str] = []
             for field_name, field in fields_obj.items():

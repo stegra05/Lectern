@@ -14,12 +14,18 @@ import { CardToolbar } from '../components/CardToolbar';
 import { CardList } from '../components/CardList';
 import { SyncOverlay, SyncSuccessOverlay, SyncPartialFailureOverlay, ErrorOverlay } from '../components/overlays';
 import { useProgressViewModel } from '../hooks/useProgressViewModel';
-import { filterCards, sortCards } from '../utils/cards';
+import { sortCards } from '../utils/cards';
 import { getCardPageReferences } from '../utils/cardMetadata';
 import { useTrickleProgress } from '../hooks/useTrickleProgress';
 import { useTimeEstimate } from '../hooks/useTimeEstimate';
 import { useReviewOrchestrator } from '../hooks/useReviewOrchestrator';
-import { countCardsByType } from '../logic/progress';
+import { useLecternStore } from '../store';
+import {
+    selectFilteredCards,
+    selectSortedCards,
+    selectUidToIndex,
+    selectTypeCounts,
+} from '../selectors';
 
 import type { Phase } from '../components/PhaseIndicator';
 
@@ -40,6 +46,12 @@ export function ProgressView() {
     const { isSyncing, syncPartialFailure, syncSuccess, syncProgress, syncLogs } = sync;
     const { sortBy, searchQuery, isMultiSelectMode, selectedCards, confirmModal } = ui;
 
+    // Subscribing to memoized selectors to avoid recomputing derived state on unrelated renders
+    const baseFilteredCards = useLecternStore(selectFilteredCards);
+    const sortedCardsGlobal = useLecternStore(selectSortedCards);
+    const uidToIndex = useLecternStore(selectUidToIndex);
+    const typeCounts = useLecternStore(selectTypeCounts);
+
     // Local state
     const [activePage, setActivePage] = useState<number | null>(null);
     const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
@@ -53,23 +65,19 @@ export function ProgressView() {
     }
 
     const filteredCards = useMemo(() => {
-        let result = filterCards(allCards, searchQuery);
         if (activePage !== null) {
-            result = result.filter(c => getCardPageReferences(c).includes(activePage));
+            return baseFilteredCards.filter(c => getCardPageReferences(c).includes(activePage));
         }
-        return result;
-    }, [allCards, searchQuery, activePage]);
+        return baseFilteredCards;
+    }, [baseFilteredCards, activePage]);
 
-    const sortedCards = useMemo(() => sortCards(filteredCards, sortBy), [filteredCards, sortBy]);
-
-    // O(1) lookup: card._uid -> original index in cards[]
-    const uidToIndex = useMemo(() => {
-        const map = new Map<string, number>();
-        allCards.forEach((c, i) => { if (c._uid) map.set(c._uid, i); });
-        return map;
-    }, [allCards]);
-
-    const typeCounts = useMemo(() => countCardsByType(allCards), [allCards]);
+    const sortedCards = useMemo(() => {
+        if (activePage !== null) {
+            // Need to re-sort because the list changed due to local filtering
+            return sortCards(filteredCards, sortBy);
+        }
+        return sortedCardsGlobal;
+    }, [filteredCards, sortedCardsGlobal, activePage, sortBy]);
 
     // Continuous progress calculation using extracted logic
     const progressResult = useTrickleProgress(progressPct);

@@ -36,7 +36,13 @@ def _legacy_estimate_card_quality(
     score = 30.0
 
     fields = card.get("fields") or {}
-    front = str(card.get("front") or fields.get("Front") or card.get("text") or fields.get("Text") or "").strip()
+    front = str(
+        card.get("front")
+        or fields.get("Front")
+        or card.get("text")
+        or fields.get("Text")
+        or ""
+    ).strip()
     back = str(card.get("back") or fields.get("Back") or "").strip()
     text = str(card.get("text") or fields.get("Text") or "").strip()
     answer_text = text or back
@@ -130,7 +136,9 @@ def test_answer_text_rule():
 
 
 def test_source_pages_rule():
-    score, flags = _single_rule_evaluator(SourcePagesRule()).evaluate({"source_pages": [1]})
+    score, flags = _single_rule_evaluator(SourcePagesRule()).evaluate(
+        {"source_pages": [1]}
+    )
     assert score == 12.0
     assert flags == []
 
@@ -140,7 +148,9 @@ def test_source_pages_rule():
 
 
 def test_concept_ids_rule():
-    score, flags = _single_rule_evaluator(ConceptIdsRule()).evaluate({"concept_ids": ["c1"]})
+    score, flags = _single_rule_evaluator(ConceptIdsRule()).evaluate(
+        {"concept_ids": ["c1"]}
+    )
     assert score == 12.0
     assert flags == []
 
@@ -158,7 +168,9 @@ def test_relation_keys_rule():
 
 
 def test_rationale_rule():
-    score, flags = _single_rule_evaluator(RationaleRule()).evaluate({"rationale": "because"})
+    score, flags = _single_rule_evaluator(RationaleRule()).evaluate(
+        {"rationale": "because"}
+    )
     assert score == 7.0
     assert flags == []
 
@@ -168,7 +180,9 @@ def test_rationale_rule():
 
 
 def test_source_excerpt_rule():
-    score, flags = _single_rule_evaluator(SourceExcerptRule()).evaluate({"source_excerpt": "quote"})
+    score, flags = _single_rule_evaluator(SourceExcerptRule()).evaluate(
+        {"source_excerpt": "quote"}
+    )
     assert score == 6.0
     assert flags == []
 
@@ -178,19 +192,25 @@ def test_source_excerpt_rule():
 
 
 def test_slide_number_rule():
-    score, flags = _single_rule_evaluator(SlideNumberRule()).evaluate({"slide_number": 2})
+    score, flags = _single_rule_evaluator(SlideNumberRule()).evaluate(
+        {"slide_number": 2}
+    )
     assert score == 3.0
     assert flags == []
 
 
 def test_long_front_rule():
-    score, flags = _single_rule_evaluator(LongFrontRule()).evaluate({"front": "x" * 181})
+    score, flags = _single_rule_evaluator(LongFrontRule()).evaluate(
+        {"front": "x" * 181}
+    )
     assert score == 0.0
     assert flags == ["long_front"]
 
 
 def test_long_answer_rule():
-    score, flags = _single_rule_evaluator(LongAnswerRule()).evaluate({"back": "y" * 421})
+    score, flags = _single_rule_evaluator(LongAnswerRule()).evaluate(
+        {"back": "y" * 421}
+    )
     assert score == 0.0
     assert flags == ["long_answer"]
 
@@ -236,7 +256,9 @@ def test_quality_engine_golden_parity():
         cards.append(card)
 
     for card in cards:
-        new_score, new_flags = evaluator.evaluate(card, high_priority_ids=high_priority_ids)
+        new_score, new_flags = evaluator.evaluate(
+            card, high_priority_ids=high_priority_ids
+        )
         old_score, old_flags = _legacy_estimate_card_quality(
             card, high_priority_ids=high_priority_ids
         )

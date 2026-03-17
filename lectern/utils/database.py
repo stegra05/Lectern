@@ -14,7 +14,7 @@ from lectern.utils.path_utils import get_app_data_dir
 logger = logging.getLogger(__name__)
 
 # Current database schema version - increment when making schema changes
-DB_SCHEMA_VERSION = 3
+DB_SCHEMA_VERSION = 4
 
 
 def get_db_path() -> Path:
@@ -45,7 +45,7 @@ class DatabaseManager:
         """Initialize database schema and run migrations if needed."""
         self.db_path = get_db_path()
 
-        with self._get_raw_connection() as conn:
+        with self.get_connection() as conn:
             # Enable WAL mode for better concurrent read/write performance
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
@@ -112,6 +112,8 @@ class DatabaseManager:
             elif version == 3:
                 self._add_column_if_missing(conn, "history", "total_pages", "INTEGER")
                 self._add_column_if_missing(conn, "history", "coverage_data", "TEXT")
+            elif version == 4:
+                self._add_column_if_missing(conn, "history", "current_phase", "TEXT")
 
             conn.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
@@ -175,7 +177,7 @@ class DatabaseManager:
         Should be called after bulk deletions or migrations.
         Note: VACUUM locks the database, so use sparingly.
         """
-        with self._get_raw_connection() as conn:
+        with self.get_connection() as conn:
             conn.execute("VACUUM")
             logger.info("Database VACUUM completed")
 
@@ -198,6 +200,7 @@ class DatabaseManager:
             "logs": json.loads(row[13]) if len(row) > 13 and row[13] else [],
             "total_pages": row[14] if len(row) > 14 else None,
             "coverage_data": json.loads(row[15]) if len(row) > 15 and row[15] else None,
+            "current_phase": row[16] if len(row) > 16 else None,
         }
 
     # History Methods
@@ -378,6 +381,16 @@ class DatabaseManager:
             cursor = conn.execute(
                 "UPDATE history SET logs = ?, last_modified = ? WHERE session_id = ?",
                 (json.dumps(logs), datetime.now().isoformat(), session_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_session_phase(self, session_id: str, phase: str) -> bool:
+        """Update the current phase for a session. Returns True if updated."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE history SET current_phase = ?, last_modified = ? WHERE session_id = ?",
+                (phase, datetime.now().isoformat(), session_id),
             )
             conn.commit()
             return cursor.rowcount > 0

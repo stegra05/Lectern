@@ -9,19 +9,23 @@ client = TestClient(app)
 
 @pytest.fixture
 def mock_notes_info():
-    with patch("gui.backend.main.notes_info") as mock:
+    with patch("lectern.anki_connector.notes_info", new_callable=AsyncMock) as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_update_note_fields():
-    with patch("gui.backend.main.update_note_fields") as mock:
+    with patch(
+        "lectern.anki_connector.update_note_fields", new_callable=AsyncMock
+    ) as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_export_card_to_anki():
-    with patch("gui.backend.main.export_card_to_anki") as mock:
+    with patch(
+        "gui.backend.routers.anki.export_card_to_anki", new_callable=AsyncMock
+    ) as mock:
         yield mock
 
 

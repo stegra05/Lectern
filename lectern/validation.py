@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, AsyncGenerator, Optional
 
 from lectern.anki_connector import check_connection
 from lectern import config
@@ -25,15 +25,7 @@ class ValidationResult:
 
 
 def validate_pdf(pdf_path: str) -> ValidationResult:
-    """Validate that a PDF file exists and is not empty.
-
-    Args:
-        pdf_path: Path to the PDF file to validate.
-
-    Returns:
-        ValidationResult with valid=True if PDF is accessible and non-empty,
-        or valid=False with error_event if validation fails.
-    """
+    """Validate that a PDF file exists and is not empty."""
     if not os.path.exists(pdf_path):
         return ValidationResult(
             valid=False,
@@ -64,30 +56,17 @@ def validate_pdf(pdf_path: str) -> ValidationResult:
     )
 
 
-def validate_anki_connection(
+async def validate_anki_connection(
     skip_export: bool,
-) -> Generator[Dict[str, Any], None, bool]:
-    """Validate AnkiConnect connection with progress events.
-
-    Yields ServiceEvent dicts for progress reporting.
-
-    Args:
-        skip_export: If True, allow offline mode when AnkiConnect is unreachable.
-
-    Yields:
-        ServiceEvent dicts for step_start, step_end, warning, and error events.
-
-    Returns:
-        True if connected or offline mode is acceptable, False if connection
-        is required but unavailable.
-    """
+) -> AsyncGenerator[Dict[str, Any], bool]:
+    """Validate AnkiConnect connection with progress events (Async)."""
     yield {
         "type": "step_start",
         "message": "Check AnkiConnect",
         "data": {},
     }
 
-    if not check_connection():
+    if not await check_connection():
         if skip_export:
             # Offline mode - technically successful but with warning
             yield {
@@ -105,7 +84,7 @@ def validate_anki_connection(
                 "message": "Could not connect to AnkiConnect. Proceeding in offline mode (examples and export will be skipped).",
                 "data": {},
             }
-            return True
+            return
         else:
             yield {
                 "type": "step_end",
@@ -117,11 +96,11 @@ def validate_anki_connection(
                 "message": f"Could not connect to AnkiConnect at {config.ANKI_CONNECT_URL}",
                 "data": {"recoverable": False},
             }
-            return False
+            return
 
     yield {
         "type": "step_end",
         "message": "AnkiConnect Connected",
         "data": {"success": True},
     }
-    return True
+    return

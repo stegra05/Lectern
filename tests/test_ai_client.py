@@ -1,6 +1,9 @@
 import pytest
-from unittest.mock import patch, MagicMock
-from lectern.ai_client import LecternAIClient
+import asyncio
+import os
+import tempfile
+from unittest.mock import patch, MagicMock, AsyncMock
+from lectern.ai_client import LecternAIClient, UploadedDocument, DocumentUploadError
 from lectern.ai_schemas import CardGenerationResponse, card_generation_schema
 
 
@@ -8,10 +11,16 @@ from lectern.ai_schemas import CardGenerationResponse, card_generation_schema
 def mock_genai_client():
     with patch("google.genai.Client") as MockClient:
         instance = MockClient.return_value
-        # Mock chat creation
+        # Mock chat creation via aio
         mock_chat = MagicMock()
         mock_chat.history = []
-        instance.chats.create.return_value = mock_chat
+        mock_chat.send_message = AsyncMock()
+        instance.aio.chats.create.return_value = mock_chat
+
+        # Mock other aio methods
+        instance.aio.files.upload = AsyncMock()
+        instance.aio.models.count_tokens = AsyncMock()
+
         yield instance
 
 
@@ -23,18 +32,19 @@ def ai_client(mock_genai_client):
 
 
 def test_initialization(ai_client, mock_genai_client):
-    mock_genai_client.chats.create.assert_called_once()
-    call_args = mock_genai_client.chats.create.call_args
+    mock_genai_client.aio.chats.create.assert_called_once()
+    call_args = mock_genai_client.aio.chats.create.call_args
     assert call_args.kwargs["model"] == "test-model"
 
 
-def test_update_language(ai_client):
+@pytest.mark.asyncio
+async def test_update_language(ai_client):
     ai_client.update_language("de")
     mock_response = MagicMock()
     mock_response.text = '{"cards": [], "done": true}'
     ai_client._chat.send_message.return_value = mock_response
 
-    ai_client.generate_more_cards(limit=1)
+    await ai_client.generate_more_cards(limit=1)
 
     call_args = ai_client._chat.send_message.call_args
     sent_prompt = call_args.kwargs["message"]
@@ -141,13 +151,14 @@ def test_history_pruning(ai_client):
             assert args[-1]["index"] == 29
 
 
-def test_generate_more_cards_flow(ai_client):
+@pytest.mark.asyncio
+async def test_generate_more_cards_flow(ai_client):
     # Mock send_message response
     mock_response = MagicMock()
     mock_response.text = '{"cards":[{"model_name":"Basic","front":"Q","back":"A","slide_number":1,"slide_topic":"Topic"}], "done": false}'
     ai_client._chat.send_message.return_value = mock_response
 
-    result = ai_client.generate_more_cards(limit=5)
+    result = await ai_client.generate_more_cards(limit=5)
 
     ai_client._chat.send_message.assert_called_once()
     assert result["done"] is False
@@ -155,7 +166,8 @@ def test_generate_more_cards_flow(ai_client):
     assert result["parse_error"] == ""
 
 
-def test_generate_more_cards_uses_parsed_response(ai_client):
+@pytest.mark.asyncio
+async def test_generate_more_cards_uses_parsed_response(ai_client):
     mock_response = MagicMock()
     mock_response.parsed = {
         "cards": [
@@ -170,7 +182,7 @@ def test_generate_more_cards_uses_parsed_response(ai_client):
     mock_response.text = ""
     ai_client._chat.send_message.return_value = mock_response
 
-    result = ai_client.generate_more_cards(limit=1)
+    result = await ai_client.generate_more_cards(limit=1)
 
     assert result["done"] is False
     assert result["cards"][0]["fields"]["Front"] == "Q"
@@ -178,24 +190,26 @@ def test_generate_more_cards_uses_parsed_response(ai_client):
     assert result["parse_error"] == ""
 
 
-def test_generate_more_cards_includes_examples(ai_client):
+@pytest.mark.asyncio
+async def test_generate_more_cards_includes_examples(ai_client):
     mock_response = MagicMock()
     mock_response.text = '{"cards":[], "done": true}'
     ai_client._chat.send_message.return_value = mock_response
 
-    ai_client.generate_more_cards(limit=2, examples="Basic: sample")
+    await ai_client.generate_more_cards(limit=2, examples="Basic: sample")
 
     sent_prompt = ai_client._chat.send_message.call_args.kwargs["message"]
     assert "Style anchor from the user's deck" in sent_prompt
     assert "Basic: sample" in sent_prompt
 
 
-def test_generate_more_cards_parse_failure_returns_empty(ai_client):
+@pytest.mark.asyncio
+async def test_generate_more_cards_parse_failure_returns_empty(ai_client):
     mock_response = MagicMock()
     mock_response.text = "not-json"
     ai_client._chat.send_message.return_value = mock_response
 
-    result = ai_client.generate_more_cards(limit=5)
+    result = await ai_client.generate_more_cards(limit=5)
     assert result["cards"] == []
     assert result["done"] is True
     assert result["parse_error"]
@@ -205,64 +219,221 @@ def test_restore_history(ai_client, mock_genai_client):
     history = [{"role": "user", "parts": [{"text": "Hello"}]}]
     ai_client.restore_history(history)
 
-    # Verify new chat was created with history
-    mock_genai_client.chats.create.assert_called()
-    call_args = mock_genai_client.chats.create.call_args_list[-1]
+    # Verify new chat was created with history via aio
+    mock_genai_client.aio.chats.create.assert_called()
+    call_args = mock_genai_client.aio.chats.create.call_args_list[-1]
     assert "history" in call_args.kwargs
     assert len(call_args.kwargs["history"]) == 1
 
 
-def test_count_tokens(ai_client, mock_genai_client):
+@pytest.mark.asyncio
+async def test_count_tokens(ai_client, mock_genai_client):
     mock_response = MagicMock()
     mock_response.total_tokens = 42
-    mock_genai_client.models.count_tokens.return_value = mock_response
+    mock_genai_client.aio.models.count_tokens.return_value = mock_response
 
     content = [{"role": "user", "parts": [{"text": "Hello"}]}]
-    tokens = ai_client.count_tokens(content)
+    tokens = await ai_client.count_tokens(content)
 
     assert tokens == 42
-    mock_genai_client.models.count_tokens.assert_called_once()
+    mock_genai_client.aio.models.count_tokens.assert_called_once()
 
 
-def test_count_tokens_failure(ai_client, mock_genai_client):
-    mock_genai_client.models.count_tokens.side_effect = Exception("API error")
+@pytest.mark.asyncio
+async def test_count_tokens_failure(ai_client, mock_genai_client):
+    mock_genai_client.aio.models.count_tokens.side_effect = Exception("API error")
 
     content = [{"role": "user", "parts": [{"text": "Hello"}]}]
-    tokens = ai_client.count_tokens(content)
+    tokens = await ai_client.count_tokens(content)
 
     assert tokens == 0
 
 
-def test_concept_map(ai_client, mock_genai_client):
+@pytest.mark.asyncio
+async def test_concept_map(ai_client, mock_genai_client):
     mock_response = MagicMock()
     mock_response.text = '{"objectives": ["O1"], "concepts": [], "relations": [], "language": "en", "slide_set_name": "Test", "page_count": 10, "estimated_text_chars": 5000}'
     ai_client._chat.send_message.return_value = mock_response
 
     with patch("lectern.ai_client._compose_multimodal_content", return_value=[]):
-        result = ai_client.concept_map([])
+        result = await ai_client.concept_map([])
         assert result["slide_set_name"] == "Test"
         assert ai_client._prompt_config.language == "en"
 
 
-def test_upload_pdf_retries_then_succeeds(ai_client, mock_genai_client):
+@pytest.mark.asyncio
+async def test_upload_pdf_retries_then_succeeds(ai_client, mock_genai_client):
     upload_fail = Exception("temporary upload failure")
     upload_ok = MagicMock(uri="gs://file.pdf", mime_type="application/pdf")
-    mock_genai_client.files.upload.side_effect = [upload_fail, upload_ok]
+    mock_genai_client.aio.files.upload.side_effect = [upload_fail, upload_ok]
 
-    with patch("lectern.ai_client.time.sleep") as mock_sleep:
-        result = ai_client.upload_pdf("/tmp/fake.pdf", retries=2)
+    # Create a temp file for validation
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(b"%PDF-1.4 fake content")
+        tmp_path = tmp.name
 
-    assert result["uri"] == "gs://file.pdf"
-    assert mock_genai_client.files.upload.call_count == 2
-    mock_sleep.assert_called_once()
+    try:
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = await ai_client.upload_pdf(tmp_path, retries=2)
+
+        assert result["uri"] == "gs://file.pdf"
+        assert mock_genai_client.aio.files.upload.call_count == 2
+        mock_sleep.assert_called_once()
+    finally:
+        os.unlink(tmp_path)
 
 
-def test_count_tokens_for_pdf_retries_then_succeeds(ai_client):
-    with patch.object(
-        ai_client, "count_tokens", side_effect=[Exception("transient"), 123]
-    ) as mock_count:
-        with patch("lectern.ai_client.time.sleep") as mock_sleep:
-            result = ai_client.count_tokens_for_pdf(
+# --- Tests for upload_document() ---
+
+
+@pytest.mark.asyncio
+async def test_upload_document_success_returns_typed_result(
+    ai_client, mock_genai_client
+):
+    """Test that upload_document returns a properly typed UploadedDocument."""
+    # Create a temp file
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(b"%PDF-1.4 fake content")
+        tmp_path = tmp.name
+
+    try:
+        mock_upload = MagicMock(uri="gs://uploaded.pdf", mime_type="application/pdf")
+        mock_genai_client.aio.files.upload.return_value = mock_upload
+
+        result = await ai_client.upload_document(tmp_path)
+
+        assert isinstance(result, UploadedDocument)
+        assert result.uri == "gs://uploaded.pdf"
+        assert result.mime_type == "application/pdf"
+        assert result.duration_ms >= 0
+        assert result.file_size_bytes > 0
+    finally:
+        os.unlink(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_upload_document_zero_byte_raises_document_upload_error(
+    ai_client, mock_genai_client
+):
+    """Test that upload_document raises DocumentUploadError for empty files."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp_path = tmp.name
+        # File is empty (0 bytes)
+
+    try:
+        with pytest.raises(DocumentUploadError) as exc_info:
+            await ai_client.upload_document(tmp_path)
+
+        assert "empty" in exc_info.value.user_message.lower()
+        assert exc_info.value.original_error is None
+    finally:
+        os.unlink(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_upload_document_missing_file_raises_document_upload_error(
+    ai_client, mock_genai_client
+):
+    """Test that upload_document raises DocumentUploadError for missing files."""
+    with pytest.raises(DocumentUploadError) as exc_info:
+        await ai_client.upload_document("/nonexistent/path/file.pdf")
+
+    assert "could not be found" in exc_info.value.user_message.lower()
+    assert exc_info.value.original_error is None
+
+
+@pytest.mark.asyncio
+async def test_upload_document_retries_and_succeeds(ai_client, mock_genai_client):
+    """Test that upload_document retries on transient failures."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(b"%PDF-1.4 fake content")
+        tmp_path = tmp.name
+
+    try:
+        upload_fail = Exception("temporary upload failure")
+        upload_ok = MagicMock(uri="gs://file.pdf", mime_type="application/pdf")
+        mock_genai_client.aio.files.upload.side_effect = [upload_fail, upload_ok]
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await ai_client.upload_document(tmp_path, retries=2)
+
+        assert result.uri == "gs://file.pdf"
+        assert result.retries == 1  # One retry was needed
+        assert mock_genai_client.aio.files.upload.call_count == 2
+    finally:
+        os.unlink(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_upload_document_timeout_after_retries(ai_client, mock_genai_client):
+    """Test that upload_document raises DocumentUploadError after all retries fail."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(b"%PDF-1.4 fake content")
+        tmp_path = tmp.name
+
+    try:
+        mock_genai_client.aio.files.upload.side_effect = Exception("persistent failure")
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(DocumentUploadError) as exc_info:
+                await ai_client.upload_document(tmp_path, retries=2)
+
+        assert "failed to upload" in exc_info.value.user_message.lower()
+        assert exc_info.value.original_error is not None
+        assert mock_genai_client.aio.files.upload.call_count == 2
+    finally:
+        os.unlink(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_upload_document_no_uri_raises_document_upload_error(
+    ai_client, mock_genai_client
+):
+    """Test that upload_document raises DocumentUploadError when response has no URI."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(b"%PDF-1.4 fake content")
+        tmp_path = tmp.name
+
+    try:
+        # Response without URI
+        mock_upload = MagicMock(uri=None, mime_type="application/pdf")
+        mock_genai_client.aio.files.upload.return_value = mock_upload
+
+        with pytest.raises(DocumentUploadError) as exc_info:
+            await ai_client.upload_document(tmp_path)
+
+        assert "invalid response" in exc_info.value.user_message.lower()
+    finally:
+        os.unlink(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_upload_pdf_backward_compatible(ai_client, mock_genai_client):
+    """Test that upload_pdf returns legacy dict format for backward compatibility."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(b"%PDF-1.4 fake content")
+        tmp_path = tmp.name
+
+    try:
+        mock_upload = MagicMock(uri="gs://file.pdf", mime_type="application/pdf")
+        mock_genai_client.aio.files.upload.return_value = mock_upload
+
+        result = await ai_client.upload_pdf(tmp_path)
+
+        # Should return dict, not UploadedDocument
+        assert isinstance(result, dict)
+        assert result["uri"] == "gs://file.pdf"
+        assert result["mime_type"] == "application/pdf"
+    finally:
+        os.unlink(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_count_tokens_for_pdf_retries_then_succeeds(ai_client):
+    with patch.object(ai_client, "count_tokens", new_callable=AsyncMock) as mock_count:
+        mock_count.side_effect = [Exception("transient"), 123]
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = await ai_client.count_tokens_for_pdf(
                 file_uri="gs://file.pdf", prompt="Analyze", retries=2
             )
 
@@ -271,12 +442,13 @@ def test_count_tokens_for_pdf_retries_then_succeeds(ai_client):
     mock_sleep.assert_called_once()
 
 
-def test_reflect(ai_client, mock_genai_client):
+@pytest.mark.asyncio
+async def test_reflect(ai_client, mock_genai_client):
     mock_response = MagicMock()
     mock_response.text = '{"reflection": "Better cards", "cards": [], "done": true}'
     ai_client._chat.send_message.return_value = mock_response
 
-    result = ai_client.reflect(limit=5)
+    result = await ai_client.reflect(limit=5)
     assert result["reflection"] == "Better cards"
     assert result["done"] is True
     assert result["parse_error"] == ""

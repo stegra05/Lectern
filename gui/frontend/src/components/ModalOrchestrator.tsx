@@ -44,8 +44,9 @@ export interface ModalOrchestratorProps {
     onCloseHistory: () => void;
     onClearAllHistory: () => void;
     onDeleteHistoryEntry: (id: string) => void;
-    onBatchDeleteHistory: (ids: string[]) => void;
+    onBatchDeleteHistory: (params: { ids?: string[]; status?: string }) => void;
     onLoadSession: (sessionId: string) => void;
+    onResumeSession: (sessionId: string, filename: string) => void;
     onCloseShortcuts: () => void;
     onConfirmUnsynced: () => void;
     onCancelUnsynced: () => void;
@@ -71,6 +72,7 @@ export function ModalOrchestrator({
     onDeleteHistoryEntry,
     onBatchDeleteHistory,
     onLoadSession,
+    onResumeSession,
     onCloseShortcuts,
     onConfirmUnsynced,
     onCancelUnsynced,
@@ -86,8 +88,9 @@ export function ModalOrchestrator({
                 history={history.entries}
                 clearAllHistory={onClearAllHistory}
                 deleteHistoryEntry={onDeleteHistoryEntry}
-                batchDeleteHistory={(params) => onBatchDeleteHistory(params.ids ?? [])}
+                batchDeleteHistory={(params) => onBatchDeleteHistory(params)}
                 loadSession={onLoadSession}
+                onResume={onResumeSession}
             />
 
             <SettingsModal

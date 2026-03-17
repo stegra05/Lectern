@@ -1,6 +1,11 @@
 import { useLecternStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import type { Phase } from '../components/PhaseIndicator';
+import {
+    selectSummaryInfo,
+    selectCostDisplay,
+    selectHasUnsyncedCards,
+} from '../selectors';
 
 /**
  * Optimized selector hooks for Zustand store.
@@ -116,11 +121,19 @@ export const useGenerationValidation = () => useLecternStore(useShallow((s) => {
 
     return {
         canGenerate,
-        hasUnsyncedCards: s.cards.length > 0 && !s.syncSuccess,
         isButtonDisabled: !canGenerate,
         disabledReason,
     };
 }));
+
+/** State for generation summary (derived) */
+export const useSummaryInfo = () => useLecternStore(selectSummaryInfo);
+
+/** State for cost display (derived) */
+export const useCostDisplay = () => useLecternStore(selectCostDisplay);
+
+/** State for unsynced cards (derived) */
+export const useHasUnsyncedCards = () => useLecternStore(selectHasUnsyncedCards);
 
 /** State for generation summary */
 export const useGenerationSummaryState = () => useLecternStore(useShallow((s) => ({

@@ -9,6 +9,7 @@ import { ModalOrchestrator } from './components/ModalOrchestrator';
 import { useAppState } from './hooks/useAppState';
 import { useAnkiStatusQuery } from './queries';
 import { useLecternStore } from './store';
+import { useHasUnsyncedCards } from './hooks/useLecternSelectors';
 import { useHistory } from './hooks/useHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useReviewOrchestrator } from './hooks/useReviewOrchestrator';
@@ -40,15 +41,17 @@ function App() {
   const [isUnsyncedConfirmOpen, setIsUnsyncedConfirmOpen] = useState(false);
   const pendingGenerateCallbackRef = useRef<(() => void) | null>(null);
 
-  // Get cards and sync state for unsynced check
+  // Get sync state for unsynced check
+  const hasUnsyncedCards = useHasUnsyncedCards();
   const cards = useLecternStore((s) => s.cards);
-  const syncSuccess = useLecternStore((s) => s.syncSuccess);
 
   const step = useLecternStore((s) => s.step);
   const handleGenerate = useLecternStore((s) => s.handleGenerate);
   const handleCancelAndReset = useLecternStore((s) => s.handleCancelAndReset);
   const loadSession = useLecternStore((s) => s.loadSession);
   const recoverSessionOnRefresh = useLecternStore((s) => s.recoverSessionOnRefresh);
+  const handleResume = useLecternStore((s) => s.handleResume);
+  const setPdfFile = useLecternStore((s) => s.setPdfFile);
 
   // Budget actions and state for settings
   const totalSessionSpend = useLecternStore((s) => s.totalSessionSpend);
@@ -111,9 +114,6 @@ function App() {
   // writer for cards. refreshRecoveredSession was removed to prevent racing with the stream
   // and overwriting live state with stale persisted snapshots.
 
-  // Check if there are unsynced cards (cards exist but haven't been synced)
-  const hasUnsyncedCards = cards.length > 0 && !syncSuccess;
-
   // beforeunload handler for browser close/refresh when there are unsynced cards
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -153,6 +153,21 @@ function App() {
     setIsUnsyncedConfirmOpen(false);
     pendingGenerateCallbackRef.current = null;
   }, []);
+
+  // Resume session handler - opens file picker and calls handleResume
+  const handleResumeSession = useCallback((sessionId: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        setPdfFile(file);
+        handleResume(sessionId, file);
+      }
+    };
+    input.click();
+  }, [handleResume, setPdfFile]);
 
   if (isCheckingHealth) {
     return (
@@ -237,8 +252,9 @@ function App() {
           onCloseHistory={() => setIsHistoryOpen(false)}
           onClearAllHistory={clearAllHistory}
           onDeleteHistoryEntry={deleteHistoryEntry}
-          onBatchDeleteHistory={(ids) => batchDeleteHistory({ ids })}
+          onBatchDeleteHistory={(params) => batchDeleteHistory(params)}
           onLoadSession={loadSession}
+          onResumeSession={handleResumeSession}
           onCloseShortcuts={() => setIsShortcutsModalOpen(false)}
           onConfirmUnsynced={handleConfirmGenerate}
           onCancelUnsynced={handleCancelGenerate}

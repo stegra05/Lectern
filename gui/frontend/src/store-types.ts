@@ -46,6 +46,7 @@ export type StoreState = {
     sessionId: string | null;
     isError: boolean;
     isCancelling: boolean;
+    isResuming: boolean;
     estimation: Estimation | null;
     isEstimating: boolean;
     estimationError: string | null;
@@ -110,6 +111,7 @@ export type GenerationActions = {
     appendLog: (event: ProgressEvent) => void;
     appendCard: (card: Card) => void;
     handleGenerate: () => Promise<void>;
+    handleResume: (sessionId: string, pdfFile: File) => Promise<void>;
     handleCancel: () => void;
     handleCancelAndReset: () => void;
     handleReset: () => void;
