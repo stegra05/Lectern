@@ -4,9 +4,11 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
+from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from typing import Any
 
 # NOTE(Paths): Use Path.resolve() to handle frozen PyInstaller envs correctly.
 _here = Path(__file__).resolve().parent
@@ -37,6 +39,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Lectern API", version=__version__, lifespan=lifespan)
 session_manager.sweep_orphan_temp_files()
+
+def _sorted(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _sorted(obj[k]) for k in sorted(obj)}
+    if isinstance(obj, list):
+        return [_sorted(v) for v in obj]
+    return obj
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+    )
+    app.openapi_schema = _sorted(schema)
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 app.add_middleware(
     CORSMiddleware,
