@@ -21,6 +21,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from lectern.ai_client import UploadedDocument
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
 
 
@@ -35,8 +36,8 @@ def service():
 
 @pytest.fixture(autouse=True)
 def mock_extract_pdf_metadata():
-    """Mock extract_pdf_metadata globally for service tests."""
-    with patch("lectern.lectern_service.extract_pdf_metadata") as mock:
+    """Mock extract_pdf_metadata globally for service tests (used by InitializationPhase)."""
+    with patch("lectern.orchestration.phases.extract_pdf_metadata") as mock:
         mock.return_value = {
             "page_count": 3,
             "text_chars": 1200,
@@ -82,24 +83,30 @@ def mock_pdf_pages():
 @pytest.fixture
 def generation_env(mock_pdf_pages):
     """Common patched environment for service integration tests."""
+    anki_connected = {
+        "connected": True,
+        "version_ok": True,
+        "collection_available": True,
+    }
+
     with patch(
+        "lectern.orchestration.phases.get_connection_info",
+        new_callable=AsyncMock,
+        return_value=anki_connected,
+    ) as mock_info, patch(
         "lectern.lectern_service.get_connection_info",
         new_callable=AsyncMock,
-        return_value={
-            "connected": True,
-            "version_ok": True,
-            "collection_available": True,
-        },
-    ) as mock_info, patch(
-        "lectern.lectern_service.sample_examples_from_deck",
+        return_value=anki_connected,
+    ), patch(
+        "lectern.orchestration.phases.sample_examples_from_deck",
         new_callable=AsyncMock,
         return_value="",
     ) as mock_examples, patch(
         "lectern.lectern_service.LecternAIClient"
     ) as mock_ai_class, patch(
-        "os.path.exists", return_value=True
+        "lectern.orchestration.phases.os.path.exists", return_value=True
     ), patch(
-        "os.path.getsize", return_value=1024
+        "lectern.orchestration.phases.os.path.getsize", return_value=1024
     ):
 
         mock_ai = MagicMock()
@@ -121,7 +128,7 @@ def generation_env(mock_pdf_pages):
             }
         )
         mock_ai.upload_document = AsyncMock(
-            return_value=MagicMock(
+            return_value=UploadedDocument(
                 uri="gs://fake.pdf", mime_type="application/pdf", duration_ms=100
             )
         )
@@ -160,7 +167,7 @@ class TestServiceValidation:
     @pytest.mark.asyncio
     async def test_run_with_nonexistent_pdf(self, service):
         """Test that service yields error for missing PDF."""
-        with patch("os.path.exists", return_value=False):
+        with patch("lectern.orchestration.phases.os.path.exists", return_value=False):
             events = []
             async for event in service.run(
                 pdf_path="/nonexistent/path.pdf",
@@ -175,7 +182,7 @@ class TestServiceValidation:
             assert "not found" in error_events[0].message.lower()
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("os.path.exists", return_value=True)
     @patch("os.path.getsize", return_value=1024)
     async def test_run_with_anki_disconnected(
@@ -203,10 +210,10 @@ class TestServiceValidation:
 
 class TestStopCheck:
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("os.path.exists", return_value=True)
-    @patch("os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_stop_check_aborts_early(
         self, mock_getsize, mock_exists, mock_ai_client_class, mock_info, service
     ):
@@ -274,6 +281,62 @@ class TestServiceIntegration:
         assert any(e.type == "done" for e in events)
 
     @pytest.mark.asyncio
+    @patch(
+        "lectern.orchestration.phases.ConceptMappingPhase.execute",
+        new_callable=AsyncMock,
+    )
+    @patch(
+        "lectern.orchestration.phases.InitializationPhase.execute",
+        new_callable=AsyncMock,
+    )
+    async def test_run_executes_initialization_then_concept_phase(
+        self,
+        mock_init_execute,
+        mock_concept_execute,
+        service,
+        generation_env,
+    ):
+        env = generation_env
+        env["ai"].generate_more_cards.return_value = {
+            "cards": [{"fields": {"Front": "Q1", "Back": "A1"}}],
+            "done": True,
+        }
+
+        call_order: list[str] = []
+
+        async def _init_side_effect(context, emitter, ai_client):
+            call_order.append("init")
+            context.pdf.page_count = 3
+            context.pdf.text_chars = 1200
+            context.pdf.image_count = 0
+
+        async def _concept_side_effect(context, emitter, ai_client):
+            call_order.append("concept")
+            context.pages = [{}, {}, {}]
+            context.concept_map = {"concepts": [], "relations": []}
+            context.slide_set_name = "Test Lecture"
+            context.pdf.metadata_pages = 3
+            context.pdf.metadata_chars = 1200
+
+        mock_init_execute.side_effect = _init_side_effect
+        mock_concept_execute.side_effect = _concept_side_effect
+
+        events = []
+        async for event in service.run(
+            pdf_path="/fake/path.pdf",
+            deck_name="Test Deck",
+            model_name="gemini-3-flash-preview",
+            tags=[],
+            skip_export=True,
+        ):
+            events.append(event)
+
+        assert call_order == ["init", "concept"]
+        assert mock_init_execute.await_count == 1
+        assert mock_concept_execute.await_count == 1
+        assert any(e.type == "done" for e in events)
+
+    @pytest.mark.asyncio
     async def test_focus_prompt_passed_to_ai_client(self, service, generation_env):
         """Test that focus_prompt is correctly passed to LecternAIClient."""
         env = generation_env
@@ -318,7 +381,7 @@ class TestServiceIntegration:
         )
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
     @patch("os.path.exists", return_value=True)
     @patch("os.path.getsize", return_value=1024)
@@ -449,8 +512,8 @@ class TestServiceIntegration:
         )
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=0)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=0)
     async def test_run_with_zero_byte_file(self, mock_getsize, mock_exists, service):
         """Test that service yields error for empty file."""
         events = []
@@ -463,25 +526,28 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
     @patch("lectern.lectern_service.export_card_to_anki", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_run_with_export(
         self,
         mock_getsize,
         mock_exists,
         mock_export,
         mock_ai_client_class,
-        mock_info,
+        mock_info_phases,
+        mock_info_service,
         service,
     ):
         """Test the full run including Anki export."""
-        mock_info.return_value = {"connected": True, "collection_available": True}
+        anki_ok = {"connected": True, "collection_available": True}
+        mock_info_phases.return_value = mock_info_service.return_value = anki_ok
 
         mock_ai = MagicMock()
         mock_ai.upload_document = AsyncMock(
-            return_value=MagicMock(
+            return_value=UploadedDocument(
                 uri="gs://mock", mime_type="application/pdf", duration_ms=100
             )
         )
@@ -515,10 +581,10 @@ class TestServiceIntegration:
         mock_export.assert_called()
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_pdf_parsing_exception(
         self, mock_getsize, mock_exists, mock_ai_class, mock_info, service
     ):
@@ -538,10 +604,10 @@ class TestServiceIntegration:
         )
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.sample_examples_from_deck", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.sample_examples_from_deck", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     @patch("lectern.lectern_service.HistoryManager")
     async def test_example_sampling_exception(
         self,
@@ -588,17 +654,17 @@ class TestServiceIntegration:
         assert any(e.type == "done" for e in events)
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_script_mode_density_calculation(
         self, mock_getsize, mock_exists, mock_ai_class, mock_info, service
     ):
         """Test that script mode uses text-based density calculation."""
         mock_info.return_value = {"connected": True, "collection_available": True}
 
-        with patch("lectern.lectern_service.extract_pdf_metadata") as mock_meta:
+        with patch("lectern.orchestration.phases.extract_pdf_metadata") as mock_meta:
             mock_meta.return_value = {
                 "page_count": 1,
                 "text_chars": 3000,
@@ -634,10 +700,10 @@ class TestServiceIntegration:
         assert any("Script mode" in e.message for e in events if e.type == "info")
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_reflection_logic_and_stop_check(
         self, mock_getsize, mock_exists, mock_ai_class, mock_info, service
     ):
@@ -679,18 +745,29 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
     @patch("lectern.lectern_service.export_card_to_anki", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_export_failure_reporting(
-        self, mock_getsize, mock_exists, mock_export, mock_ai_class, mock_info, service
+        self,
+        mock_getsize,
+        mock_exists,
+        mock_export,
+        mock_ai_class,
+        mock_info_phases,
+        mock_info_service,
+        service,
     ):
         """Test that individual export failures are reported as warnings."""
-        mock_info.return_value = {"connected": True, "collection_available": True}
+        anki_ok = {"connected": True, "collection_available": True}
+        mock_info_phases.return_value = mock_info_service.return_value = anki_ok
         mock_ai = mock_ai_class.return_value
         mock_ai.upload_document = AsyncMock(
-            return_value=MagicMock(uri="gs://mock", duration_ms=100)
+            return_value=UploadedDocument(
+                uri="gs://mock", mime_type="application/pdf", duration_ms=100
+            )
         )
         mock_ai.concept_map_from_file = AsyncMock(return_value={})
         mock_ai.generate_more_cards = AsyncMock(
@@ -716,10 +793,10 @@ class TestServiceIntegration:
         )
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=5000)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=5000)
     @patch("lectern.lectern_service.HistoryManager")
     async def test_script_mode_and_entry_id(
         self,
@@ -733,7 +810,7 @@ class TestServiceIntegration:
         """Test script mode and providing entry_id."""
         mock_info.return_value = {"connected": True, "collection_available": True}
 
-        with patch("lectern.lectern_service.extract_pdf_metadata") as mock_meta:
+        with patch("lectern.orchestration.phases.extract_pdf_metadata") as mock_meta:
             mock_meta.return_value = {
                 "page_count": 1,
                 "text_chars": 5000,
@@ -742,7 +819,9 @@ class TestServiceIntegration:
 
             mock_ai = mock_ai_class.return_value
             mock_ai.upload_document = AsyncMock(
-                return_value=MagicMock(uri="gs://mock", duration_ms=100)
+                return_value=UploadedDocument(
+                    uri="gs://mock", mime_type="application/pdf", duration_ms=100
+                )
             )
             mock_ai.concept_map_from_file = AsyncMock(
                 return_value={"page_count": 1, "estimated_text_chars": 5000}
@@ -768,17 +847,17 @@ class TestServiceIntegration:
         assert any("Script mode" in e.message for e in events)
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_dynamic_reflection_rounds_large_doc(
         self, mock_getsize, mock_exists, mock_ai_class, mock_info, service
     ):
         """Test dynamic reflection rounds for a 100+ page document."""
         mock_info.return_value = {"connected": True, "collection_available": True}
 
-        with patch("lectern.lectern_service.extract_pdf_metadata") as mock_meta:
+        with patch("lectern.orchestration.phases.extract_pdf_metadata") as mock_meta:
             mock_meta.return_value = {
                 "page_count": 110,
                 "text_chars": 44000,
@@ -870,9 +949,9 @@ class TestServiceIntegration:
         assert script_result["estimated_card_count"] == 8
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.os.path.exists", return_value=True)
-    @patch("lectern.lectern_service.os.path.getsize", return_value=1024)
+    @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
+    @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_critical_error_graceful_exit(
         self, mock_getsize, mock_exists, mock_info, service
     ):

@@ -14,6 +14,11 @@ from lectern.orchestration.pipeline_context import (
     GenerationTargets,
     PipelinePhase,
 )
+from lectern.orchestration.phases import (
+    InitializationPhase,
+    ConceptMappingPhase,
+    PhaseExecutionHalt,
+)
 
 __all__ = [
     "SessionOrchestrator",
@@ -27,4 +32,7 @@ __all__ = [
     "PDFMetadata",
     "GenerationTargets",
     "PipelinePhase",
+    "InitializationPhase",
+    "ConceptMappingPhase",
+    "PhaseExecutionHalt",
 ]

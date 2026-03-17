@@ -1,7 +1,10 @@
 """Tests for the phase_handlers module."""
 
+import asyncio
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
+from lectern.events.service_events import ServiceEvent
+from lectern.orchestration.phases import PhaseExecutionHalt
 from lectern.phase_handlers import (
     ConceptPhaseResult,
     ExportPhaseResult,
@@ -76,16 +79,105 @@ class TestConceptPhaseHandler:
         assert handler.focus_prompt == "Focus on X"
 
     @pytest.mark.asyncio
-    @patch("lectern.phase_handlers.LecternAIClient")
-    @patch("lectern.phase_handlers.sample_examples_from_deck")
+    @patch(
+        "lectern.phase_handlers.extract_pdf_metadata",
+        return_value={"page_count": 2, "text_chars": 1200, "image_count": 0},
+    )
+    @patch("lectern.phase_handlers.ConceptMappingPhase.execute", new_callable=AsyncMock)
+    async def test_run_delegates_to_concept_mapping_phase(
+        self, mock_phase_execute, mock_metadata
+    ):
+        del mock_metadata
+
+        async def _delegate(context, emitter, ai_client):
+            del ai_client
+            await emitter.emit_event(ServiceEvent("step_start", "Delegated phase", {}))
+            context.concept_map = {"slide_set_name": "Delegated Slides"}
+            context.slide_set_name = "Delegated Slides"
+            context.pages = [{}, {}]
+            context.pdf.metadata_chars = 1200
+            context.uploaded_pdf = {"uri": "gs://mock", "mime_type": "application/pdf"}
+
+        mock_phase_execute.side_effect = _delegate
+
+        handler = ConceptPhaseHandler(
+            pdf_path="/test/file.pdf",
+            deck_name="Test Deck",
+            model_name="Basic",
+        )
+
+        events = []
+        result = None
+        async for item in handler.run(file_size=100000, context_deck=""):
+            if isinstance(item, ConceptPhaseResult):
+                result = item
+            else:
+                events.append(item)
+
+        assert mock_phase_execute.await_count == 1
+        assert any(e["type"] == "step_start" and e["message"] == "Delegated phase" for e in events)
+        assert result is not None
+        assert result.slide_set_name == "Delegated Slides"
+
+    @pytest.mark.asyncio
+    @patch(
+        "lectern.phase_handlers.extract_pdf_metadata",
+        return_value={"page_count": 2, "text_chars": 1200, "image_count": 0},
+    )
+    @patch("lectern.phase_handlers.ConceptMappingPhase.execute", new_callable=AsyncMock)
+    async def test_run_streams_events_without_buffering_all_output(
+        self, mock_phase_execute, mock_metadata
+    ):
+        del mock_metadata
+        gate = asyncio.Event()
+
+        async def _delegate(context, emitter, ai_client):
+            del context, ai_client
+            await emitter.emit_event(ServiceEvent("step_start", "Delegated phase", {}))
+            await gate.wait()
+            await emitter.emit_event(ServiceEvent("step_end", "Delegated done", {}))
+
+        mock_phase_execute.side_effect = _delegate
+
+        handler = ConceptPhaseHandler(
+            pdf_path="/test/file.pdf",
+            deck_name="Test Deck",
+            model_name="Basic",
+        )
+
+        agen = handler.run(file_size=100000, context_deck="")
+        first_item = await asyncio.wait_for(anext(agen), timeout=0.2)
+        assert isinstance(first_item, dict)
+        assert first_item["type"] == "step_start"
+        assert first_item["message"] == "Delegated phase"
+        gate.set()
+        remaining = [item async for item in agen]
+        assert any(isinstance(item, dict) and item["type"] == "step_end" for item in remaining)
+
+    @pytest.mark.asyncio
+    @patch(
+        "lectern.phase_handlers.extract_pdf_metadata",
+        return_value={"page_count": 2, "text_chars": 1200, "image_count": 0},
+    )
+    @patch("lectern.phase_handlers.ConceptMappingPhase.execute", new_callable=AsyncMock)
     async def test_run_returns_failure_on_upload_error(
-        self, mock_sample, mock_ai_class
+        self, mock_phase_execute, mock_metadata
     ):
         """Test run returns failure when PDF upload fails."""
-        mock_ai = AsyncMock()
-        mock_ai.upload_pdf.side_effect = Exception("Upload failed")
-        mock_ai_class.return_value = mock_ai
-        mock_sample.return_value = ""
+        del mock_metadata
+
+        async def _raise(context, emitter, ai_client):
+            del context, ai_client
+            await emitter.emit_event(
+                ServiceEvent(
+                    "error",
+                    "Native PDF upload failed: Upload failed",
+                    {"recoverable": False},
+                )
+            )
+            raise PhaseExecutionHalt("error")
+
+        mock_phase_execute.side_effect = _raise
 
         handler = ConceptPhaseHandler(
             pdf_path="/test/file.pdf",

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 import logging
-import os
 import time
 import uuid
 import asyncio
-from dataclasses import dataclass, field, replace as dataclass_replace
+from dataclasses import dataclass
 from typing import (
     Any,
     Dict,
@@ -19,17 +17,12 @@ from typing import (
 )
 
 from lectern import config
-from lectern.anki_connector import (
-    check_connection,
-    get_connection_info,
-    sample_examples_from_deck,
-)
-from lectern.ai_client import LecternAIClient, DocumentUploadError
+from lectern.anki_connector import get_connection_info
+from lectern.ai_client import LecternAIClient
 
 from lectern.cost_estimator import (
     derive_effective_target,
     estimate_card_cap,
-    extract_pdf_metadata,
     estimate_cost as estimate_cost_impl,
     estimate_cost_with_base as estimate_cost_with_base_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
@@ -45,13 +38,17 @@ from lectern.generation_loop import (
     collect_card_fronts as collect_card_fronts_impl,
     get_card_key as get_card_key_impl,
 )
-from lectern.utils.tags import infer_slide_set_name
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.error_handling import capture_exception
-import tempfile
 
 from lectern.utils.history import HistoryManager
 from lectern.events.pipeline_emitter import PipelineEmitter
+from lectern.orchestration.pipeline_context import SessionContext
+from lectern.orchestration.phases import (
+    ConceptMappingPhase,
+    InitializationPhase,
+    PhaseExecutionHalt,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -163,142 +160,23 @@ class LecternGenerationService:
     ) -> None:
         try:
             history_mgr = HistoryManager()
-
-            # 1. Initialization and Validation
-            if not os.path.exists(cfg.pdf_path):
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "error",
-                        f"PDF path not found: {cfg.pdf_path}",
-                        {"recoverable": False},
-                    )
-                )
-                return
-
-            file_size = os.path.getsize(cfg.pdf_path)
-            if file_size == 0:
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "error",
-                        "The uploaded PDF is empty (0 bytes).",
-                        {"recoverable": False},
-                    )
-                )
-                return
-
-            # Extract metadata early for stable progress bar and pacing (CPU-bound)
-            metadata = await asyncio.to_thread(extract_pdf_metadata, cfg.pdf_path)
-            actual_pages = metadata["page_count"]
-            actual_text_chars = metadata["text_chars"]
-            actual_image_count = metadata["image_count"]
-
-            # Sanity check AnkiConnect / collection before any Anki-dependent work
-            if not cfg.skip_export:
-                anki_info = await get_connection_info()
-                anki_ready = bool(
-                    anki_info.get("connected")
-                    and anki_info.get("collection_available", False)
-                )
-                if not anki_ready:
-                    reason = anki_info.get("error") or (
-                        "AnkiConnect collection is not available yet."
-                    )
-                    if config.DEBUG:
-                        await emitter.emit_event(
-                            ServiceEvent(
-                                "warning",
-                                f"Anki unavailable ({reason}), but DEBUG is ON. Proceeding with skip_export=True.",
-                            )
-                        )
-                        cfg = dataclass_replace(cfg, skip_export=True)
-                    else:
-                        await emitter.emit_event(
-                            ServiceEvent(
-                                "error",
-                                f"Could not use AnkiConnect: {reason}",
-                                {
-                                    "recoverable": False,
-                                    "error_kind": anki_info.get("error_kind"),
-                                },
-                            )
-                        )
-                        await asyncio.to_thread(
-                            history_mgr.update_entry, history_id, status="error"
-                        )
-                        return
-                else:
-                    await emitter.emit_event(
-                        ServiceEvent(
-                            "step_end", "AnkiConnect Connected", {"success": True}
-                        )
-                    )
-
-            # Emit start event
-            await emitter.emit_event(
-                ServiceEvent(
-                    "step_start", "Extracting images and text", {"phase": "concept"}
-                )
+            context = SessionContext.from_generation_config(cfg)
+            ai = LecternAIClient(
+                model_name=context.config.model_name,
+                focus_prompt=context.config.focus_prompt,
+                slide_set_context=None,
             )
 
-            # 2. Sample style examples
-            examples = ""
-            await emitter.emit_event(
-                ServiceEvent("step_start", "Sample examples from deck")
-            )
-            examples_started_at = time.perf_counter()
             try:
-                if not cfg.skip_export:
-                    deck_for_examples = cfg.context_deck or cfg.deck_name
-                    examples = await sample_examples_from_deck(
-                        deck_name=deck_for_examples, sample_size=5
+                await InitializationPhase().execute(context, emitter, ai)
+            except PhaseExecutionHalt as e:
+                if history_id:
+                    await asyncio.to_thread(
+                        history_mgr.update_entry, history_id, status=e.history_status
                     )
-                if examples.strip():
-                    await emitter.emit_event(
-                        ServiceEvent("info", "Loaded style examples from Anki")
-                    )
-                elif cfg.skip_export:
-                    await emitter.emit_event(
-                        ServiceEvent(
-                            "info",
-                            "Skipping style example sampling (Anki unavailable / draft mode).",
-                        )
-                    )
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_end",
-                        "Examples Loaded",
-                        {
-                            "success": True,
-                            "duration_ms": self._elapsed_ms(examples_started_at),
-                        },
-                    )
-                )
-            except Exception as e:
-                user_msg, _ = capture_exception(e, "Sample examples")
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "error",
-                        f"Failed to sample examples: {user_msg}",
-                        {"recoverable": True},
-                    )
-                )
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_end",
-                        "Examples Failed",
-                        {
-                            "success": False,
-                            "duration_ms": self._elapsed_ms(examples_started_at),
-                        },
-                    )
-                )
+                return
 
-            # 3b. Native flow: PDF title resolved via concept map; fallback uses filename.
-            pdf_filename = os.path.splitext(os.path.basename(cfg.pdf_path))[0]
-            pdf_title = ""
-
-            # 4. AI Session Init
-            if self._should_stop(cfg.stop_check):
+            if self._should_stop(context.config.stop_check):
                 await asyncio.to_thread(
                     history_mgr.update_entry, history_id, status="cancelled"
                 )
@@ -307,251 +185,32 @@ class LecternGenerationService:
                 )
                 return
 
-            await emitter.emit_event(
-                ServiceEvent("step_start", "Start AI session")
-            )
-            session_started_at = time.perf_counter()
-            ai = LecternAIClient(
-                model_name=cfg.model_name,
-                focus_prompt=cfg.focus_prompt,
-                slide_set_context=None,
-            )
-            await emitter.emit_event(
-                ServiceEvent(
-                    "step_end",
-                    "Session Started",
-                    {
-                        "success": True,
-                        "duration_ms": self._elapsed_ms(session_started_at),
-                        "ai_log_path": getattr(ai, "log_path", ""),
-                    },
-                )
-            )
-
-            # 4b. Native PDF extraction & upload
-            upload_path = cfg.pdf_path
-
-            uploaded_pdf: Dict[str, str] = {}
-            await emitter.emit_event(
-                ServiceEvent("step_start", "Upload PDF to Gemini")
-            )
             try:
-                uploaded_doc = await ai.upload_document(upload_path)
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_end",
-                        "PDF Uploaded",
-                        {
-                            "success": True,
-                            "duration_ms": uploaded_doc.duration_ms,
-                        },
+                await ConceptMappingPhase().execute(context, emitter, ai)
+            except PhaseExecutionHalt as e:
+                if history_id:
+                    await asyncio.to_thread(
+                        history_mgr.update_entry, history_id, status=e.history_status
                     )
-                )
-                uploaded_pdf = uploaded_doc.to_dict()
-            except DocumentUploadError as e:
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_end",
-                        "PDF Upload Failed",
-                        {"success": False},
-                    )
-                )
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "error",
-                        f"Native PDF upload failed: {e.user_message}",
-                        {
-                            "recoverable": False,
-                            "terminal": True,
-                            "stage": "upload",
-                            "elapsed_ms": self._elapsed_ms(start_time),
-                        },
-                    )
-                )
-                await asyncio.to_thread(
-                    history_mgr.update_entry, history_id, status="error"
-                )
                 return
 
-            # 5. Concept Map
-            concept_map = {}
-            if self._should_stop(cfg.stop_check):
-                await asyncio.to_thread(
-                    history_mgr.update_entry, history_id, status="cancelled"
-                )
-                await emitter.emit_event(
-                    self._cancelled_event("concept_map", start_time)
-                )
-                return
-
-            await emitter.emit_event(
-                ServiceEvent(
-                    "step_start", "Build global concept map", {"phase": "concept"}
-                )
-            )
-            await emitter.emit_event(
-                ServiceEvent(
-                    "progress_start",
-                    "Analyzing slides",
-                    {"total": actual_pages, "phase": "concept"},
-                )
-            )
-            concept_started_at = time.perf_counter()
-
-            # Emit initial progress using actual page count
-            await emitter.emit_event(
-                ServiceEvent(
-                    "progress_update",
-                    "",
-                    {"current": 0, "total": actual_pages, "phase": "concept"},
-                )
-            )
-
-            try:
-                raw_concept_map = await ai.concept_map_from_file(
-                    file_uri=uploaded_pdf["uri"],
-                    mime_type=uploaded_pdf.get("mime_type", "application/pdf"),
-                )
-                concept_map = (
-                    raw_concept_map if isinstance(raw_concept_map, dict) else {}
-                )
-                if not concept_map:
-                    try:
-                        legacy_map = await ai.concept_map([])
-                        if isinstance(legacy_map, dict):
-                            concept_map = legacy_map
-                    except Exception as e:
-                        logger.debug("Legacy concept map fallback failed: %s", e)
-
-                advised_pages = int(concept_map.get("page_count") or 0)
-                advised_chars = int(concept_map.get("estimated_text_chars") or 0)
-                metadata_pages = actual_pages
-                metadata_chars = actual_text_chars
-
-                # Treat model metadata as advisory only when reasonably close to
-                # deterministic PDF-derived metadata.
-                page_delta_limit = max(5, int(actual_pages * 0.25))
-                if (
-                    advised_pages > 0
-                    and abs(advised_pages - actual_pages) <= page_delta_limit
-                ):
-                    metadata_pages = advised_pages
-
-                if advised_chars > 0:
-                    if actual_text_chars <= 0:
-                        metadata_chars = advised_chars
-                    else:
-                        min_chars = int(actual_text_chars * 0.25)
-                        max_chars = int(actual_text_chars * 4.0)
-                        if min_chars <= advised_chars <= max_chars:
-                            metadata_chars = advised_chars
-
-                if metadata_chars <= 0:
-                    metadata_chars = metadata_pages * 800
-
-                pages = [{} for _ in range(metadata_pages)]
-                total_text_chars = metadata_chars
-
-                # Emit final progress
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "progress_update",
-                        "",
-                        {
-                            "current": metadata_pages,
-                            "total": metadata_pages,
-                            "phase": "concept",
-                        },
-                    )
-                )
-
-                # CPU bound compute
-                initial_coverage = await asyncio.to_thread(
-                    compute_coverage_data,
-                    cards=[],
-                    concept_map=concept_map,
-                    total_pages=metadata_pages,
-                )
-
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_end",
-                        "Concept Map Built",
-                        {
-                            "success": True,
-                            "page_count": metadata_pages,
-                            "coverage_data": initial_coverage,
-                            "duration_ms": self._elapsed_ms(concept_started_at),
-                            "concept_count": len(concept_map.get("concepts") or []),
-                            "relation_count": len(concept_map.get("relations") or []),
-                        },
-                    )
-                )
-                await emitter.emit_event(
-                    ServiceEvent("info", "Concept Map built", {"map": concept_map})
-                )
-                for w in ai.drain_warnings():
-                    await emitter.emit_event(ServiceEvent("warning", w))
-            except Exception as e:
-                user_msg, _ = capture_exception(e, "Concept map")
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "error",
-                        f"Concept map failed: {user_msg}",
-                        {
-                            "recoverable": True,
-                            "stage": "concept_map",
-                        },
-                    )
-                )
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_end",
-                        "Concept Map Failed",
-                        {
-                            "success": False,
-                            "duration_ms": self._elapsed_ms(concept_started_at),
-                        },
-                    )
-                )
-                metadata_pages = actual_pages
-                pages = [{} for _ in range(metadata_pages)]
-                total_text_chars = actual_text_chars or (metadata_pages * 800)
-
-            # 5b. Extract Slide Set Name from Concept Map (or fallback to heuristic)
-            slide_set_name = (
-                concept_map.get("slide_set_name", "") if concept_map else ""
-            )
-            if not slide_set_name:
-                slide_set_name = infer_slide_set_name(pdf_title, pdf_filename)
-            if not slide_set_name:
-                slide_set_name = (
-                    pdf_filename.replace("_", " ").replace("-", " ").title()
-                )
-            await emitter.emit_event(
-                ServiceEvent("info", f"Slide Set Name: '{slide_set_name}'")
-            )
-
-            # Build slide set context for AI
-            slide_set_context = {
-                "deck_name": cfg.deck_name,
-                "slide_set_name": slide_set_name,
-            }
-            ai.set_slide_set_context(
-                deck_name=slide_set_context["deck_name"],
-                slide_set_name=slide_set_context["slide_set_name"],
-            )
+            # Extract variables for downstream phases (NOTE: context is single source of truth)
+            actual_image_count = context.pdf.image_count
+            pages = context.pages
+            concept_map = context.concept_map
+            examples = context.examples
+            slide_set_name = context.slide_set_name
+            total_text_chars = context.pdf.metadata_chars
 
             # 6. Generation Loop
             all_cards = []
-            seen_keys = set()
 
             # Targets
             document_type = concept_map.get("document_type") if concept_map else None
             effective_target, _ = derive_effective_target(
                 page_count=len(pages),
                 estimated_text_chars=total_text_chars,
-                target_card_count=cfg.target_card_count,
+                target_card_count=context.config.target_card_count,
                 density_target=None,
                 script_base_chars=config.SCRIPT_BASE_CHARS,
                 force_mode=document_type,
@@ -564,7 +223,7 @@ class LecternGenerationService:
                 estimated_text_chars=total_text_chars,
                 image_count=actual_image_count,
                 density_target=None,
-                target_card_count=cfg.target_card_count,
+                target_card_count=context.config.target_card_count,
                 script_base_chars=config.SCRIPT_BASE_CHARS,
                 force_mode=document_type,
             )
@@ -614,9 +273,9 @@ class LecternGenerationService:
             gen_config = OrchGenConfig(
                 total_cards_cap=total_cards_cap,
                 actual_batch_size=actual_batch_size,
-                focus_prompt=cfg.focus_prompt,
+                focus_prompt=context.config.focus_prompt,
                 effective_target=effective_target,
-                stop_check=cfg.stop_check,
+                stop_check=context.config.stop_check,
                 examples=examples,
             )
 
@@ -648,7 +307,7 @@ class LecternGenerationService:
             if card_count > 0:
                 rounds = dynamic_rounds = 1 if card_count < 50 else 2
 
-            if rounds > 0 and not self._should_stop(cfg.stop_check):
+            if rounds > 0 and not self._should_stop(context.config.stop_check):
                 await emitter.emit_event(
                     ServiceEvent(
                         "step_start",
@@ -668,7 +327,7 @@ class LecternGenerationService:
                 ref_config = OrchRefConfig(
                     total_cards_cap=total_cards_cap,
                     rounds=rounds,
-                    stop_check=cfg.stop_check,
+                    stop_check=context.config.stop_check,
                 )
                 async for event in orchestrator.run_reflection(
                     ai_client=ai, config=ref_config
@@ -725,7 +384,7 @@ class LecternGenerationService:
             )
 
             # 8. Creation in Anki
-            if cfg.skip_export:
+            if context.config.skip_export:
                 # Draft Mode: Save state but don't export
                 await emitter.emit_event(
                     ServiceEvent("info", "Skipping Anki export (Draft Mode)")
@@ -734,13 +393,13 @@ class LecternGenerationService:
                 # IMPORTANT: Persist cards to DB so they survive app restart/refresh
                 await asyncio.to_thread(
                     history_mgr.sync_session_state,
-                    session_id=cfg.session_id or history_id,
+                    session_id=context.config.session_id or history_id,
                     cards=all_cards,
                     status="completed",
-                    deck_name=cfg.deck_name,
+                    deck_name=context.config.deck_name,
                     slide_set_name=slide_set_name,
-                    model_name=cfg.model_name,
-                    tags=cfg.tags,
+                    model_name=context.config.model_name,
+                    tags=context.config.tags,
                     total_pages=len(pages),
                     coverage_data=final_coverage,
                 )
@@ -765,7 +424,7 @@ class LecternGenerationService:
                 )
                 return
 
-            if self._should_stop(cfg.stop_check):
+            if self._should_stop(context.config.stop_check):
                 await asyncio.to_thread(
                     history_mgr.update_entry, history_id, status="cancelled"
                 )
@@ -824,10 +483,10 @@ class LecternGenerationService:
             for idx, card in enumerate(all_cards, start=1):
                 result = await export_card_to_anki(
                     card=card,
-                    deck_name=cfg.deck_name,
+                    deck_name=context.config.deck_name,
                     slide_set_name=slide_set_name,
                     fallback_model=config.DEFAULT_BASIC_MODEL,
-                    additional_tags=cfg.tags,
+                    additional_tags=context.config.tags,
                 )
 
                 if result.success:
@@ -867,13 +526,13 @@ class LecternGenerationService:
             # Persist final state (including any note IDs created)
             await asyncio.to_thread(
                 history_mgr.sync_session_state,
-                session_id=cfg.session_id or history_id,
+                session_id=context.config.session_id or history_id,
                 cards=all_cards,
                 status="completed",
-                deck_name=cfg.deck_name,
+                deck_name=context.config.deck_name,
                 slide_set_name=slide_set_name,
-                model_name=cfg.model_name,
-                tags=cfg.tags,
+                model_name=context.config.model_name,
+                tags=context.config.tags,
                 total_pages=len(pages),
                 coverage_data=final_coverage,
             )
