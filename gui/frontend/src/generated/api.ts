@@ -4,41 +4,36 @@
  */
 
 export interface paths {
-    "/version": {
+    "/anki/notes": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Version
-         * @description Returns local version and checks GitHub for updates.
-         */
-        get: operations["get_version_version_get"];
+        get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Anki Notes */
+        delete: operations["delete_anki_notes_anki_notes_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/health": {
+    "/anki/notes/{note_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        get?: never;
         /**
-         * Health Check
-         * @description Health check endpoint that safely checks system status.
-         *
-         *     Returns status even if individual checks fail to prevent blocking the UI.
+         * Update Anki Note
+         * @description Update fields on an existing Anki note.
          */
-        get: operations["health_check_health_get"];
-        put?: never;
+        put: operations["update_anki_note_anki_notes__note_id__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -84,24 +79,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get History */
-        get: operations["get_history_history_get"];
-        put?: never;
-        post?: never;
-        /** Clear History */
-        delete: operations["clear_history_history_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/decks": {
         parameters: {
             query?: never;
@@ -114,40 +91,6 @@ export interface paths {
         put?: never;
         /** Create Deck Endpoint */
         post: operations["create_deck_endpoint_decks_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/history/{entry_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete History Entry */
-        delete: operations["delete_history_entry_history__entry_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/history/batch-delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Batch Delete History */
-        post: operations["batch_delete_history_history_batch_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -188,7 +131,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stop": {
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Check
+         * @description Health check endpoint that safely checks system status.
+         */
+        get: operations["health_check_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get History */
+        get: operations["get_history_history_get"];
+        put?: never;
+        post?: never;
+        /** Clear History */
+        delete: operations["clear_history_history_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/history/batch-delete": {
         parameters: {
             query?: never;
             header?: never;
@@ -197,9 +178,26 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stop Generation */
-        post: operations["stop_generation_stop_post"];
+        /** Batch Delete History */
+        post: operations["batch_delete_history_history_batch_delete_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/history/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete History Entry */
+        delete: operations["delete_history_entry_history__entry_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -222,7 +220,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/anki/notes": {
+    "/stop": {
         parameters: {
             query?: never;
             header?: never;
@@ -231,28 +229,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        /** Delete Anki Notes */
-        delete: operations["delete_anki_notes_anki_notes_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/anki/notes/{note_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Anki Note
-         * @description Update fields on an existing Anki note.
-         */
-        put: operations["update_anki_note_anki_notes__note_id__put"];
-        post?: never;
+        /** Stop Generation */
+        post: operations["stop_generation_stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -276,15 +254,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/{full_path}": {
+    "/version": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Serve React App */
-        get: operations["serve_react_app__full_path__get"];
+        /**
+         * Get Version
+         * @description Returns local version and checks GitHub for updates.
+         */
+        get: operations["get_version_version_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -304,20 +285,24 @@ export interface components {
         };
         /** AnkiDeleteResponse */
         AnkiDeleteResponse: {
+            /** Count */
+            count: number;
             /**
              * Status
              * @constant
              */
             status: "deleted";
-            /** Count */
-            count: number;
         };
         /** AnkiStatusResponse */
         AnkiStatusResponse: {
-            /** Status */
-            status: string;
+            /** Collection Available */
+            collection_available?: boolean | null;
             /** Connected */
             connected: boolean;
+            /** Error */
+            error?: string | null;
+            /** Status */
+            status: string;
             /** Version */
             version?: string | null;
             /**
@@ -325,10 +310,6 @@ export interface components {
              * @default false
              */
             version_ok: boolean;
-            /** Collection Available */
-            collection_available?: boolean | null;
-            /** Error */
-            error?: string | null;
         };
         /** AnkiUpdateRequest */
         AnkiUpdateRequest: {
@@ -339,13 +320,13 @@ export interface components {
         };
         /** AnkiUpdateResponse */
         AnkiUpdateResponse: {
+            /** Note Id */
+            note_id: number;
             /**
              * Status
              * @constant
              */
             status: "updated";
-            /** Note Id */
-            note_id: number;
         };
         /** BatchDeleteRequest */
         BatchDeleteRequest: {
@@ -356,39 +337,47 @@ export interface components {
         };
         /** Body_estimate_cost_estimate_post */
         Body_estimate_cost_estimate_post: {
-            /** Pdf File */
-            pdf_file: string;
             /** Model Name */
             model_name?: string | null;
+            /**
+             * Pdf File
+             * Format: binary
+             */
+            pdf_file: string;
             /** Target Card Count */
             target_card_count?: number | null;
         };
         /** Body_generate_cards_generate_post */
         Body_generate_cards_generate_post: {
-            /** Pdf File */
-            pdf_file: string;
+            /**
+             * Context Deck
+             * @default
+             */
+            context_deck: string;
             /** Deck Name */
             deck_name: string;
+            /**
+             * Focus Prompt
+             * @default
+             */
+            focus_prompt: string;
             /**
              * Model Name
              * @default gemini-3-flash-preview
              */
             model_name: string;
             /**
+             * Pdf File
+             * Format: binary
+             */
+            pdf_file: string;
+            /** Session Id */
+            session_id?: string | null;
+            /**
              * Tags
              * @default []
              */
             tags: string;
-            /**
-             * Context Deck
-             * @default
-             */
-            context_deck: string;
-            /**
-             * Focus Prompt
-             * @default
-             */
-            focus_prompt: string;
             /** Target Card Count */
             target_card_count?: number | null;
         };
@@ -402,29 +391,29 @@ export interface components {
         };
         /** ConfigResponse */
         ConfigResponse: {
-            /** Gemini Model */
-            gemini_model?: string | null;
             /** Anki Url */
             anki_url?: string | null;
             /** Basic Model */
             basic_model?: string | null;
             /** Cloze Model */
             cloze_model?: string | null;
-            /** Tag Template */
-            tag_template?: string | null;
             /** Gemini Configured */
             gemini_configured: boolean;
+            /** Gemini Model */
+            gemini_model?: string | null;
+            /** Tag Template */
+            tag_template?: string | null;
         };
         /** ConfigUpdate */
         ConfigUpdate: {
-            /** Gemini Api Key */
-            gemini_api_key?: string | null;
             /** Anki Url */
             anki_url?: string | null;
             /** Basic Model */
             basic_model?: string | null;
             /** Cloze Model */
             cloze_model?: string | null;
+            /** Gemini Api Key */
+            gemini_api_key?: string | null;
             /** Gemini Model */
             gemini_model?: string | null;
             /** Tag Template */
@@ -432,13 +421,13 @@ export interface components {
         };
         /** ConfigUpdatedResponse */
         ConfigUpdatedResponse: {
+            /** Fields */
+            fields: string[];
             /**
              * Status
              * @constant
              */
             status: "updated";
-            /** Fields */
-            fields: string[];
             /** Warnings */
             warnings?: string[] | null;
         };
@@ -449,13 +438,13 @@ export interface components {
         };
         /** DeckCreateResponse */
         DeckCreateResponse: {
+            /** Deck */
+            deck: string;
             /**
              * Status
              * @constant
              */
             status: "created";
-            /** Deck */
-            deck: string;
         };
         /** DeckListResponse */
         DeckListResponse: {
@@ -464,32 +453,32 @@ export interface components {
         };
         /** EstimateResponse */
         EstimateResponse: {
-            /** Tokens */
-            tokens?: number | null;
-            /** Input Tokens */
-            input_tokens?: number | null;
-            /** Output Tokens */
-            output_tokens?: number | null;
-            /** Input Cost */
-            input_cost?: number | null;
-            /** Output Cost */
-            output_cost?: number | null;
             /** Cost */
             cost?: number | null;
-            /** Pages */
-            pages?: number | null;
-            /** Text Chars */
-            text_chars?: number | null;
-            /** Model */
-            model?: string | null;
-            /** Suggested Card Count */
-            suggested_card_count?: number | null;
+            /** Document Type */
+            document_type?: string | null;
             /** Estimated Card Count */
             estimated_card_count?: number | null;
             /** Image Count */
             image_count?: number | null;
-            /** Document Type */
-            document_type?: string | null;
+            /** Input Cost */
+            input_cost?: number | null;
+            /** Input Tokens */
+            input_tokens?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Output Cost */
+            output_cost?: number | null;
+            /** Output Tokens */
+            output_tokens?: number | null;
+            /** Pages */
+            pages?: number | null;
+            /** Suggested Card Count */
+            suggested_card_count?: number | null;
+            /** Text Chars */
+            text_chars?: number | null;
+            /** Tokens */
+            tokens?: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -498,24 +487,24 @@ export interface components {
         };
         /** HealthResponse */
         HealthResponse: {
-            /** Status */
-            status: string;
             /** Anki Connected */
             anki_connected: boolean;
-            /** Gemini Configured */
-            gemini_configured: boolean;
             /** Backend Ready */
             backend_ready: boolean;
+            /** Gemini Configured */
+            gemini_configured: boolean;
+            /** Status */
+            status: string;
         };
         /** HistoryBatchDeleteResponse */
         HistoryBatchDeleteResponse: {
+            /** Count */
+            count: number;
             /**
              * Status
              * @constant
              */
             status: "deleted";
-            /** Count */
-            count: number;
         };
         /** HistoryClearResponse */
         HistoryClearResponse: {
@@ -535,63 +524,63 @@ export interface components {
         };
         /** HistoryEntryResponse */
         HistoryEntryResponse: {
-            /** Id */
-            id?: string | null;
-            /** Session Id */
-            session_id?: string | null;
+            /** Card Count */
+            card_count?: number | null;
+            /** Date */
+            date?: string | null;
+            /** Deck */
+            deck?: string | null;
             /** Filename */
             filename?: string | null;
             /** Full Path */
             full_path?: string | null;
-            /** Deck */
-            deck?: string | null;
-            /** Date */
-            date?: string | null;
-            /** Card Count */
-            card_count?: number | null;
+            /** Id */
+            id?: string | null;
+            /** Session Id */
+            session_id?: string | null;
             /** Status */
             status?: string | null;
         };
         /** SessionEntryResponse */
         SessionEntryResponse: {
-            /** Id */
-            id: string;
-            /** Session Id */
-            session_id: string;
-            /** Status */
-            status: string;
+            /** Card Count */
+            card_count?: number | null;
             /** Cards */
             cards: {
                 [key: string]: unknown;
             }[];
-            /** Deck */
-            deck?: string | null;
-            /** Deck Name */
-            deck_name?: string | null;
-            /** Logs */
-            logs?: {
-                [key: string]: unknown;
-            }[] | null;
-            /** Total Pages */
-            total_pages?: number | null;
             /** Coverage Data */
             coverage_data?: {
                 [key: string]: unknown;
             } | null;
+            /** Date */
+            date?: string | null;
+            /** Deck */
+            deck?: string | null;
+            /** Deck Name */
+            deck_name?: string | null;
             /** Filename */
             filename?: string | null;
             /** Full Path */
             full_path?: string | null;
-            /** Date */
-            date?: string | null;
-            /** Card Count */
-            card_count?: number | null;
-            /** Slide Set Name */
-            slide_set_name?: string | null;
+            /** Id */
+            id: string;
+            /** Logs */
+            logs?: {
+                [key: string]: unknown;
+            }[] | null;
             /** Model Name */
             model_name?: string | null;
+            /** Session Id */
+            session_id: string;
+            /** Slide Set Name */
+            slide_set_name?: string | null;
+            /** Status */
+            status: string;
             /** Tags */
             tags?: string[] | null;
+            /** Total Pages */
+            total_pages?: number | null;
         };
         /** SessionNotFoundResponse */
         SessionNotFoundResponse: {
@@ -599,40 +588,40 @@ export interface components {
             cards: {
                 [key: string]: unknown;
             }[];
-            /** Session Id */
-            session_id: string;
             /**
              * Not Found
              * @constant
              */
             not_found: true;
+            /** Session Id */
+            session_id: string;
         };
         /** StopResponse */
         StopResponse: {
-            /** Stopped */
-            stopped: boolean;
-            /** Session Id */
-            session_id: string;
             /** Message */
             message?: string | null;
+            /** Session Id */
+            session_id: string;
+            /** Stopped */
+            stopped: boolean;
         };
         /** SyncRequest */
         SyncRequest: {
+            /**
+             * Allow Updates
+             * @default false
+             */
+            allow_updates: boolean;
             /** Cards */
             cards: {
                 [key: string]: unknown;
             }[];
             /** Deck Name */
             deck_name: string;
-            /** Tags */
-            tags: string[];
             /** Slide Set Name */
             slide_set_name: string;
-            /**
-             * Allow Updates
-             * @default false
-             */
-            allow_updates: boolean;
+            /** Tags */
+            tags: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -642,10 +631,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /** VersionResponse */
         VersionResponse: {
@@ -653,10 +638,10 @@ export interface components {
             current: string;
             /** Latest */
             latest?: string | null;
-            /** Update Available */
-            update_available: boolean;
             /** Release Url */
             release_url: string;
+            /** Update Available */
+            update_available: boolean;
         };
     };
     responses: never;
@@ -667,14 +652,18 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_version_version_get: {
+    delete_anki_notes_anki_notes_delete: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnkiDeleteRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -682,19 +671,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VersionResponse"];
+                    "application/json": components["schemas"]["AnkiDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    health_check_health_get: {
+    update_anki_note_anki_notes__note_id__put: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                note_id: number;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnkiUpdateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -702,7 +706,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HealthResponse"];
+                    "application/json": components["schemas"]["AnkiUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -780,46 +793,6 @@ export interface operations {
             };
         };
     };
-    get_history_history_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HistoryEntryResponse"][];
-                };
-            };
-        };
-    };
-    clear_history_history_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HistoryClearResponse"];
-                };
-            };
-        };
-    };
     get_decks_decks_get: {
         parameters: {
             query?: never;
@@ -860,70 +833,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeckCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_history_entry_history__entry_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HistoryDeleteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_delete_history_history_batch_delete_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BatchDeleteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HistoryBatchDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1003,11 +912,9 @@ export interface operations {
             };
         };
     };
-    stop_generation_stop_post: {
+    health_check_health_get: {
         parameters: {
-            query?: {
-                session_id?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -1020,7 +927,102 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StopResponse"];
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    get_history_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryEntryResponse"][];
+                };
+            };
+        };
+    };
+    clear_history_history_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryClearResponse"];
+                };
+            };
+        };
+    };
+    batch_delete_history_history_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryBatchDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_history_entry_history__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1065,18 +1067,16 @@ export interface operations {
             };
         };
     };
-    delete_anki_notes_anki_notes_delete: {
+    stop_generation_stop_post: {
         parameters: {
-            query?: never;
+            query?: {
+                session_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AnkiDeleteRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -1084,42 +1084,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AnkiDeleteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_anki_note_anki_notes__note_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                note_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AnkiUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnkiUpdateResponse"];
+                    "application/json": components["schemas"]["StopResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1166,13 +1131,11 @@ export interface operations {
             };
         };
     };
-    serve_react_app__full_path__get: {
+    get_version_version_get: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                full_path: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -1183,16 +1146,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["VersionResponse"];
                 };
             };
         };
