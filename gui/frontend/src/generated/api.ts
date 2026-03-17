@@ -300,11 +300,11 @@ export interface components {
             /** Connected */
             connected: boolean;
             /** Error */
-            error?: string | null;
+            error?: null | string;
             /** Status */
             status: string;
             /** Version */
-            version?: string | null;
+            version?: null | string;
             /**
              * Version Ok
              * @default false
@@ -333,12 +333,12 @@ export interface components {
             /** Ids */
             ids?: string[] | null;
             /** Status */
-            status?: string | null;
+            status?: null | string;
         };
         /** Body_estimate_cost_estimate_post */
         Body_estimate_cost_estimate_post: {
             /** Model Name */
-            model_name?: string | null;
+            model_name?: null | string;
             /**
              * Pdf File
              * Format: binary
@@ -372,7 +372,7 @@ export interface components {
              */
             pdf_file: string;
             /** Session Id */
-            session_id?: string | null;
+            session_id?: null | string;
             /**
              * Tags
              * @default []
@@ -392,32 +392,32 @@ export interface components {
         /** ConfigResponse */
         ConfigResponse: {
             /** Anki Url */
-            anki_url?: string | null;
+            anki_url?: null | string;
             /** Basic Model */
-            basic_model?: string | null;
+            basic_model?: null | string;
             /** Cloze Model */
-            cloze_model?: string | null;
+            cloze_model?: null | string;
             /** Gemini Configured */
             gemini_configured: boolean;
             /** Gemini Model */
-            gemini_model?: string | null;
+            gemini_model?: null | string;
             /** Tag Template */
-            tag_template?: string | null;
+            tag_template?: null | string;
         };
         /** ConfigUpdate */
         ConfigUpdate: {
             /** Anki Url */
-            anki_url?: string | null;
+            anki_url?: null | string;
             /** Basic Model */
-            basic_model?: string | null;
+            basic_model?: null | string;
             /** Cloze Model */
-            cloze_model?: string | null;
+            cloze_model?: null | string;
             /** Gemini Api Key */
-            gemini_api_key?: string | null;
+            gemini_api_key?: null | string;
             /** Gemini Model */
-            gemini_model?: string | null;
+            gemini_model?: null | string;
             /** Tag Template */
-            tag_template?: string | null;
+            tag_template?: null | string;
         };
         /** ConfigUpdatedResponse */
         ConfigUpdatedResponse: {
@@ -454,21 +454,21 @@ export interface components {
         /** EstimateResponse */
         EstimateResponse: {
             /** Cost */
-            cost?: number | null;
+            cost?: null | number;
             /** Document Type */
-            document_type?: string | null;
+            document_type?: null | string;
             /** Estimated Card Count */
             estimated_card_count?: number | null;
             /** Image Count */
             image_count?: number | null;
             /** Input Cost */
-            input_cost?: number | null;
+            input_cost?: null | number;
             /** Input Tokens */
             input_tokens?: number | null;
             /** Model */
-            model?: string | null;
+            model?: null | string;
             /** Output Cost */
-            output_cost?: number | null;
+            output_cost?: null | number;
             /** Output Tokens */
             output_tokens?: number | null;
             /** Pages */
@@ -527,19 +527,19 @@ export interface components {
             /** Card Count */
             card_count?: number | null;
             /** Date */
-            date?: string | null;
+            date?: null | string;
             /** Deck */
-            deck?: string | null;
+            deck?: null | string;
             /** Filename */
-            filename?: string | null;
+            filename?: null | string;
             /** Full Path */
-            full_path?: string | null;
+            full_path?: null | string;
             /** Id */
-            id?: string | null;
+            id?: null | string;
             /** Session Id */
-            session_id?: string | null;
+            session_id?: null | string;
             /** Status */
-            status?: string | null;
+            status?: null | string;
         };
         /** SessionEntryResponse */
         SessionEntryResponse: {
@@ -554,15 +554,15 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /** Date */
-            date?: string | null;
+            date?: null | string;
             /** Deck */
-            deck?: string | null;
+            deck?: null | string;
             /** Deck Name */
-            deck_name?: string | null;
+            deck_name?: null | string;
             /** Filename */
-            filename?: string | null;
+            filename?: null | string;
             /** Full Path */
-            full_path?: string | null;
+            full_path?: null | string;
             /** Id */
             id: string;
             /** Logs */
@@ -570,11 +570,11 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             /** Model Name */
-            model_name?: string | null;
+            model_name?: null | string;
             /** Session Id */
             session_id: string;
             /** Slide Set Name */
-            slide_set_name?: string | null;
+            slide_set_name?: null | string;
             /** Status */
             status: string;
             /** Tags */
@@ -599,7 +599,7 @@ export interface components {
         /** StopResponse */
         StopResponse: {
             /** Message */
-            message?: string | null;
+            message?: null | string;
             /** Session Id */
             session_id: string;
             /** Stopped */
@@ -626,7 +626,7 @@ export interface components {
         /** ValidationError */
         ValidationError: {
             /** Location */
-            loc: (string | number)[];
+            loc: (number | string)[];
             /** Message */
             msg: string;
             /** Error Type */
@@ -637,7 +637,7 @@ export interface components {
             /** Current */
             current: string;
             /** Latest */
-            latest?: string | null;
+            latest?: null | string;
             /** Release Url */
             release_url: string;
             /** Update Available */
@@ -779,7 +779,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigUpdatedResponse"] | components["schemas"]["ConfigNoChangeResponse"];
+                    "application/json": components["schemas"]["ConfigNoChangeResponse"] | components["schemas"]["ConfigUpdatedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1053,7 +1053,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionNotFoundResponse"] | components["schemas"]["SessionEntryResponse"];
+                    "application/json": components["schemas"]["SessionEntryResponse"] | components["schemas"]["SessionNotFoundResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1070,7 +1070,7 @@ export interface operations {
     stop_generation_stop_post: {
         parameters: {
             query?: {
-                session_id?: string | null;
+                session_id?: null | string;
             };
             header?: never;
             path?: never;

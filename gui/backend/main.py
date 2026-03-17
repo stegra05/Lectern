@@ -8,6 +8,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+import json
 from typing import Any
 
 # NOTE(Paths): Use Path.resolve() to handle frozen PyInstaller envs correctly.
@@ -40,11 +41,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Lectern API", version=__version__, lifespan=lifespan)
 session_manager.sweep_orphan_temp_files()
 
-def _sorted(obj: Any) -> Any:
+def _canonicalize(obj: Any) -> Any:
+    """Deep-sort dicts by key and lists by value for a deterministic OpenAPI schema."""
     if isinstance(obj, dict):
-        return {k: _sorted(obj[k]) for k in sorted(obj)}
+        return {k: _canonicalize(obj[k]) for k in sorted(obj)}
     if isinstance(obj, list):
-        return [_sorted(v) for v in obj]
+        items = [_canonicalize(v) for v in obj]
+        try:
+            return sorted(items, key=lambda v: json.dumps(v, sort_keys=True))
+        except TypeError:
+            return items
     return obj
 
 def custom_openapi():
@@ -55,7 +61,7 @@ def custom_openapi():
         version=app.version,
         routes=app.routes,
     )
-    app.openapi_schema = _sorted(schema)
+    app.openapi_schema = _canonicalize(schema)
     return app.openapi_schema
 
 app.openapi = custom_openapi

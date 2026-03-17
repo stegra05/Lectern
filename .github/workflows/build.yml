@@ -125,7 +125,10 @@ jobs:
         working-directory: gui/frontend
         run: |
           npm run generate-api
-          test -z "$(git status --porcelain -- src/generated/api.ts)"
+          if ! git diff --exit-code -- src/generated/api.ts; then
+            echo "::error::api.ts drift detected — regenerate locally: npm run generate-api"
+            exit 1
+          fi
 
       - name: Start Frontend (Vite)
         working-directory: gui/frontend
