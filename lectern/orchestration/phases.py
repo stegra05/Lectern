@@ -10,6 +10,7 @@ from gui.backend.sse_emitter import SSEEmitter
 from lectern import config
 from lectern.ai_client import DocumentUploadError, UploadedDocument
 from lectern.anki_connector import get_connection_info, sample_examples_from_deck
+from lectern.card_quality import RUBRIC_WARNING_THRESHOLD, summarize_card_quality
 from lectern.cost_estimator import extract_pdf_metadata
 from lectern.coverage import compute_coverage_data
 from lectern.events.pipeline_emitter import PipelineEmitter
@@ -528,6 +529,10 @@ class GenerationPhase(PipelinePhase):
             concept_map=context.concept_map,
             total_pages=len(context.pages),
         )
+        context.rubric_summary = summarize_card_quality(
+            context.all_cards,
+            threshold=RUBRIC_WARNING_THRESHOLD,
+        )
 
 
 class ExportPhase(PipelinePhase):
@@ -543,6 +548,10 @@ class ExportPhase(PipelinePhase):
         pages = context.pages
         slide_set_name = context.slide_set_name
         final_coverage = context.final_coverage
+        rubric_summary = context.rubric_summary or summarize_card_quality(
+            context.all_cards,
+            threshold=RUBRIC_WARNING_THRESHOLD,
+        )
         history_id = context.config.entry_id
         run_started_at = context.run_started_at or time.perf_counter()
 
@@ -567,6 +576,7 @@ class ExportPhase(PipelinePhase):
             return
 
         if context.config.skip_export:
+            await self._emit_rubric_warning_if_needed(emitter, rubric_summary)
             await emitter.emit_event(
                 ServiceEvent("info", "Skipping Anki export (Draft Mode)")
             )
@@ -596,6 +606,7 @@ class ExportPhase(PipelinePhase):
                         "slide_set_name": slide_set_name,
                         "total_pages": len(pages),
                         "coverage_data": final_coverage,
+                        "rubric_summary": rubric_summary,
                         "terminal": True,
                     },
                 )
@@ -715,6 +726,7 @@ class ExportPhase(PipelinePhase):
         )
 
         elapsed = time.perf_counter() - run_started_at
+        await self._emit_rubric_warning_if_needed(emitter, rubric_summary)
         await emitter.emit_event(
             ServiceEvent(
                 "done",
@@ -728,6 +740,7 @@ class ExportPhase(PipelinePhase):
                     "slide_set_name": slide_set_name,
                     "total_pages": len(pages),
                     "coverage_data": final_coverage,
+                    "rubric_summary": rubric_summary,
                     "terminal": True,
                 },
             )
@@ -740,6 +753,30 @@ class ExportPhase(PipelinePhase):
     @staticmethod
     def _elapsed_ms(started_at: float) -> int:
         return int((time.perf_counter() - started_at) * 1000)
+
+    @staticmethod
+    async def _emit_rubric_warning_if_needed(
+        emitter: PipelineEmitter,
+        rubric_summary: dict[str, Any],
+    ) -> None:
+        total_cards = int(rubric_summary.get("total_cards") or 0)
+        avg_quality = float(rubric_summary.get("avg_quality") or 0.0)
+        threshold = float(rubric_summary.get("threshold") or RUBRIC_WARNING_THRESHOLD)
+        if total_cards > 0 and avg_quality < threshold:
+            await emitter.emit_event(
+                ServiceEvent(
+                    "warning",
+                    (
+                        f"Rubric quality average is {avg_quality:.1f}, "
+                        f"below threshold {threshold:.1f}. Export is allowed, "
+                        "but consider refining weaker cards."
+                    ),
+                    {
+                        "warning_kind": "rubric_quality_below_threshold",
+                        "rubric_summary": rubric_summary,
+                    },
+                )
+            )
 
 
 def build_orchestration_phases() -> list[PipelinePhase]:

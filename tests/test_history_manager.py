@@ -151,3 +151,25 @@ def test_history_manager_sync_session_state_persists_resume_metadata():
         assert entry["source_pdf_sha256"] == "sha256-sync"
     finally:
         mgr.clear_all()
+
+
+def test_database_manager_persists_feedback_summary_from_cards():
+    db = DatabaseManager()
+    session_id = "feedback-summary-session"
+    entry_id = db.add_history("feedback.pdf", "Deck", session_id=session_id)
+
+    try:
+        cards = [
+            {"front": "Q1", "back": "A1", "feedback_vote": "up"},
+            {"front": "Q2", "back": "A2", "feedback_vote": "down"},
+            {"front": "Q3", "back": "A3", "feedback_vote": "down"},
+        ]
+        db.update_session_cards(session_id, cards)
+        entry = db.get_entry_by_session_id(session_id)
+
+        assert entry is not None
+        assert entry["feedback_positive_count"] == 1
+        assert entry["feedback_negative_count"] == 2
+        assert entry["feedback_last_updated"] is not None
+    finally:
+        db.delete_entry(entry_id)

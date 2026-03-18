@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, Save, X, RotateCcw, Tag } from 'lucide-react';
+import { Eye, EyeOff, Save, X, RotateCcw, Tag, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import DOMPurify from 'dompurify';
 import type { Card } from '../api';
@@ -12,6 +12,7 @@ interface CardEditorProps {
     onSave: () => void;
     onCancel: () => void;
     onChange: (field: string, value: string) => void;
+    onFeedbackChange?: (vote: 'up' | 'down' | null, reason: string) => void;
     isSaving?: boolean;
 }
 
@@ -87,6 +88,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
     onSave,
     onCancel,
     onChange,
+    onFeedbackChange,
     isSaving = false,
 }) => {
     const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -259,6 +261,60 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                                 />
                             </div>
                         ))}
+
+                        {/* Feedback UI */}
+                        {onFeedbackChange && (
+                            <div className="pt-4 mt-4 border-t border-border">
+                                <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">
+                                    Quality Feedback
+                                </div>
+                                <div className="flex items-start gap-4">
+                                    <div className="flex gap-2">
+                                        <button
+                                            aria-pressed={card.feedback_vote === 'up'}
+                                            onClick={() => onFeedbackChange(card.feedback_vote === 'up' ? null : 'up', card.feedback_reason || '')}
+                                            className={clsx(
+                                                "p-2 rounded-lg border transition-colors flex items-center justify-center",
+                                                card.feedback_vote === 'up'
+                                                    ? "bg-primary/20 border-primary/30 text-primary"
+                                                    : "bg-surface border-border text-text-muted hover:text-text-main"
+                                            )}
+                                            title="Helpful"
+                                        >
+                                            <ThumbsUp className="w-4 h-4" />
+                                            <span className="sr-only">Helpful</span>
+                                        </button>
+                                        <button
+                                            aria-pressed={card.feedback_vote === 'down'}
+                                            onClick={() => onFeedbackChange(card.feedback_vote === 'down' ? null : 'down', card.feedback_reason || '')}
+                                            className={clsx(
+                                                "p-2 rounded-lg border transition-colors flex items-center justify-center",
+                                                card.feedback_vote === 'down'
+                                                    ? "bg-red-500/20 border-red-500/30 text-red-400"
+                                                    : "bg-surface border-border text-text-muted hover:text-text-main"
+                                            )}
+                                            title="Needs work"
+                                        >
+                                            <ThumbsDown className="w-4 h-4" />
+                                            <span className="sr-only">Needs work</span>
+                                        </button>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label htmlFor="feedback-reason" className="sr-only">
+                                            Feedback reason
+                                        </label>
+                                        <input
+                                            id="feedback-reason"
+                                            type="text"
+                                            placeholder="Optional reason..."
+                                            value={card.feedback_reason || ''}
+                                            onChange={(e) => onFeedbackChange(card.feedback_vote || null, e.target.value)}
+                                            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:outline-none focus:border-primary/50"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </motion.div>
                 )}
             </AnimatePresence>

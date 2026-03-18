@@ -32,6 +32,7 @@ export function useProgressViewModel() {
         sessionId: s.sessionId,
         totalPages: s.totalPages,
         coverageData: s.coverageData,
+        rubricSummary: s.rubricSummary,
         isError: s.isError,
         logs: s.logs,
         copied: s.copied,
@@ -71,6 +72,7 @@ export function useProgressViewModel() {
                 sessionId: stateSlice.sessionId,
                 totalPages: stateSlice.totalPages,
                 coverageData: stateSlice.coverageData,
+                rubricSummary: stateSlice.rubricSummary,
                 isError: stateSlice.isError,
             },
             logs: {

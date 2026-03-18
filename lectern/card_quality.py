@@ -315,3 +315,34 @@ class CardQualityEvaluator:
         for rule in self.rules:
             rule.apply(ctx, acc, self.weights)
         return max(0.0, min(100.0, acc.score)), sorted(set(acc.flags))
+
+
+RUBRIC_WARNING_THRESHOLD = 60.0
+
+
+def summarize_card_quality(
+    cards: list[dict[str, Any]],
+    *,
+    threshold: float = RUBRIC_WARNING_THRESHOLD,
+) -> dict[str, float | int]:
+    scores = [float(card.get("quality_score") or 0.0) for card in cards]
+    total_cards = len(scores)
+    if total_cards == 0:
+        return {
+            "avg_quality": 0.0,
+            "min_quality": 0.0,
+            "max_quality": 0.0,
+            "below_threshold_count": 0,
+            "total_cards": 0,
+            "threshold": float(threshold),
+        }
+
+    avg_quality = sum(scores) / total_cards
+    return {
+        "avg_quality": round(avg_quality, 1),
+        "min_quality": round(min(scores), 1),
+        "max_quality": round(max(scores), 1),
+        "below_threshold_count": sum(1 for score in scores if score < threshold),
+        "total_cards": total_cards,
+        "threshold": float(threshold),
+    }

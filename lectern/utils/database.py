@@ -191,6 +191,11 @@ class DatabaseManager:
 
     def row_to_dict(self, row: tuple) -> Dict[str, Any]:
         """Convert a history row tuple to a dictionary."""
+        cards = json.loads(row[9]) if row[9] else []
+        pos = sum(1 for c in cards if c.get("feedback_vote") == "up")
+        neg = sum(1 for c in cards if c.get("feedback_vote") == "down")
+        last_updated = row[6] if (pos > 0 or neg > 0) else None
+        
         return {
             "id": row[0],
             "session_id": row[1],
@@ -201,7 +206,7 @@ class DatabaseManager:
             "last_modified": row[6],
             "status": row[7],
             "card_count": row[8],
-            "cards": json.loads(row[9]) if row[9] else [],
+            "cards": cards,
             "tags": json.loads(row[10]) if row[10] else [],
             "model_name": row[11],
             "slide_set_name": row[12],
@@ -211,6 +216,9 @@ class DatabaseManager:
             "current_phase": row[16] if len(row) > 16 else None,
             "source_file_name": row[17] if len(row) > 17 else None,
             "source_pdf_sha256": row[18] if len(row) > 18 else None,
+            "feedback_positive_count": pos,
+            "feedback_negative_count": neg,
+            "feedback_last_updated": last_updated,
         }
 
     # History Methods

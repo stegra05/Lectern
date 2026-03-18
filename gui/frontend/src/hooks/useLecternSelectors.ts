@@ -74,6 +74,7 @@ export const useSessionState = () => useLecternStore(useShallow((s) => ({
     sessionId: s.sessionId,
     totalPages: s.totalPages,
     coverageData: s.coverageData,
+    rubricSummary: s.rubricSummary,
 })));
 
 /** State for confirmation modal */
@@ -142,6 +143,7 @@ export const useGenerationSummaryState = () => useLecternStore(useShallow((s) =>
     targetDeckSize: s.targetDeckSize,
     estimation: s.estimation,
     isEstimating: s.isEstimating,
+    rubricSummary: s.rubricSummary,
 })));
 
 // ---------------------------------------------------------------------------

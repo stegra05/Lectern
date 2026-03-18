@@ -21,6 +21,7 @@ export const getGenerationState = () => ({
   estimationError: null as string | null,
   totalPages: 0,
   coverageData: null as import("../api").CoverageData | null,
+  rubricSummary: null as import("../store-types").RubricSummary | null,
   setupStepsCompleted: 0,
   conceptProgress: { current: 0, total: 0 },
   lastSnapshotTimestamp: null as number | null,
@@ -176,4 +177,3 @@ export const createProgressTrackingActions = (
       conceptProgress: progress,
     })),
 });
-

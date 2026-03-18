@@ -80,6 +80,51 @@ class TestGenerationLoopPure:
     """Test generation loop without SSE/HTTP mocking."""
 
     @pytest.mark.asyncio
+    async def test_annotates_generated_cards_with_quality_metadata(self):
+        ai = MagicMock()
+        ai.generate_cards = AsyncMock(
+            return_value={
+                "cards": [
+                    {
+                        "front": "Q1",
+                        "back": "A1",
+                        "source_pages": [1],
+                        "concept_ids": ["important"],
+                    }
+                ],
+                "done": True,
+            }
+        )
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{}] * 5
+        orchestrator.state.concept_map = {
+            "concepts": [{"id": "important", "name": "Important concept"}],
+            "relations": [],
+        }
+
+        config = GenerationConfig(
+            total_cards_cap=10,
+            actual_batch_size=5,
+            recent_card_window=100,
+            focus_prompt=None,
+            effective_target=1.0,
+            stop_check=None,
+            examples="",
+        )
+
+        events = [
+            e async for e in orchestrator.run_generation(ai_client=ai, config=config)
+        ]
+
+        card_event = next(e for e in events if isinstance(e, CardGeneratedEvent))
+        assert "quality_score" in card_event.card
+        assert isinstance(card_event.card["quality_score"], float)
+        assert "quality_flags" in card_event.card
+        assert isinstance(card_event.card["quality_flags"], list)
+
+    @pytest.mark.asyncio
     async def test_yields_card_events_with_uuids(self):
         ai = MagicMock()
         ai.generate_cards = AsyncMock(

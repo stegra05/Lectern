@@ -1,5 +1,5 @@
 import { api, type ProgressEvent, type Card, type CoverageData, type SessionData, type ControlSnapshot } from '../api';
-import type { StoreState, LecternStore, Phase } from '../store-types';
+import type { StoreState, LecternStore, Phase, RubricSummary } from '../store-types';
 import { processStreamEvent } from './stream';
 import { applyControlSnapshot } from './snapshot';
 import { stampUid, stampUids, reconcileCardUids } from '../utils/uid';
@@ -16,6 +16,42 @@ import {
 
 const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
+};
+
+const normalizeRubricSummary = (value: unknown): RubricSummary | null => {
+    if (!value || typeof value !== 'object') return null;
+    const raw = value as Record<string, unknown>;
+    const numeric = (key: string): number | null => {
+        const parsed = Number(raw[key]);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const avgQuality = numeric('avg_quality');
+    const minQuality = numeric('min_quality');
+    const maxQuality = numeric('max_quality');
+    const belowThresholdCount = numeric('below_threshold_count');
+    const totalCards = numeric('total_cards');
+    const threshold = numeric('threshold');
+
+    if (
+        avgQuality === null ||
+        minQuality === null ||
+        maxQuality === null ||
+        belowThresholdCount === null ||
+        totalCards === null ||
+        threshold === null
+    ) {
+        return null;
+    }
+
+    return {
+        avg_quality: avgQuality,
+        min_quality: minQuality,
+        max_quality: maxQuality,
+        below_threshold_count: belowThresholdCount,
+        total_cards: totalCards,
+        threshold,
+    };
 };
 
 export const processGenerationEvent = (
@@ -143,12 +179,16 @@ export const processGenerationEvent = (
 
         store.addToast('success', `Generation complete — ${cardCount} cards`);
         const doneData = validateGenerationDoneData(event.data);
+        const rubricSummary = normalizeRubricSummary(
+            (doneData as Record<string, unknown> | null)?.rubric_summary
+        );
         set((prev) => ({
             step: 'done',
             sessionId: null,
             isCancelling: false,
             totalPages: doneData?.total_pages ?? prev.totalPages,
             coverageData: (doneData?.coverage_data as unknown as CoverageData | undefined) ?? prev.coverageData,
+            rubricSummary,
         }));
         return;
     }
@@ -198,6 +238,7 @@ export const handleGenerate = async (
         currentPhase: 'idle',
         setupStepsCompleted: 0,
         coverageData: null,
+        rubricSummary: null,
         lastSnapshotTimestamp: null,
     });
     try {
@@ -279,6 +320,7 @@ export const handleResume = async (
         isHistorical: false,
         currentPhase: 'idle',
         setupStepsCompleted: 0,
+        rubricSummary: null,
         lastSnapshotTimestamp: null,
     });
     try {
@@ -348,6 +390,7 @@ export const loadSession = async (
             deckName: session.deck_name || session.deck || '',
             sessionId,
             isHistorical: true,
+            rubricSummary: null,
             step: 'done',
             currentPhase: 'complete',
         });
@@ -376,6 +419,7 @@ export const recoverSessionOnRefresh = async (
             totalPages: deriveTotalPages(cards, snapshot.total_pages),
             coverageData: snapshot.coverage_data || null,
             deckName: snapshot.deck_name || snapshot.deck || '',
+            rubricSummary: null,
             step: 'done',
             currentPhase: 'complete',
             isHistorical: true,

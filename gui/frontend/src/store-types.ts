@@ -22,6 +22,17 @@ export interface DeletedCardBuffer {
     timeoutId: ReturnType<typeof setTimeout> | null;
 }
 
+export interface RubricSummary {
+    avg_quality: number;
+    min_quality: number;
+    max_quality: number;
+    below_threshold_count: number;
+    total_cards: number;
+    threshold: number;
+}
+
+export type FeedbackVote = 'up' | 'down';
+
 export type Step = 'dashboard' | 'config' | 'generating' | 'done';
 
 export type ConfirmModalState = {
@@ -52,6 +63,7 @@ export type StoreState = {
     estimationError: string | null;
     totalPages: number;
     coverageData: CoverageData | null;
+    rubricSummary: RubricSummary | null;
 
     // Review / Sync
     isHistorical: boolean;
@@ -133,6 +145,7 @@ export type ReviewActions = {
     cancelEdit: () => void;
     saveEdit: (index: number) => void;
     handleFieldChange: (field: string, value: string) => void;
+    handleFeedbackChange: (vote: FeedbackVote | null, reason: string) => void;
     handleDelete: (index: number) => Promise<void>;
     handleAnkiDelete: (noteId: number, index: number) => void;
     startSync: () => void;

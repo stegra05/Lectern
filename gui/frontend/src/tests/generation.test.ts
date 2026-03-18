@@ -220,6 +220,41 @@ describe('generation logic', () => {
             expect(result).not.toHaveProperty('currentPhase');
             expect(result).not.toHaveProperty('progress');
         });
+
+        it('stores rubric summary from done payload', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'done',
+                    message: 'Generation complete',
+                    data: {
+                        total_pages: 5,
+                        rubric_summary: {
+                            avg_quality: 55.2,
+                            min_quality: 30,
+                            max_quality: 88,
+                            below_threshold_count: 3,
+                            total_cards: 12,
+                            threshold: 60,
+                        },
+                    },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const prevState = {
+                step: 'generating' as Step,
+                totalPages: 0,
+                coverageData: null,
+                rubricSummary: null,
+            };
+
+            const result = update(prevState);
+            expect(result).toHaveProperty('rubricSummary');
+            expect((result as { rubricSummary: { avg_quality: number } }).rubricSummary.avg_quality).toBe(55.2);
+        });
     });
 
     describe('processGenerationEvent side effects', () => {

@@ -42,6 +42,9 @@ export interface Card {
   anki_note_id?: number;
   fields?: Record<string, string>;
   model_name?: string;
+  feedback_vote?: 'up' | 'down';
+  feedback_reason?: string;
+  feedback_updated_at?: number;
   slide_number?: number;
   source_pages?: number[];
   concept_ids?: string[];

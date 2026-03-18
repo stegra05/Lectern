@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { GlassCard } from './GlassCard';
 import { DeckSelector, type DeckSelectorProps } from './DeckSelector';
 import type { LucideIcon } from 'lucide-react';
+import type { RubricSummary } from '../store-types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +44,7 @@ export interface EstimationDisplay {
 
 export interface GenerationSummaryCardProps {
     summary: SummaryInfo;
+    rubricSummary?: RubricSummary | null;
     cost: CostDisplay | null;
     estimation: EstimationDisplay;
     validation: ValidationState;
@@ -72,6 +74,7 @@ const PHASE_CONFIG: Record<EstimationPhase, { label: string; icon: LucideIcon }>
 
 export function GenerationSummaryCard({
     summary,
+    rubricSummary,
     cost,
     estimation,
     validation,
@@ -147,6 +150,29 @@ export function GenerationSummaryCard({
                         isActive={true}
                     />
                 </div>
+
+                {rubricSummary && (
+                    <div className="mb-6 rounded-xl border border-border/50 bg-surface/30 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Rubric Quality</p>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <p className="text-text-muted">Avg</p>
+                                <p className="font-semibold text-text-main">{rubricSummary.avg_quality.toFixed(1)}</p>
+                            </div>
+                            <div>
+                                <p className="text-text-muted">Min</p>
+                                <p className="font-semibold text-text-main">{rubricSummary.min_quality.toFixed(1)}</p>
+                            </div>
+                            <div>
+                                <p className="text-text-muted">Max</p>
+                                <p className="font-semibold text-text-main">{rubricSummary.max_quality.toFixed(1)}</p>
+                            </div>
+                        </div>
+                        <p className="mt-2 text-[11px] text-text-muted">
+                            {rubricSummary.below_threshold_count} of {rubricSummary.total_cards} cards below threshold {rubricSummary.threshold.toFixed(1)}.
+                        </p>
+                    </div>
+                )}
 
                 {(cost || isEstimating) && (
                     <CostSection

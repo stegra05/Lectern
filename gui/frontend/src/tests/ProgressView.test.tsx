@@ -91,6 +91,14 @@ const { defaultState, storeState } = vi.hoisted(() => {
         setSearchQuery: vi.fn(),
         totalPages: 0,
         coverageData: null,
+        rubricSummary: null as {
+            avg_quality: number;
+            min_quality: number;
+            max_quality: number;
+            below_threshold_count: number;
+            total_cards: number;
+            threshold: number;
+        } | null,
         copied: false,
         sessionId: null as string | null,
     };
@@ -136,6 +144,7 @@ vi.mock('../hooks/useProgressViewModel', () => {
                         sessionId: storeState.sessionId,
                         totalPages: storeState.totalPages,
                         coverageData: storeState.coverageData,
+                        rubricSummary: (storeState as typeof storeState & { rubricSummary?: unknown }).rubricSummary ?? null,
                         isError: storeState.isError,
                     },
                     logs: {
@@ -267,6 +276,23 @@ describe('ProgressView', () => {
         render(<ProgressView />);
         expect(screen.getByText(/^Insights$/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
+    });
+
+    it('renders rubric summary insight when available', () => {
+        Object.assign(storeState, {
+            step: 'done' as const,
+            rubricSummary: {
+                avg_quality: 55.2,
+                min_quality: 30,
+                max_quality: 88,
+                below_threshold_count: 3,
+                total_cards: 12,
+                threshold: 60,
+            },
+        });
+        render(<ProgressView />);
+        expect(screen.getByText(/Rubric Quality/i)).toBeInTheDocument();
+        expect(screen.getByText(/55.2/)).toBeInTheDocument();
     });
 
     it('filters cards based on search query', () => {

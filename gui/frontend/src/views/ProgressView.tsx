@@ -40,7 +40,16 @@ export function ProgressView() {
     const review = useReviewOrchestrator();
     const { session, logs, progress, cards, sync, ui } = state;
     
-    const { step, currentPhase, isCancelling, isHistorical, sessionId, totalPages, coverageData } = session;
+    const {
+        step,
+        currentPhase,
+        isCancelling,
+        isHistorical,
+        sessionId,
+        totalPages,
+        coverageData,
+        rubricSummary,
+    } = session;
     const { logs: logEntries, copied } = logs;
     const { progress: progressData, conceptProgress, progressPct } = progress;
     const { cards: allCards, editingIndex, editForm } = cards;
@@ -200,6 +209,30 @@ export function ProgressView() {
                             <span className="text-xl font-bold text-blue-400">{typeCounts.cloze}</span>
                         </div>
                     </div>
+                    {rubricSummary && (
+                        <div className="mt-3 rounded-lg border border-border/60 bg-surface/30 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                                Rubric Quality
+                            </p>
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                                <div>
+                                    <p className="text-text-muted">Avg</p>
+                                    <p className="font-semibold text-text-main">{rubricSummary.avg_quality.toFixed(1)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-text-muted">Min</p>
+                                    <p className="font-semibold text-text-main">{rubricSummary.min_quality.toFixed(1)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-text-muted">Max</p>
+                                    <p className="font-semibold text-text-main">{rubricSummary.max_quality.toFixed(1)}</p>
+                                </div>
+                            </div>
+                            <p className="mt-2 text-[11px] text-text-muted">
+                                {rubricSummary.below_threshold_count} of {rubricSummary.total_cards} cards below threshold {rubricSummary.threshold.toFixed(1)}.
+                            </p>
+                        </div>
+                    )}
                 </SidebarPane>
 
                 {/* Page Coverage */}

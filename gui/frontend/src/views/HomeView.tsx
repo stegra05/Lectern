@@ -20,6 +20,7 @@ import {
     useCostDisplay,
 } from '../hooks/useLecternSelectors';
 import { useDecksQuery, useCreateDeckMutation } from '../queries';
+import { useLecternStore } from '../store';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -54,6 +55,7 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
     // Derived state via memoized selectors
     const summaryInfo = useSummaryInfo();
     const costDisplay = useCostDisplay();
+    const rubricSummary = useLecternStore((s) => s.rubricSummary);
     // Actions
     const actions = useHomeActions();
 
@@ -278,6 +280,7 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
             <motion.div variants={itemVariants} className="lg:col-span-5">
                 <GenerationSummaryCard
                     summary={summaryInfo}
+                    rubricSummary={rubricSummary}
                     cost={costDisplay}
                     estimation={{
                         phase: estimationPhase,

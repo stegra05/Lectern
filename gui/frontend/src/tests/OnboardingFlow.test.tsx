@@ -170,6 +170,7 @@ describe('OnboardingFlow', () => {
                     connected: false,
                     reason: 'Connection refused by AnkiConnect at localhost:8765.',
                     hint: 'Start Anki and ensure AnkiConnect is installed/enabled (add-on code: 2055492159).',
+                    // @ts-expect-error: Mock extension
                     remediation: {
                         summary: 'Do this next to reconnect Anki.',
                         actions: [
@@ -238,6 +239,7 @@ describe('OnboardingFlow', () => {
                     configured: false,
                     reason: 'Gemini API key is missing.',
                     hint: 'Open Settings and provide a Gemini API key.',
+                    // @ts-expect-error: Mock extension
                     remediation: {
                         summary: 'Complete these steps to enable AI generation.',
                         actions: [

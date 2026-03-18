@@ -112,6 +112,42 @@ async def test_export_phase_skip_export_bypasses_anki_calls() -> None:
 
 
 @pytest.mark.asyncio
+async def test_export_phase_emits_rubric_summary_and_warning_when_below_threshold() -> None:
+    phase = ExportPhase()
+    emitter = RecordingEmitter()
+    context = _context(skip_export=True)
+    context.slide_set_name = "Sample Slides"
+    context.pages = [{}]
+    context.final_coverage = {"covered": 1}
+    context.all_cards = [
+        {
+            "fields": {"Front": "Low quality 1", "Back": "A"},
+            "quality_score": 45.0,
+            "quality_flags": ["missing_source_excerpt"],
+        },
+        {
+            "fields": {"Front": "Low quality 2", "Back": "B"},
+            "quality_score": 50.0,
+            "quality_flags": ["missing_rationale"],
+        },
+    ]
+
+    with patch("lectern.orchestration.phases.HistoryManager"):
+        await phase.execute(context, emitter, MagicMock())
+
+    warning_event = next((ev for ev in emitter.events if ev.type == "warning"), None)
+    assert warning_event is not None
+    assert "rubric" in warning_event.message.lower()
+
+    done_event = next(ev for ev in emitter.events if ev.type == "done")
+    rubric_summary = (done_event.data or {}).get("rubric_summary")
+    assert isinstance(rubric_summary, dict)
+    assert rubric_summary.get("threshold") == 60.0
+    assert rubric_summary.get("avg_quality") == 47.5
+    assert rubric_summary.get("below_threshold_count") == 2
+
+
+@pytest.mark.asyncio
 async def test_initialization_phase_missing_pdf_emits_terminal_error() -> None:
     emitter = RecordingEmitter()
     context = _context(pdf_path="/missing/file.pdf")

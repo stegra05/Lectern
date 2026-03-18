@@ -117,6 +117,7 @@ class SessionContext:
     initial_coverage: dict[str, Any] = field(default_factory=dict)
     reflected_coverage: dict[str, Any] = field(default_factory=dict)
     final_coverage: dict[str, Any] = field(default_factory=dict)
+    rubric_summary: dict[str, Any] | None = None
 
     # Loop state
     batch_index: int = 0

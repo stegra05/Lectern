@@ -118,4 +118,57 @@ describe('CardEditor', () => {
         expect(backElements[1].textContent).toContain('cloze');
         expect(backElements[1].innerHTML).toContain('cloze-answer');
     });
+
+    it('captures thumbs-down feedback with an optional reason', () => {
+        const onFeedbackChange = vi.fn();
+        const { rerender } = render(
+            <CardEditor
+                card={basicCard}
+                onSave={vi.fn()}
+                onCancel={vi.fn()}
+                onChange={vi.fn()}
+                onFeedbackChange={onFeedbackChange}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /Needs work/i }));
+        expect(onFeedbackChange).toHaveBeenCalledWith('down', '');
+
+        // Rerender with the updated prop to match controlled component behavior
+        rerender(
+            <CardEditor
+                card={{ ...basicCard, feedback_vote: 'down' }}
+                onSave={vi.fn()}
+                onCancel={vi.fn()}
+                onChange={vi.fn()}
+                onFeedbackChange={onFeedbackChange}
+            />
+        );
+
+        fireEvent.change(screen.getByLabelText(/Feedback reason/i), {
+            target: { value: 'Answer is too vague' },
+        });
+        expect(onFeedbackChange).toHaveBeenLastCalledWith('down', 'Answer is too vague');
+    });
+
+    it('shows existing feedback metadata when editing a card', () => {
+        const cardWithFeedback: Card = {
+            ...basicCard,
+            feedback_vote: 'up',
+            feedback_reason: 'Clear and concise',
+        };
+
+        render(
+            <CardEditor
+                card={cardWithFeedback}
+                onSave={vi.fn()}
+                onCancel={vi.fn()}
+                onChange={vi.fn()}
+                onFeedbackChange={vi.fn()}
+            />
+        );
+
+        expect(screen.getByRole('button', { name: /Helpful/i })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByLabelText(/Feedback reason/i)).toHaveValue('Clear and concise');
+    });
 });

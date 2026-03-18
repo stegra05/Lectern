@@ -70,11 +70,13 @@ function getRemediationActions(
         return undefined;
       }
 
-      return {
-        label,
-        description: textOrUndefined(action?.description),
-        url: textOrUndefined(action?.url),
-      };
+      const res: OnboardingRemediationAction = { label };
+      const desc = textOrUndefined(action?.description);
+      if (desc) res.description = desc;
+      const url = textOrUndefined(action?.url);
+      if (url) res.url = url;
+
+      return res;
     })
     .filter((action): action is OnboardingRemediationAction => Boolean(action));
 }

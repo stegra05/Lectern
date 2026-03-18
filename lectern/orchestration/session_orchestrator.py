@@ -49,6 +49,7 @@ from lectern.domain_types import (
 )
 from lectern.orchestration.pipeline_context import SessionContext
 from lectern.generation_loop import (
+    _annotate_card_quality,
     _coverage_is_sufficient,
     _rebuild_seen_keys,
     _select_best_reflection_cards,
@@ -303,6 +304,18 @@ class SessionOrchestrator:
             return False
         return _coverage_is_sufficient(self.state.last_coverage_data)
 
+    @staticmethod
+    def _high_priority_ids_from_coverage(
+        coverage_data: CoverageData | None,
+    ) -> set[str]:
+        if not coverage_data:
+            return set()
+        return {
+            str(item.get("id") or "").strip()
+            for item in (coverage_data.get("missing_high_priority") or [])
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        }
+
     # --- Event Factories ---
 
     def _emit_coverage_event(self) -> CoverageUpdatedEvent:
@@ -399,15 +412,22 @@ class SessionOrchestrator:
 
                 # State Mutation: Add cards with UUID injection
                 added_count = 0
+                high_priority_ids = self._high_priority_ids_from_coverage(
+                    self.state.last_coverage_data
+                )
                 for card in new_cards:
-                    key = get_card_key(card)
-                    if self._add_card(card, key):
+                    annotated_card = _annotate_card_quality(
+                        card,
+                        high_priority_ids=high_priority_ids,
+                    )
+                    key = get_card_key(annotated_card)
+                    if self._add_card(annotated_card, key):
                         # INJECT UUID before yielding (for React key stability)
-                        self._inject_uuid(card)
+                        self._inject_uuid(annotated_card)
                         added_count += 1
                         yield CardGeneratedEvent(
                             batch_index=batch_index,
-                            card=card,
+                            card=annotated_card,
                             is_refined=False,
                         )
 

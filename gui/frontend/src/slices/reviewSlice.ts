@@ -73,6 +73,17 @@ export const createReviewActions = (
       },
     });
   },
+  handleFeedbackChange: (vote, reason) => {
+    const { editForm } = get();
+    if (!editForm) return;
+    set({
+      editForm: {
+        ...editForm,
+        feedback_vote: vote || undefined,
+        feedback_reason: reason || undefined,
+      },
+    });
+  },
   handleDelete: async (index) => {
     const { cards } = get();
     const card = cards[index];

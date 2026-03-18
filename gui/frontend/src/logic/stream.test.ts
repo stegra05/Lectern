@@ -28,6 +28,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     estimationError: null,
     totalPages: 0,
     coverageData: null,
+    rubricSummary: null,
     isHistorical: false,
     editingIndex: null,
     editForm: null,
