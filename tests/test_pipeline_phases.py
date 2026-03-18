@@ -10,6 +10,7 @@ from lectern.events.service_events import ServiceEvent
 from lectern.orchestration.pipeline_context import PipelinePhase, SessionConfig, SessionContext
 from lectern.orchestration.phases import (
     ConceptMappingPhase,
+    GenerationPhase,
     InitializationPhase,
     PhaseExecutionHalt,
 )
@@ -70,6 +71,7 @@ def _context(*, pdf_path: str = "/tmp/slides.pdf", skip_export: bool = False) ->
 def test_phases_implement_pipeline_phase_protocol() -> None:
     assert isinstance(InitializationPhase(), PipelinePhase)
     assert isinstance(ConceptMappingPhase(), PipelinePhase)
+    assert isinstance(GenerationPhase(), PipelinePhase)
 
 
 @pytest.mark.asyncio

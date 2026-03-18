@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from gui.backend.sse_emitter import SSEEmitter
 from lectern import config
 from lectern.ai_client import DocumentUploadError, LecternAIClient, UploadedDocument
 from lectern.anki_connector import get_connection_info, sample_examples_from_deck
@@ -14,6 +15,12 @@ from lectern.coverage import compute_coverage_data
 from lectern.events.pipeline_emitter import PipelineEmitter
 from lectern.events.service_events import ServiceEvent
 from lectern.orchestration.pipeline_context import PipelinePhase, SessionContext
+from lectern.orchestration.session_orchestrator import (
+    GenerationConfig as OrchGenerationConfig,
+    GenerationSetupConfig,
+    ReflectionConfig as OrchReflectionConfig,
+    SessionOrchestrator,
+)
 from lectern.utils.error_handling import capture_exception
 from lectern.utils.tags import infer_slide_set_name
 
@@ -350,4 +357,146 @@ class ConceptMappingPhase(PipelinePhase):
         ai_client.set_slide_set_context(
             deck_name=context.config.deck_name,
             slide_set_name=slide_set_name,
+        )
+
+
+class GenerationPhase(PipelinePhase):
+    async def execute(
+        self,
+        context: SessionContext,
+        emitter: PipelineEmitter,
+        ai_client: LecternAIClient,
+    ) -> None:
+        total_text_chars = context.pdf.metadata_chars or context.pdf.text_chars
+        orchestrator = SessionOrchestrator()
+        setup = orchestrator.prepare_generation(
+            GenerationSetupConfig(
+                pages=context.pages,
+                concept_map=context.concept_map,
+                examples=context.examples,
+                estimated_text_chars=total_text_chars,
+                image_count=context.pdf.image_count,
+                target_card_count=context.config.target_card_count,
+            )
+        )
+
+        context.targets.effective_target = setup.effective_target
+        context.targets.total_cards_cap = setup.total_cards_cap
+        context.targets.is_script_mode = setup.is_script_mode
+        context.targets.chars_per_page = setup.chars_per_page
+        context.initial_coverage = setup.initial_coverage
+
+        if setup.is_script_mode:
+            await emitter.emit_event(
+                ServiceEvent(
+                    "info",
+                    f"Script mode: ~{setup.total_cards_cap} cards target ({setup.chars_per_page:.0f} chars/page)",
+                )
+            )
+        else:
+            await emitter.emit_event(
+                ServiceEvent(
+                    "info",
+                    f"Slides mode: ~{setup.total_cards_cap} cards target ({len(context.pages)} pages × {setup.effective_target:.1f})",
+                )
+            )
+
+        batch_size = max(
+            config.MIN_NOTES_PER_BATCH,
+            min(config.MAX_NOTES_PER_BATCH, len(context.pages) // 2),
+        )
+        context.targets.actual_batch_size = int(batch_size)
+
+        await emitter.emit_event(
+            ServiceEvent(
+                "progress_start",
+                "Generating Cards",
+                {"total": setup.total_cards_cap, "label": "Generation"},
+            )
+        )
+        await emitter.emit_event(
+            ServiceEvent("step_start", "Generate cards", {"phase": "generating"})
+        )
+        generation_started_at = time.perf_counter()
+
+        gen_config = OrchGenerationConfig(
+            total_cards_cap=setup.total_cards_cap,
+            actual_batch_size=context.targets.actual_batch_size,
+            focus_prompt=context.config.focus_prompt,
+            effective_target=setup.effective_target,
+            stop_check=context.config.stop_check,
+            examples=context.examples,
+        )
+        async for event in orchestrator.run_generation(ai_client=ai_client, config=gen_config):
+            await emitter.emit_event(SSEEmitter.domain_to_service_event(event))
+
+        context.all_cards = list(orchestrator.state.all_cards)
+        context.seen_keys = set(orchestrator.state.seen_keys)
+        await emitter.emit_event(
+            ServiceEvent(
+                "step_end",
+                "Generation Phase Complete",
+                {
+                    "success": True,
+                    "count": len(context.all_cards),
+                    "duration_ms": int((time.perf_counter() - generation_started_at) * 1000),
+                },
+            )
+        )
+
+        rounds = 1 if 0 < len(context.all_cards) < 50 else 2 if len(context.all_cards) > 0 else 0
+        if rounds > 0 and not orchestrator.should_stop(context.config.stop_check):
+            await emitter.emit_event(
+                ServiceEvent(
+                    "step_start",
+                    "Reflection and improvement",
+                    {"phase": "reflecting"},
+                )
+            )
+            reflection_started_at = time.perf_counter()
+            await emitter.emit_event(
+                ServiceEvent(
+                    "progress_start",
+                    "Reflection",
+                    {"total": rounds, "label": "Reflection Rounds"},
+                )
+            )
+
+            ref_config = OrchReflectionConfig(
+                total_cards_cap=setup.total_cards_cap,
+                rounds=rounds,
+                stop_check=context.config.stop_check,
+            )
+            async for event in orchestrator.run_reflection(
+                ai_client=ai_client, config=ref_config
+            ):
+                await emitter.emit_event(SSEEmitter.domain_to_service_event(event))
+
+            context.all_cards = list(orchestrator.state.all_cards)
+            context.seen_keys = set(orchestrator.state.seen_keys)
+            context.reflected_coverage = await asyncio.to_thread(
+                compute_coverage_data,
+                cards=context.all_cards,
+                concept_map=context.concept_map,
+                total_pages=len(context.pages),
+            )
+            await emitter.emit_event(
+                ServiceEvent(
+                    "step_end",
+                    "Reflection Phase Complete",
+                    {
+                        "success": True,
+                        "duration_ms": int(
+                            (time.perf_counter() - reflection_started_at) * 1000
+                        ),
+                        "coverage_data": context.reflected_coverage,
+                    },
+                )
+            )
+
+        context.final_coverage = await asyncio.to_thread(
+            compute_coverage_data,
+            cards=context.all_cards,
+            concept_map=context.concept_map,
+            total_pages=len(context.pages),
         )

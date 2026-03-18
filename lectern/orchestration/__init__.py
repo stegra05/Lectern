@@ -6,6 +6,8 @@ from lectern.orchestration.session_orchestrator import (
     GenerationConfig,
     GenerationConfig as OrchestratorGenerationConfig,
     ReflectionConfig,
+    GenerationSetupConfig,
+    GenerationSetupResult,
 )
 from lectern.orchestration.pipeline_context import (
     SessionContext,
@@ -17,6 +19,7 @@ from lectern.orchestration.pipeline_context import (
 from lectern.orchestration.phases import (
     InitializationPhase,
     ConceptMappingPhase,
+    GenerationPhase,
     PhaseExecutionHalt,
 )
 
@@ -26,6 +29,8 @@ __all__ = [
     "GenerationConfig",
     "OrchestratorGenerationConfig",
     "ReflectionConfig",
+    "GenerationSetupConfig",
+    "GenerationSetupResult",
     # New exports
     "SessionContext",
     "SessionConfig",
@@ -34,5 +39,6 @@ __all__ = [
     "PipelinePhase",
     "InitializationPhase",
     "ConceptMappingPhase",
+    "GenerationPhase",
     "PhaseExecutionHalt",
 ]

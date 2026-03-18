@@ -13,7 +13,9 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, AsyncGenerator, List, Optional
 
+from lectern import config
 from lectern.ai_pacing import PacingState
+from lectern.cost_estimator import derive_effective_target, estimate_card_cap
 from lectern.coverage import (
     build_generation_gap_text,
     build_reflection_gap_text,
@@ -86,6 +88,29 @@ class ReflectionConfig:
     hard_cap_padding: int = 5
 
 
+@dataclass
+class GenerationSetupConfig:
+    """Inputs required to initialize generation targets and state."""
+
+    pages: list[dict[str, Any]]
+    concept_map: dict[str, Any]
+    examples: str
+    estimated_text_chars: int
+    image_count: int
+    target_card_count: Optional[int] = None
+
+
+@dataclass
+class GenerationSetupResult:
+    """Computed generation targets derived from setup inputs."""
+
+    effective_target: float
+    total_cards_cap: int
+    is_script_mode: bool
+    chars_per_page: float
+    initial_coverage: dict[str, Any]
+
+
 class SessionOrchestrator:
     """
     Owns the generation loop and all state mutations.
@@ -119,6 +144,53 @@ class SessionOrchestrator:
 
     def should_stop(self, stop_check: Optional[Callable[[], bool]]) -> bool:
         return bool(stop_check and stop_check())
+
+    def prepare_generation(
+        self, setup_config: GenerationSetupConfig
+    ) -> GenerationSetupResult:
+        """Initialize orchestrator state and derive generation targets."""
+        self.state.pages = list(setup_config.pages)
+        self.state.concept_map = dict(setup_config.concept_map)
+        self.state.examples = setup_config.examples
+
+        page_count = len(self.state.pages)
+        estimated_text_chars = int(setup_config.estimated_text_chars or 0)
+        document_type = self.state.concept_map.get("document_type")
+
+        effective_target, _ = derive_effective_target(
+            page_count=page_count,
+            estimated_text_chars=estimated_text_chars,
+            target_card_count=setup_config.target_card_count,
+            density_target=None,
+            script_base_chars=config.SCRIPT_BASE_CHARS,
+            force_mode=document_type,
+        )
+
+        total_cards_cap, is_script_mode = estimate_card_cap(
+            page_count=page_count,
+            estimated_text_chars=estimated_text_chars,
+            image_count=setup_config.image_count,
+            density_target=None,
+            target_card_count=setup_config.target_card_count,
+            script_base_chars=config.SCRIPT_BASE_CHARS,
+            force_mode=document_type,
+        )
+
+        initial_coverage = compute_coverage_data(
+            cards=[],
+            concept_map=self.state.concept_map,
+            total_pages=page_count,
+        )
+        self.state.last_coverage_data = initial_coverage
+
+        chars_per_page = (estimated_text_chars / page_count) if page_count > 0 else 0.0
+        return GenerationSetupResult(
+            effective_target=effective_target,
+            total_cards_cap=total_cards_cap,
+            is_script_mode=is_script_mode,
+            chars_per_page=chars_per_page,
+            initial_coverage=initial_coverage,
+        )
 
     # --- State Mutations (internal) ---
 

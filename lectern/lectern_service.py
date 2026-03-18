@@ -12,8 +12,6 @@ from typing import (
     List,
     Optional,
     Callable,
-    Literal,
-    Iterable,
 )
 
 from lectern import config
@@ -21,22 +19,9 @@ from lectern.anki_connector import get_connection_info
 from lectern.ai_client import LecternAIClient
 
 from lectern.cost_estimator import (
-    derive_effective_target,
-    estimate_card_cap,
     estimate_cost as estimate_cost_impl,
     estimate_cost_with_base as estimate_cost_with_base_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
-)
-from lectern.coverage import compute_coverage_data
-from lectern.orchestration.session_orchestrator import (
-    SessionOrchestrator,
-    GenerationConfig as OrchGenConfig,
-    ReflectionConfig as OrchRefConfig,
-)
-from gui.backend.sse_emitter import SSEEmitter
-from lectern.generation_loop import (
-    collect_card_fronts as collect_card_fronts_impl,
-    get_card_key as get_card_key_impl,
 )
 from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.error_handling import capture_exception
@@ -46,6 +31,7 @@ from lectern.events.pipeline_emitter import PipelineEmitter
 from lectern.orchestration.pipeline_context import SessionContext
 from lectern.orchestration.phases import (
     ConceptMappingPhase,
+    GenerationPhase,
     InitializationPhase,
     PhaseExecutionHalt,
 )
@@ -54,7 +40,7 @@ from lectern.orchestration.phases import (
 logger = logging.getLogger(__name__)
 
 
-from lectern.events.service_events import EventType, ServiceEvent
+from lectern.events.service_events import ServiceEvent
 
 
 @dataclass(frozen=True)
@@ -194,167 +180,11 @@ class LecternGenerationService:
                     )
                 return
 
-            # Extract variables for downstream phases (NOTE: context is single source of truth)
-            actual_image_count = context.pdf.image_count
+            await GenerationPhase().execute(context, emitter, ai)
+
+            all_cards = context.all_cards
             pages = context.pages
-            concept_map = context.concept_map
-            examples = context.examples
             slide_set_name = context.slide_set_name
-            total_text_chars = context.pdf.metadata_chars
-
-            # 6. Generation Loop
-            all_cards = []
-
-            # Targets
-            document_type = concept_map.get("document_type") if concept_map else None
-            effective_target, _ = derive_effective_target(
-                page_count=len(pages),
-                estimated_text_chars=total_text_chars,
-                target_card_count=context.config.target_card_count,
-                density_target=None,
-                script_base_chars=config.SCRIPT_BASE_CHARS,
-                force_mode=document_type,
-            )
-
-            # Calculate chars per page for mode detection
-            chars_per_page = total_text_chars / len(pages) if len(pages) > 0 else 0
-            total_cards_cap, is_script_mode = estimate_card_cap(
-                page_count=len(pages),
-                estimated_text_chars=total_text_chars,
-                image_count=actual_image_count,
-                density_target=None,
-                target_card_count=context.config.target_card_count,
-                script_base_chars=config.SCRIPT_BASE_CHARS,
-                force_mode=document_type,
-            )
-
-            if is_script_mode:
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "info",
-                        f"Script mode: ~{total_cards_cap} cards target ({chars_per_page:.0f} chars/page)",
-                    )
-                )
-            else:
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "info",
-                        f"Slides mode: ~{total_cards_cap} cards target ({len(pages)} pages × {effective_target:.1f})",
-                    )
-                )
-
-            # Batch sizing
-            # Clamp batch size: at least 20, at most 50, targeting half the page count.
-            batch_size = max(
-                config.MIN_NOTES_PER_BATCH,
-                min(config.MAX_NOTES_PER_BATCH, len(pages) // 2),
-            )
-            actual_batch_size = int(batch_size)
-
-            await emitter.emit_event(
-                ServiceEvent(
-                    "progress_start",
-                    "Generating Cards",
-                    {"total": total_cards_cap, "label": "Generation"},
-                )
-            )
-
-            await emitter.emit_event(
-                ServiceEvent("step_start", "Generate cards", {"phase": "generating"})
-            )
-            generation_started_at = time.perf_counter()
-
-            # Orchestrate generation
-            orchestrator = SessionOrchestrator()
-            orchestrator.state.pages = pages
-            orchestrator.state.concept_map = concept_map
-
-            # Configure the generation loop
-            gen_config = OrchGenConfig(
-                total_cards_cap=total_cards_cap,
-                actual_batch_size=actual_batch_size,
-                focus_prompt=context.config.focus_prompt,
-                effective_target=effective_target,
-                stop_check=context.config.stop_check,
-                examples=examples,
-            )
-
-            # Generation loop
-            async for event in orchestrator.run_generation(
-                ai_client=ai, config=gen_config
-            ):
-                await emitter.emit_event(
-                    SSEEmitter.domain_to_service_event(event)
-                )
-
-            all_cards = orchestrator.state.all_cards
-
-            await emitter.emit_event(
-                ServiceEvent(
-                    "step_end",
-                    "Generation Phase Complete",
-                    {
-                        "success": True,
-                        "count": len(all_cards),
-                        "duration_ms": self._elapsed_ms(generation_started_at),
-                    },
-                )
-            )
-
-            # 7. Reflection Phase
-            card_count = len(all_cards)
-            rounds = dynamic_rounds = 0
-            if card_count > 0:
-                rounds = dynamic_rounds = 1 if card_count < 50 else 2
-
-            if rounds > 0 and not self._should_stop(context.config.stop_check):
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_start",
-                        "Reflection and improvement",
-                        {"phase": "reflecting"},
-                    )
-                )
-                reflection_started_at = time.perf_counter()
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "progress_start",
-                        "Reflection",
-                        {"total": rounds, "label": "Reflection Rounds"},
-                    )
-                )
-
-                ref_config = OrchRefConfig(
-                    total_cards_cap=total_cards_cap,
-                    rounds=rounds,
-                    stop_check=context.config.stop_check,
-                )
-                async for event in orchestrator.run_reflection(
-                    ai_client=ai, config=ref_config
-                ):
-                    await emitter.emit_event(
-                        SSEEmitter.domain_to_service_event(event)
-                    )
-
-                all_cards = orchestrator.state.all_cards
-
-                reflected_coverage = await asyncio.to_thread(
-                    compute_coverage_data,
-                    cards=all_cards,
-                    concept_map=concept_map,
-                    total_pages=len(pages),
-                )
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "step_end",
-                        "Reflection Phase Complete",
-                        {
-                            "success": True,
-                            "duration_ms": self._elapsed_ms(reflection_started_at),
-                            "coverage_data": reflected_coverage,
-                        },
-                    )
-                )
 
             if not all_cards:
                 await emitter.emit_event(
@@ -376,12 +206,7 @@ class LecternGenerationService:
                 )
                 return
 
-            final_coverage = await asyncio.to_thread(
-                compute_coverage_data,
-                cards=all_cards,
-                concept_map=concept_map,
-                total_pages=len(pages),
-            )
+            final_coverage = context.final_coverage
 
             # 8. Creation in Anki
             if context.config.skip_export:
@@ -627,9 +452,6 @@ class LecternGenerationService:
         """Estimate per-image token cost via count_tokens delta."""
         return await verify_image_token_cost_impl(model_name=model_name)
 
-    def _get_card_key(self, card: Dict[str, Any]) -> str:
-        return get_card_key_impl(card)
-
     def _should_stop(self, stop_check: Optional[Callable[[], bool]]) -> bool:
         return bool(stop_check and stop_check())
 
@@ -652,6 +474,3 @@ class LecternGenerationService:
         return ServiceEvent(
             "cancelled", f"Generation cancelled during {stage}.", payload
         )
-
-    def _collect_card_fronts(self, cards: List[Dict[str, Any]]) -> List[str]:
-        return collect_card_fronts_impl(cards)

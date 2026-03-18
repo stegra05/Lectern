@@ -26,7 +26,9 @@ def test_stream_to_logger_implements_isatty():
     assert "isatty" in method_names
 
 
-def test_service_uses_orchestrator_generation_config_alias():
-    """Guard against reintroducing local GenerationConfig constructor mismatch."""
+def test_service_delegates_generation_to_generation_phase():
+    """Guard against reintroducing generation heuristics in the service layer."""
     source = _read_project_file("lectern/lectern_service.py")
-    assert "gen_config = OrchGenConfig(" in source
+    assert "await GenerationPhase().execute(context, emitter, ai)" in source
+    assert "derive_effective_target(" not in source
+    assert "estimate_card_cap(" not in source
