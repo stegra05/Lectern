@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from lectern.version import __version__
 from lectern import config, anki_connector
 from lectern.config import ConfigManager
+from lectern.providers.factory import DEFAULT_PROVIDER, is_supported_provider
 from lectern.utils.error_handling import capture_exception
 
 router = APIRouter()
@@ -24,10 +25,14 @@ class HealthResponse(BaseModel):
     status: str
     anki_connected: bool
     gemini_configured: bool
+    active_provider: str
+    provider_configured: bool
+    provider_ready: bool
     backend_ready: bool
 
 
 class ConfigResponse(BaseModel):
+    ai_provider: Optional[str] = None
     gemini_model: Optional[str] = None
     anki_url: Optional[str] = None
     basic_model: Optional[str] = None
@@ -58,6 +63,15 @@ class ConfigNoChangeResponse(BaseModel):
 ConfigUpdateResponse = Union[ConfigUpdatedResponse, ConfigNoChangeResponse]
 
 # --- Endpoints ---
+
+
+def _provider_readiness() -> tuple[str, bool]:
+    active_provider = (str(config.AI_PROVIDER or DEFAULT_PROVIDER)).strip().lower()
+    if not is_supported_provider(active_provider):
+        return active_provider, False
+    if active_provider == "gemini":
+        return active_provider, bool(config.GEMINI_API_KEY)
+    return active_provider, True
 
 
 @router.get("/version", response_model=VersionResponse)
@@ -104,6 +118,7 @@ async def get_version():
 async def health_check():
     """Health check endpoint that safely checks system status."""
     anki_status = False
+    active_provider, provider_configured = _provider_readiness()
     try:
         anki_status = await anki_connector.check_connection()
     except Exception as e:
@@ -113,6 +128,9 @@ async def health_check():
         "status": "ok",
         "anki_connected": anki_status,
         "gemini_configured": bool(config.GEMINI_API_KEY),
+        "active_provider": active_provider,
+        "provider_configured": provider_configured,
+        "provider_ready": provider_configured,
         "backend_ready": True,
     }
 
@@ -120,6 +138,7 @@ async def health_check():
 @router.get("/config", response_model=ConfigResponse)
 async def get_config():
     return {
+        "ai_provider": config.AI_PROVIDER,
         "gemini_model": config.DEFAULT_GEMINI_MODEL,
         "anki_url": config.ANKI_CONNECT_URL,
         "basic_model": config.DEFAULT_BASIC_MODEL,

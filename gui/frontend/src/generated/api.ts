@@ -388,6 +388,8 @@ export interface components {
         };
         /** ConfigResponse */
         ConfigResponse: {
+            /** Ai Provider */
+            ai_provider?: null | string;
             /** Anki Url */
             anki_url?: null | string;
             /** Basic Model */
@@ -484,12 +486,18 @@ export interface components {
         };
         /** HealthResponse */
         HealthResponse: {
+            /** Active Provider */
+            active_provider: string;
             /** Anki Connected */
             anki_connected: boolean;
             /** Backend Ready */
             backend_ready: boolean;
             /** Gemini Configured */
             gemini_configured: boolean;
+            /** Provider Configured */
+            provider_configured: boolean;
+            /** Provider Ready */
+            provider_ready: boolean;
             /** Status */
             status: string;
         };
