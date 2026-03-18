@@ -135,4 +135,159 @@ describe('OnboardingFlow', () => {
             expect(mockOnComplete).toHaveBeenCalled();
         }, { timeout: 10000 });
     });
+
+    it('shows diagnostics-driven remediation details when Anki is unavailable', async () => {
+        vi.mocked(api.checkHealth).mockResolvedValue({
+            status: 'ok',
+            anki_connected: false,
+            gemini_configured: false,
+            active_provider: 'gemini',
+            provider_configured: false,
+            provider_ready: false,
+            backend_ready: true,
+            diagnostics: {
+                anki: {
+                    status: 'unreachable',
+                    connected: false,
+                    reason: 'Connection refused by AnkiConnect at localhost:8765.',
+                    hint: 'Start Anki and ensure AnkiConnect is installed/enabled (add-on code: 2055492159).',
+                },
+                api_key: {
+                    required: true,
+                    configured: false,
+                    reason: 'Gemini API key is missing.',
+                    hint: 'Open Settings and provide a Gemini API key.',
+                },
+                provider: {
+                    name: 'gemini',
+                    configured: false,
+                    ready: false,
+                    reason: 'Gemini provider requires an API key.',
+                    hint: 'Add a Gemini API key in Settings to enable generation.',
+                },
+            },
+        });
+
+        renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
+
+        await waitFor(() => {
+            expect(screen.getByRole('alert')).toBeInTheDocument();
+        }, { timeout: 10000 });
+
+        expect(screen.getByRole('button', { name: /Retry Anki connection/i })).toBeInTheDocument();
+        expect(screen.getByText(/Continue Offline \(Save as Drafts\)/i)).toBeInTheDocument();
+        expect(screen.getByText('Connection refused by AnkiConnect at localhost:8765.')).toBeInTheDocument();
+        expect(screen.getByText('Start Anki and ensure AnkiConnect is installed/enabled (add-on code: 2055492159).')).toBeInTheDocument();
+    });
+
+    it('shows API key remediation guidance when diagnostics report missing key', async () => {
+        vi.mocked(api.checkHealth).mockResolvedValue({
+            status: 'ok',
+            anki_connected: true,
+            gemini_configured: false,
+            active_provider: 'gemini',
+            provider_configured: false,
+            provider_ready: false,
+            backend_ready: true,
+            diagnostics: {
+                anki: {
+                    status: 'healthy',
+                    connected: true,
+                },
+                api_key: {
+                    required: true,
+                    configured: false,
+                    reason: 'Gemini API key is missing.',
+                    hint: 'Open Settings and provide a Gemini API key.',
+                },
+                provider: {
+                    name: 'gemini',
+                    configured: false,
+                    ready: false,
+                    reason: 'Gemini provider requires an API key.',
+                    hint: 'Add a Gemini API key in Settings to enable generation.',
+                },
+            },
+        });
+
+        renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
+
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('sk-...')).toBeInTheDocument();
+        }, { timeout: 10000 });
+
+        expect(screen.getByRole('button', { name: /Initialize with API key/i })).toBeDisabled();
+        expect(screen.getByText('Gemini API key is missing.')).toBeInTheDocument();
+        expect(screen.getByText('Open Settings and provide a Gemini API key.')).toBeInTheDocument();
+    });
+
+    it('transitions from retry to success when health refetch becomes healthy', async () => {
+        vi.mocked(api.checkHealth)
+            .mockResolvedValueOnce({
+                status: 'ok',
+                anki_connected: false,
+                gemini_configured: false,
+                active_provider: 'gemini',
+                provider_configured: false,
+                provider_ready: false,
+                backend_ready: true,
+                diagnostics: {
+                    anki: {
+                        status: 'offline',
+                        connected: false,
+                        reason: 'Anki connection check returned offline.',
+                        hint: 'Start Anki and ensure AnkiConnect is installed/enabled (add-on code: 2055492159).',
+                    },
+                    api_key: {
+                        required: true,
+                        configured: false,
+                        reason: 'Gemini API key is missing.',
+                        hint: 'Open Settings and provide a Gemini API key.',
+                    },
+                    provider: {
+                        name: 'gemini',
+                        configured: false,
+                        ready: false,
+                        reason: 'Gemini provider requires an API key.',
+                        hint: 'Add a Gemini API key in Settings to enable generation.',
+                    },
+                },
+            })
+            .mockResolvedValue({
+                status: 'ok',
+                anki_connected: true,
+                gemini_configured: false,
+                active_provider: 'gemini',
+                provider_configured: false,
+                provider_ready: false,
+                backend_ready: true,
+                diagnostics: {
+                    anki: {
+                        status: 'healthy',
+                        connected: true,
+                    },
+                    api_key: {
+                        required: true,
+                        configured: false,
+                        reason: 'Gemini API key is missing.',
+                        hint: 'Open Settings and provide a Gemini API key.',
+                    },
+                    provider: {
+                        name: 'gemini',
+                        configured: false,
+                        ready: false,
+                    },
+                },
+            });
+
+        renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
+
+        const retryButton = await screen.findByRole('button', { name: /Retry Anki connection/i }, { timeout: 10000 });
+        fireEvent.click(retryButton);
+
+        await waitFor(() => {
+            expect(screen.getByText('CONNECTED: LOCALHOST:8765')).toBeInTheDocument();
+            expect(screen.getByText('Gemini API key is missing.')).toBeInTheDocument();
+        }, { timeout: 2200 });
+    });
 });

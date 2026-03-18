@@ -140,17 +140,23 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                         <div className="flex items-start gap-2 text-red-200">
                           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
                           <div className="space-y-2">
-                            <p>Connection failed. Is Anki running with AnkiConnect?</p>
-                            <div className="text-xs text-red-300">
-                              <p>1. Open Anki → Tools → Add-ons</p>
-                              <p>
-                                2. Get Add-ons → Code: <span className="font-mono bg-red-500/20 px-1 rounded select-all">2055492159</span>
-                              </p>
-                              <p>3. Restart Anki</p>
-                            </div>
-                            <a href="https://ankiweb.net/shared/info/2055492159" target="_blank" rel="noreferrer" className="inline-block text-xs underline hover:text-white">
-                              AnkiConnect Page
-                            </a>
+                            <p>{state.ankiDiagnostics?.reason ?? 'Connection failed. Is Anki running with AnkiConnect?'}</p>
+                            {state.ankiDiagnostics?.hint ? (
+                              <p className="text-xs text-red-300">{state.ankiDiagnostics.hint}</p>
+                            ) : (
+                              <>
+                                <div className="text-xs text-red-300">
+                                  <p>1. Open Anki → Tools → Add-ons</p>
+                                  <p>
+                                    2. Get Add-ons → Code: <span className="font-mono bg-red-500/20 px-1 rounded select-all">2055492159</span>
+                                  </p>
+                                  <p>3. Restart Anki</p>
+                                </div>
+                                <a href="https://ankiweb.net/shared/info/2055492159" target="_blank" rel="noreferrer" className="inline-block text-xs underline hover:text-white">
+                                  AnkiConnect Page
+                                </a>
+                              </>
+                            )}
                           </div>
                         </div>
                         <button
@@ -206,6 +212,13 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                             aria-hidden="true"
                           />
                         </div>
+
+                        {state.apiKeyDiagnostics && (
+                          <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-500/10 p-3">
+                            {state.apiKeyDiagnostics.reason && <p className="text-xs text-amber-100">{state.apiKeyDiagnostics.reason}</p>}
+                            {state.apiKeyDiagnostics.hint && <p className="mt-1 text-[11px] text-amber-200">{state.apiKeyDiagnostics.hint}</p>}
+                          </div>
+                        )}
 
                         <button
                           onClick={state.submitApiKey}

@@ -293,6 +293,20 @@ export interface components {
              */
             status: "deleted";
         };
+        /** AnkiDiagnostics */
+        AnkiDiagnostics: {
+            /** Connected */
+            connected: boolean;
+            /** Hint */
+            hint?: null | string;
+            /** Reason */
+            reason?: null | string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "healthy" | "offline" | "unreachable";
+        };
         /** AnkiStatusResponse */
         AnkiStatusResponse: {
             /** Collection Available */
@@ -327,6 +341,17 @@ export interface components {
              * @constant
              */
             status: "updated";
+        };
+        /** ApiKeyDiagnostics */
+        ApiKeyDiagnostics: {
+            /** Configured */
+            configured: boolean;
+            /** Hint */
+            hint?: null | string;
+            /** Reason */
+            reason?: null | string;
+            /** Required */
+            required: boolean;
         };
         /** BatchDeleteRequest */
         BatchDeleteRequest: {
@@ -484,6 +509,12 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HealthDiagnostics */
+        HealthDiagnostics: {
+            anki: components["schemas"]["AnkiDiagnostics"];
+            api_key: components["schemas"]["ApiKeyDiagnostics"];
+            provider: components["schemas"]["ProviderDiagnostics"];
+        };
         /** HealthResponse */
         HealthResponse: {
             /** Active Provider */
@@ -492,6 +523,7 @@ export interface components {
             anki_connected: boolean;
             /** Backend Ready */
             backend_ready: boolean;
+            diagnostics: components["schemas"]["HealthDiagnostics"];
             /** Gemini Configured */
             gemini_configured: boolean;
             /** Provider Configured */
@@ -545,6 +577,19 @@ export interface components {
             session_id?: null | string;
             /** Status */
             status?: null | string;
+        };
+        /** ProviderDiagnostics */
+        ProviderDiagnostics: {
+            /** Configured */
+            configured: boolean;
+            /** Hint */
+            hint?: null | string;
+            /** Name */
+            name: string;
+            /** Ready */
+            ready: boolean;
+            /** Reason */
+            reason?: null | string;
         };
         /** SessionEntryResponse */
         SessionEntryResponse: {

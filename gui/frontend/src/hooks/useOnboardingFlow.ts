@@ -3,10 +3,48 @@
  * Keeps OnboardingFlow as a pure presentational component.
  */
 import { useState, useEffect, useCallback } from 'react';
+import type { components } from '../generated/api';
 import { useHealthQuery } from '../queries';
+import type { HealthStatus } from '../schemas/api';
+import { getHealthRemediation, isHealthReady } from '../lib/healthDiagnostics';
 import { useOnboardingManager } from './useOnboardingManager';
 
 export type StepStatus = 'pending' | 'active' | 'success' | 'error';
+
+type HealthDiagnostics = components['schemas']['HealthDiagnostics'];
+
+type OptionalHealthDiagnostics = {
+  anki?: Partial<HealthDiagnostics['anki']> | null;
+  api_key?: Partial<HealthDiagnostics['api_key']> | null;
+};
+
+type HealthWithOptionalDiagnostics = Omit<HealthStatus, 'diagnostics'> & {
+  diagnostics?: OptionalHealthDiagnostics | null;
+};
+
+export interface OnboardingDiagnosticsDetails {
+  reason?: string;
+  hint?: string;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function textOrUndefined(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function isAnkiFailureKind(kind: ReturnType<typeof getHealthRemediation>['kind']): boolean {
+  return kind === 'anki_offline' || kind === 'anki_unreachable';
+}
+
+function getDiagnostics(
+  health: HealthStatus | null | undefined
+): OptionalHealthDiagnostics | undefined {
+  return (health as HealthWithOptionalDiagnostics | null | undefined)?.diagnostics ?? undefined;
+}
 
 export function useOnboardingFlow(onComplete: () => void) {
   const [ankiStatus, setAnkiStatus] = useState<StepStatus>('pending');
@@ -24,32 +62,44 @@ export function useOnboardingFlow(onComplete: () => void) {
     }, 1000);
   }, [onComplete]);
 
-  const startSequence = useCallback(async () => {
-    setAnkiStatus('active');
-    await new Promise((r) => setTimeout(r, 1000));
-
-    if (healthError) {
+  const applyHealthState = useCallback((nextHealth: HealthStatus | null | undefined) => {
+    if (!nextHealth) {
       setAnkiStatus('error');
       return;
     }
-    if (health) {
-      if (health.anki_connected) {
-        setAnkiStatus('success');
-        if (health.gemini_configured) {
-          setGeminiStatus('success');
-          completeOnboarding();
-        } else {
-          setGeminiStatus('active');
-        }
-      } else {
-        setAnkiStatus('error');
-      }
+
+    const remediation = getHealthRemediation(nextHealth);
+    if (isAnkiFailureKind(remediation.kind)) {
+      setAnkiStatus('error');
+      return;
     }
-  }, [health, healthError, completeOnboarding]);
+
+    setAnkiStatus('success');
+    if (isHealthReady(nextHealth)) {
+      setGeminiStatus('success');
+      completeOnboarding();
+    } else {
+      setGeminiStatus('active');
+    }
+  }, [completeOnboarding]);
+
+  const startSequence = useCallback(async (healthSnapshot?: HealthStatus | null) => {
+    setAnkiStatus('active');
+    await delay(1000);
+
+    if (!healthSnapshot && healthError) {
+      setAnkiStatus('error');
+      return;
+    }
+
+    applyHealthState(healthSnapshot ?? health);
+  }, [applyHealthState, health, healthError]);
 
   // Orchestration: run sequence on mount. Defer to next tick to avoid sync setState-in-effect.
   useEffect(() => {
-    const id = setTimeout(() => startSequence(), 0);
+    const id = setTimeout(() => {
+      void startSequence();
+    }, 0);
     return () => clearTimeout(id);
   }, [startSequence]);
 
@@ -59,25 +109,25 @@ export function useOnboardingFlow(onComplete: () => void) {
     const poll = setInterval(async () => {
       const result = await refetchHealth();
       const data = result?.data;
-      if (data?.anki_connected) {
+      if (!data) return;
+
+      const remediation = getHealthRemediation(data);
+      if (!isAnkiFailureKind(remediation.kind)) {
         clearInterval(poll);
-        setAnkiStatus('success');
-        if (data.gemini_configured) {
-          setGeminiStatus('success');
-          completeOnboarding();
-        } else {
-          setGeminiStatus('active');
-        }
+        applyHealthState(data);
       }
     }, 3000);
 
     return () => clearInterval(poll);
-  }, [ankiStatus, refetchHealth, completeOnboarding]);
+  }, [ankiStatus, refetchHealth, applyHealthState]);
 
-  const retryAnki = useCallback(() => {
+  const retryAnki = useCallback(async () => {
     setAnkiStatus('pending');
-    refetchHealth();
-    setTimeout(() => startSequence(), 300);
+    const result = await refetchHealth();
+    const freshHealth = result?.data;
+    setTimeout(() => {
+      void startSequence(freshHealth);
+    }, 300);
   }, [refetchHealth, startSequence]);
 
   const skipAnki = useCallback(() => {
@@ -101,6 +151,31 @@ export function useOnboardingFlow(onComplete: () => void) {
     }
   }, [apiKey, saveApiKeyMutation, completeOnboarding]);
 
+  const remediation = getHealthRemediation(health);
+  const diagnostics = getDiagnostics(health);
+
+  const ankiDiagnosticsReason = textOrUndefined(diagnostics?.anki?.reason);
+  const ankiDiagnosticsHint = textOrUndefined(diagnostics?.anki?.hint);
+  const ankiDiagnostics =
+    ankiStatus === 'error' && isAnkiFailureKind(remediation.kind) && (ankiDiagnosticsReason || ankiDiagnosticsHint)
+      ? {
+          reason: ankiDiagnosticsReason ?? remediation.message,
+          hint: ankiDiagnosticsHint ?? remediation.hint,
+        }
+      : undefined;
+
+  const apiKeyDiagnosticsReason = textOrUndefined(diagnostics?.api_key?.reason);
+  const apiKeyDiagnosticsHint = textOrUndefined(diagnostics?.api_key?.hint);
+  const apiKeyDiagnostics =
+    geminiStatus === 'active' &&
+    remediation.kind === 'missing_api_key' &&
+    (apiKeyDiagnosticsReason || apiKeyDiagnosticsHint)
+      ? {
+          reason: apiKeyDiagnosticsReason ?? remediation.message,
+          hint: apiKeyDiagnosticsHint ?? remediation.hint,
+        }
+      : undefined;
+
   return {
     ankiStatus,
     geminiStatus,
@@ -113,5 +188,7 @@ export function useOnboardingFlow(onComplete: () => void) {
     skipAnki,
     submitApiKey,
     completeOnboarding,
+    ankiDiagnostics,
+    apiKeyDiagnostics,
   };
 }

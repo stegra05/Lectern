@@ -35,6 +35,10 @@ export interface SettingsModalViewProps {
   newKey: string;
   onNewKeyChange: (value: string) => void;
   ankiStatus: 'checking' | 'connected' | 'disconnected';
+  ankiHint?: string;
+  canRetryAnkiConnection: boolean;
+  onRetryAnkiConnection: () => void;
+  isRetryingAnkiConnection: boolean;
   ankiUrlError: string | null;
   hasChanges: boolean;
   onSave: () => void;
@@ -62,6 +66,10 @@ function SettingsModalView({
   newKey,
   onNewKeyChange,
   ankiStatus,
+  ankiHint,
+  canRetryAnkiConnection,
+  onRetryAnkiConnection,
+  isRetryingAnkiConnection,
   ankiUrlError,
   hasChanges,
   onSave,
@@ -206,6 +214,23 @@ function SettingsModalView({
                           <p id="anki-url-error" className="text-xs text-red-500 mt-1" role="alert">
                             {ankiUrlError}
                           </p>
+                        )}
+                        {ankiStatus === 'disconnected' && ankiHint && !ankiUrlError && (
+                          <p className="text-xs text-text-muted mt-1" role="status">
+                            {ankiHint}
+                          </p>
+                        )}
+                        {canRetryAnkiConnection && (
+                          <button
+                            type="button"
+                            onClick={onRetryAnkiConnection}
+                            disabled={isRetryingAnkiConnection}
+                            className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Ping AnkiConnect again"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${isRetryingAnkiConnection ? 'animate-spin' : ''}`} />
+                            Ping AnkiConnect again
+                          </button>
                         )}
                       </div>
 
@@ -365,6 +390,10 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
       newKey={state.newKey}
       onNewKeyChange={state.setNewKey}
       ankiStatus={state.ankiStatus}
+      ankiHint={state.ankiHint}
+      canRetryAnkiConnection={state.canRetryAnkiConnection}
+      onRetryAnkiConnection={state.retryAnkiConnection}
+      isRetryingAnkiConnection={state.isRetryingAnkiConnection}
       ankiUrlError={state.ankiUrlError}
       hasChanges={state.hasChanges}
       onSave={state.saveConfig}

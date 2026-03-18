@@ -176,6 +176,80 @@ describe('SettingsModal', () => {
         });
     });
 
+    it('shows preflight guidance when Anki URL is invalid', async () => {
+        await act(async () => {
+            renderWithQueryClient(
+                <SettingsModal
+                    {...defaultProps}
+                    isOpen={true}
+                    onClose={mockOnClose}
+                />
+            );
+        });
+
+        await waitFor(() => screen.getByLabelText('Anki Connect URL'));
+        const ankiUrlInput = screen.getByLabelText('Anki Connect URL');
+
+        await act(async () => {
+            fireEvent.change(ankiUrlInput, { target: { value: 'localhost:8765' } });
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText(/Use a full URL including protocol/i)).toBeInTheDocument();
+        });
+    });
+
+    it('shows actionable disconnected hint when Anki check fails', async () => {
+        vi.mocked(api.checkAnkiConnectUrl).mockResolvedValueOnce({ connected: false });
+
+        await act(async () => {
+            renderWithQueryClient(
+                <SettingsModal
+                    {...defaultProps}
+                    isOpen={true}
+                    onClose={mockOnClose}
+                />
+            );
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Offline')).toBeInTheDocument();
+        });
+
+        expect(screen.getByText(/Open Anki and verify AnkiConnect is installed/i)).toBeInTheDocument();
+    });
+
+    it('rechecks Anki connection from retry action and can transition to connected', async () => {
+        vi.mocked(api.checkAnkiConnectUrl)
+            .mockResolvedValueOnce({ connected: false })
+            .mockResolvedValueOnce({ connected: true });
+
+        await act(async () => {
+            renderWithQueryClient(
+                <SettingsModal
+                    {...defaultProps}
+                    isOpen={true}
+                    onClose={mockOnClose}
+                />
+            );
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Offline')).toBeInTheDocument();
+        });
+
+        const retryButton = screen.getByRole('button', { name: /Ping AnkiConnect again/i });
+
+        await act(async () => {
+            fireEvent.click(retryButton);
+        });
+
+        await waitFor(() => {
+            expect(api.checkAnkiConnectUrl).toHaveBeenCalledTimes(2);
+            expect(screen.getByText('Connected')).toBeInTheDocument();
+        });
+    });
+
     it('checks for updates', async () => {
         vi.mocked(api.getVersion).mockResolvedValue({
             current: '1.2.0',

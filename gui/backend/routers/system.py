@@ -29,6 +29,35 @@ class HealthResponse(BaseModel):
     provider_configured: bool
     provider_ready: bool
     backend_ready: bool
+    diagnostics: "HealthDiagnostics"
+
+
+class AnkiDiagnostics(BaseModel):
+    status: Literal["healthy", "offline", "unreachable"]
+    connected: bool
+    reason: Optional[str] = None
+    hint: Optional[str] = None
+
+
+class ProviderDiagnostics(BaseModel):
+    name: str
+    configured: bool
+    ready: bool
+    reason: Optional[str] = None
+    hint: Optional[str] = None
+
+
+class ApiKeyDiagnostics(BaseModel):
+    required: bool
+    configured: bool
+    reason: Optional[str] = None
+    hint: Optional[str] = None
+
+
+class HealthDiagnostics(BaseModel):
+    anki: AnkiDiagnostics
+    provider: ProviderDiagnostics
+    api_key: ApiKeyDiagnostics
 
 
 class ConfigResponse(BaseModel):
@@ -72,6 +101,70 @@ def _provider_readiness() -> tuple[str, bool]:
     if active_provider == "gemini":
         return active_provider, bool(config.GEMINI_API_KEY)
     return active_provider, True
+
+
+def _build_health_diagnostics(
+    *,
+    active_provider: str,
+    provider_ready: bool,
+    anki_connected: bool,
+    anki_error: Optional[str],
+) -> HealthDiagnostics:
+    provider_supported = is_supported_provider(active_provider)
+    api_key_required = active_provider == "gemini"
+    api_key_configured = bool(config.GEMINI_API_KEY)
+
+    anki_reason = None
+    anki_hint = None
+    anki_status: Literal["healthy", "offline", "unreachable"] = "healthy"
+    if not anki_connected:
+        if anki_error:
+            anki_status = "unreachable"
+            anki_reason = anki_error
+        else:
+            anki_status = "offline"
+            anki_reason = "Anki connection check returned offline."
+        anki_hint = (
+            "Start Anki and ensure AnkiConnect is installed/enabled "
+            "(add-on code: 2055492159)."
+        )
+
+    provider_reason = None
+    provider_hint = None
+    if not provider_supported:
+        provider_reason = f"Unsupported provider '{active_provider}'."
+        provider_hint = "Set ai_provider to a supported backend (e.g. gemini)."
+    elif active_provider == "gemini" and not api_key_configured:
+        provider_reason = "Gemini provider requires an API key."
+        provider_hint = "Add a Gemini API key in Settings to enable generation."
+
+    api_key_reason = None
+    api_key_hint = None
+    if api_key_required and not api_key_configured:
+        api_key_reason = "Gemini API key is missing."
+        api_key_hint = "Open Settings and provide a Gemini API key."
+
+    return HealthDiagnostics(
+        anki=AnkiDiagnostics(
+            status=anki_status,
+            connected=anki_connected,
+            reason=anki_reason,
+            hint=anki_hint,
+        ),
+        provider=ProviderDiagnostics(
+            name=active_provider,
+            configured=provider_supported,
+            ready=provider_ready,
+            reason=provider_reason,
+            hint=provider_hint,
+        ),
+        api_key=ApiKeyDiagnostics(
+            required=api_key_required,
+            configured=api_key_configured,
+            reason=api_key_reason,
+            hint=api_key_hint,
+        ),
+    )
 
 
 @router.get("/version", response_model=VersionResponse)
@@ -118,20 +211,30 @@ async def get_version():
 async def health_check():
     """Health check endpoint that safely checks system status."""
     anki_status = False
-    active_provider, provider_configured = _provider_readiness()
+    anki_error: Optional[str] = None
+    active_provider, provider_ready = _provider_readiness()
     try:
         anki_status = await anki_connector.check_connection()
     except Exception as e:
+        anki_error = str(e)
         capture_exception(e, "Anki health check")
+
+    diagnostics = _build_health_diagnostics(
+        active_provider=active_provider,
+        provider_ready=provider_ready,
+        anki_connected=anki_status,
+        anki_error=anki_error,
+    )
 
     return {
         "status": "ok",
         "anki_connected": anki_status,
         "gemini_configured": bool(config.GEMINI_API_KEY),
         "active_provider": active_provider,
-        "provider_configured": provider_configured,
-        "provider_ready": provider_configured,
+        "provider_configured": provider_ready,
+        "provider_ready": provider_ready,
         "backend_ready": True,
+        "diagnostics": diagnostics.model_dump(exclude_none=True),
     }
 
 

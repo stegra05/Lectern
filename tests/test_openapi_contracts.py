@@ -60,6 +60,26 @@ def test_health_schema_includes_provider_diagnostics_fields():
         assert required_field in properties
 
 
+def test_health_schema_includes_nested_diagnostics_contract():
+    spec = app.openapi()
+    schema = _resolve_schema(spec, _response_schema(spec, "/health", "get"))
+
+    properties = schema.get("properties", {})
+
+    for backward_compatible_field in [
+        "anki_connected",
+        "gemini_configured",
+        "provider_ready",
+    ]:
+        assert backward_compatible_field in properties
+
+    assert "diagnostics" in properties
+    diagnostics_schema = _resolve_schema(spec, properties["diagnostics"])
+    diagnostics_properties = diagnostics_schema.get("properties", {})
+    for diagnostics_field in ["anki", "provider", "api_key"]:
+        assert diagnostics_field in diagnostics_properties
+
+
 def test_config_schema_includes_ai_provider_selection_field():
     spec = app.openapi()
     schema = _resolve_schema(spec, _response_schema(spec, "/config", "get"))

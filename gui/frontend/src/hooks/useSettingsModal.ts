@@ -6,7 +6,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useConfigQuery, useSaveConfigMutation, useVersionQuery } from '../queries';
 import { api } from '../api';
-import type { Config } from '../schemas/api';
+import type { Config, HealthStatus } from '../schemas/api';
+import { getAnkiPreflight } from '../lib/healthDiagnostics';
 
 export interface ConfigState {
   gemini_model: string;
@@ -17,6 +18,11 @@ export interface ConfigState {
 }
 
 export type AnkiCheckStatus = 'checking' | 'connected' | 'disconnected';
+
+const INVALID_ANKI_URL_ERROR =
+  'Use a full URL including protocol (http:// or https://), e.g. http://localhost:8765.';
+const OFFLINE_ANKI_HINT =
+  'Open Anki and verify AnkiConnect is installed/enabled (add-on code: 2055492159).';
 
 function configToState(c: Config): ConfigState {
   return {
@@ -35,6 +41,35 @@ function isValidUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function buildAnkiPreflightHealth(connected: boolean, hint?: string): HealthStatus {
+  return {
+    status: connected ? 'healthy' : 'degraded',
+    active_provider: 'gemini',
+    anki_connected: connected,
+    backend_ready: true,
+    gemini_configured: true,
+    provider_configured: true,
+    provider_ready: true,
+    diagnostics: {
+      anki: {
+        status: connected ? 'healthy' : 'offline',
+        connected,
+        reason: connected ? undefined : 'Anki connection check returned offline.',
+        hint,
+      },
+      api_key: {
+        required: false,
+        configured: true,
+      },
+      provider: {
+        name: 'gemini',
+        configured: true,
+        ready: true,
+      },
+    },
+  };
 }
 
 export function useSettingsModal(isOpen: boolean) {
@@ -67,17 +102,27 @@ export function useSettingsModal(isOpen: boolean) {
     queryFn: () => api.checkAnkiConnectUrl(ankiUrl),
   });
 
-  const ankiStatus: AnkiCheckStatus = useMemo(() => {
-    if (!ankiUrl) return 'checking';
-    if (!isValidUrl(ankiUrl)) return 'disconnected';
-    if (ankiStatusQuery.isLoading || ankiStatusQuery.isFetching) return 'checking';
-    return ankiStatusQuery.data?.connected ? 'connected' : 'disconnected';
+  const ankiPreflight = useMemo(() => {
+    if (!ankiUrl) return { status: 'checking' } as const;
+    if (!isValidUrl(ankiUrl)) {
+      return { status: 'disconnected', hint: INVALID_ANKI_URL_ERROR } as const;
+    }
+    if (ankiStatusQuery.isLoading || ankiStatusQuery.isFetching) return { status: 'checking' } as const;
+    return getAnkiPreflight(
+      buildAnkiPreflightHealth(
+        Boolean(ankiStatusQuery.data?.connected),
+        ankiStatusQuery.data?.connected ? undefined : OFFLINE_ANKI_HINT
+      )
+    );
   }, [
     ankiUrl,
     ankiStatusQuery.data?.connected,
     ankiStatusQuery.isFetching,
     ankiStatusQuery.isLoading,
   ]);
+
+  const ankiStatus: AnkiCheckStatus = ankiPreflight.status;
+  const canRetryAnkiConnection = ankiStatus === 'disconnected' && isValidUrl(ankiUrl);
 
   const updateField = useCallback((field: keyof ConfigState, value: string) => {
     if (!editedConfig) return;
@@ -97,8 +142,15 @@ export function useSettingsModal(isOpen: boolean) {
 
   const ankiUrlError =
     editedConfig && editedConfig.anki_url && !isValidUrl(editedConfig.anki_url)
-      ? 'Must be a valid URL (e.g. http://localhost:8765)'
+      ? INVALID_ANKI_URL_ERROR
       : null;
+
+  const retryAnkiConnection = useCallback(async () => {
+    if (!isValidUrl(ankiUrl)) {
+      return;
+    }
+    await ankiStatusQuery.refetch();
+  }, [ankiStatusQuery, ankiUrl]);
 
   const handleSave = useCallback(async () => {
     if (!editedConfig || !hasChanges || ankiUrlError) return;
@@ -135,6 +187,10 @@ export function useSettingsModal(isOpen: boolean) {
     newKey,
     setNewKey,
     ankiStatus,
+    ankiHint: ankiPreflight.hint,
+    canRetryAnkiConnection,
+    retryAnkiConnection,
+    isRetryingAnkiConnection: ankiStatusQuery.isFetching,
     ankiUrlError,
     hasChanges,
     saveSuccess,
