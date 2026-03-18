@@ -22,6 +22,8 @@ from lectern.orchestration.session_orchestrator import (
     SessionOrchestrator,
 )
 from lectern.utils.error_handling import capture_exception
+from lectern.utils.history import HistoryManager
+from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.tags import infer_slide_set_name
 
 
@@ -500,3 +502,207 @@ class GenerationPhase(PipelinePhase):
             concept_map=context.concept_map,
             total_pages=len(context.pages),
         )
+
+
+class ExportPhase(PipelinePhase):
+    async def execute(
+        self,
+        context: SessionContext,
+        emitter: PipelineEmitter,
+        ai_client: LecternAIClient,
+    ) -> None:
+        del ai_client
+        history_mgr = HistoryManager()
+        all_cards = context.all_cards
+        pages = context.pages
+        slide_set_name = context.slide_set_name
+        final_coverage = context.final_coverage
+        history_id = context.config.entry_id
+        run_started_at = context.run_started_at or time.perf_counter()
+
+        if not all_cards:
+            await emitter.emit_event(ServiceEvent("warning", "No cards were generated."))
+            await asyncio.to_thread(history_mgr.update_entry, history_id, status="error")
+            await emitter.emit_event(
+                ServiceEvent(
+                    "error",
+                    "Generation completed without any usable cards.",
+                    {
+                        "terminal": True,
+                        "stage": "generation",
+                        "elapsed_ms": self._elapsed_ms(run_started_at),
+                    },
+                )
+            )
+            return
+
+        if context.config.skip_export:
+            await emitter.emit_event(
+                ServiceEvent("info", "Skipping Anki export (Draft Mode)")
+            )
+            await asyncio.to_thread(
+                history_mgr.sync_session_state,
+                session_id=context.config.session_id or history_id,
+                cards=all_cards,
+                status="completed",
+                deck_name=context.config.deck_name,
+                slide_set_name=slide_set_name,
+                model_name=context.config.model_name,
+                tags=context.config.tags,
+                total_pages=len(pages),
+                coverage_data=final_coverage,
+            )
+            await emitter.emit_event(
+                ServiceEvent(
+                    "done",
+                    "Draft Generation Complete",
+                    {
+                        "created": 0,
+                        "failed": 0,
+                        "total": len(all_cards),
+                        "elapsed": time.perf_counter() - run_started_at,
+                        "elapsed_ms": self._elapsed_ms(run_started_at),
+                        "cards": all_cards,
+                        "slide_set_name": slide_set_name,
+                        "total_pages": len(pages),
+                        "coverage_data": final_coverage,
+                        "terminal": True,
+                    },
+                )
+            )
+            return
+
+        if self._should_stop(context.config.stop_check):
+            await asyncio.to_thread(history_mgr.update_entry, history_id, status="cancelled")
+            await emitter.emit_event(
+                ServiceEvent(
+                    "cancelled",
+                    "Generation cancelled during export.",
+                    {
+                        "terminal": True,
+                        "stage": "export",
+                        "elapsed_ms": self._elapsed_ms(run_started_at),
+                        "generated_cards": len(all_cards),
+                    },
+                )
+            )
+            return
+
+        anki_export_info = await get_connection_info()
+        if not (
+            anki_export_info.get("connected")
+            and anki_export_info.get("collection_available", False)
+        ):
+            reason = anki_export_info.get("error") or "AnkiConnect unavailable."
+            await emitter.emit_event(
+                ServiceEvent(
+                    "error",
+                    f"Export skipped: {reason}",
+                    {
+                        "recoverable": False,
+                        "terminal": True,
+                        "stage": "export",
+                        "error_kind": anki_export_info.get("error_kind"),
+                        "elapsed_ms": self._elapsed_ms(run_started_at),
+                    },
+                )
+            )
+            await asyncio.to_thread(history_mgr.update_entry, history_id, status="error")
+            return
+
+        await emitter.emit_event(
+            ServiceEvent(
+                "step_start",
+                f"Create {len(all_cards)} notes in Anki",
+                {"phase": "exporting"},
+            )
+        )
+        await emitter.emit_event(
+            ServiceEvent(
+                "progress_start",
+                "Exporting",
+                {"total": len(all_cards), "label": "Notes", "phase": "exporting"},
+            )
+        )
+        export_started_at = time.perf_counter()
+
+        created = 0
+        failed = 0
+        for card in all_cards:
+            result = await export_card_to_anki(
+                card=card,
+                deck_name=context.config.deck_name,
+                slide_set_name=slide_set_name,
+                fallback_model=config.DEFAULT_BASIC_MODEL,
+                additional_tags=context.config.tags,
+            )
+            if result.success:
+                created += 1
+                await emitter.emit_event(
+                    ServiceEvent(
+                        "note",
+                        f"Created note {result.note_id}",
+                        {"id": result.note_id},
+                    )
+                )
+            else:
+                failed += 1
+                await emitter.emit_event(
+                    ServiceEvent("warning", f"Failed to create note: {result.error}")
+                )
+            await emitter.emit_event(
+                ServiceEvent("progress_update", "", {"current": created + failed})
+            )
+
+        await emitter.emit_event(
+            ServiceEvent(
+                "step_end",
+                "Export Complete",
+                {
+                    "success": True,
+                    "created": created,
+                    "failed": failed,
+                    "duration_ms": self._elapsed_ms(export_started_at),
+                },
+            )
+        )
+
+        await asyncio.to_thread(
+            history_mgr.sync_session_state,
+            session_id=context.config.session_id or history_id,
+            cards=all_cards,
+            status="completed",
+            deck_name=context.config.deck_name,
+            slide_set_name=slide_set_name,
+            model_name=context.config.model_name,
+            tags=context.config.tags,
+            total_pages=len(pages),
+            coverage_data=final_coverage,
+        )
+
+        elapsed = time.perf_counter() - run_started_at
+        await emitter.emit_event(
+            ServiceEvent(
+                "done",
+                "Job Complete",
+                {
+                    "created": created,
+                    "failed": failed,
+                    "total": len(all_cards),
+                    "elapsed": elapsed,
+                    "elapsed_ms": self._elapsed_ms(run_started_at),
+                    "slide_set_name": slide_set_name,
+                    "total_pages": len(pages),
+                    "coverage_data": final_coverage,
+                    "terminal": True,
+                },
+            )
+        )
+
+    @staticmethod
+    def _should_stop(stop_check: Any) -> bool:
+        return bool(stop_check and stop_check())
+
+    @staticmethod
+    def _elapsed_ms(started_at: float) -> int:
+        return int((time.perf_counter() - started_at) * 1000)
