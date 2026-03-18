@@ -20,9 +20,18 @@ class HistoryManager:
         deck: str,
         session_id: Optional[str] = None,
         status: str = "draft",
+        source_file_name: Optional[str] = None,
+        source_pdf_sha256: Optional[str] = None,
     ) -> str:
         """Create a new history entry and return its ID."""
-        return self.db.add_history(filename, deck, session_id, status)
+        return self.db.add_history(
+            filename,
+            deck,
+            session_id,
+            status,
+            source_file_name=source_file_name,
+            source_pdf_sha256=source_pdf_sha256,
+        )
 
     def update_entry(
         self,
@@ -44,6 +53,8 @@ class HistoryManager:
         tags: Optional[List[str]] = None,
         total_pages: Optional[int] = None,
         coverage_data: Optional[Dict[str, Any]] = None,
+        source_file_name: Optional[str] = None,
+        source_pdf_sha256: Optional[str] = None,
     ) -> bool:
         """Persist session cards, status, and metadata in one transaction."""
         if not session_id:
@@ -59,6 +70,8 @@ class HistoryManager:
             tags=tags,
             total_pages=total_pages,
             coverage_data=coverage_data,
+            source_file_name=source_file_name,
+            source_pdf_sha256=source_pdf_sha256,
         )
 
         # If status or card_count provided, update core record

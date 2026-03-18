@@ -103,3 +103,51 @@ def test_recover_interrupted_sessions_marks_inflight_drafts():
         assert idle["current_phase"] is None
     finally:
         mgr.clear_all()
+
+
+def test_database_manager_persists_resume_invariant_metadata():
+    db = DatabaseManager()
+    session_id = "resume-metadata-session"
+    entry_id = db.add_history(
+        "test.pdf",
+        "Deck",
+        session_id=session_id,
+        source_file_name="slides-original.pdf",
+        source_pdf_sha256="sha256-abc",
+    )
+
+    try:
+        entry = db.get_entry_by_session_id(session_id)
+        assert entry is not None
+        assert entry["source_file_name"] == "slides-original.pdf"
+        assert entry["source_pdf_sha256"] == "sha256-abc"
+    finally:
+        db.delete_entry(entry_id)
+
+
+def test_history_manager_sync_session_state_persists_resume_metadata():
+    mgr = HistoryManager()
+    mgr.clear_all()
+
+    try:
+        session_id = "sync-resume-metadata-session"
+        mgr.add_entry(
+            filename="lecture.pdf",
+            deck="Deck",
+            session_id=session_id,
+            status="draft",
+        )
+        mgr.sync_session_state(
+            session_id=session_id,
+            cards=[],
+            model_name="gemini-3-flash",
+            source_file_name="lecture.pdf",
+            source_pdf_sha256="sha256-sync",
+        )
+        entry = mgr.get_entry_by_session_id(session_id)
+        assert entry is not None
+        assert entry["model_name"] == "gemini-3-flash"
+        assert entry["source_file_name"] == "lecture.pdf"
+        assert entry["source_pdf_sha256"] == "sha256-sync"
+    finally:
+        mgr.clear_all()

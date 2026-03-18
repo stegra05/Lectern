@@ -13,9 +13,20 @@ export type StepStatus = 'pending' | 'active' | 'success' | 'error';
 
 type HealthDiagnostics = components['schemas']['HealthDiagnostics'];
 
+interface DiagnosticsRemediationAction {
+  label?: string | null;
+  description?: string | null;
+  url?: string | null;
+}
+
+interface DiagnosticsRemediationPayload {
+  summary?: string | null;
+  actions?: DiagnosticsRemediationAction[] | null;
+}
+
 type OptionalHealthDiagnostics = {
-  anki?: Partial<HealthDiagnostics['anki']> | null;
-  api_key?: Partial<HealthDiagnostics['api_key']> | null;
+  anki?: (Partial<HealthDiagnostics['anki']> & { remediation?: DiagnosticsRemediationPayload | null }) | null;
+  api_key?: (Partial<HealthDiagnostics['api_key']> & { remediation?: DiagnosticsRemediationPayload | null }) | null;
 };
 
 type HealthWithOptionalDiagnostics = Omit<HealthStatus, 'diagnostics'> & {
@@ -25,6 +36,14 @@ type HealthWithOptionalDiagnostics = Omit<HealthStatus, 'diagnostics'> & {
 export interface OnboardingDiagnosticsDetails {
   reason?: string;
   hint?: string;
+  summary?: string;
+  actions: OnboardingRemediationAction[];
+}
+
+export interface OnboardingRemediationAction {
+  label: string;
+  description?: string;
+  url?: string;
 }
 
 function delay(ms: number): Promise<void> {
@@ -35,6 +54,53 @@ function textOrUndefined(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
+
+function getRemediationActions(
+  remediation: DiagnosticsRemediationPayload | null | undefined
+): OnboardingRemediationAction[] {
+  const actions = remediation?.actions;
+  if (!Array.isArray(actions)) {
+    return [];
+  }
+
+  return actions
+    .map((action) => {
+      const label = textOrUndefined(action?.label);
+      if (!label) {
+        return undefined;
+      }
+
+      return {
+        label,
+        description: textOrUndefined(action?.description),
+        url: textOrUndefined(action?.url),
+      };
+    })
+    .filter((action): action is OnboardingRemediationAction => Boolean(action));
+}
+
+const DEFAULT_ANKI_ACTIONS: OnboardingRemediationAction[] = [
+  {
+    label: 'Open AnkiConnect add-on page',
+    description: 'Install or enable AnkiConnect in Anki.',
+    url: 'https://ankiweb.net/shared/info/2055492159',
+  },
+  {
+    label: 'Restart Anki',
+    description: 'Restart after enabling the add-on, then retry.',
+  },
+];
+
+const DEFAULT_API_KEY_ACTIONS: OnboardingRemediationAction[] = [
+  {
+    label: 'Generate Gemini API key',
+    url: 'https://aistudio.google.com/app/apikey',
+  },
+  {
+    label: 'Paste key and initialize',
+    description: 'Paste the key above and click Initialize.',
+  },
+];
 
 function isAnkiFailureKind(kind: ReturnType<typeof getHealthRemediation>['kind']): boolean {
   return kind === 'anki_offline' || kind === 'anki_unreachable';
@@ -156,23 +222,33 @@ export function useOnboardingFlow(onComplete: () => void) {
 
   const ankiDiagnosticsReason = textOrUndefined(diagnostics?.anki?.reason);
   const ankiDiagnosticsHint = textOrUndefined(diagnostics?.anki?.hint);
+  const ankiDiagnosticsSummary = textOrUndefined(diagnostics?.anki?.remediation?.summary);
+  const ankiDiagnosticsActions = getRemediationActions(diagnostics?.anki?.remediation);
   const ankiDiagnostics =
-    ankiStatus === 'error' && isAnkiFailureKind(remediation.kind) && (ankiDiagnosticsReason || ankiDiagnosticsHint)
+    ankiStatus === 'error' &&
+    isAnkiFailureKind(remediation.kind) &&
+    (ankiDiagnosticsReason || ankiDiagnosticsHint || ankiDiagnosticsSummary || ankiDiagnosticsActions.length > 0)
       ? {
           reason: ankiDiagnosticsReason ?? remediation.message,
           hint: ankiDiagnosticsHint ?? remediation.hint,
+          summary: ankiDiagnosticsSummary,
+          actions: ankiDiagnosticsActions.length > 0 ? ankiDiagnosticsActions : DEFAULT_ANKI_ACTIONS,
         }
       : undefined;
 
   const apiKeyDiagnosticsReason = textOrUndefined(diagnostics?.api_key?.reason);
   const apiKeyDiagnosticsHint = textOrUndefined(diagnostics?.api_key?.hint);
+  const apiKeyDiagnosticsSummary = textOrUndefined(diagnostics?.api_key?.remediation?.summary);
+  const apiKeyDiagnosticsActions = getRemediationActions(diagnostics?.api_key?.remediation);
   const apiKeyDiagnostics =
     geminiStatus === 'active' &&
     remediation.kind === 'missing_api_key' &&
-    (apiKeyDiagnosticsReason || apiKeyDiagnosticsHint)
+    (apiKeyDiagnosticsReason || apiKeyDiagnosticsHint || apiKeyDiagnosticsSummary || apiKeyDiagnosticsActions.length > 0)
       ? {
           reason: apiKeyDiagnosticsReason ?? remediation.message,
           hint: apiKeyDiagnosticsHint ?? remediation.hint,
+          summary: apiKeyDiagnosticsSummary,
+          actions: apiKeyDiagnosticsActions.length > 0 ? apiKeyDiagnosticsActions : DEFAULT_API_KEY_ACTIONS,
         }
       : undefined;
 

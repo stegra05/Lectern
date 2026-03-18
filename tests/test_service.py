@@ -241,6 +241,31 @@ class TestStopCheck:
 
 class TestServiceIntegration:
     @pytest.mark.asyncio
+    @patch(
+        "lectern.lectern_service.run_orchestration_entry",
+        new_callable=AsyncMock,
+        create=True,
+    )
+    async def test_run_delegates_to_canonical_orchestration_entry(
+        self,
+        mock_run_orchestration_entry,
+        service,
+        generation_env,
+    ):
+        """Service should use one orchestration entry helper for phase execution."""
+        events = []
+        async for event in service.run(
+            pdf_path="/fake/path.pdf",
+            deck_name="Test Deck",
+            model_name="gemini-3-flash-preview",
+            tags=[],
+            skip_export=True,
+        ):
+            events.append(event)
+
+        mock_run_orchestration_entry.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_full_flow_emits_expected_events(self, service, generation_env):
         """Test that a full run emits the expected event sequence."""
         env = generation_env

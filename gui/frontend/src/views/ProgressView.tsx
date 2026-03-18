@@ -20,6 +20,7 @@ import { useTrickleProgress } from '../hooks/useTrickleProgress';
 import { useTimeEstimate } from '../hooks/useTimeEstimate';
 import { useReviewOrchestrator } from '../hooks/useReviewOrchestrator';
 import { useLecternStore } from '../store';
+import type { SyncPreview } from '../api';
 import {
     selectFilteredCards,
     selectSortedCards,
@@ -56,6 +57,8 @@ export function ProgressView() {
     const [activePage, setActivePage] = useState<number | null>(null);
     const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
     const [isFocusMode, setIsFocusMode] = useState(false);
+    const [syncPreview, setSyncPreview] = useState<SyncPreview | null>(null);
+    const [isPreviewingSync, setIsPreviewingSync] = useState(false);
 
     // Reset filters when step changes - using render-time reset pattern to avoid cascading effects
     const [prevStep, setPrevStep] = useState(step);
@@ -109,6 +112,23 @@ export function ProgressView() {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     }, [logEntries, sessionId]);
+
+    const handlePreviewSync = useCallback(async () => {
+        setIsPreviewingSync(true);
+        try {
+            const preview = await review.handleSyncPreview();
+            if (preview) {
+                setSyncPreview(preview);
+            }
+        } finally {
+            setIsPreviewingSync(false);
+        }
+    }, [review]);
+
+    const handleSyncWithPreview = useCallback(() => {
+        setSyncPreview(null);
+        review.handleSync();
+    }, [review]);
 
 
 
@@ -251,9 +271,34 @@ export function ProgressView() {
 
             {/* New Session + Sync CTA */}
             <div className="p-4 border-t border-border space-y-2 mt-auto">
+                {syncPreview && (
+                    <div
+                        className={
+                            syncPreview.conflict_count > 0
+                                ? 'rounded-lg border border-amber-400/30 bg-amber-500/10 p-3'
+                                : 'rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-3'
+                        }
+                    >
+                        <p className="text-xs font-semibold text-text-main">Sync Preview</p>
+                        <p className="mt-1 text-[11px] text-text-muted">
+                            {syncPreview.create_candidates} create, {syncPreview.update_candidates} update candidates,{' '}
+                            {syncPreview.conflict_count} conflicts.
+                        </p>
+                        {syncPreview.note_lookup_error && (
+                            <p className="mt-1 text-[11px] text-amber-300">{syncPreview.note_lookup_error}</p>
+                        )}
+                    </div>
+                )}
                 <button
-                    onClick={() => review.handleSync()}
-                    disabled={allCards.length === 0}
+                    onClick={handlePreviewSync}
+                    disabled={allCards.length === 0 || isPreviewingSync || isSyncing}
+                    className="w-full py-2.5 text-text-main border border-border hover:border-border/80 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isPreviewingSync ? 'Previewing…' : 'Preview Sync'}
+                </button>
+                <button
+                    onClick={handleSyncWithPreview}
+                    disabled={allCards.length === 0 || isPreviewingSync}
                     className="w-full bg-primary hover:bg-primary/90 text-background font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                     <UploadCloud className="w-4 h-4" />
@@ -295,6 +340,7 @@ export function ProgressView() {
                     searchQuery={searchQuery}
                     onSearchChange={actions.setSearchQuery}
                     isMultiSelectMode={isMultiSelectMode}
+                    selectedCount={selectedCards.size}
                     onToggleMultiSelect={actions.toggleMultiSelectMode}
                     filteredCount={filteredCards.length}
                     onFocusMode={() => setIsFocusMode(true)}

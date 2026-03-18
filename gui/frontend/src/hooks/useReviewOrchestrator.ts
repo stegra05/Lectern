@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 
-import { api, type ProgressEvent } from '../api';
+import { api, type ProgressEvent, type SyncPreview } from '../api';
 import {
   useDeleteAnkiNotesMutation,
   useUpdateAnkiNoteMutation,
@@ -93,9 +93,27 @@ export function useReviewOrchestrator() {
     }
   }, [finishSync, startSync]);
 
+  const handleSyncPreview = useCallback(async (): Promise<SyncPreview | null> => {
+    const { cards, deckName } = getFromStore();
+    try {
+      return await api.previewSyncToAnki({
+        cards,
+        deck_name: deckName,
+        tags: [],
+        slide_set_name: deckName,
+        allow_updates: true,
+      });
+    } catch (error) {
+      console.error('Sync preview failed', error);
+      getFromStore().addToast('error', 'Failed to preview sync');
+      return null;
+    }
+  }, []);
+
   return {
     saveEdit,
     handleAnkiDelete,
     handleSync,
+    handleSyncPreview,
   };
 }

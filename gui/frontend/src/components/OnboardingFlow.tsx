@@ -7,7 +7,7 @@ import { Check, RefreshCw, Terminal, Server, BrainCircuit, AlertCircle, Lock, Un
 import { clsx } from 'clsx';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useOnboardingFlow } from '../hooks/useOnboardingFlow';
-import type { StepStatus } from '../hooks/useOnboardingFlow';
+import type { OnboardingRemediationAction, StepStatus } from '../hooks/useOnboardingFlow';
 import { GlassCard } from './GlassCard';
 
 // ---------------------------------------------------------------------------
@@ -33,6 +33,58 @@ function StepIndicator({ status, icon: Icon }: { status: StepStatus; icon: React
           <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-20 animate-ping" />
           <span className="absolute inline-flex h-[140%] w-[140%] rounded-full border border-primary/20 opacity-50 animate-pulse" />
         </>
+      )}
+    </div>
+  );
+}
+
+function RemediationActions({
+  summary,
+  actions,
+  tone,
+}: {
+  summary?: string;
+  actions?: OnboardingRemediationAction[];
+  tone: 'danger' | 'warning';
+}) {
+  if (!summary && (!actions || actions.length === 0)) {
+    return null;
+  }
+
+  const textClass = tone === 'danger' ? 'text-red-200' : 'text-amber-100';
+  const descriptionClass = tone === 'danger' ? 'text-red-300' : 'text-amber-200';
+  const bulletClass = tone === 'danger' ? 'bg-red-300/60' : 'bg-amber-200/60';
+  const linkClass =
+    tone === 'danger'
+      ? 'underline decoration-red-300/50 hover:text-white'
+      : 'underline decoration-amber-200/50 hover:text-white';
+
+  return (
+    <div className="mt-3 space-y-2">
+      {summary && <p className={clsx('text-xs font-medium', textClass)}>{summary}</p>}
+      {actions && actions.length > 0 && (
+        <ul className="space-y-1.5">
+          {actions.map((action) => (
+            <li key={action.label} className="flex items-start gap-2">
+              <span className={clsx('mt-1.5 h-1.5 w-1.5 rounded-full', bulletClass)} aria-hidden="true" />
+              <div className="space-y-0.5">
+                {action.url ? (
+                  <a
+                    href={action.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={clsx('text-xs', textClass, linkClass)}
+                  >
+                    {action.label}
+                  </a>
+                ) : (
+                  <p className={clsx('text-xs', textClass)}>{action.label}</p>
+                )}
+                {action.description && <p className={clsx('text-[11px]', descriptionClass)}>{action.description}</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -144,19 +196,22 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                             {state.ankiDiagnostics?.hint ? (
                               <p className="text-xs text-red-300">{state.ankiDiagnostics.hint}</p>
                             ) : (
-                              <>
-                                <div className="text-xs text-red-300">
-                                  <p>1. Open Anki → Tools → Add-ons</p>
-                                  <p>
-                                    2. Get Add-ons → Code: <span className="font-mono bg-red-500/20 px-1 rounded select-all">2055492159</span>
-                                  </p>
-                                  <p>3. Restart Anki</p>
-                                </div>
-                                <a href="https://ankiweb.net/shared/info/2055492159" target="_blank" rel="noreferrer" className="inline-block text-xs underline hover:text-white">
+                              <div className="text-xs text-red-300">
+                                <p>1. Open Anki → Tools → Add-ons</p>
+                                <p>
+                                  2. Get Add-ons → Code: <span className="font-mono bg-red-500/20 px-1 rounded select-all">2055492159</span>
+                                </p>
+                                <p>3. Restart Anki</p>
+                                <a href="https://ankiweb.net/shared/info/2055492159" target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs underline hover:text-white">
                                   AnkiConnect Page
                                 </a>
-                              </>
+                              </div>
                             )}
+                            <RemediationActions
+                              summary={state.ankiDiagnostics?.summary}
+                              actions={state.ankiDiagnostics?.actions}
+                              tone="danger"
+                            />
                           </div>
                         </div>
                         <button
@@ -217,6 +272,11 @@ export function OnboardingFlow({ onComplete }: OnboardingProps) {
                           <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-500/10 p-3">
                             {state.apiKeyDiagnostics.reason && <p className="text-xs text-amber-100">{state.apiKeyDiagnostics.reason}</p>}
                             {state.apiKeyDiagnostics.hint && <p className="mt-1 text-[11px] text-amber-200">{state.apiKeyDiagnostics.hint}</p>}
+                            <RemediationActions
+                              summary={state.apiKeyDiagnostics.summary}
+                              actions={state.apiKeyDiagnostics.actions}
+                              tone="warning"
+                            />
                           </div>
                         )}
 

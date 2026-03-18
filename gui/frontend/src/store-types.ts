@@ -157,7 +157,7 @@ export type BatchActions = {
     toggleCardSelection: (cardUid: string) => void;
     /** Select a range of cards from lastSelectedUid to currentUid (for Shift+Click) */
     selectCardRange: (currentUid: string) => void;
-    selectAllCards: () => void;
+    selectAllCards: (cardUids?: string[]) => void;
     clearSelection: () => void;
     batchDeleteSelected: () => Promise<void>;
     undoBatchDelete: () => void;

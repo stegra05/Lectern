@@ -277,8 +277,8 @@ export function isValidProgressEvent(event: unknown): event is { type: string; m
 
 /** Known progress event types from backend NDJSON streams */
 const ProgressEventTypeSchema = z.enum([
-  'session_start', 'status', 'info', 'warning', 'error',
-  'progress_start', 'progress_update', 'card', 'note_created', 'note_updated', 'note_recreated',
+  'session_start', 'session_resumed', 'status', 'info', 'warning', 'error',
+  'progress_start', 'progress_update', 'card', 'note', 'note_created', 'note_updated', 'note_recreated',
   'cards_replaced', 'done', 'cancelled', 'step_start', 'step_end', 'control_snapshot',
 ]);
 

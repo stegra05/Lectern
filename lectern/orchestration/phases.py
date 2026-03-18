@@ -8,13 +8,14 @@ from typing import Any
 
 from gui.backend.sse_emitter import SSEEmitter
 from lectern import config
-from lectern.ai_client import DocumentUploadError, LecternAIClient, UploadedDocument
+from lectern.ai_client import DocumentUploadError, UploadedDocument
 from lectern.anki_connector import get_connection_info, sample_examples_from_deck
 from lectern.cost_estimator import extract_pdf_metadata
 from lectern.coverage import compute_coverage_data
 from lectern.events.pipeline_emitter import PipelineEmitter
 from lectern.events.service_events import ServiceEvent
 from lectern.orchestration.pipeline_context import PipelinePhase, SessionContext
+from lectern.providers.base import AIProvider
 from lectern.orchestration.session_orchestrator import (
     GenerationConfig as OrchGenerationConfig,
     GenerationSetupConfig,
@@ -39,7 +40,7 @@ class InitializationPhase(PipelinePhase):
         self,
         context: SessionContext,
         emitter: PipelineEmitter,
-        ai_client: LecternAIClient,
+        ai_client: AIProvider,
     ) -> None:
         del ai_client
         pdf_path = context.config.pdf_path
@@ -113,7 +114,7 @@ class ConceptMappingPhase(PipelinePhase):
         self,
         context: SessionContext,
         emitter: PipelineEmitter,
-        ai_client: LecternAIClient,
+        ai_client: AIProvider,
     ) -> None:
         phase_started_at = time.perf_counter()
         await emitter.emit_event(
@@ -257,14 +258,14 @@ class ConceptMappingPhase(PipelinePhase):
         )
 
         try:
-            raw_concept_map = await ai_client.concept_map_from_file(
+            raw_concept_map = await ai_client.build_concept_map(
                 file_uri=context.uploaded_pdf["uri"],
                 mime_type=context.uploaded_pdf.get("mime_type", "application/pdf"),
             )
             concept_map = raw_concept_map if isinstance(raw_concept_map, dict) else {}
             if not concept_map:
                 try:
-                    legacy_map = await ai_client.concept_map([])
+                    legacy_map = await ai_client.build_concept_map(pdf_content=[])
                     if isinstance(legacy_map, dict):
                         concept_map = legacy_map
                 except Exception:
@@ -384,7 +385,7 @@ class GenerationPhase(PipelinePhase):
         self,
         context: SessionContext,
         emitter: PipelineEmitter,
-        ai_client: LecternAIClient,
+        ai_client: AIProvider,
     ) -> None:
         total_text_chars = context.pdf.metadata_chars or context.pdf.text_chars
         orchestrator = SessionOrchestrator()
@@ -534,7 +535,7 @@ class ExportPhase(PipelinePhase):
         self,
         context: SessionContext,
         emitter: PipelineEmitter,
-        ai_client: LecternAIClient,
+        ai_client: AIProvider,
     ) -> None:
         del ai_client
         history_mgr = HistoryManager()
@@ -739,3 +740,13 @@ class ExportPhase(PipelinePhase):
     @staticmethod
     def _elapsed_ms(started_at: float) -> int:
         return int((time.perf_counter() - started_at) * 1000)
+
+
+def build_orchestration_phases() -> list[PipelinePhase]:
+    """Construct the canonical pipeline phase sequence."""
+    return [
+        InitializationPhase(),
+        ConceptMappingPhase(),
+        GenerationPhase(),
+        ExportPhase(),
+    ]

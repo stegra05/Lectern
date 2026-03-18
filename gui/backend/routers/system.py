@@ -37,6 +37,7 @@ class AnkiDiagnostics(BaseModel):
     connected: bool
     reason: Optional[str] = None
     hint: Optional[str] = None
+    remediation: Optional["RemediationPlan"] = None
 
 
 class ProviderDiagnostics(BaseModel):
@@ -45,6 +46,7 @@ class ProviderDiagnostics(BaseModel):
     ready: bool
     reason: Optional[str] = None
     hint: Optional[str] = None
+    remediation: Optional["RemediationPlan"] = None
 
 
 class ApiKeyDiagnostics(BaseModel):
@@ -52,6 +54,18 @@ class ApiKeyDiagnostics(BaseModel):
     configured: bool
     reason: Optional[str] = None
     hint: Optional[str] = None
+    remediation: Optional["RemediationPlan"] = None
+
+
+class RemediationAction(BaseModel):
+    label: str
+    description: Optional[str] = None
+    url: Optional[str] = None
+
+
+class RemediationPlan(BaseModel):
+    summary: Optional[str] = None
+    actions: List[RemediationAction]
 
 
 class HealthDiagnostics(BaseModel):
@@ -116,6 +130,7 @@ def _build_health_diagnostics(
 
     anki_reason = None
     anki_hint = None
+    anki_remediation: Optional[RemediationPlan] = None
     anki_status: Literal["healthy", "offline", "unreachable"] = "healthy"
     if not anki_connected:
         if anki_error:
@@ -128,21 +143,71 @@ def _build_health_diagnostics(
             "Start Anki and ensure AnkiConnect is installed/enabled "
             "(add-on code: 2055492159)."
         )
+        anki_remediation = RemediationPlan(
+            summary="Do this next to reconnect Anki.",
+            actions=[
+                RemediationAction(
+                    label="Open AnkiConnect add-on page",
+                    description="Install or enable AnkiConnect in Anki.",
+                    url="https://ankiweb.net/shared/info/2055492159",
+                ),
+                RemediationAction(
+                    label="Restart Anki",
+                    description="Restart Anki after enabling the add-on.",
+                ),
+            ],
+        )
 
     provider_reason = None
     provider_hint = None
+    provider_remediation: Optional[RemediationPlan] = None
     if not provider_supported:
         provider_reason = f"Unsupported provider '{active_provider}'."
         provider_hint = "Set ai_provider to a supported backend (e.g. gemini)."
+        provider_remediation = RemediationPlan(
+            summary="Select a supported AI provider to continue.",
+            actions=[
+                RemediationAction(
+                    label="Set ai_provider to gemini",
+                    description="Update configuration and restart Lectern if needed.",
+                ),
+            ],
+        )
     elif active_provider == "gemini" and not api_key_configured:
         provider_reason = "Gemini provider requires an API key."
         provider_hint = "Add a Gemini API key in Settings to enable generation."
+        provider_remediation = RemediationPlan(
+            summary="Configure Gemini credentials to make the provider ready.",
+            actions=[
+                RemediationAction(
+                    label="Generate Gemini API key",
+                    url="https://aistudio.google.com/app/apikey",
+                ),
+                RemediationAction(
+                    label="Open Lectern Settings and save the API key",
+                ),
+            ],
+        )
 
     api_key_reason = None
     api_key_hint = None
+    api_key_remediation: Optional[RemediationPlan] = None
     if api_key_required and not api_key_configured:
         api_key_reason = "Gemini API key is missing."
         api_key_hint = "Open Settings and provide a Gemini API key."
+        api_key_remediation = RemediationPlan(
+            summary="Complete these steps to enable AI generation.",
+            actions=[
+                RemediationAction(
+                    label="Generate Gemini API key",
+                    url="https://aistudio.google.com/app/apikey",
+                ),
+                RemediationAction(
+                    label="Paste key and initialize",
+                    description="Return to Lectern and save the key.",
+                ),
+            ],
+        )
 
     return HealthDiagnostics(
         anki=AnkiDiagnostics(
@@ -150,6 +215,7 @@ def _build_health_diagnostics(
             connected=anki_connected,
             reason=anki_reason,
             hint=anki_hint,
+            remediation=anki_remediation,
         ),
         provider=ProviderDiagnostics(
             name=active_provider,
@@ -157,12 +223,14 @@ def _build_health_diagnostics(
             ready=provider_ready,
             reason=provider_reason,
             hint=provider_hint,
+            remediation=provider_remediation,
         ),
         api_key=ApiKeyDiagnostics(
             required=api_key_required,
             configured=api_key_configured,
             reason=api_key_reason,
             hint=api_key_hint,
+            remediation=api_key_remediation,
         ),
     )
 

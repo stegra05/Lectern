@@ -244,10 +244,22 @@ export const createBatchActions = (
       return { selectedCards: newSet };
     });
   },
-  selectAllCards: () => {
+  selectAllCards: (cardUids) => {
     const { cards } = get();
-    const allUids = new Set(cards.filter(c => c._uid).map(c => c._uid!));
-    set({ selectedCards: allUids });
+    const allUids = cards.filter(c => c._uid).map(c => c._uid!);
+
+    if (Array.isArray(cardUids)) {
+      const validUidSet = new Set(allUids);
+      const scopedUids = cardUids.filter((uid) => validUidSet.has(uid));
+
+      set({
+        selectedCards: new Set(scopedUids),
+        lastSelectedUid: scopedUids.length > 0 ? scopedUids[scopedUids.length - 1] : null,
+      });
+      return;
+    }
+
+    set({ selectedCards: new Set(allUids), lastSelectedUid: null });
   },
   clearSelection: () => {
     set({ selectedCards: new Set(), lastSelectedUid: null });
@@ -341,4 +353,3 @@ export const createBatchActions = (
     }));
   },
 });
-

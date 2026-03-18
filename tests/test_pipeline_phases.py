@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from lectern.ai_client import DocumentUploadError, LecternAIClient, UploadedDocument
+from lectern.ai_client import DocumentUploadError, UploadedDocument
 from lectern.events.service_events import ServiceEvent
 from lectern.orchestration.pipeline_context import (
     PipelinePhase,
@@ -198,13 +198,13 @@ async def test_concept_mapping_phase_updates_context_on_success() -> None:
     context = _context(skip_export=False)
     context.pdf.page_count = 10
     context.pdf.text_chars = 3200
-    ai_client = MagicMock(spec=LecternAIClient)
+    ai_client = MagicMock()
     ai_client.upload_document = AsyncMock(
         return_value=UploadedDocument(
             uri="gs://doc.pdf", mime_type="application/pdf", duration_ms=50
         )
     )
-    ai_client.concept_map_from_file = AsyncMock(
+    ai_client.build_concept_map = AsyncMock(
         return_value={
             "concepts": [{"name": "A"}],
             "relations": [],
@@ -248,7 +248,7 @@ async def test_concept_mapping_phase_upload_error_halts() -> None:
     context = _context(skip_export=False)
     context.pdf.page_count = 3
     context.pdf.text_chars = 1000
-    ai_client = MagicMock(spec=LecternAIClient)
+    ai_client = MagicMock()
     ai_client.upload_document = AsyncMock(
         side_effect=DocumentUploadError(
             "upload failed",

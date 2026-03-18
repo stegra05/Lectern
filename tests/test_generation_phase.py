@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 
 from lectern import config
 from lectern.events.domain import ProgressUpdatedEvent
@@ -16,6 +18,9 @@ from lectern.orchestration.session_orchestrator import (
     GenerationSetupResult,
     SessionOrchestrator,
 )
+from lectern.utils.history import HistoryManager
+from gui.backend.main import app
+from gui.backend.dependencies import get_generation_service
 
 
 @dataclass
@@ -27,6 +32,9 @@ class RecordingEmitter:
 
     async def emit_event(self, event: ServiceEvent) -> None:
         self.events.append(event)
+
+
+client = TestClient(app)
 
 
 def _context() -> SessionContext:
@@ -155,3 +163,75 @@ async def test_generation_phase_maps_domain_events_and_updates_context() -> None
     assert context.all_cards == [{"front": "Q1", "back": "A1"}]
     assert context.final_coverage["total_pages"] == 8
     assert any(ev.type == "progress_update" for ev in emitter.events)
+
+
+def test_generate_rejects_malformed_tags_payload_with_structured_error() -> None:
+    files = {"pdf_file": ("test.pdf", b"pdf content", "application/pdf")}
+    data = {
+        "deck_name": "Deck A",
+        "tags": "{not-valid-json",
+    }
+
+    response = client.post("/generate", files=files, data=data)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "code": "invalid_generation_input",
+        "field": "tags",
+        "reason": "invalid_json",
+        "message": "Invalid generation input for 'tags': expected JSON array of strings.",
+    }
+
+
+def test_generate_rejects_resume_when_source_pdf_hash_mismatches() -> None:
+    history_mgr = HistoryManager()
+    history_mgr.clear_all()
+
+    session_id = "resume-invariant-source-hash"
+    try:
+        history_mgr.add_entry(
+            filename="original.pdf",
+            deck="Deck A",
+            session_id=session_id,
+            status="draft",
+            source_file_name="original.pdf",
+            source_pdf_sha256="persisted-hash-value",
+        )
+        history_mgr.sync_session_state(
+            session_id=session_id,
+            cards=[],
+            model_name="gemini-3-flash",
+            source_file_name="original.pdf",
+            source_pdf_sha256="persisted-hash-value",
+        )
+
+        async def mock_run(*args, **kwargs):
+            del args, kwargs
+            yield ServiceEvent("done", "Finished")
+
+        mock_service = MagicMock()
+        mock_service.run = mock_run
+        app.dependency_overrides[get_generation_service] = lambda: mock_service
+        response = client.post(
+            "/generate",
+            files={"pdf_file": ("incoming.pdf", b"new-pdf-content", "application/pdf")},
+            data={
+                "deck_name": "Deck A",
+                "model_name": "gemini-3-flash",
+                "tags": "[]",
+                "session_id": session_id,
+            },
+        )
+        assert response.status_code == 200
+        events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+        assert not any(evt["type"] == "session_resumed" for evt in events)
+        assert any(
+            evt["type"] == "warning"
+            and evt.get("data", {}).get("warning_kind") == "invalid_resume_invariants"
+            and "source_pdf_sha256"
+            in evt.get("data", {}).get("mismatched_fields", [])
+            for evt in events
+        )
+    finally:
+        app.dependency_overrides.clear()
+        history_mgr.clear_all()

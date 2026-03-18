@@ -8,7 +8,9 @@ Key principle: The orchestrator OWNS the loop. It does not receive state to muta
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Optional
@@ -37,12 +39,15 @@ from lectern.events.domain import (
     ReflectionStoppedEvent,
     WarningEmittedEvent,
 )
+from lectern.events.pipeline_emitter import PipelineEmitter
+from lectern.events.service_events import ServiceEvent
 from lectern.domain_types import (
     CardData,
     ConceptMapData,
     CoverageData,
     OrchestratorAIClient,
 )
+from lectern.orchestration.pipeline_context import SessionContext
 from lectern.generation_loop import (
     _coverage_is_sufficient,
     _rebuild_seen_keys,
@@ -115,6 +120,59 @@ class GenerationSetupResult:
     is_script_mode: bool
     chars_per_page: float
     initial_coverage: CoverageData
+
+
+def _should_stop(stop_check: Optional[Callable[[], bool]]) -> bool:
+    return bool(stop_check and stop_check())
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return int((time.perf_counter() - started_at) * 1000)
+
+
+def _cancelled_event(stage: str, started_at: float) -> ServiceEvent:
+    return ServiceEvent(
+        "cancelled",
+        f"Generation cancelled during {stage}.",
+        {"terminal": True, "stage": stage, "elapsed_ms": _elapsed_ms(started_at)},
+    )
+
+
+async def run_orchestration_entry(
+    *,
+    context: SessionContext,
+    emitter: PipelineEmitter,
+    ai_client: OrchestratorAIClient,
+    history_mgr: Any,
+    start_time: float,
+) -> None:
+    """Execute the canonical phase sequence for a session."""
+    from lectern.orchestration.phases import (
+        PhaseExecutionHalt,
+        build_orchestration_phases,
+    )
+
+    phases = build_orchestration_phases()
+    for index, phase in enumerate(phases):
+        try:
+            await phase.execute(context, emitter, ai_client)
+        except PhaseExecutionHalt as exc:
+            if context.config.entry_id:
+                await asyncio.to_thread(
+                    history_mgr.update_entry,
+                    context.config.entry_id,
+                    status=exc.history_status,
+                )
+            return
+
+        if index == 0 and _should_stop(context.config.stop_check):
+            await asyncio.to_thread(
+                history_mgr.update_entry,
+                context.config.entry_id,
+                status="cancelled",
+            )
+            await emitter.emit_event(_cancelled_event("ai_session_init", start_time))
+            return
 
 
 class SessionOrchestrator:
@@ -310,7 +368,7 @@ class SessionOrchestrator:
                 )
 
                 # Pure AI call (no side effects)
-                out = await ai_client.generate_more_cards(
+                out = await ai_client.generate_cards(
                     limit=limit,
                     examples=config.examples if len(self.state.all_cards) == 0 else "",
                     avoid_fronts=recent_keys,
@@ -460,7 +518,7 @@ class SessionOrchestrator:
 
                 cards_to_refine_json = json.dumps(cards_to_refine, ensure_ascii=False)
 
-                out = await ai_client.reflect(
+                out = await ai_client.reflect_cards(
                     limit=batch_size,
                     all_card_fronts=collect_card_fronts(self.state.all_cards)[-200:],
                     cards_to_refine_json=cards_to_refine_json,

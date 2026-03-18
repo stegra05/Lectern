@@ -27,90 +27,12 @@ from lectern.utils.error_handling import capture_exception
 from lectern.utils.history import HistoryManager
 from lectern.events.pipeline_emitter import PipelineEmitter
 from lectern.orchestration.pipeline_context import SessionContext
-from lectern.orchestration.phases import (
-    ConceptMappingPhase,
-    ExportPhase,
-    GenerationPhase,
-    InitializationPhase,
-    PhaseExecutionHalt,
-)
+from lectern.orchestration.session_orchestrator import run_orchestration_entry
 
 
 from lectern.events.service_events import ServiceEvent
 
 logger = logging.getLogger(__name__)
-
-
-class _ProviderClientAdapter:
-    """Compatibility adapter for phases still expecting legacy AI client methods."""
-
-    def __init__(self, provider: AIProvider) -> None:
-        self._provider = provider
-
-    @property
-    def log_path(self) -> str:
-        return self._provider.log_path
-
-    async def upload_document(self, pdf_path: str) -> Any:
-        return await self._provider.upload_document(pdf_path)
-
-    async def concept_map_from_file(
-        self,
-        *,
-        file_uri: str,
-        mime_type: str = "application/pdf",
-    ) -> dict[str, Any]:
-        return await self._provider.build_concept_map(
-            file_uri=file_uri,
-            mime_type=mime_type,
-        )
-
-    async def concept_map(self, pdf_content: list[dict[str, Any]]) -> dict[str, Any]:
-        return await self._provider.build_concept_map(pdf_content=pdf_content)
-
-    async def generate_more_cards(
-        self,
-        *,
-        limit: int,
-        examples: str = "",
-        avoid_fronts: list[str] | None = None,
-        covered_slides: list[int] | None = None,
-        pacing_hint: str = "",
-        all_card_fronts: list[str] | None = None,
-        coverage_gap_text: str = "",
-    ) -> dict[str, Any]:
-        return await self._provider.generate_cards(
-            limit=limit,
-            examples=examples,
-            avoid_fronts=avoid_fronts,
-            covered_slides=covered_slides,
-            pacing_hint=pacing_hint,
-            all_card_fronts=all_card_fronts,
-            coverage_gap_text=coverage_gap_text,
-        )
-
-    async def reflect(
-        self,
-        *,
-        limit: int,
-        all_card_fronts: list[str] | None = None,
-        cards_to_refine_json: str = "",
-        coverage_gaps: str = "",
-    ) -> dict[str, Any]:
-        return await self._provider.reflect_cards(
-            limit=limit,
-            all_card_fronts=all_card_fronts,
-            cards_to_refine_json=cards_to_refine_json,
-            coverage_gaps=coverage_gaps,
-        )
-
-    def set_slide_set_context(self, *, deck_name: str, slide_set_name: str) -> None:
-        self._provider.set_slide_set_context(
-            deck_name=deck_name, slide_set_name=slide_set_name
-        )
-
-    def drain_warnings(self) -> list[str]:
-        return self._provider.drain_warnings()
 
 
 @dataclass(frozen=True)
@@ -240,34 +162,14 @@ class LecternGenerationService:
                 focus_prompt=context.config.focus_prompt,
                 slide_set_context=None,
             )
-            ai = _ProviderClientAdapter(provider)
-
-            phases = [
-                InitializationPhase(),
-                ConceptMappingPhase(),
-                GenerationPhase(),
-                ExportPhase(),
-            ]
-            for index, phase in enumerate(phases):
-                try:
-                    await phase.execute(context, emitter, ai)
-                except PhaseExecutionHalt as e:
-                    if history_id:
-                        await asyncio.to_thread(
-                            history_mgr.update_entry,
-                            history_id,
-                            status=e.history_status,
-                        )
-                    return
-
-                if index == 0 and self._should_stop(context.config.stop_check):
-                    await asyncio.to_thread(
-                        history_mgr.update_entry, history_id, status="cancelled"
-                    )
-                    await emitter.emit_event(
-                        self._cancelled_event("ai_session_init", start_time)
-                    )
-                    return
+            ai = provider
+            await run_orchestration_entry(
+                context=context,
+                emitter=emitter,
+                ai_client=ai,
+                history_mgr=history_mgr,
+                start_time=start_time,
+            )
 
         except asyncio.CancelledError:
             # Sync cancelled status to DB before task exits
@@ -340,25 +242,5 @@ class LecternGenerationService:
         """Estimate per-image token cost via count_tokens delta."""
         return await verify_image_token_cost_impl(model_name=model_name)
 
-    def _should_stop(self, stop_check: Optional[Callable[[], bool]]) -> bool:
-        return bool(stop_check and stop_check())
-
     def _elapsed_ms(self, started_at: float) -> int:
         return int((time.perf_counter() - started_at) * 1000)
-
-    def _cancelled_event(
-        self,
-        stage: str,
-        started_at: float,
-        extra_data: Optional[Dict[str, Any]] = None,
-    ) -> ServiceEvent:
-        payload: Dict[str, Any] = {
-            "terminal": True,
-            "stage": stage,
-            "elapsed_ms": self._elapsed_ms(started_at),
-        }
-        if extra_data:
-            payload.update(extra_data)
-        return ServiceEvent(
-            "cancelled", f"Generation cancelled during {stage}.", payload
-        )

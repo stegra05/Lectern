@@ -550,3 +550,35 @@ class TestExceptionHierarchy:
 
         with pytest.raises(anki_connector.AnkiConnectError):
             await anki_connector._invoke("invalidAction")
+
+
+class TestSyncFailureTaxonomy:
+    def test_classify_sync_failure_transport_exception(self):
+        details = anki_connector.classify_sync_failure(
+            AnkiTransportError("Failed to reach AnkiConnect")
+        )
+        assert details["failure_kind"] == "transport"
+        assert details["severity"] == "error"
+        assert "Anki is running" in details["hint"]
+
+    def test_classify_sync_failure_api_exception(self):
+        details = anki_connector.classify_sync_failure(
+            AnkiApiError("AnkiConnect error for addNote: Deck not found")
+        )
+        assert details["failure_kind"] == "api"
+        assert details["severity"] == "error"
+        assert "deck and note type" in details["hint"].lower()
+
+    def test_classify_sync_failure_card_validation_exception(self):
+        details = anki_connector.classify_sync_failure(
+            ValueError("invalid literal for int() with base 10: 'abc'")
+        )
+        assert details["failure_kind"] == "card_validation"
+        assert details["severity"] == "warning"
+        assert "card payload fields" in details["hint"].lower()
+
+    def test_classify_sync_failure_transport_from_error_string(self):
+        details = anki_connector.classify_sync_failure(
+            "Failed to reach AnkiConnect at http://127.0.0.1:8765: Connection refused"
+        )
+        assert details["failure_kind"] == "transport"

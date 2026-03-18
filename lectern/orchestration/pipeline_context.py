@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from lectern.ai_client import LecternAIClient
     from lectern.events.pipeline_emitter import PipelineEmitter
+    from lectern.providers.base import AIProvider
 
 
 def _pdf_stem(pdf_path: str) -> str:
@@ -208,7 +208,7 @@ class PipelinePhase(Protocol):
         self,
         context: SessionContext,
         emitter: "PipelineEmitter",
-        ai_client: "LecternAIClient",
+        ai_client: "AIProvider",
     ) -> None:
         """Execute this pipeline phase.
 

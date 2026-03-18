@@ -14,7 +14,7 @@ from lectern.utils.path_utils import get_app_data_dir
 logger = logging.getLogger(__name__)
 
 # Current database schema version - increment when making schema changes
-DB_SCHEMA_VERSION = 4
+DB_SCHEMA_VERSION = 5
 
 
 def get_db_path() -> Path:
@@ -89,7 +89,10 @@ class DatabaseManager:
                     slide_set_name TEXT,
                     logs TEXT,
                     total_pages INTEGER,
-                    coverage_data TEXT
+                    coverage_data TEXT,
+                    current_phase TEXT,
+                    source_file_name TEXT,
+                    source_pdf_sha256 TEXT
                 )
             """
             )
@@ -114,6 +117,11 @@ class DatabaseManager:
                 self._add_column_if_missing(conn, "history", "coverage_data", "TEXT")
             elif version == 4:
                 self._add_column_if_missing(conn, "history", "current_phase", "TEXT")
+            elif version == 5:
+                self._add_column_if_missing(conn, "history", "source_file_name", "TEXT")
+                self._add_column_if_missing(
+                    conn, "history", "source_pdf_sha256", "TEXT"
+                )
 
             conn.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
@@ -201,6 +209,8 @@ class DatabaseManager:
             "total_pages": row[14] if len(row) > 14 else None,
             "coverage_data": json.loads(row[15]) if len(row) > 15 and row[15] else None,
             "current_phase": row[16] if len(row) > 16 else None,
+            "source_file_name": row[17] if len(row) > 17 else None,
+            "source_pdf_sha256": row[18] if len(row) > 18 else None,
         }
 
     # History Methods
@@ -218,17 +228,23 @@ class DatabaseManager:
         deck: str,
         session_id: Optional[str] = None,
         status: str = "draft",
+        source_file_name: Optional[str] = None,
+        source_pdf_sha256: Optional[str] = None,
     ) -> str:
         """Create a new history entry and return its ID."""
         entry_id = str(uuid.uuid4())
         final_session_id = session_id if session_id else entry_id
         now = datetime.now().isoformat()
+        final_source_file_name = source_file_name or os.path.basename(filename)
 
         with self.get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO history (id, session_id, filename, full_path, deck, date, last_modified, status, card_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO history (
+                    id, session_id, filename, full_path, deck, date, last_modified,
+                    status, card_count, source_file_name, source_pdf_sha256
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry_id,
@@ -240,6 +256,8 @@ class DatabaseManager:
                     now,
                     status,
                     0,
+                    final_source_file_name,
+                    source_pdf_sha256,
                 ),
             )
             conn.commit()
@@ -340,6 +358,8 @@ class DatabaseManager:
         tags: Optional[List[str]] = None,
         total_pages: Optional[int] = None,
         coverage_data: Optional[Dict[str, Any]] = None,
+        source_file_name: Optional[str] = None,
+        source_pdf_sha256: Optional[str] = None,
     ) -> bool:
         """Update the cards and metadata for a session. Returns True if updated."""
         updates: List[str] = ["cards = ?"]
@@ -363,6 +383,12 @@ class DatabaseManager:
         if coverage_data is not None:
             updates.append("coverage_data = ?")
             params.append(json.dumps(coverage_data))
+        if source_file_name is not None:
+            updates.append("source_file_name = ?")
+            params.append(source_file_name)
+        if source_pdf_sha256 is not None:
+            updates.append("source_pdf_sha256 = ?")
+            params.append(source_pdf_sha256)
 
         updates.append("last_modified = ?")
         params.append(datetime.now().isoformat())

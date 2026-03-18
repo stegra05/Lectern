@@ -63,11 +63,89 @@ class SyncRequest(BaseModel):
     allow_updates: bool = False
 
 
+class SyncPreviewResponse(BaseModel):
+    total_cards: int
+    create_candidates: int
+    update_candidates: int
+    existing_note_matches: int
+    missing_note_ids: int
+    invalid_note_ids: int
+    conflict_count: int
+    note_lookup_error: Optional[str] = None
+
+
 # --- Helpers ---
 
 
 def event_json(event_type: str, message: str = "", data: Optional[Dict] = None) -> str:
     return ndjson_event(event_type, message, data or {})
+
+
+async def build_sync_preview(
+    cards: List[dict],
+    *,
+    allow_updates: bool,
+) -> SyncPreviewResponse:
+    total_cards = len(cards)
+    if not allow_updates:
+        return SyncPreviewResponse(
+            total_cards=total_cards,
+            create_candidates=total_cards,
+            update_candidates=0,
+            existing_note_matches=0,
+            missing_note_ids=0,
+            invalid_note_ids=0,
+            conflict_count=0,
+        )
+
+    note_ids_to_check: List[int] = []
+    invalid_note_ids = 0
+    update_candidates = 0
+
+    for card in cards:
+        raw_id = card.get("anki_note_id")
+        if raw_id in (None, ""):
+            continue
+
+        update_candidates += 1
+        if isinstance(raw_id, int):
+            note_ids_to_check.append(raw_id)
+        elif isinstance(raw_id, str) and raw_id.isdigit():
+            note_ids_to_check.append(int(raw_id))
+        else:
+            invalid_note_ids += 1
+
+    create_candidates = total_cards - update_candidates
+    existing_note_matches = 0
+    missing_note_ids = 0
+    note_lookup_error: Optional[str] = None
+
+    if note_ids_to_check:
+        try:
+            infos = await anki_connector.notes_info(note_ids_to_check)
+            existing_note_ids = {
+                int(info.get("noteId")) for info in infos if info and info.get("noteId")
+            }
+            existing_note_matches = sum(
+                1 for note_id in note_ids_to_check if note_id in existing_note_ids
+            )
+            missing_note_ids = len(note_ids_to_check) - existing_note_matches
+        except Exception as e:
+            user_msg, _ = capture_exception(e, "Sync preview note lookup")
+            note_lookup_error = user_msg
+            missing_note_ids = len(note_ids_to_check)
+
+    conflict_count = missing_note_ids + invalid_note_ids
+    return SyncPreviewResponse(
+        total_cards=total_cards,
+        create_candidates=create_candidates,
+        update_candidates=update_candidates,
+        existing_note_matches=existing_note_matches,
+        missing_note_ids=missing_note_ids,
+        invalid_note_ids=invalid_note_ids,
+        conflict_count=conflict_count,
+        note_lookup_error=note_lookup_error,
+    )
 
 
 async def stream_sync_cards(
@@ -80,8 +158,35 @@ async def stream_sync_cards(
     created = 0
     updated = 0
     failed = 0
+    failure_summary: Dict[str, int] = {
+        "transport": 0,
+        "api": 0,
+        "card_validation": 0,
+    }
 
     yield event_json("progress_start", "Syncing to Anki...", {"total": len(cards)})
+
+    def _sync_failure_event(
+        *, card_index: int, action: str, error: Exception | str | None
+    ) -> str:
+        details = anki_connector.classify_sync_failure(error)
+        failure_kind = details["failure_kind"]
+        failure_summary[failure_kind] += 1
+        return event_json(
+            details["severity"],
+            (
+                f"Card {card_index} sync failed [{failure_kind}] during {action}: "
+                f"{details['detail']}. {details['hint']}"
+            ),
+            {
+                "kind": "sync_failure",
+                "failure_kind": failure_kind,
+                "card_index": card_index,
+                "action": action,
+                "hint": details["hint"],
+                "error": details["detail"],
+            },
+        )
 
     async def _export_new_note(card: dict) -> tuple[bool, int | None, str | None]:
         result = await export_card_to_anki(
@@ -121,24 +226,29 @@ async def stream_sync_cards(
 
     for idx, card in enumerate(cards, start=1):
         note_id = card.get("anki_note_id")
+        action = "sync_card"
         try:
             if allow_updates and note_id:
+                action = "parse_note_id"
                 note_id_int = int(note_id)
                 note_exists = False
 
                 if batch_check_success:
                     note_exists = note_id_int in existing_note_ids
                 else:
+                    action = "lookup_note"
                     info = await anki_connector.notes_info([note_id_int])
                     note_exists = bool(info and info[0].get("noteId"))
 
                 if note_exists:
+                    action = "update_note"
                     await anki_connector.update_note_fields(note_id_int, card["fields"])
                     updated += 1
                     yield event_json(
                         "note_updated", f"Updated note {note_id}", {"id": note_id}
                     )
                 else:
+                    action = "create_note"
                     success, created_id, error = await _export_new_note(card)
                     if success and created_id is not None:
                         created += 1
@@ -149,8 +259,13 @@ async def stream_sync_cards(
                         )
                     else:
                         failed += 1
-                        yield event_json("warning", f"Failed to create note: {error}")
+                        yield _sync_failure_event(
+                            card_index=idx,
+                            action=action,
+                            error=error,
+                        )
             else:
+                action = "create_note"
                 success, created_id, error = await _export_new_note(card)
                 if success and created_id is not None:
                     created += 1
@@ -159,18 +274,36 @@ async def stream_sync_cards(
                     )
                 else:
                     failed += 1
-                    yield event_json("warning", f"Failed to create note: {error}")
+                    yield _sync_failure_event(
+                        card_index=idx,
+                        action=action,
+                        error=error,
+                    )
+        except (
+            anki_connector.AnkiTransportError,
+            anki_connector.AnkiApiError,
+            ValueError,
+            TypeError,
+            KeyError,
+        ) as e:
+            failed += 1
+            yield _sync_failure_event(card_index=idx, action=action, error=e)
         except Exception as e:
             user_msg, _ = capture_exception(e, f"Sync card {idx}")
             failed += 1
-            yield event_json("warning", f"Sync failed for card {idx}: {user_msg}")
+            yield _sync_failure_event(card_index=idx, action=action, error=user_msg)
 
         yield event_json("progress_update", "", {"current": created + updated + failed})
 
     yield event_json(
         "done",
         "Sync Complete",
-        {"created": created, "updated": updated, "failed": failed},
+        {
+            "created": created,
+            "updated": updated,
+            "failed": failed,
+            "failure_summary": failure_summary,
+        },
     )
 
 
@@ -253,3 +386,8 @@ async def sync_cards(req: SyncRequest):
             yield f"{payload}\n"
 
     return StreamingResponse(sync_generator(), media_type="application/x-ndjson")
+
+
+@router.post("/sync/preview", response_model=SyncPreviewResponse)
+async def preview_sync(req: SyncRequest):
+    return await build_sync_preview(req.cards, allow_updates=req.allow_updates)

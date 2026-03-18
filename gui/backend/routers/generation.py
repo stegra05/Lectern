@@ -59,11 +59,84 @@ class StopResponse(BaseModel):
 
 def _estimate_cache_key(tmp_path: str, model: str) -> tuple:
     """Content-based key for same PDF+model."""
+    return (_file_sha256(tmp_path), model or "")
+
+
+def _file_sha256(tmp_path: str) -> str:
+    """Compute SHA-256 hash for a file path."""
     h = hashlib.sha256()
     with open(tmp_path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
-    return (h.hexdigest(), model or "")
+    return h.hexdigest()
+
+
+def _generation_validation_error(*, field: str, reason: str) -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail={
+            "code": "invalid_generation_input",
+            "field": field,
+            "reason": reason,
+            "message": (
+                "Invalid generation input for 'tags': expected JSON array of strings."
+            ),
+        },
+    )
+
+
+def _parse_tags_payload(tags: str) -> list[str]:
+    try:
+        tags_list = json.loads(tags)
+    except json.JSONDecodeError as exc:
+        raise _generation_validation_error(
+            field="tags",
+            reason="invalid_json",
+        ) from exc
+
+    if not isinstance(tags_list, list):
+        raise _generation_validation_error(
+            field="tags",
+            reason="invalid_type",
+        )
+
+    if not all(isinstance(tag, str) for tag in tags_list):
+        raise _generation_validation_error(
+            field="tags",
+            reason="invalid_item_type",
+        )
+
+    return tags_list
+
+
+def _collect_resume_invariant_mismatches(
+    existing_session: dict[str, Any],
+    *,
+    deck_name: str,
+    model_name: str,
+    source_file_name: str,
+    source_pdf_sha256: str,
+) -> list[str]:
+    mismatched_fields: list[str] = []
+
+    if existing_session.get("deck") != deck_name:
+        mismatched_fields.append("deck_name")
+    if existing_session.get("model_name") != model_name:
+        mismatched_fields.append("model_name")
+
+    persisted_source_hash = existing_session.get("source_pdf_sha256")
+    if not persisted_source_hash or persisted_source_hash != source_pdf_sha256:
+        mismatched_fields.append("source_pdf_sha256")
+
+    persisted_source_name = existing_session.get("source_file_name")
+    if (
+        persisted_source_name
+        and source_file_name
+        and persisted_source_name != source_file_name
+    ):
+        mismatched_fields.append("source_file_name")
+
+    return mismatched_fields
 
 
 # --- Endpoints ---
@@ -137,25 +210,27 @@ async def generate_cards(
     if focus_prompt:
         logger.info(f"User focus: '{focus_prompt}'")
 
-    try:
-        tags_list = json.loads(tags)
-    except Exception:
-        tags_list = []
+    tags_list = _parse_tags_payload(tags)
 
-    def save_generate_temp():
+    def save_generate_temp() -> tuple[str, str]:
+        pdf_file.file.seek(0)
+        file_hasher = hashlib.sha256()
         with tempfile.NamedTemporaryFile(
             delete=False,
             prefix=LECTERN_TEMP_PREFIX,
             suffix=".pdf",
         ) as tmp:
-            shutil.copyfileobj(pdf_file.file, tmp)
-            return tmp.name
+            for chunk in iter(lambda: pdf_file.file.read(65536), b""):
+                file_hasher.update(chunk)
+                tmp.write(chunk)
+            return tmp.name, file_hasher.hexdigest()
 
-    tmp_path = await run_in_threadpool(save_generate_temp)
+    tmp_path, source_pdf_sha256 = await run_in_threadpool(save_generate_temp)
+    source_file_name = pdf_file.filename or ""
 
     # Handle resume case
     existing_session = None
-    resume_rejected_status: str | None = None
+    resume_rejection: dict[str, Any] | None = None
     if session_id:
         existing_session = await run_in_threadpool(
             history_mgr.get_entry_by_session_id, session_id
@@ -165,13 +240,41 @@ async def generate_cards(
             status = existing_session.get("status")
             if status not in ("draft", "error", "cancelled"):
                 logger.warning(f"Cannot resume session with status '{status}'")
-                resume_rejected_status = status
+                resume_rejection = {
+                    "warning_kind": "invalid_resume_status",
+                    "message": (
+                        f"Cannot resume session with status '{status}'. Starting new session."
+                    ),
+                    "original_status": status,
+                }
                 existing_session = None  # Fall through to create new session
             else:
-                logger.info(f"Resuming session {session_id}")
-                session = session_mgr.restore_session(
-                    session_id=session_id, pdf_path=tmp_path
+                mismatched_fields = _collect_resume_invariant_mismatches(
+                    existing_session,
+                    deck_name=deck_name,
+                    model_name=model_name,
+                    source_file_name=source_file_name,
+                    source_pdf_sha256=source_pdf_sha256,
                 )
+                if mismatched_fields:
+                    logger.warning(
+                        "Cannot resume session '%s' due to invariant mismatch: %s",
+                        session_id,
+                        ", ".join(mismatched_fields),
+                    )
+                    resume_rejection = {
+                        "warning_kind": "invalid_resume_invariants",
+                        "message": (
+                            "Resume invariants failed (deck/model/source). Starting new session."
+                        ),
+                        "mismatched_fields": mismatched_fields,
+                    }
+                    existing_session = None
+                else:
+                    logger.info(f"Resuming session {session_id}")
+                    session = session_mgr.restore_session(
+                        session_id=session_id, pdf_path=tmp_path
+                    )
         if not existing_session:
             logger.warning(
                 f"Session {session_id} not found or invalid status, creating new session"
@@ -189,6 +292,8 @@ async def generate_cards(
             deck=deck_name,
             session_id=session.session_id,
             status="draft",
+            source_file_name=source_file_name,
+            source_pdf_sha256=source_pdf_sha256,
         )
 
     status_handlers = {
@@ -217,14 +322,15 @@ async def generate_cards(
             "session_start", "Session started", {"session_id": session.session_id}
         )
 
-        # Emit warning if resume was rejected due to invalid status
-        if resume_rejected_status:
+        # Emit warning if resume was rejected
+        if resume_rejection:
             yield emit_event(
                 "warning",
-                f"Cannot resume session with status '{resume_rejected_status}'. Starting new session.",
+                resume_rejection["message"],
                 {
-                    "warning_kind": "invalid_resume_status",
-                    "original_status": resume_rejected_status,
+                    key: value
+                    for key, value in resume_rejection.items()
+                    if key != "message"
                 },
             )
 
@@ -341,6 +447,8 @@ async def generate_cards(
                                 tags=tags_list,
                                 total_pages=final_total_pages,
                                 coverage_data=final_coverage_data,
+                                source_file_name=source_file_name,
+                                source_pdf_sha256=source_pdf_sha256,
                             )
                 except Exception as e:
                     logger.error(f"Error processing event: {e}")

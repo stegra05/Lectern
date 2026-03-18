@@ -3,7 +3,8 @@ import { loadSession, recoverSessionOnRefresh, processGenerationEvent } from '..
 import { api } from '../api';
 import type { Step } from '../store-types';
 import type { Phase } from '../components/PhaseIndicator';
-import type { StoreState } from '../store-types';
+import type { LecternStore, StoreState } from '../store-types';
+import { createBatchActions } from '../slices/reviewSlice';
 
 // Mock dependencies
 vi.mock('../api', () => ({
@@ -256,6 +257,49 @@ describe('generation logic', () => {
             );
 
             expect(removeItemSpy).not.toHaveBeenCalledWith('lectern_active_session_id');
+        });
+    });
+
+    describe('batch actions selection scope', () => {
+        it('selects only visible card uids when a scoped list is provided', () => {
+            type ScopedSelectAll = {
+                selectAllCards: (uids: string[]) => void;
+            };
+
+            type BatchSelectionState = Pick<StoreState, 'cards' | 'selectedCards' | 'lastSelectedUid'> &
+                Pick<LecternStore, 'clearBatchDeletedCard' | 'addToast' | 'undoBatchDelete' | 'batchDeletedCards' | 'confirmModal' | 'isMultiSelectMode'>;
+
+            const state: BatchSelectionState = {
+                cards: [
+                    { front: 'A', back: 'A', fields: { Front: 'A', Back: 'A' }, _uid: 'uid-a' },
+                    { front: 'B', back: 'B', fields: { Front: 'B', Back: 'B' }, _uid: 'uid-b' },
+                    { front: 'C', back: 'C', fields: { Front: 'C', Back: 'C' }, _uid: 'uid-c' },
+                ],
+                selectedCards: new Set<string>(),
+                lastSelectedUid: null,
+                clearBatchDeletedCard: vi.fn(),
+                addToast: vi.fn(),
+                undoBatchDelete: vi.fn(),
+                batchDeletedCards: [],
+                confirmModal: { isOpen: false, type: 'lectern', index: -1 },
+                isMultiSelectMode: true,
+            };
+
+            const setState = (
+                partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)
+            ) => {
+                const update =
+                    typeof partial === 'function'
+                        ? partial(state as unknown as StoreState)
+                        : partial;
+                Object.assign(state, update);
+            };
+            const getState = () => state as unknown as LecternStore;
+
+            const actions = createBatchActions(setState, getState) as unknown as ScopedSelectAll;
+            actions.selectAllCards(['uid-a', 'uid-c']);
+
+            expect(state.selectedCards).toEqual(new Set(['uid-a', 'uid-c']));
         });
     });
 });

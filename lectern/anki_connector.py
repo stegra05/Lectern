@@ -7,11 +7,11 @@ add notes to Anki. It never manipulates the collection directly.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import logging
 import random
-import asyncio
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, Callable, Dict, List, Literal, Optional, TypeVar, TypedDict
 
 import httpx
 
@@ -49,6 +49,77 @@ class AnkiApiError(AnkiConnectError):
 
     def __init__(self, message: str) -> None:
         super().__init__(message, retriable=False)
+
+
+class SyncFailureDetails(TypedDict):
+    failure_kind: Literal["transport", "api", "card_validation"]
+    severity: Literal["error", "warning"]
+    detail: str
+    hint: str
+
+
+_SYNC_FAILURE_HINTS: Dict[Literal["transport", "api", "card_validation"], str] = {
+    "transport": "Check that Anki is running with AnkiConnect enabled, then retry sync.",
+    "api": "Check deck and note type settings in Anki, then retry sync.",
+    "card_validation": "Review the card payload fields before syncing again.",
+}
+
+
+def _classify_sync_failure_kind(
+    error: Exception | str | None, detail: str
+) -> Literal["transport", "api", "card_validation"]:
+    if isinstance(error, AnkiTransportError):
+        return "transport"
+    if isinstance(error, AnkiApiError):
+        return "api"
+    if isinstance(error, (ValueError, TypeError, KeyError)):
+        return "card_validation"
+
+    lowered = detail.lower()
+    transport_markers = (
+        "failed to reach ankiconnect",
+        "connection refused",
+        "connect timeout",
+        "read timeout",
+        "timed out",
+        "non-json response",
+        "http error",
+    )
+    card_validation_markers = (
+        "invalid literal for int",
+        "missing field",
+        "missing required",
+        "payload",
+        "field",
+    )
+    api_markers = (
+        "ankiconnect error for",
+        "deck not found",
+        "model",
+        "unexpected addnote result",
+    )
+
+    if any(marker in lowered for marker in transport_markers):
+        return "transport"
+    if any(marker in lowered for marker in card_validation_markers):
+        return "card_validation"
+    if any(marker in lowered for marker in api_markers):
+        return "api"
+    return "api"
+
+
+def classify_sync_failure(error: Exception | str | None) -> SyncFailureDetails:
+    detail = str(error or "").strip() or "Unknown sync failure"
+    failure_kind = _classify_sync_failure_kind(error, detail)
+    severity: Literal["error", "warning"] = (
+        "warning" if failure_kind == "card_validation" else "error"
+    )
+    return {
+        "failure_kind": failure_kind,
+        "severity": severity,
+        "detail": detail,
+        "hint": _SYNC_FAILURE_HINTS[failure_kind],
+    }
 
 
 # Caches for model field detection (lifecycle of the app)

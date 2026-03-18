@@ -170,6 +170,20 @@ describe('OnboardingFlow', () => {
                     connected: false,
                     reason: 'Connection refused by AnkiConnect at localhost:8765.',
                     hint: 'Start Anki and ensure AnkiConnect is installed/enabled (add-on code: 2055492159).',
+                    remediation: {
+                        summary: 'Do this next to reconnect Anki.',
+                        actions: [
+                            {
+                                label: 'Open AnkiConnect add-on page',
+                                url: 'https://ankiweb.net/shared/info/2055492159',
+                                description: 'Install or enable the AnkiConnect add-on.',
+                            },
+                            {
+                                label: 'Restart Anki',
+                                description: 'Restart after enabling the add-on.',
+                            },
+                        ],
+                    },
                 },
                 api_key: {
                     required: true,
@@ -197,6 +211,12 @@ describe('OnboardingFlow', () => {
         expect(screen.getByText(/Continue Offline \(Save as Drafts\)/i)).toBeInTheDocument();
         expect(screen.getByText('Connection refused by AnkiConnect at localhost:8765.')).toBeInTheDocument();
         expect(screen.getByText('Start Anki and ensure AnkiConnect is installed/enabled (add-on code: 2055492159).')).toBeInTheDocument();
+        expect(screen.getByText('Do this next to reconnect Anki.')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Open AnkiConnect add-on page' })).toHaveAttribute(
+            'href',
+            'https://ankiweb.net/shared/info/2055492159'
+        );
+        expect(screen.getByText('Restart Anki')).toBeInTheDocument();
     });
 
     it('shows API key remediation guidance when diagnostics report missing key', async () => {
@@ -218,6 +238,19 @@ describe('OnboardingFlow', () => {
                     configured: false,
                     reason: 'Gemini API key is missing.',
                     hint: 'Open Settings and provide a Gemini API key.',
+                    remediation: {
+                        summary: 'Complete these steps to enable AI generation.',
+                        actions: [
+                            {
+                                label: 'Generate Gemini key',
+                                url: 'https://aistudio.google.com/app/apikey',
+                            },
+                            {
+                                label: 'Paste key and initialize',
+                                description: 'Return here, paste your key, then click Initialize.',
+                            },
+                        ],
+                    },
                 },
                 provider: {
                     name: 'gemini',
@@ -238,6 +271,12 @@ describe('OnboardingFlow', () => {
         expect(screen.getByRole('button', { name: /Initialize with API key/i })).toBeDisabled();
         expect(screen.getByText('Gemini API key is missing.')).toBeInTheDocument();
         expect(screen.getByText('Open Settings and provide a Gemini API key.')).toBeInTheDocument();
+        expect(screen.getByText('Complete these steps to enable AI generation.')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Generate Gemini key' })).toHaveAttribute(
+            'href',
+            'https://aistudio.google.com/app/apikey'
+        );
+        expect(screen.getByText('Paste key and initialize')).toBeInTheDocument();
     });
 
     it('transitions from retry to success when health refetch becomes healthy', async () => {

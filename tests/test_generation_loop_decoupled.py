@@ -82,7 +82,7 @@ class TestGenerationLoopPure:
     @pytest.mark.asyncio
     async def test_yields_card_events_with_uuids(self):
         ai = MagicMock()
-        ai.generate_more_cards = AsyncMock(
+        ai.generate_cards = AsyncMock(
             return_value={
                 "cards": [
                     {"front": "Q1", "back": "A1", "source_pages": [1]},
@@ -122,7 +122,7 @@ class TestGenerationLoopPure:
     @pytest.mark.asyncio
     async def test_stops_on_user_cancel(self):
         ai = MagicMock()
-        ai.generate_more_cards = AsyncMock(return_value={"cards": [], "done": False})
+        ai.generate_cards = AsyncMock(return_value={"cards": [], "done": False})
         ai.drain_warnings.return_value = []
 
         stop_flag = [False]
@@ -160,7 +160,7 @@ class TestGenerationLoopPure:
     @pytest.mark.asyncio
     async def test_yields_batch_events(self):
         ai = MagicMock()
-        ai.generate_more_cards = AsyncMock(
+        ai.generate_cards = AsyncMock(
             return_value={
                 "cards": [{"front": "Q1", "back": "A1"}],
                 "done": True,
@@ -202,7 +202,7 @@ class TestGenerationLoopPure:
     @pytest.mark.asyncio
     async def test_handles_warnings_from_ai(self):
         ai = MagicMock()
-        ai.generate_more_cards = AsyncMock(return_value={"cards": [], "done": True})
+        ai.generate_cards = AsyncMock(return_value={"cards": [], "done": True})
         ai.drain_warnings.return_value = ["Warning 1", "Warning 2"]
 
         orchestrator = SessionOrchestrator()
@@ -232,7 +232,7 @@ class TestGenerationLoopPure:
     @pytest.mark.asyncio
     async def test_handles_errors_gracefully(self):
         ai = MagicMock()
-        ai.generate_more_cards = AsyncMock(side_effect=Exception("AI failure"))
+        ai.generate_cards = AsyncMock(side_effect=Exception("AI failure"))
 
         orchestrator = SessionOrchestrator()
         orchestrator.state.pages = [{"number": i} for i in range(5)]
@@ -262,7 +262,7 @@ class TestGenerationLoopPure:
     @pytest.mark.asyncio
     async def test_stops_on_coverage_threshold(self):
         ai = MagicMock()
-        ai.generate_more_cards = AsyncMock(
+        ai.generate_cards = AsyncMock(
             return_value={
                 "cards": [{"front": "Q1", "back": "A1"}],
                 "done": True,
@@ -304,7 +304,7 @@ class TestReflectionLoopPure:
     @pytest.mark.asyncio
     async def test_yields_reflection_events(self):
         ai = MagicMock()
-        ai.reflect = AsyncMock(
+        ai.reflect_cards = AsyncMock(
             return_value={
                 "cards": [
                     {"front": "Q1_refined", "back": "A1_refined", "source_pages": [1]},
@@ -357,7 +357,7 @@ class TestReflectionLoopPure:
     @pytest.mark.asyncio
     async def test_stops_on_user_cancel_during_reflection(self):
         ai = MagicMock()
-        ai.reflect = AsyncMock(
+        ai.reflect_cards = AsyncMock(
             return_value={"cards": [], "reflection": "", "done": False}
         )
         ai.drain_warnings.return_value = []
@@ -394,7 +394,7 @@ class TestReflectionLoopPure:
     @pytest.mark.asyncio
     async def test_handles_reflection_errors(self):
         ai = MagicMock()
-        ai.reflect = AsyncMock(side_effect=Exception("Reflection error"))
+        ai.reflect_cards = AsyncMock(side_effect=Exception("Reflection error"))
         orchestrator = SessionOrchestrator()
         orchestrator.state.pages = [{"number": i} for i in range(5)]
         orchestrator.state.concept_map = {}

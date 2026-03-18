@@ -22,6 +22,8 @@ const Tooltip = ({ text }: { text: string }) => (
   </div>
 );
 
+const ANKI_CONNECT_ADDON_URL = 'https://ankiweb.net/shared/info/2055492159';
+
 export interface SettingsModalViewProps {
   isOpen: boolean;
   onClose: () => void;
@@ -215,10 +217,25 @@ function SettingsModalView({
                             {ankiUrlError}
                           </p>
                         )}
-                        {ankiStatus === 'disconnected' && ankiHint && !ankiUrlError && (
-                          <p className="text-xs text-text-muted mt-1" role="status">
-                            {ankiHint}
-                          </p>
+                        {ankiStatus === 'disconnected' && !ankiUrlError && (
+                          <div className="mt-2 rounded-lg border border-amber-400/20 bg-amber-500/10 p-3" role="status">
+                            {ankiHint && <p className="text-xs text-amber-100">{ankiHint}</p>}
+                            <p className="mt-2 text-[11px] font-medium text-amber-100">Try these actions:</p>
+                            <ul className="mt-1 space-y-1">
+                              <li className="text-[11px] text-amber-200">• Keep Anki open while using Lectern.</li>
+                              <li className="text-[11px] text-amber-200">
+                                •{' '}
+                                <a
+                                  href={ANKI_CONNECT_ADDON_URL}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="underline decoration-amber-300/40 hover:text-white"
+                                >
+                                  Open AnkiConnect add-on page
+                                </a>
+                              </li>
+                            </ul>
+                          </div>
                         )}
                         {canRetryAnkiConnection && (
                           <button

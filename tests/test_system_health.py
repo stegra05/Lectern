@@ -44,6 +44,33 @@ def test_health_endpoint_exposes_anki_unreachable_reason_and_hint(isolated_confi
     assert anki_diagnostics.get("reason") or anki_diagnostics.get("hint")
 
 
+def test_health_endpoint_includes_structured_remediation_actions(isolated_config):
+    with patch.dict(os.environ, {"AI_PROVIDER": "gemini"}, clear=False):
+        with patch("gui.backend.routers.system.config.GEMINI_API_KEY", ""):
+            with patch(
+                "gui.backend.routers.system.anki_connector.check_connection",
+                new=AsyncMock(side_effect=RuntimeError("AnkiConnect is offline")),
+            ):
+                response = client.get("/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    anki_actions = payload["diagnostics"]["anki"]["remediation"]["actions"]
+    api_key_actions = payload["diagnostics"]["api_key"]["remediation"]["actions"]
+
+    assert any(action["label"] == "Open AnkiConnect add-on page" for action in anki_actions)
+    assert any(
+        action.get("url") == "https://ankiweb.net/shared/info/2055492159"
+        for action in anki_actions
+    )
+    assert any(action["label"] == "Generate Gemini API key" for action in api_key_actions)
+    assert any(
+        action.get("url") == "https://aistudio.google.com/app/apikey"
+        for action in api_key_actions
+    )
+
+
 def test_health_endpoint_exposes_missing_api_key_not_ready_hint(isolated_config):
     with patch.dict(os.environ, {"AI_PROVIDER": "gemini"}, clear=False):
         with patch("gui.backend.routers.system.config.GEMINI_API_KEY", ""):

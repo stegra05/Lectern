@@ -176,3 +176,44 @@ async def test_service_accepts_injected_provider_factory(pipeline_env) -> None:
     assert "client" not in captured["kwargs"]
     assert captured["kwargs"]["model_name"] == "gemini-3-flash-preview"
     assert any(event.type == "done" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_run_passes_provider_adapter_through_canonical_entry(pipeline_env) -> None:
+    provider = _FakeProvider()
+    captured: dict[str, Any] = {}
+
+    async def _capture_entry(*, context, emitter, ai_client, history_mgr, start_time):
+        captured["context"] = context
+        captured["emitter"] = emitter
+        captured["ai_client"] = ai_client
+        captured["history_mgr"] = history_mgr
+        captured["start_time"] = start_time
+
+    with (
+        patch(
+            "lectern.lectern_service.create_provider",
+            return_value=provider,
+            create=True,
+        ),
+        patch(
+            "lectern.lectern_service.run_orchestration_entry",
+            new_callable=AsyncMock,
+            side_effect=_capture_entry,
+            create=True,
+        ) as mock_entry,
+    ):
+        service = LecternGenerationService()
+        async for _ in service.run(
+            pdf_path="/fake/path.pdf",
+            deck_name="Provider Deck",
+            model_name="gemini-3-flash-preview",
+            tags=["provider"],
+            skip_export=True,
+        ):
+            pass
+
+    mock_entry.assert_awaited_once()
+    assert captured["context"].config.deck_name == "Provider Deck"
+    assert hasattr(captured["ai_client"], "generate_cards")
+    assert hasattr(captured["ai_client"], "reflect_cards")

@@ -21,7 +21,7 @@ interface CardListProps {
     onSetConfirmModal: (modal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number }) => void;
     onToggleSelection: (uid: string) => void;
     onSelectRange: (uid: string) => void;
-    onSelectAll: () => void;
+    onSelectAll: (cardUids?: string[]) => void;
     onClearSelection: () => void;
 }
 
@@ -130,7 +130,13 @@ export const CardList = memo(function CardList({
             {isMultiSelectMode && sortedCards.length > 0 && (
                 <div className="flex items-center justify-between px-2 py-2 mb-2">
                     <button
-                        onClick={onSelectAll}
+                        onClick={() =>
+                            onSelectAll(
+                                sortedCards
+                                    .map((card) => card._uid)
+                                    .filter((uid): uid is string => Boolean(uid))
+                            )
+                        }
                         className="text-xs text-primary hover:text-primary/80 font-medium"
                     >
                         Select All ({sortedCards.length})

@@ -87,7 +87,20 @@ class ReflectionResponse(TypedDict, total=False):
 
 
 class OrchestratorAIClient(Protocol):
-    async def generate_more_cards(
+    @property
+    def log_path(self) -> str: ...
+
+    async def upload_document(self, pdf_path: str) -> object: ...
+
+    async def build_concept_map(
+        self,
+        *,
+        file_uri: str | None = None,
+        mime_type: str = "application/pdf",
+        pdf_content: list[dict[str, object]] | None = None,
+    ) -> ConceptMapData: ...
+
+    async def generate_cards(
         self,
         *,
         limit: int,
@@ -99,7 +112,7 @@ class OrchestratorAIClient(Protocol):
         coverage_gap_text: str = "",
     ) -> GenerationResponse: ...
 
-    async def reflect(
+    async def reflect_cards(
         self,
         *,
         limit: int,
@@ -107,5 +120,7 @@ class OrchestratorAIClient(Protocol):
         cards_to_refine_json: str = "",
         coverage_gaps: str = "",
     ) -> ReflectionResponse: ...
+
+    def set_slide_set_context(self, *, deck_name: str, slide_set_name: str) -> None: ...
 
     def drain_warnings(self) -> list[str]: ...

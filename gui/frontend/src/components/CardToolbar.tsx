@@ -11,6 +11,7 @@ interface CardToolbarProps {
     searchQuery: string;
     onSearchChange: (query: string) => void;
     isMultiSelectMode: boolean;
+    selectedCount: number;
     onToggleMultiSelect: () => void;
     filteredCount: number;
     onFocusMode?: () => void;
@@ -28,6 +29,7 @@ export const CardToolbar = memo(function CardToolbar({
     searchQuery,
     onSearchChange,
     isMultiSelectMode,
+    selectedCount,
     onToggleMultiSelect,
     filteredCount,
     onFocusMode,
@@ -93,6 +95,11 @@ export const CardToolbar = memo(function CardToolbar({
                         <CheckSquare className="w-3.5 h-3.5" />
                         {isMultiSelectMode ? "Done" : "Select"}
                     </button>
+                )}
+                {step === 'done' && isMultiSelectMode && (
+                    <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-1 rounded-md">
+                        {selectedCount} selected
+                    </span>
                 )}
                 <div className="relative group">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted group-focus-within:text-primary transition-colors" />

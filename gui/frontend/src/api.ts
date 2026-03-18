@@ -107,10 +107,10 @@ export interface ProgressEvent {
     | "progress_start"
     | "progress_update"
     | "card"
+    | "note"
     | "note_created"
     | "note_updated"
     | "note_recreated"
-    | "card"
     | "cards_replaced"
     | "done"
     | "cancelled"
@@ -120,6 +120,17 @@ export interface ProgressEvent {
     message: string;
     data?: unknown;
     timestamp: number;
+}
+
+export interface SyncPreview {
+    total_cards: number;
+    create_candidates: number;
+    update_candidates: number;
+    existing_note_matches: number;
+    missing_note_ids: number;
+    invalid_note_ids: number;
+    conflict_count: number;
+    note_lookup_error?: string | null;
 }
 
 const parseNDJSONStream = async (
@@ -374,6 +385,32 @@ export const api = {
         });
         if (!response.ok) throw new Error("Sync failed");
         await parseNDJSONStream(response, onEvent);
+    },
+
+    previewSyncToAnki: async (
+        payload: { cards: Card[]; deck_name: string; tags: string[]; slide_set_name: string; allow_updates: boolean }
+    ): Promise<SyncPreview> => {
+        const response = await fetch(`${API_URL}/sync/preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to preview sync (HTTP ${response.status})`);
+        }
+        const data = (await response.json()) as Record<string, unknown>;
+
+        return {
+            total_cards: Number(data.total_cards ?? 0),
+            create_candidates: Number(data.create_candidates ?? 0),
+            update_candidates: Number(data.update_candidates ?? 0),
+            existing_note_matches: Number(data.existing_note_matches ?? 0),
+            missing_note_ids: Number(data.missing_note_ids ?? 0),
+            invalid_note_ids: Number(data.invalid_note_ids ?? 0),
+            conflict_count: Number(data.conflict_count ?? 0),
+            note_lookup_error:
+                data.note_lookup_error == null ? null : String(data.note_lookup_error),
+        };
     },
 
     deleteAnkiNotes: async (noteIds: number[]): Promise<AnkiNoteResponse> => {

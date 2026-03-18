@@ -79,6 +79,7 @@ const { defaultState, storeState } = vi.hoisted(() => {
         saveEdit: vi.fn(),
         handleFieldChange: vi.fn(),
         handleSync: vi.fn(),
+        handleSyncPreview: vi.fn(),
         setConfirmModal: vi.fn(),
         toggleMultiSelectMode: vi.fn(),
         toggleCardSelection: vi.fn(),
@@ -114,6 +115,7 @@ vi.mock('../hooks/useReviewOrchestrator', () => ({
     useReviewOrchestrator: () => ({
         saveEdit: storeState.saveEdit,
         handleSync: storeState.handleSync,
+        handleSyncPreview: storeState.handleSyncPreview,
         handleAnkiDelete: storeState.handleAnkiDelete,
     }),
 }));
@@ -302,6 +304,47 @@ describe('ProgressView', () => {
         expect(screen.getByText('Cat')).toBeInTheDocument();
         expect(screen.getByText('Bat')).toBeInTheDocument();
         expect(screen.queryByText('Rat')).not.toBeInTheDocument();
+    });
+
+    it('passes visible card uids when selecting all in multi-select mode', () => {
+        Object.assign(storeState, {
+            step: 'done',
+            isMultiSelectMode: true,
+            searchQuery: 'Apple',
+            selectAllCards: vi.fn(),
+            cards: [
+                { front: 'Apple', back: 'Fruit', fields: { Front: 'Apple', Back: 'Fruit' }, model_name: 'Basic', _uid: 'uid-apple' },
+                { front: 'Banana', back: 'Fruit', fields: { Front: 'Banana', Back: 'Fruit' }, model_name: 'Basic', _uid: 'uid-banana' },
+                { front: 'Carrot', back: 'Vegetable', fields: { Front: 'Carrot', Back: 'Vegetable' }, model_name: 'Basic', _uid: 'uid-carrot' },
+            ],
+        });
+
+        render(<ProgressView />);
+        screen.getByText('Select All (1)').click();
+
+        expect(storeState.selectAllCards).toHaveBeenCalledWith(['uid-apple']);
+    });
+
+    it('requests sync preview before syncing', () => {
+        Object.assign(storeState, {
+            step: 'done',
+            cards: [{ front: 'Apple', back: 'Fruit', fields: { Front: 'Apple', Back: 'Fruit' }, model_name: 'Basic', _uid: 'uid-apple' }],
+            handleSyncPreview: vi.fn().mockResolvedValue({
+                total_cards: 1,
+                create_candidates: 1,
+                update_candidates: 0,
+                existing_note_matches: 0,
+                missing_note_ids: 0,
+                invalid_note_ids: 0,
+                conflict_count: 0,
+                note_lookup_error: null,
+            }),
+        });
+
+        render(<ProgressView />);
+        screen.getByRole('button', { name: 'Preview Sync' }).click();
+
+        expect(storeState.handleSyncPreview).toHaveBeenCalledTimes(1);
     });
     it('shows sync overlay when isSyncing is true', () => {
         Object.assign(storeState, {
