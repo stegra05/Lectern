@@ -6,7 +6,7 @@ import uuid
 import warnings
 from dataclasses import dataclass, field
 from html import unescape
-from typing import Any, Callable, Dict, Generator, Iterable, List, Optional
+from typing import Any, Dict, Generator, List
 
 from lectern.ai_pacing import PacingState
 from lectern.card_quality import CardQualityEvaluator
@@ -18,6 +18,7 @@ from lectern.coverage import (
     get_card_page_references,
     get_card_relation_keys,
 )
+from lectern.domain_types import CardData, ConceptMapData, CoverageData
 from lectern.utils.error_handling import capture_exception
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ _NON_WORD_RE = re.compile(r"[^\w\s]")
 _CARD_QUALITY_EVALUATOR = CardQualityEvaluator()
 
 
-def get_card_key(card: Dict[str, Any]) -> str:
+def get_card_key(card: CardData) -> str:
     fields = card.get("fields") or {}
     val = str(
         card.get("text")
@@ -51,14 +52,14 @@ def _strip_markup(value: str) -> str:
     ).strip()
 
 
-def _get_card_field(card: Dict[str, Any], field_name: str) -> str:
+def _get_card_field(card: CardData, field_name: str) -> str:
     fields = card.get("fields") or {}
     if isinstance(fields, dict):
         return str(fields.get(field_name) or "")
     return ""
 
 
-def _get_card_front(card: Dict[str, Any]) -> str:
+def _get_card_front(card: CardData) -> str:
     return str(
         card.get("front")
         or _get_card_field(card, "Front")
@@ -68,12 +69,12 @@ def _get_card_front(card: Dict[str, Any]) -> str:
     )
 
 
-def _get_card_back(card: Dict[str, Any]) -> str:
+def _get_card_back(card: CardData) -> str:
     return str(card.get("back") or _get_card_field(card, "Back") or "")
 
 
 def _estimate_card_quality(
-    card: Dict[str, Any],
+    card: CardData,
     *,
     high_priority_ids: set[str] | None = None,
 ) -> tuple[float, List[str]]:
@@ -84,10 +85,10 @@ def _estimate_card_quality(
 
 
 def _annotate_card_quality(
-    card: Dict[str, Any],
+    card: CardData,
     *,
     high_priority_ids: set[str] | None = None,
-) -> Dict[str, Any]:
+) -> CardData:
     annotated = dict(card)
     score, flags = _estimate_card_quality(
         annotated, high_priority_ids=high_priority_ids
@@ -97,7 +98,7 @@ def _annotate_card_quality(
     return annotated
 
 
-def _coverage_is_sufficient(coverage_data: Dict[str, Any]) -> bool:
+def _coverage_is_sufficient(coverage_data: CoverageData) -> bool:
     high_priority_total = int(coverage_data.get("high_priority_total") or 0)
     high_priority_covered = int(coverage_data.get("high_priority_covered") or 0)
     high_priority_ok = (
@@ -117,38 +118,29 @@ def _coverage_is_sufficient(coverage_data: Dict[str, Any]) -> bool:
     )
 
 
-def _select_best_reflection_cards(
-    *,
-    original_cards: List[Dict[str, Any]],
-    reflected_cards: List[Dict[str, Any]],
-    limit: int,
-    concept_map: Dict[str, Any],
-    total_pages: int,
-) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    baseline = compute_coverage_data(
-        cards=[], concept_map=concept_map, total_pages=total_pages
-    )
-    high_priority_ids = {
-        str(item.get("id") or "").strip()
-        for item in (baseline.get("missing_high_priority") or [])
-        if str(item.get("id") or "").strip()
-    }
-    candidates: List[Dict[str, Any]] = []
-    for card in original_cards + reflected_cards:
-        if not isinstance(card, dict):
-            continue
-        annotated = _annotate_card_quality(card, high_priority_ids=high_priority_ids)
-        if get_card_key(annotated):
-            candidates.append(annotated)
+@dataclass(frozen=True)
+class ReflectionScoringWeights:
+    high_priority_concept: float = 8.0
+    new_concept: float = 4.0
+    new_relation: float = 3.0
+    new_page: float = 1.5
+    saturation_penalty: float = 6.0
 
-    selected: List[Dict[str, Any]] = []
-    selected_keys: set[str] = set()
-    selected_pages: set[int] = set()
-    selected_concepts: set[str] = set()
-    selected_relations: set[str] = set()
-    per_page_counts: Dict[int, int] = {}
 
-    def candidate_priority(card: Dict[str, Any]) -> float:
+class CardPriorityScorer:
+    def __init__(self, weights: ReflectionScoringWeights | None = None):
+        self.weights = weights or ReflectionScoringWeights()
+
+    def score(
+        self,
+        *,
+        card: CardData,
+        selected_pages: set[int],
+        selected_concepts: set[str],
+        selected_relations: set[str],
+        per_page_counts: dict[int, int],
+        high_priority_ids: set[str],
+    ) -> float:
         base_score = float(card.get("quality_score") or 0.0)
         pages = set(get_card_page_references(card))
         concepts = set(get_card_concept_ids(card))
@@ -157,17 +149,49 @@ def _select_best_reflection_cards(
         new_concepts = concepts.difference(selected_concepts)
         new_relations = relations.difference(selected_relations)
         new_high_priority = high_priority_ids.intersection(new_concepts)
-        saturation_penalty = sum(
-            max((per_page_counts.get(page, 0) + 1) - 2, 0) for page in pages
-        )
+        saturation = sum(max((per_page_counts.get(page, 0) + 1) - 2, 0) for page in pages)
         return (
             base_score
-            + len(new_high_priority) * 8.0
-            + len(new_concepts) * 4.0
-            + len(new_relations) * 3.0
-            + len(new_pages) * 1.5
-            - saturation_penalty * 6.0
+            + len(new_high_priority) * self.weights.high_priority_concept
+            + len(new_concepts) * self.weights.new_concept
+            + len(new_relations) * self.weights.new_relation
+            + len(new_pages) * self.weights.new_page
+            - saturation * self.weights.saturation_penalty
         )
+
+
+def _select_best_reflection_cards(
+    *,
+    original_cards: List[CardData],
+    reflected_cards: List[CardData],
+    limit: int,
+    concept_map: ConceptMapData,
+    total_pages: int,
+    scorer: CardPriorityScorer | None = None,
+) -> tuple[List[CardData], Dict[str, Any]]:
+    scorer = scorer or CardPriorityScorer()
+    baseline = compute_coverage_data(
+        cards=[], concept_map=concept_map, total_pages=total_pages
+    )
+    high_priority_ids = {
+        str(item.get("id") or "").strip()
+        for item in (baseline.get("missing_high_priority") or [])
+        if str(item.get("id") or "").strip()
+    }
+    candidates: List[CardData] = []
+    for card in original_cards + reflected_cards:
+        if not isinstance(card, dict):
+            continue
+        annotated = _annotate_card_quality(card, high_priority_ids=high_priority_ids)
+        if get_card_key(annotated):
+            candidates.append(annotated)
+
+    selected: List[CardData] = []
+    selected_keys: set[str] = set()
+    selected_pages: set[int] = set()
+    selected_concepts: set[str] = set()
+    selected_relations: set[str] = set()
+    per_page_counts: dict[int, int] = {}
 
     remaining = list(candidates)
     while remaining and len(selected) < limit:
@@ -177,7 +201,14 @@ def _select_best_reflection_cards(
             card_key = get_card_key(card)
             if not card_key or card_key in selected_keys:
                 continue
-            priority = candidate_priority(card)
+            priority = scorer.score(
+                card=card,
+                selected_pages=selected_pages,
+                selected_concepts=selected_concepts,
+                selected_relations=selected_relations,
+                per_page_counts=per_page_counts,
+                high_priority_ids=high_priority_ids,
+            )
             if priority > best_priority:
                 best_priority = priority
                 best_idx = idx
@@ -244,10 +275,10 @@ def _select_best_reflection_cards(
     }
 
 
-def _rebuild_seen_keys(cards: List[Dict[str, Any]]) -> set[str]:
+def _rebuild_seen_keys(cards: List[CardData]) -> set[str]:
     return {key for key in (get_card_key(card) for card in cards) if key}
 
 
-def collect_card_fronts(cards: List[Dict[str, Any]]) -> List[str]:
+def collect_card_fronts(cards: List[CardData]) -> List[str]:
     """Collect all card fronts from a list of cards."""
     return [_get_card_front(c) for c in cards if _get_card_front(c)]

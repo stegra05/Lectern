@@ -4,6 +4,7 @@ import { processStreamEvent } from './stream';
 import { applyControlSnapshot } from './snapshot';
 import { stampUid, stampUids, reconcileCardUids } from '../utils/uid';
 import { useLecternStore } from '../store';
+import { clearActiveSessionId, getActiveSessionId } from './activeSessionStorage';
 import { deriveMaxSlideNumber, normalizeCardMetadata, normalizeCardsMetadata } from '../utils/cardMetadata';
 import {
     validateCardEventData,
@@ -16,8 +17,6 @@ import {
 const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
 };
-
-const ACTIVE_SESSION_KEY = 'lectern_active_session_id';
 
 export const processGenerationEvent = (
     event: ProgressEvent,
@@ -33,10 +32,6 @@ export const processGenerationEvent = (
             event.data && typeof event.data === 'object' && 'session_id' in event.data
                 ? (event.data as { session_id: string }).session_id
                 : null;
-        if (typeof window !== 'undefined') {
-            if (sid) localStorage.setItem(ACTIVE_SESSION_KEY, sid);
-            else localStorage.removeItem(ACTIVE_SESSION_KEY);
-        }
         set(() => ({ sessionId: sid }));
         return;
     }
@@ -137,9 +132,6 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'done') {
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem(ACTIVE_SESSION_KEY);
-        }
         const store = useLecternStore.getState();
         const cardCount = store.cards.length;
 
@@ -153,6 +145,7 @@ export const processGenerationEvent = (
         const doneData = validateGenerationDoneData(event.data);
         set((prev) => ({
             step: 'done',
+            sessionId: null,
             isCancelling: false,
             totalPages: doneData?.total_pages ?? prev.totalPages,
             coverageData: (doneData?.coverage_data as unknown as CoverageData | undefined) ?? prev.coverageData,
@@ -161,11 +154,8 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'cancelled') {
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem(ACTIVE_SESSION_KEY);
-        }
         useLecternStore.getState().addToast('warning', 'Generation cancelled');
-        set(() => ({ isCancelling: false }));
+        set(() => ({ isCancelling: false, sessionId: null }));
         return;
     }
 
@@ -177,7 +167,7 @@ export const processGenerationEvent = (
 
         if (!isRecoverable) {
             // Fatal error: show full-screen overlay
-            set(() => ({ isError: true }));
+            set(() => ({ isError: true, sessionId: null }));
         }
         // Recoverable errors just show toast, generation continues
     }
@@ -210,10 +200,6 @@ export const handleGenerate = async (
         coverageData: null,
         lastSnapshotTimestamp: null,
     });
-    if (typeof window !== 'undefined') {
-        localStorage.removeItem(ACTIVE_SESSION_KEY);
-    }
-
     try {
         await api.generate(
             {
@@ -295,10 +281,6 @@ export const handleResume = async (
         setupStepsCompleted: 0,
         lastSnapshotTimestamp: null,
     });
-    if (typeof window !== 'undefined') {
-        localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
-    }
-
     try {
         await api.generate(
             {
@@ -378,13 +360,12 @@ export const loadSession = async (
 export const recoverSessionOnRefresh = async (
     set: (partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void
 ) => {
-    if (typeof window === 'undefined') return;
-    const sessionId = localStorage.getItem(ACTIVE_SESSION_KEY);
+    const sessionId = getActiveSessionId();
     if (!sessionId) return;
 
     try {
         const snapshot: SessionData = await api.getSession(sessionId);
-        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        clearActiveSessionId();
         if (snapshot.not_found) {
             throw new Error(`Session not found: ${sessionId}`);
         }
@@ -401,8 +382,7 @@ export const recoverSessionOnRefresh = async (
         });
     } catch (error) {
         console.warn('Session recovery failed:', error);
-        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        clearActiveSessionId();
         set({ sessionId: null });
     }
 };
-

@@ -73,3 +73,37 @@ def test_database_manager_singleton():
 
     # Clean up
     db.delete_entry(entry_id)
+
+
+def test_recover_interrupted_sessions_marks_inflight_drafts():
+    mgr = HistoryManager()
+    mgr.clear_all()
+
+    try:
+        mgr.add_entry("active.pdf", "Deck", session_id="active-session", status="draft")
+        mgr.add_entry(
+            "completed.pdf", "Deck", session_id="completed-session", status="completed"
+        )
+        mgr.add_entry("idle.pdf", "Deck", session_id="idle-session", status="draft")
+
+        mgr.update_session_phase("active-session", "generating")
+        mgr.update_session_phase("completed-session", "complete")
+
+        recovered = mgr.recover_interrupted_sessions()
+        assert recovered == 1
+
+        active = mgr.get_entry_by_session_id("active-session")
+        assert active is not None
+        assert active["status"] == "interrupted"
+        assert active["current_phase"] == "idle"
+
+        completed = mgr.get_entry_by_session_id("completed-session")
+        assert completed is not None
+        assert completed["status"] == "completed"
+
+        idle = mgr.get_entry_by_session_id("idle-session")
+        assert idle is not None
+        assert idle["status"] == "draft"
+        assert idle["current_phase"] is None
+    finally:
+        mgr.clear_all()

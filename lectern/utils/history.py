@@ -104,3 +104,7 @@ class HistoryManager:
     def update_session_phase(self, session_id: str, phase: str) -> bool:
         """Update the current phase for a session."""
         return self.db.update_session_phase(session_id, phase)
+
+    def recover_interrupted_sessions(self) -> int:
+        """Mark stale in-flight draft sessions as interrupted."""
+        return self.db.recover_interrupted_sessions()

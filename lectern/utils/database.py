@@ -394,3 +394,23 @@ class DatabaseManager:
             )
             conn.commit()
             return cursor.rowcount > 0
+
+    def recover_interrupted_sessions(self, interrupted_status: str = "interrupted") -> int:
+        """Mark stale in-flight draft sessions as interrupted.
+
+        A session is considered stale in-flight when it is still in draft status
+        but has a non-terminal current_phase from a previous process run.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE history
+                SET status = ?, current_phase = 'idle', last_modified = ?
+                WHERE status = 'draft'
+                  AND current_phase IS NOT NULL
+                  AND current_phase NOT IN ('idle', 'complete')
+                """,
+                (interrupted_status, datetime.now().isoformat()),
+            )
+            conn.commit()
+            return cursor.rowcount

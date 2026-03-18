@@ -19,6 +19,7 @@ sys.path.insert(0, str(_here))
 from lectern.version import __version__
 from lectern import config
 from lectern.utils.path_utils import get_app_data_dir, ensure_app_dirs
+from lectern.utils.history import HistoryManager
 from session import session_manager
 from gui.backend.routers import system, anki, history, generation
 
@@ -34,8 +35,16 @@ logger = logging.getLogger("lectern.backend")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    session_manager.shutdown()
+    try:
+        recovered = HistoryManager().recover_interrupted_sessions()
+        if recovered:
+            logger.warning(
+                "Recovered %s interrupted in-flight session(s) from previous runs.",
+                recovered,
+            )
+        yield
+    finally:
+        session_manager.shutdown()
 
 
 app = FastAPI(title="Lectern API", version=__version__, lifespan=lifespan)
