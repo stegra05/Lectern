@@ -48,6 +48,7 @@ class ConfigManager:
 
     # Default values for all configurable keys
     _DEFAULTS: Dict[str, Any] = {
+        "ai_provider": "gemini",
         "gemini_model": "gemini-3-flash",
         "lightweight_model": "gemini-3-flash",
         "anki_url": "http://localhost:8765",
@@ -59,6 +60,7 @@ class ConfigManager:
 
     # Environment variable name mappings
     _ENV_MAPPINGS = {
+        "ai_provider": "AI_PROVIDER",
         "gemini_model": "DEFAULT_GEMINI_MODEL",
         "lightweight_model": "LIGHTWEIGHT_MODEL",
         "anki_url": "ANKI_CONNECT_URL",
@@ -290,6 +292,7 @@ def __getattr__(name: str) -> Any:
     """Dynamic attribute access for hot-reloadable config values."""
     # Map module attribute names to ConfigManager keys
     key_mapping = {
+        "AI_PROVIDER": "ai_provider",
         "DEFAULT_GEMINI_MODEL": "gemini_model",
         "LIGHTWEIGHT_MODEL": "lightweight_model",
         "ANKI_CONNECT_URL": "anki_url",

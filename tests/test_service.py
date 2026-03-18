@@ -98,7 +98,7 @@ def generation_env(mock_pdf_pages):
         new_callable=AsyncMock,
         return_value="",
     ) as mock_examples, patch(
-        "lectern.lectern_service.LecternAIClient"
+        "lectern.providers.gemini_provider.LecternAIClient"
     ) as mock_ai_class, patch(
         "lectern.orchestration.phases.os.path.exists", return_value=True
     ), patch(
@@ -207,7 +207,7 @@ class TestServiceValidation:
 class TestStopCheck:
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_stop_check_aborts_early(
@@ -378,7 +378,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("os.path.exists", return_value=True)
     @patch("os.path.getsize", return_value=1024)
     async def test_stop_check_during_generation(
@@ -522,7 +522,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.export_card_to_anki", new_callable=AsyncMock)
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
@@ -576,7 +576,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_pdf_parsing_exception(
@@ -616,7 +616,7 @@ class TestServiceIntegration:
         mock_info.return_value = {"connected": True, "collection_available": True}
         mock_samples.side_effect = Exception("Anki error")
 
-        with patch("lectern.lectern_service.LecternAIClient") as mock_ai_class:
+        with patch("lectern.providers.gemini_provider.LecternAIClient") as mock_ai_class:
             mock_ai = mock_ai_class.return_value
             mock_ai.upload_document = AsyncMock(
                 return_value=MagicMock(uri="gs://mock", duration_ms=100)
@@ -649,7 +649,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_script_mode_density_calculation(
@@ -695,7 +695,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_reflection_logic_and_stop_check(
@@ -739,7 +739,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.export_card_to_anki", new_callable=AsyncMock)
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
@@ -786,7 +786,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=5000)
     @patch("lectern.lectern_service.HistoryManager")
@@ -840,7 +840,7 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.lectern_service.LecternAIClient")
+    @patch("lectern.providers.gemini_provider.LecternAIClient")
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_dynamic_reflection_rounds_large_doc(

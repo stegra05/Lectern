@@ -94,6 +94,12 @@ _CONCEPT_MAP_SCHEMA = concept_map_schema()
 _CARD_GENERATION_SCHEMA = card_generation_schema()
 _REFLECTION_SCHEMA = reflection_schema()
 
+
+def coerce_response_dict(payload: Any) -> dict[str, Any]:
+    """Return a structured response dict or an empty fallback."""
+    return payload if isinstance(payload, dict) else {}
+
+
 _MAX_OUTPUT_TOKENS = 8192
 _HISTORY_PRUNE_THRESHOLD = 20
 _HISTORY_PRUNE_HEAD = 2

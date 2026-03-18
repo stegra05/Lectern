@@ -6,6 +6,17 @@ def _response_schema(spec: dict, path: str, method: str) -> dict:
     return operation["responses"]["200"]["content"]["application/json"]["schema"]
 
 
+def _resolve_schema(spec: dict, schema: dict) -> dict:
+    if "$ref" not in schema:
+        return schema
+
+    ref_path = schema["$ref"].replace("#/", "").split("/")
+    resolved = spec
+    for key in ref_path:
+        resolved = resolved[key]
+    return resolved
+
+
 def test_critical_endpoints_have_typed_response_schemas():
     spec = app.openapi()
     critical_routes = [
@@ -38,3 +49,20 @@ def test_critical_endpoints_have_typed_response_schemas():
             or "items" in schema
             or "properties" in schema
         ), f"{method.upper()} {path} should use structured OpenAPI schema"
+
+
+def test_health_schema_includes_provider_diagnostics_fields():
+    spec = app.openapi()
+    schema = _resolve_schema(spec, _response_schema(spec, "/health", "get"))
+
+    properties = schema.get("properties", {})
+    for required_field in ["active_provider", "provider_configured", "provider_ready"]:
+        assert required_field in properties
+
+
+def test_config_schema_includes_ai_provider_selection_field():
+    spec = app.openapi()
+    schema = _resolve_schema(spec, _response_schema(spec, "/config", "get"))
+
+    properties = schema.get("properties", {})
+    assert "ai_provider" in properties

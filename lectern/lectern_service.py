@@ -14,7 +14,8 @@ from typing import (
     Callable,
 )
 
-from lectern.ai_client import LecternAIClient
+from lectern.providers.base import AIProvider
+from lectern.providers.factory import create_provider
 
 from lectern.cost_estimator import (
     estimate_cost as estimate_cost_impl,
@@ -41,6 +42,78 @@ logger = logging.getLogger(__name__)
 from lectern.events.service_events import ServiceEvent
 
 
+class _ProviderClientAdapter:
+    """Compatibility adapter for phases still expecting legacy AI client methods."""
+
+    def __init__(self, provider: AIProvider) -> None:
+        self._provider = provider
+
+    @property
+    def log_path(self) -> str:
+        return self._provider.log_path
+
+    async def upload_document(self, pdf_path: str) -> Any:
+        return await self._provider.upload_document(pdf_path)
+
+    async def concept_map_from_file(
+        self,
+        *,
+        file_uri: str,
+        mime_type: str = "application/pdf",
+    ) -> dict[str, Any]:
+        return await self._provider.build_concept_map(
+            file_uri=file_uri,
+            mime_type=mime_type,
+        )
+
+    async def concept_map(self, pdf_content: list[dict[str, Any]]) -> dict[str, Any]:
+        return await self._provider.build_concept_map(pdf_content=pdf_content)
+
+    async def generate_more_cards(
+        self,
+        *,
+        limit: int,
+        examples: str = "",
+        avoid_fronts: list[str] | None = None,
+        covered_slides: list[int] | None = None,
+        pacing_hint: str = "",
+        all_card_fronts: list[str] | None = None,
+        coverage_gap_text: str = "",
+    ) -> dict[str, Any]:
+        return await self._provider.generate_cards(
+            limit=limit,
+            examples=examples,
+            avoid_fronts=avoid_fronts,
+            covered_slides=covered_slides,
+            pacing_hint=pacing_hint,
+            all_card_fronts=all_card_fronts,
+            coverage_gap_text=coverage_gap_text,
+        )
+
+    async def reflect(
+        self,
+        *,
+        limit: int,
+        all_card_fronts: list[str] | None = None,
+        cards_to_refine_json: str = "",
+        coverage_gaps: str = "",
+    ) -> dict[str, Any]:
+        return await self._provider.reflect_cards(
+            limit=limit,
+            all_card_fronts=all_card_fronts,
+            cards_to_refine_json=cards_to_refine_json,
+            coverage_gaps=coverage_gaps,
+        )
+
+    def set_slide_set_context(self, *, deck_name: str, slide_set_name: str) -> None:
+        self._provider.set_slide_set_context(
+            deck_name=deck_name, slide_set_name=slide_set_name
+        )
+
+    def drain_warnings(self) -> list[str]:
+        return self._provider.drain_warnings()
+
+
 @dataclass(frozen=True)
 class GenerationConfig:
     pdf_path: str
@@ -62,6 +135,16 @@ class LecternGenerationService:
     Orchestrates the PDF parsing, AI generation, Reflection, and Anki export.
     Yields ServiceEvent objects to allow UIs (CLI/GUI) to render progress.
     """
+
+    def __init__(
+        self,
+        *,
+        provider_factory: Callable[..., AIProvider] | None = None,
+        provider_name: str | None = None,
+    ) -> None:
+        self._provider_factory = provider_factory or create_provider
+        self._provider_name = provider_name
+
     async def run(
         self,
         pdf_path: str,
@@ -146,11 +229,13 @@ class LecternGenerationService:
             history_mgr = HistoryManager()
             context = SessionContext.from_generation_config(cfg)
             context.run_started_at = start_time
-            ai = LecternAIClient(
+            provider = self._provider_factory(
+                self._provider_name,
                 model_name=context.config.model_name,
                 focus_prompt=context.config.focus_prompt,
                 slide_set_context=None,
             )
+            ai = _ProviderClientAdapter(provider)
 
             phases = [
                 InitializationPhase(),
