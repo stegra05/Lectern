@@ -220,4 +220,42 @@ describe('generation logic', () => {
             expect(result).not.toHaveProperty('progress');
         });
     });
+
+    describe('processGenerationEvent side effects', () => {
+        it('does not touch localStorage for session_start events', () => {
+            const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+            const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem');
+
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'session_start',
+                    message: 'Session started',
+                    data: { session_id: 'abc123' },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            expect(setItemSpy).not.toHaveBeenCalledWith('lectern_active_session_id', expect.any(String));
+            expect(removeItemSpy).not.toHaveBeenCalledWith('lectern_active_session_id');
+        });
+
+        it('does not touch localStorage for done events', () => {
+            const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem');
+
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'done',
+                    message: 'Generation complete',
+                    data: { total_pages: 5 },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            expect(removeItemSpy).not.toHaveBeenCalledWith('lectern_active_session_id');
+        });
+    });
 });

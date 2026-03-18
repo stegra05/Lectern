@@ -22,6 +22,7 @@ import {
   createToastActions,
   createBudgetActions,
 } from "./slices/uiSlice";
+import { clearActiveSessionId, setActiveSessionId } from "./logic/activeSessionStorage";
 
 const getInitialState = (): StoreState => ({
   ...getGenerationState(),
@@ -65,3 +66,21 @@ export const useLecternStore = create<LecternStore>()(
     }
   )
 );
+
+let previousSessionId = useLecternStore.getState().sessionId;
+let previousStep = useLecternStore.getState().step;
+
+useLecternStore.subscribe((state) => {
+  const { sessionId, step } = state;
+  if (sessionId === previousSessionId && step === previousStep) {
+    return;
+  }
+  previousSessionId = sessionId;
+  previousStep = step;
+
+  if (step === "generating" && sessionId) {
+    setActiveSessionId(sessionId);
+    return;
+  }
+  clearActiveSessionId();
+});

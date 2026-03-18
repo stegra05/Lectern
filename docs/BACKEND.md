@@ -17,8 +17,9 @@ The backend (`gui/backend/`) is a FastAPI application that serves the React fron
 The bridge between FastAPI and the AI engine is `lectern_service.py` (located in `lectern/`), which uses `phase_handlers.py` to manage discrete logic for each generation stage. This module owns the pipeline, calculates pacing, tracks state, and yields events. The backend's `service.py` acts as a thin wrapper to expose this orchestrator to the API routes.
 
 ### State & Session Management
-- `utils/state.py`: Manages the serialization of active generation sessions so they can be paused or resumed.
-- `utils/history.py`: Stores a permanent record of past generations in `history.json`.
+- `gui/backend/session.py`: Tracks in-memory active runs and temp-file lifecycle.
+- `lectern/utils/history.py` + `lectern/utils/database.py`: Persist session state/history in SQLite (`lectern.db`) for resume/history views.
+- Startup recovery in `gui/backend/main.py` marks stale in-flight draft sessions as `interrupted` so crashed runs do not remain in a misleading generating phase.
 
 ### AnkiConnect Integration
 - Never write to Anki's SQLite database directly.

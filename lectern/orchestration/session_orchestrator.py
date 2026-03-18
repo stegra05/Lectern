@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, AsyncGenerator, List, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
 
 from lectern import config
 from lectern.ai_pacing import PacingState
@@ -37,6 +37,7 @@ from lectern.events.domain import (
     ReflectionStoppedEvent,
     WarningEmittedEvent,
 )
+from lectern.domain_types import CardData, ConceptMapData, CoverageData, OrchestratorAIClient
 from lectern.generation_loop import (
     _coverage_is_sufficient,
     _rebuild_seen_keys,
@@ -51,15 +52,15 @@ from lectern.utils.error_handling import capture_exception
 class SessionState:
     """Internal state for a generation session."""
 
-    all_cards: list[dict] = field(default_factory=list)
+    all_cards: list[CardData] = field(default_factory=list)
     seen_keys: set[str] = field(default_factory=set)
     batch_index: int = 0
     reflection_round: int = 0
-    last_coverage_data: Optional[dict] = None
+    last_coverage_data: Optional[CoverageData] = None
 
     # Context fields populated by service layer
-    pages: list[dict] = field(default_factory=list)
-    concept_map: dict = field(default_factory=dict)
+    pages: list[dict[str, Any]] = field(default_factory=list)
+    concept_map: ConceptMapData = field(default_factory=dict)
     examples: str = ""
 
 
@@ -93,7 +94,7 @@ class GenerationSetupConfig:
     """Inputs required to initialize generation targets and state."""
 
     pages: list[dict[str, Any]]
-    concept_map: dict[str, Any]
+    concept_map: ConceptMapData
     examples: str
     estimated_text_chars: int
     image_count: int
@@ -108,7 +109,7 @@ class GenerationSetupResult:
     total_cards_cap: int
     is_script_mode: bool
     chars_per_page: float
-    initial_coverage: dict[str, Any]
+    initial_coverage: CoverageData
 
 
 class SessionOrchestrator:
@@ -194,7 +195,7 @@ class SessionOrchestrator:
 
     # --- State Mutations (internal) ---
 
-    def _add_card(self, card: Dict[str, Any], key: str) -> bool:
+    def _add_card(self, card: CardData, key: str) -> bool:
         """Add a card if not duplicate. Returns True if added."""
         if key and key not in self.state.seen_keys:
             self.state.seen_keys.add(key)
@@ -202,13 +203,13 @@ class SessionOrchestrator:
             return True
         return False
 
-    def _inject_uuid(self, card: Dict[str, Any]) -> Dict[str, Any]:
+    def _inject_uuid(self, card: CardData) -> CardData:
         """Inject a backend-assigned uid into the card for React key stability."""
         if not card.get("uid"):
             card["uid"] = str(uuid.uuid4())
         return card
 
-    def _compute_coverage(self) -> Dict[str, Any]:
+    def _compute_coverage(self) -> CoverageData:
         """Calculates content coverage statistics based on current cards."""
         total_pages = len(self.state.pages)
         coverage = compute_coverage_data(
@@ -252,7 +253,7 @@ class SessionOrchestrator:
 
     async def run_generation(
         self,
-        ai_client: Any,  # LecternAIClient
+        ai_client: OrchestratorAIClient,
         config: GenerationConfig,
     ) -> AsyncGenerator[DomainEvent, None]:
         """
@@ -416,7 +417,7 @@ class SessionOrchestrator:
 
     async def run_reflection(
         self,
-        ai_client: Any,
+        ai_client: OrchestratorAIClient,
         config: ReflectionConfig,
     ) -> AsyncGenerator[DomainEvent, None]:
         """

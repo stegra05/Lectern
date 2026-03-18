@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from lectern.domain_types import CardData, CoverageData
+
 
 class DomainEventType(Enum):
     """Enumeration of all domain event types."""
@@ -60,7 +62,7 @@ class CardGeneratedEvent(DomainEvent):
     event_type: DomainEventType = field(
         default=DomainEventType.CARD_GENERATED, init=False
     )
-    card: Dict[str, Any] = field(default_factory=dict)
+    card: CardData = field(default_factory=dict)
     is_refined: bool = False  # True if from reflection phase
 
 
@@ -71,7 +73,7 @@ class CoverageUpdatedEvent(DomainEvent):
     event_type: DomainEventType = field(
         default=DomainEventType.COVERAGE_UPDATED, init=False
     )
-    coverage_data: Dict[str, Any] = field(default_factory=dict)
+    coverage_data: CoverageData = field(default_factory=dict)
     cards_count: int = 0
 
 
@@ -82,7 +84,7 @@ class CoverageThresholdMetEvent(DomainEvent):
     event_type: DomainEventType = field(
         default=DomainEventType.COVERAGE_THRESHOLD_MET, init=False
     )
-    coverage_data: Dict[str, Any] = field(default_factory=dict)
+    coverage_data: CoverageData = field(default_factory=dict)
     reason: str = ""
 
 
@@ -148,8 +150,8 @@ class CardsReplacedEvent(DomainEvent):
     event_type: DomainEventType = field(
         default=DomainEventType.CARDS_REPLACED, init=False
     )
-    cards: List[Dict[str, Any]] = field(default_factory=list)
-    coverage_data: Dict[str, Any] = field(default_factory=dict)
+    cards: List[CardData] = field(default_factory=list)
+    coverage_data: CoverageData = field(default_factory=dict)
     reflection_text: str = ""
     selection_summary: Dict[str, Any] = field(default_factory=dict)
 

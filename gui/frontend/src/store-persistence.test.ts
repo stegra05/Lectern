@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useLecternStore } from './store';
 import { act } from '@testing-library/react';
 
@@ -112,5 +112,22 @@ describe('Store Persistence', () => {
 
         // 4.0 * (20000 / 1000) = 80 cards
         expect(useLecternStore.getState().targetDeckSize).toBe(80);
+    });
+
+    it('syncs active session id in localStorage from store state transitions', () => {
+        const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+        const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem');
+
+        act(() => {
+            useLecternStore.setState({ step: 'generating', sessionId: 'session-123' });
+        });
+
+        expect(setItemSpy).toHaveBeenCalledWith('lectern_active_session_id', 'session-123');
+
+        act(() => {
+            useLecternStore.setState({ step: 'done' });
+        });
+
+        expect(removeItemSpy).toHaveBeenCalledWith('lectern_active_session_id');
     });
 });
