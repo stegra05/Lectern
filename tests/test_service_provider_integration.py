@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -105,43 +105,14 @@ async def test_run_routes_through_provider_factory_and_preserves_event_lifecycle
             return_value=provider,
             create=True,
         ) as mock_create_provider,
-        patch("lectern.lectern_service.LecternAIClient") as mock_ai_client,
+        patch(
+            "lectern.lectern_service.LecternAIClient",
+            side_effect=AssertionError(
+                "Service must not instantiate LecternAIClient directly"
+            ),
+            create=True,
+        ) as legacy_ctor,
     ):
-        legacy_ai = MagicMock()
-        legacy_ai.log_path = "/tmp/legacy-ai.log"
-        legacy_ai.upload_document = AsyncMock(
-            return_value={
-                "uri": "gs://legacy.pdf",
-                "mime_type": "application/pdf",
-                "duration_ms": 10,
-            }
-        )
-        legacy_ai.concept_map_from_file = AsyncMock(
-            return_value={
-                "concepts": [],
-                "relations": [],
-                "page_count": 3,
-                "estimated_text_chars": 1200,
-                "slide_set_name": "Legacy Lecture",
-            }
-        )
-        legacy_ai.concept_map = AsyncMock(return_value={"concepts": [], "relations": []})
-        legacy_ai.generate_more_cards = AsyncMock(
-            return_value={
-                "cards": [
-                    {
-                        "fields": {"Front": "Legacy Front", "Back": "Legacy Back"},
-                        "slide_number": 1,
-                    }
-                ],
-                "done": True,
-            }
-        )
-        legacy_ai.reflect = AsyncMock(return_value={"cards": [], "done": True})
-        legacy_ai.set_slide_set_context = MagicMock()
-        legacy_ai.drain_warnings = MagicMock(return_value=[])
-        mock_ai_client.return_value = legacy_ai
-
         service = LecternGenerationService()
         events = [
             event
@@ -157,7 +128,10 @@ async def test_run_routes_through_provider_factory_and_preserves_event_lifecycle
 
     mock_create_provider.assert_called_once()
     _, create_kwargs = mock_create_provider.call_args
-    assert "client" in create_kwargs
+    assert "client" not in create_kwargs
+    assert create_kwargs["model_name"] == "gemini-3-flash-preview"
+    assert create_kwargs["focus_prompt"] == "Prioritize definitions"
+    legacy_ctor.assert_not_called()
 
     event_types = [event.type for event in events if event.type != "control_snapshot"]
     assert "step_start" in event_types
@@ -199,5 +173,6 @@ async def test_service_accepts_injected_provider_factory(pipeline_env) -> None:
     ]
 
     assert captured["provider_name"] == "gemini"
-    assert "client" in captured["kwargs"]
+    assert "client" not in captured["kwargs"]
+    assert captured["kwargs"]["model_name"] == "gemini-3-flash-preview"
     assert any(event.type == "done" for event in events)

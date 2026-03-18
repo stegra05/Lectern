@@ -14,7 +14,6 @@ from typing import (
     Callable,
 )
 
-from lectern.ai_client import LecternAIClient
 from lectern.providers.base import AIProvider
 from lectern.providers.factory import create_provider
 
@@ -230,12 +229,12 @@ class LecternGenerationService:
             history_mgr = HistoryManager()
             context = SessionContext.from_generation_config(cfg)
             context.run_started_at = start_time
-            ai_client = LecternAIClient(
+            provider = self._provider_factory(
+                self._provider_name,
                 model_name=context.config.model_name,
                 focus_prompt=context.config.focus_prompt,
                 slide_set_context=None,
             )
-            provider = self._provider_factory(self._provider_name, client=ai_client)
             ai = _ProviderClientAdapter(provider)
 
             phases = [
