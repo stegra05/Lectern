@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from lectern.ai_client import LecternAIClient
 from lectern.providers.base import AIProvider
@@ -97,7 +97,10 @@ class GeminiProvider(AIProvider):
         return self._client.drain_warnings()
 
 
-_PROVIDER_MAP: dict[str, type[GeminiProvider]] = {
+ProviderConstructor = Callable[..., AIProvider]
+
+
+_PROVIDER_MAP: dict[str, ProviderConstructor] = {
     "gemini": GeminiProvider,
 }
 
