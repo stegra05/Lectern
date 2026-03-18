@@ -1,5 +1,4 @@
 import pytest
-import json
 from unittest.mock import MagicMock, patch, AsyncMock
 from lectern.ai_client import LecternAIClient
 
@@ -19,6 +18,7 @@ async def test_language_detection_integration(mock_client_cls):
     mock_chat.send_message = AsyncMock(return_value=mock_response)
 
     from lectern import config
+
     config.GEMINI_API_KEY = "test_key"
     client = LecternAIClient()
 

@@ -142,7 +142,9 @@ def test_from_generation_config_rejects_orchestrator_config() -> None:
         stop_check=None,
     )
 
-    with pytest.raises(TypeError, match="expects legacy lectern_service.GenerationConfig"):
+    with pytest.raises(
+        TypeError, match="expects legacy lectern_service.GenerationConfig"
+    ):
         SessionContext.from_generation_config(orchestrator_cfg)
 
 

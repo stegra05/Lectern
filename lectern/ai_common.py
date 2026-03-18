@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import base64
 import json
-import os
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
+
+from google.genai import types  # type: ignore
 
 from lectern import config
 
@@ -24,9 +24,6 @@ def _infer_mime_type(image_bytes: bytes) -> str:
     if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
         return "image/webp"
     return "application/octet-stream"
-
-
-from google.genai import types  # type: ignore
 
 
 def _compose_multimodal_content(

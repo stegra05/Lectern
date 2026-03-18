@@ -16,12 +16,12 @@ _here = Path(__file__).resolve().parent
 sys.path.insert(0, str(_here.parent.parent))
 sys.path.insert(0, str(_here))
 
-from lectern.version import __version__
-from lectern import config
-from lectern.utils.path_utils import get_app_data_dir, ensure_app_dirs
-from lectern.utils.history import HistoryManager
-from session import session_manager
-from gui.backend.routers import system, anki, history, generation
+from lectern.version import __version__  # noqa: E402
+from lectern import config  # noqa: E402
+from lectern.utils.path_utils import get_app_data_dir, ensure_app_dirs  # noqa: E402
+from lectern.utils.history import HistoryManager  # noqa: E402
+from session import session_manager  # noqa: E402
+from gui.backend.routers import system, anki, history, generation  # noqa: E402
 
 ensure_app_dirs()
 log_file = get_app_data_dir() / "logs" / "backend.log"
@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Lectern API", version=__version__, lifespan=lifespan)
 session_manager.sweep_orphan_temp_files()
 
+
 def _canonicalize(obj: Any) -> Any:
     """Deep-sort dicts by key and lists by value for a deterministic OpenAPI schema."""
     if isinstance(obj, dict):
@@ -62,6 +63,7 @@ def _canonicalize(obj: Any) -> Any:
             return items
     return obj
 
+
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -72,6 +74,7 @@ def custom_openapi():
     )
     app.openapi_schema = _canonicalize(schema)
     return app.openapi_schema
+
 
 app.openapi = custom_openapi
 

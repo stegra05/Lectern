@@ -7,19 +7,20 @@ from lectern.snapshot import SnapshotTracker
 
 logger = logging.getLogger(__name__)
 
+
 class PipelineEmitter:
     """
     Encapsulates event emission and state tracking during the generation pipeline.
     Replaces the nested async generator boilerplate in the service layer.
     """
-    
+
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.tracker = SnapshotTracker(session_id)
         # Limit queue size to 256 events to prevent memory leaks if consumer is slow
         self.queue: asyncio.Queue[Optional[ServiceEvent]] = asyncio.Queue(maxsize=256)
         self._closed = False
-        
+
     async def stream(self) -> AsyncGenerator[ServiceEvent, None]:
         """Yields events from the internal queue until close() is called."""
         while True:
@@ -29,7 +30,7 @@ class PipelineEmitter:
                 break
             yield event
             self.queue.task_done()
-            
+
     async def close(self):
         """Signals the end of the event stream. Idempotent and non-blocking."""
         if not self._closed:
@@ -37,21 +38,23 @@ class PipelineEmitter:
             try:
                 self.queue.put_nowait(None)
             except asyncio.QueueFull:
-                # If the queue is full, we can't put the sentinel, 
+                # If the queue is full, we can't put the sentinel,
                 # but the consumer is likely already gone or stuck.
                 pass
-            
+
     def is_closed(self) -> bool:
         return self._closed
-            
-    async def emit(self, event_type: str, message: str, data: Optional[Dict[str, Any]] = None):
+
+    async def emit(
+        self, event_type: str, message: str, data: Optional[Dict[str, Any]] = None
+    ):
         """Base emission method. Routes through SnapshotTracker before queueing."""
         if self._closed:
             return
-            
+
         event_data = data or {}
         event = ServiceEvent(event_type, message, event_data)
-        
+
         try:
             snapshot = self.tracker.process_event(
                 event_type=event.type,
@@ -66,8 +69,10 @@ class PipelineEmitter:
                 )
                 await self._queue_event(snap_event)
         except Exception as e:
-            logger.error(f"Snapshot tracking failed for event {event_type}: {e}", exc_info=True)
-            
+            logger.error(
+                f"Snapshot tracking failed for event {event_type}: {e}", exc_info=True
+            )
+
         await self._queue_event(event)
 
     async def _queue_event(self, event: ServiceEvent):
@@ -94,7 +99,7 @@ class PipelineEmitter:
         """Emits an already constructed ServiceEvent."""
         if self._closed:
             return
-            
+
         try:
             snapshot = self.tracker.process_event(
                 event_type=event.type,
@@ -109,38 +114,42 @@ class PipelineEmitter:
                 )
                 await self._queue_event(snap_event)
         except Exception as e:
-            logger.error(f"Snapshot tracking failed for event {event.type}: {e}", exc_info=True)
-            
+            logger.error(
+                f"Snapshot tracking failed for event {event.type}: {e}", exc_info=True
+            )
+
         await self._queue_event(event)
 
     # --- Semantic helpers ---
 
     async def step_start(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("step_start", message, data)
-        
+
     async def step_end(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("step_end", message, data)
-        
+
     async def progress_start(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("progress_start", message, data)
-        
-    async def progress_update(self, message: str, data: Optional[Dict[str, Any]] = None):
+
+    async def progress_update(
+        self, message: str, data: Optional[Dict[str, Any]] = None
+    ):
         await self.emit("progress_update", message, data)
-        
+
     async def info(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("info", message, data)
-        
+
     async def warning(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("warning", message, data)
-        
+
     async def error(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("error", message, data)
-        
+
     async def done(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("done", message, data)
-        
+
     async def note(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("note", message, data)
-        
+
     async def cancelled(self, message: str, data: Optional[Dict[str, Any]] = None):
         await self.emit("cancelled", message, data)

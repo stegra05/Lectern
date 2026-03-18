@@ -106,7 +106,9 @@ async def test_build_concept_map_prefers_native_file_path() -> None:
     result = await provider.build_concept_map(file_uri="gs://slides.pdf")
 
     assert result == {"concepts": []}
-    assert client.concept_map_from_file_calls == [("gs://slides.pdf", "application/pdf")]
+    assert client.concept_map_from_file_calls == [
+        ("gs://slides.pdf", "application/pdf")
+    ]
     assert client.concept_map_calls == []
 
 

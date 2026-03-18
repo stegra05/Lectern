@@ -23,7 +23,9 @@ def test_card_priority_scorer_applies_weighted_signals():
 
 
 def test_card_priority_scorer_applies_saturation_penalty():
-    scorer = CardPriorityScorer(weights=ReflectionScoringWeights(saturation_penalty=7.0))
+    scorer = CardPriorityScorer(
+        weights=ReflectionScoringWeights(saturation_penalty=7.0)
+    )
     score = scorer.score(
         card={
             "quality_score": 1.0,

@@ -1,7 +1,7 @@
 import threading
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Literal, Optional, Set, Union
+from typing import List, Literal, Optional, Union
 from starlette.concurrency import run_in_threadpool
 
 from lectern.utils.history import HistoryManager

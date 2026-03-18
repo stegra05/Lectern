@@ -7,7 +7,11 @@ import pytest
 
 from lectern.ai_client import DocumentUploadError, LecternAIClient, UploadedDocument
 from lectern.events.service_events import ServiceEvent
-from lectern.orchestration.pipeline_context import PipelinePhase, SessionConfig, SessionContext
+from lectern.orchestration.pipeline_context import (
+    PipelinePhase,
+    SessionConfig,
+    SessionContext,
+)
 from lectern.orchestration.phases import (
     ConceptMappingPhase,
     ExportPhase,
@@ -27,7 +31,9 @@ class RecordingEmitter:
     async def emit_event(self, event: ServiceEvent) -> None:
         self.events.append(event)
 
-    async def emit(self, event_type: str, message: str, data: dict | None = None) -> None:
+    async def emit(
+        self, event_type: str, message: str, data: dict | None = None
+    ) -> None:
         self.events.append(ServiceEvent(event_type, message, data or {}))
 
     async def step_start(self, message: str, data: dict | None = None) -> None:
@@ -52,7 +58,9 @@ class RecordingEmitter:
         await self.emit("error", message, data)
 
 
-def _context(*, pdf_path: str = "/tmp/slides.pdf", skip_export: bool = False) -> SessionContext:
+def _context(
+    *, pdf_path: str = "/tmp/slides.pdf", skip_export: bool = False
+) -> SessionContext:
     return SessionContext(
         config=SessionConfig(
             pdf_path=pdf_path,
@@ -113,7 +121,8 @@ async def test_initialization_phase_missing_pdf_emits_terminal_error() -> None:
             await InitializationPhase().execute(context, emitter, MagicMock())
 
     assert any(
-        ev.type == "error" and "PDF path not found" in ev.message for ev in emitter.events
+        ev.type == "error" and "PDF path not found" in ev.message
+        for ev in emitter.events
     )
 
 
@@ -153,7 +162,10 @@ async def test_initialization_phase_populates_metadata_and_anki_success() -> Non
     assert context.pdf.page_count == 7
     assert context.pdf.text_chars == 2000
     assert context.pdf.image_count == 3
-    assert any(ev.type == "step_end" and ev.message == "AnkiConnect Connected" for ev in emitter.events)
+    assert any(
+        ev.type == "step_end" and ev.message == "AnkiConnect Connected"
+        for ev in emitter.events
+    )
 
 
 @pytest.mark.asyncio
@@ -169,11 +181,15 @@ async def test_initialization_phase_debug_fallback_sets_skip_export() -> None:
     ), patch(
         "lectern.orchestration.phases.get_connection_info",
         new=AsyncMock(return_value={"connected": False, "error": "Connection refused"}),
-    ), patch("lectern.orchestration.phases.config.DEBUG", True):
+    ), patch(
+        "lectern.orchestration.phases.config.DEBUG", True
+    ):
         await InitializationPhase().execute(context, emitter, MagicMock())
 
     assert context.config.skip_export is True
-    assert any(ev.type == "warning" and "DEBUG is ON" in ev.message for ev in emitter.events)
+    assert any(
+        ev.type == "warning" and "DEBUG is ON" in ev.message for ev in emitter.events
+    )
 
 
 @pytest.mark.asyncio
@@ -215,7 +231,9 @@ async def test_concept_mapping_phase_updates_context_on_success() -> None:
     assert context.pdf.metadata_chars == 3300
     assert len(context.pages) == 11
     ai_client.set_slide_set_context.assert_called_once()
-    assert any(ev.type == "warning" and "model warned" in ev.message for ev in emitter.events)
+    assert any(
+        ev.type == "warning" and "model warned" in ev.message for ev in emitter.events
+    )
     session_started = next(
         ev
         for ev in emitter.events

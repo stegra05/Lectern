@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch, AsyncMock
 from lectern.utils.note_export import (
     resolve_model_name,
     build_card_tags,

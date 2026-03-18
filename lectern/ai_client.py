@@ -8,7 +8,7 @@ import asyncio
 import json
 import inspect
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Type
 
 from google import genai  # type: ignore
 from google.genai import types  # type: ignore
@@ -558,7 +558,6 @@ class LecternAIClient:
         # Note: attempt_count relies on _with_retry calling _upload sequentially.
         # If _with_retry is ever parallelized, this will need to be made thread-safe.
         attempt_count = 0
-        last_error: Exception | None = None
 
         async def _upload() -> Any:
             nonlocal attempt_count
@@ -568,7 +567,6 @@ class LecternAIClient:
         try:
             uploaded = await self._with_retry("PDF upload", _upload, retries=retries)
         except Exception as exc:
-            last_error = exc
             raise DocumentUploadError(
                 f"PDF upload failed after {retries} attempts: {exc}",
                 user_message=f"Failed to upload the PDF. Please try again. ({type(exc).__name__})",

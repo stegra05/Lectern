@@ -1,10 +1,8 @@
-import pytest
 from lectern.cost_estimator import (
     derive_effective_target,
     estimate_card_cap,
     compute_suggested_card_count,
 )
-from lectern import config
 
 
 def test_compute_suggested_card_count_slides():

@@ -395,7 +395,9 @@ class DatabaseManager:
             conn.commit()
             return cursor.rowcount > 0
 
-    def recover_interrupted_sessions(self, interrupted_status: str = "interrupted") -> int:
+    def recover_interrupted_sessions(
+        self, interrupted_status: str = "interrupted"
+    ) -> int:
         """Mark stale in-flight draft sessions as interrupted.
 
         A session is considered stale in-flight when it is still in draft status

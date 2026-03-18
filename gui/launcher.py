@@ -1,9 +1,4 @@
-import os
-import sys
-
-
 import threading
-import time
 import uvicorn
 import webview
 from backend.main import app

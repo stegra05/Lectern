@@ -153,7 +153,7 @@ def isolated_config() -> Generator[None, None, None]:
 @pytest.fixture
 def temp_config_dir(temp_state_dir: Path) -> Generator[Path, None, None]:
     """Provide a temporary directory for config files."""
-    config_path = temp_state_dir / "user_config.json"
+    temp_state_dir / "user_config.json"
     with patch("lectern.config.get_app_data_dir", return_value=temp_state_dir):
         yield temp_state_dir
 

@@ -1,8 +1,7 @@
 """Tests for the validation module."""
 
-import os
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from lectern.validation import (
     ValidationResult,

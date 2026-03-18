@@ -1,7 +1,3 @@
-import pytest
-import os
-import sqlite3
-from unittest.mock import patch, MagicMock
 from lectern.utils.history import HistoryManager
 from lectern.utils.database import DatabaseManager
 

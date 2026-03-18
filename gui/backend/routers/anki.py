@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Any, Callable, Dict, List, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional
 
 from lectern import config, anki_connector
 from lectern.utils.note_export import export_card_to_anki
@@ -109,7 +109,11 @@ async def stream_sync_cards(
         if note_ids_to_check:
             try:
                 infos = await anki_connector.notes_info(note_ids_to_check)
-                existing_note_ids = {int(info.get("noteId")) for info in infos if info and info.get("noteId")}
+                existing_note_ids = {
+                    int(info.get("noteId"))
+                    for info in infos
+                    if info and info.get("noteId")
+                }
                 batch_check_success = True
             except Exception as e:
                 logger.warning(f"Failed to batch fetch notes info: {e}")

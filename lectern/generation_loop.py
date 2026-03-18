@@ -2,24 +2,18 @@ from __future__ import annotations
 
 import logging
 import re
-import uuid
-import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from html import unescape
-from typing import Any, Dict, Generator, List
+from typing import Any, Dict, List
 
-from lectern.ai_pacing import PacingState
 from lectern.card_quality import CardQualityEvaluator
 from lectern.coverage import (
-    build_generation_gap_text,
-    build_reflection_gap_text,
     compute_coverage_data,
     get_card_concept_ids,
     get_card_page_references,
     get_card_relation_keys,
 )
 from lectern.domain_types import CardData, ConceptMapData, CoverageData
-from lectern.utils.error_handling import capture_exception
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +143,9 @@ class CardPriorityScorer:
         new_concepts = concepts.difference(selected_concepts)
         new_relations = relations.difference(selected_relations)
         new_high_priority = high_priority_ids.intersection(new_concepts)
-        saturation = sum(max((per_page_counts.get(page, 0) + 1) - 2, 0) for page in pages)
+        saturation = sum(
+            max((per_page_counts.get(page, 0) + 1) - 2, 0) for page in pages
+        )
         return (
             base_score
             + len(new_high_priority) * self.weights.high_priority_concept

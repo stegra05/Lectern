@@ -8,7 +8,7 @@ import time
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from cachetools import TTLCache
 from starlette.concurrency import run_in_threadpool
 
@@ -16,7 +16,7 @@ from lectern import config
 from lectern.cost_estimator import recompute_estimate
 from lectern.lectern_service import LecternGenerationService
 from lectern.utils.history import HistoryManager
-from gui.backend.session import SessionManager, LECTERN_TEMP_PREFIX, _get_session_or_404
+from gui.backend.session import SessionManager, LECTERN_TEMP_PREFIX
 from gui.backend.dependencies import (
     get_session_manager,
     get_history_manager,
@@ -139,7 +139,7 @@ async def generate_cards(
 
     try:
         tags_list = json.loads(tags)
-    except:
+    except Exception:
         tags_list = []
 
     def save_generate_temp():
@@ -198,7 +198,6 @@ async def generate_cards(
     }
 
     async def event_generator():
-        import time
         from lectern.snapshot import SnapshotTracker
 
         session_logs = []

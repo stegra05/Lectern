@@ -1,4 +1,3 @@
-import pytest
 from lectern.ai_common import (
     _infer_mime_type,
     _compose_multimodal_content,
@@ -8,7 +7,6 @@ from lectern.ai_common import (
     _cleanup_stale_empty_session_logs,
 )
 from unittest.mock import MagicMock, patch, mock_open
-from lectern import config
 import json
 import os
 from pathlib import Path
@@ -69,7 +67,7 @@ def test_session_logging_logic():
             temp_dir = Path("/tmp/lectern_test_logs")
             mock_dir.return_value = temp_dir
             with patch("pathlib.Path.mkdir"):
-                with patch("builtins.open", mock_open()) as m_open:
+                with patch("builtins.open", mock_open()):
                     path = _start_session_log()
                     assert "session-" in path
                     assert "json" in path

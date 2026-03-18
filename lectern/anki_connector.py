@@ -7,7 +7,6 @@ add notes to Anki. It never manipulates the collection directly.
 
 from __future__ import annotations
 
-import base64
 import functools
 import logging
 import random

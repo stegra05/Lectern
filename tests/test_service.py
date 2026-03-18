@@ -9,12 +9,7 @@ Tests the core orchestration logic including:
 """
 
 import pytest
-import asyncio
-import time
-import uuid
-from unittest.mock import MagicMock, patch, PropertyMock, AsyncMock
-from typing import Dict, Any, List, Optional, Callable
-from dataclasses import replace as dataclass_replace
+from unittest.mock import MagicMock, patch, AsyncMock
 
 import sys
 import os
@@ -423,7 +418,7 @@ class TestServiceIntegration:
             if e.type == "progress_start":
                 stop_flag = True
 
-        assert stop_flag == True
+        assert stop_flag
         assert any(e.type == "cancelled" for e in events) or any(
             "stopped" in e.message.lower() for e in events
         )
@@ -599,7 +594,9 @@ class TestServiceIntegration:
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
-    @patch("lectern.orchestration.phases.sample_examples_from_deck", new_callable=AsyncMock)
+    @patch(
+        "lectern.orchestration.phases.sample_examples_from_deck", new_callable=AsyncMock
+    )
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     @patch("lectern.lectern_service.HistoryManager")
@@ -616,7 +613,9 @@ class TestServiceIntegration:
         mock_info.return_value = {"connected": True, "collection_available": True}
         mock_samples.side_effect = Exception("Anki error")
 
-        with patch("lectern.providers.gemini_provider.LecternAIClient") as mock_ai_class:
+        with patch(
+            "lectern.providers.gemini_provider.LecternAIClient"
+        ) as mock_ai_class:
             mock_ai = mock_ai_class.return_value
             mock_ai.upload_document = AsyncMock(
                 return_value=MagicMock(uri="gs://mock", duration_ms=100)
@@ -735,7 +734,7 @@ class TestServiceIntegration:
             if e.type == "step_start" and "Reflection" in e.message:
                 stop_flag = True
 
-        assert stop_flag == True
+        assert stop_flag
 
     @pytest.mark.asyncio
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)

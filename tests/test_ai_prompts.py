@@ -1,5 +1,5 @@
-import pytest
-from lectern.ai_prompts import PromptBuilder, PromptConfig
+from lectern.ai_prompts import PromptBuilder, PromptConfig, CARD_EXAMPLES
+import json
 
 
 def test_prompt_builder_defaults():
@@ -55,10 +55,6 @@ def test_generation_prompt_requests_grounding_metadata():
     assert "relation_keys" in prompt
     assert "rationale" in prompt
     assert "source_excerpt" in prompt
-
-
-import json
-from lectern.ai_prompts import CARD_EXAMPLES
 
 
 def _parse_examples_helper(example_str):

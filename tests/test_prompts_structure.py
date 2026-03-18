@@ -1,4 +1,3 @@
-import pytest
 from lectern.ai_prompts import PromptBuilder, PromptConfig, FORMATTING_RULES
 
 

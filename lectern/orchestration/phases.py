@@ -85,7 +85,9 @@ class InitializationPhase(PipelinePhase):
             )
             return
 
-        reason = anki_info.get("error") or "AnkiConnect collection is not available yet."
+        reason = (
+            anki_info.get("error") or "AnkiConnect collection is not available yet."
+        )
         if config.DEBUG:
             await emitter.emit_event(
                 ServiceEvent(
@@ -115,15 +117,21 @@ class ConceptMappingPhase(PipelinePhase):
     ) -> None:
         phase_started_at = time.perf_counter()
         await emitter.emit_event(
-            ServiceEvent("step_start", "Extracting images and text", {"phase": "concept"})
+            ServiceEvent(
+                "step_start", "Extracting images and text", {"phase": "concept"}
+            )
         )
 
         examples = ""
-        await emitter.emit_event(ServiceEvent("step_start", "Sample examples from deck"))
+        await emitter.emit_event(
+            ServiceEvent("step_start", "Sample examples from deck")
+        )
         examples_started_at = time.perf_counter()
         try:
             if not context.config.skip_export:
-                deck_for_examples = context.config.context_deck or context.config.deck_name
+                deck_for_examples = (
+                    context.config.context_deck or context.config.deck_name
+                )
                 examples = await sample_examples_from_deck(
                     deck_name=deck_for_examples, sample_size=5
                 )
@@ -181,7 +189,9 @@ class ConceptMappingPhase(PipelinePhase):
                 "Session Started",
                 {
                     "success": True,
-                    "duration_ms": int((time.perf_counter() - session_started_at) * 1000),
+                    "duration_ms": int(
+                        (time.perf_counter() - session_started_at) * 1000
+                    ),
                     "ai_log_path": getattr(ai_client, "log_path", ""),
                 },
             )
@@ -215,7 +225,9 @@ class ConceptMappingPhase(PipelinePhase):
                         "recoverable": False,
                         "terminal": True,
                         "stage": "upload",
-                        "elapsed_ms": int((time.perf_counter() - phase_started_at) * 1000),
+                        "elapsed_ms": int(
+                            (time.perf_counter() - phase_started_at) * 1000
+                        ),
                     },
                 )
             )
@@ -263,7 +275,10 @@ class ConceptMappingPhase(PipelinePhase):
             metadata_pages = actual_pages
             metadata_chars = actual_text_chars
             page_delta_limit = max(5, int(actual_pages * 0.25))
-            if advised_pages > 0 and abs(advised_pages - actual_pages) <= page_delta_limit:
+            if (
+                advised_pages > 0
+                and abs(advised_pages - actual_pages) <= page_delta_limit
+            ):
                 metadata_pages = advised_pages
 
             if advised_chars > 0:
@@ -355,7 +370,9 @@ class ConceptMappingPhase(PipelinePhase):
 
         context.concept_map = concept_map
         context.slide_set_name = slide_set_name
-        await emitter.emit_event(ServiceEvent("info", f"Slide Set Name: '{slide_set_name}'"))
+        await emitter.emit_event(
+            ServiceEvent("info", f"Slide Set Name: '{slide_set_name}'")
+        )
         ai_client.set_slide_set_context(
             deck_name=context.config.deck_name,
             slide_set_name=slide_set_name,
@@ -429,7 +446,9 @@ class GenerationPhase(PipelinePhase):
             stop_check=context.config.stop_check,
             examples=context.examples,
         )
-        async for event in orchestrator.run_generation(ai_client=ai_client, config=gen_config):
+        async for event in orchestrator.run_generation(
+            ai_client=ai_client, config=gen_config
+        ):
             await emitter.emit_event(SSEEmitter.domain_to_service_event(event))
 
         context.all_cards = list(orchestrator.state.all_cards)
@@ -441,12 +460,18 @@ class GenerationPhase(PipelinePhase):
                 {
                     "success": True,
                     "count": len(context.all_cards),
-                    "duration_ms": int((time.perf_counter() - generation_started_at) * 1000),
+                    "duration_ms": int(
+                        (time.perf_counter() - generation_started_at) * 1000
+                    ),
                 },
             )
         )
 
-        rounds = 1 if 0 < len(context.all_cards) < 50 else 2 if len(context.all_cards) > 0 else 0
+        rounds = (
+            1
+            if 0 < len(context.all_cards) < 50
+            else 2 if len(context.all_cards) > 0 else 0
+        )
         if rounds > 0 and not orchestrator.should_stop(context.config.stop_check):
             await emitter.emit_event(
                 ServiceEvent(
@@ -521,8 +546,12 @@ class ExportPhase(PipelinePhase):
         run_started_at = context.run_started_at or time.perf_counter()
 
         if not all_cards:
-            await emitter.emit_event(ServiceEvent("warning", "No cards were generated."))
-            await asyncio.to_thread(history_mgr.update_entry, history_id, status="error")
+            await emitter.emit_event(
+                ServiceEvent("warning", "No cards were generated.")
+            )
+            await asyncio.to_thread(
+                history_mgr.update_entry, history_id, status="error"
+            )
             await emitter.emit_event(
                 ServiceEvent(
                     "error",
@@ -573,7 +602,9 @@ class ExportPhase(PipelinePhase):
             return
 
         if self._should_stop(context.config.stop_check):
-            await asyncio.to_thread(history_mgr.update_entry, history_id, status="cancelled")
+            await asyncio.to_thread(
+                history_mgr.update_entry, history_id, status="cancelled"
+            )
             await emitter.emit_event(
                 ServiceEvent(
                     "cancelled",
@@ -607,7 +638,9 @@ class ExportPhase(PipelinePhase):
                     },
                 )
             )
-            await asyncio.to_thread(history_mgr.update_entry, history_id, status="error")
+            await asyncio.to_thread(
+                history_mgr.update_entry, history_id, status="error"
+            )
             return
 
         await emitter.emit_event(

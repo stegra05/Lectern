@@ -1,4 +1,3 @@
-import pytest
 from lectern.ai_pacing import PacingState
 
 

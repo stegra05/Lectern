@@ -37,7 +37,12 @@ from lectern.events.domain import (
     ReflectionStoppedEvent,
     WarningEmittedEvent,
 )
-from lectern.domain_types import CardData, ConceptMapData, CoverageData, OrchestratorAIClient
+from lectern.domain_types import (
+    CardData,
+    ConceptMapData,
+    CoverageData,
+    OrchestratorAIClient,
+)
 from lectern.generation_loop import (
     _coverage_is_sufficient,
     _rebuild_seen_keys,

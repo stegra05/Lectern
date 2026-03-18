@@ -5,7 +5,6 @@ import tempfile
 import random
 import string
 import sys
-from pathlib import Path
 
 # Add project root to sys.path to allow imports if needed
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -61,14 +60,14 @@ if __name__ == "__main__":
     # Measure initial size in memory (rough estimate)
     import sys
 
-    print(f"State object generated.")
+    print("State object generated.")
 
-    print(f"Benchmarking with indent=2 (Current Implementation)...")
+    print("Benchmarking with indent=2 (Current Implementation)...")
     time_indent, size_indent = benchmark_save(state, indent=2)
     print(f"Time with indent=2: {time_indent:.4f}s")
     print(f"Size with indent=2: {size_indent / 1024 / 1024:.2f} MB")
 
-    print(f"Benchmarking with indent=None (Proposed Optimization)...")
+    print("Benchmarking with indent=None (Proposed Optimization)...")
     time_no_indent, size_no_indent = benchmark_save(state, indent=None)
     print(f"Time with indent=None: {time_no_indent:.4f}s")
     print(f"Size with indent=None: {size_no_indent / 1024 / 1024:.2f} MB")

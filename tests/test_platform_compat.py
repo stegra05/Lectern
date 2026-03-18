@@ -1,8 +1,6 @@
 import sys
 import unittest
-import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from lectern.utils.path_utils import get_app_data_dir
 

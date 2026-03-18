@@ -7,7 +7,6 @@ from lectern.orchestration.session_orchestrator import (
     SessionOrchestrator,
     GenerationConfig,
     ReflectionConfig,
-    SessionState,
 )
 from lectern.events.domain import (
     CardGeneratedEvent,
@@ -272,12 +271,6 @@ class TestGenerationLoopPure:
         ai.drain_warnings.return_value = []
 
         # Create concept map with high priority concepts
-        concept_map = {
-            "concepts": [
-                {"id": "c1", "name": "Concept 1", "importance": "high"},
-            ],
-            "relations": [],
-        }
 
         orchestrator = SessionOrchestrator()
         orchestrator.state.pages = [{"number": i} for i in range(5)]
@@ -296,9 +289,7 @@ class TestGenerationLoopPure:
             e async for e in orchestrator.run_generation(ai_client=ai, config=config)
         ]
 
-        threshold_events = [
-            e for e in events if isinstance(e, CoverageThresholdMetEvent)
-        ]
+        [e for e in events if isinstance(e, CoverageThresholdMetEvent)]
         # Should have threshold met event when model_done=True and coverage is sufficient
         # Since we're mock doesn't set up coverage data properly, this test mainly verifies the event is yielded
         # In real scenarios, the coverage check would evaluate actual coverage

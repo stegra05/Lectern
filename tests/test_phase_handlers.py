@@ -115,7 +115,10 @@ class TestConceptPhaseHandler:
                 events.append(item)
 
         assert mock_phase_execute.await_count == 1
-        assert any(e["type"] == "step_start" and e["message"] == "Delegated phase" for e in events)
+        assert any(
+            e["type"] == "step_start" and e["message"] == "Delegated phase"
+            for e in events
+        )
         assert result is not None
         assert result.slide_set_name == "Delegated Slides"
 
@@ -152,7 +155,9 @@ class TestConceptPhaseHandler:
         assert first_item["message"] == "Delegated phase"
         gate.set()
         remaining = [item async for item in agen]
-        assert any(isinstance(item, dict) and item["type"] == "step_end" for item in remaining)
+        assert any(
+            isinstance(item, dict) and item["type"] == "step_end" for item in remaining
+        )
 
     @pytest.mark.asyncio
     @patch(

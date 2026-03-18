@@ -1,4 +1,3 @@
-from typing import Generator
 from lectern.utils.history import HistoryManager
 from lectern.lectern_service import LecternGenerationService
 from gui.backend.session import session_manager, SessionManager

@@ -13,7 +13,9 @@ class _StubGeminiClient:
     async def upload_document(self, pdf_path: str):
         return {"uri": f"gs://{pdf_path}", "mime_type": "application/pdf"}
 
-    async def concept_map_from_file(self, file_uri: str, mime_type: str = "application/pdf"):
+    async def concept_map_from_file(
+        self, file_uri: str, mime_type: str = "application/pdf"
+    ):
         return {"uri": file_uri, "mime_type": mime_type}
 
     async def concept_map(self, pdf_content: list[dict[str, object]]):

@@ -1,6 +1,5 @@
 import pytest
 import httpx
-import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 from lectern import anki_connector
 from lectern.anki_connector import AnkiTransportError, AnkiApiError

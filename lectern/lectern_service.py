@@ -36,10 +36,9 @@ from lectern.orchestration.phases import (
 )
 
 
-logger = logging.getLogger(__name__)
-
-
 from lectern.events.service_events import ServiceEvent
+
+logger = logging.getLogger(__name__)
 
 
 class _ProviderClientAdapter:
@@ -176,12 +175,14 @@ class LecternGenerationService:
 
         start_time = time.perf_counter()
         emitter = PipelineEmitter(cfg.session_id)
-        
+
         async def _run_task():
             try:
                 await self._execute_pipeline(cfg, start_time, cfg.entry_id, emitter)
             except asyncio.CancelledError:
-                logger.info(f"Pipeline task for session {cfg.session_id} was cancelled.")
+                logger.info(
+                    f"Pipeline task for session {cfg.session_id} was cancelled."
+                )
                 # We need to notify the emitter so it can push a final cancellation event if possible
                 if not emitter.is_closed():
                     await emitter.cancelled("Generation cancelled by user or system.")
@@ -191,19 +192,23 @@ class LecternGenerationService:
                 # Catch any unexpected errors that bypass the pipeline's own try-except
                 logger.error(f"Pipeline crashed: {e}", exc_info=True)
                 if not emitter.is_closed():
-                    await emitter.emit("error", f"Pipeline crashed: {str(e)}", {"terminal": True, "recoverable": False})
+                    await emitter.emit(
+                        "error",
+                        f"Pipeline crashed: {str(e)}",
+                        {"terminal": True, "recoverable": False},
+                    )
             finally:
                 await emitter.close()
-                
+
         # Start the execution in the background
         task = asyncio.create_task(_run_task())
-        
+
         try:
             # Yield from the emitter's queue
             async for event in emitter.stream():
                 yield event
         finally:
-            # CRITICAL: If the generator is closed (e.g. client disconnect), 
+            # CRITICAL: If the generator is closed (e.g. client disconnect),
             # we MUST cancel the background task to stop AI generation immediately.
             if not task.done():
                 task.cancel()
@@ -214,7 +219,7 @@ class LecternGenerationService:
                     pass
                 except Exception as e:
                     logger.error(f"Error during task cancellation cleanup: {e}")
-            
+
             # Ensure emitter is closed to release any resources
             await emitter.close()
 
@@ -249,7 +254,9 @@ class LecternGenerationService:
                 except PhaseExecutionHalt as e:
                     if history_id:
                         await asyncio.to_thread(
-                            history_mgr.update_entry, history_id, status=e.history_status
+                            history_mgr.update_entry,
+                            history_id,
+                            status=e.history_status,
                         )
                     return
 
@@ -269,7 +276,7 @@ class LecternGenerationService:
                     await asyncio.to_thread(
                         HistoryManager().update_entry, history_id, status="cancelled"
                     )
-            except:
+            except Exception:
                 pass
             raise
 
@@ -280,7 +287,7 @@ class LecternGenerationService:
                 await asyncio.to_thread(
                     HistoryManager().update_entry, history_id, status="error"
                 )
-            except:
+            except Exception:
                 pass
 
             await emitter.emit_event(

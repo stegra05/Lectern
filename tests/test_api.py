@@ -1,8 +1,4 @@
-import pytest
 import json
-import os
-import shutil
-import tempfile
 from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi.testclient import TestClient
 from gui.backend.main import app

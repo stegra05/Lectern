@@ -1,7 +1,7 @@
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 
 from lectern.version import __version__
 from lectern import config, anki_connector

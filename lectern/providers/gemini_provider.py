@@ -89,7 +89,9 @@ class GeminiProvider(AIProvider):
         return coerce_response_dict(result)
 
     def set_slide_set_context(self, *, deck_name: str, slide_set_name: str) -> None:
-        self._client.set_slide_set_context(deck_name=deck_name, slide_set_name=slide_set_name)
+        self._client.set_slide_set_context(
+            deck_name=deck_name, slide_set_name=slide_set_name
+        )
 
     def drain_warnings(self) -> list[str]:
         return self._client.drain_warnings()

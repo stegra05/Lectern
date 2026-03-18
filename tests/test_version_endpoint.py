@@ -1,8 +1,6 @@
-import pytest
 from fastapi.testclient import TestClient
 from gui.backend.main import app
 import unittest.mock as mock
-import httpx
 
 client = TestClient(app)
 

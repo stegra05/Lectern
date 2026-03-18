@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol, runtime_che
 if TYPE_CHECKING:
     from lectern.ai_client import LecternAIClient
     from lectern.events.pipeline_emitter import PipelineEmitter
-    from lectern.lectern_service import GenerationConfig
 
 
 def _pdf_stem(pdf_path: str) -> str:

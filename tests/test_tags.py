@@ -1,4 +1,3 @@
-import pytest
 from lectern.utils.tags import (
     build_hierarchical_tags,
     infer_slide_set_name,
