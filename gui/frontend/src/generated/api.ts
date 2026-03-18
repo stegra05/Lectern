@@ -254,6 +254,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sync/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Sync */
+        post: operations["preview_sync_sync_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/version": {
         parameters: {
             query?: never;
@@ -301,6 +318,7 @@ export interface components {
             hint?: null | string;
             /** Reason */
             reason?: null | string;
+            remediation?: components["schemas"]["RemediationPlan"] | null;
             /**
              * Status
              * @enum {string}
@@ -350,6 +368,7 @@ export interface components {
             hint?: null | string;
             /** Reason */
             reason?: null | string;
+            remediation?: components["schemas"]["RemediationPlan"] | null;
             /** Required */
             required: boolean;
         };
@@ -590,6 +609,23 @@ export interface components {
             ready: boolean;
             /** Reason */
             reason?: null | string;
+            remediation?: components["schemas"]["RemediationPlan"] | null;
+        };
+        /** RemediationAction */
+        RemediationAction: {
+            /** Description */
+            description?: null | string;
+            /** Label */
+            label: string;
+            /** Url */
+            url?: null | string;
+        };
+        /** RemediationPlan */
+        RemediationPlan: {
+            /** Actions */
+            actions: components["schemas"]["RemediationAction"][];
+            /** Summary */
+            summary?: null | string;
         };
         /** SessionEntryResponse */
         SessionEntryResponse: {
@@ -654,6 +690,25 @@ export interface components {
             session_id: string;
             /** Stopped */
             stopped: boolean;
+        };
+        /** SyncPreviewResponse */
+        SyncPreviewResponse: {
+            /** Conflict Count */
+            conflict_count: number;
+            /** Create Candidates */
+            create_candidates: number;
+            /** Existing Note Matches */
+            existing_note_matches: number;
+            /** Invalid Note Ids */
+            invalid_note_ids: number;
+            /** Missing Note Ids */
+            missing_note_ids: number;
+            /** Note Lookup Error */
+            note_lookup_error?: null | string;
+            /** Total Cards */
+            total_cards: number;
+            /** Update Candidates */
+            update_candidates: number;
         };
         /** SyncRequest */
         SyncRequest: {
@@ -1168,6 +1223,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_sync_sync_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncPreviewResponse"];
                 };
             };
             /** @description Validation Error */
