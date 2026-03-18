@@ -18,6 +18,13 @@ _PROVIDER_MAP: dict[str, ProviderConstructor] = {
 }
 
 
+def is_supported_provider(provider_name: str | None = None) -> bool:
+    """Return whether a provider name resolves to a registered backend."""
+
+    resolved_name = (provider_name or DEFAULT_PROVIDER).strip().lower()
+    return resolved_name in _PROVIDER_MAP
+
+
 def create_provider(provider_name: str | None = None, **kwargs: Any) -> AIProvider:
     """Create an AI provider for the requested backend."""
 

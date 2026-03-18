@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from lectern.version import __version__
 from lectern import config, anki_connector
 from lectern.config import ConfigManager
+from lectern.providers.factory import DEFAULT_PROVIDER, is_supported_provider
 from lectern.utils.error_handling import capture_exception
 
 router = APIRouter()
@@ -65,7 +66,9 @@ ConfigUpdateResponse = Union[ConfigUpdatedResponse, ConfigNoChangeResponse]
 
 
 def _provider_readiness() -> tuple[str, bool]:
-    active_provider = (str(config.AI_PROVIDER or "gemini")).strip().lower()
+    active_provider = (str(config.AI_PROVIDER or DEFAULT_PROVIDER)).strip().lower()
+    if not is_supported_provider(active_provider):
+        return active_provider, False
     if active_provider == "gemini":
         return active_provider, bool(config.GEMINI_API_KEY)
     return active_provider, True
