@@ -14,8 +14,6 @@ from typing import (
     Callable,
 )
 
-from lectern import config
-from lectern.anki_connector import get_connection_info
 from lectern.ai_client import LecternAIClient
 
 from lectern.cost_estimator import (
@@ -23,7 +21,6 @@ from lectern.cost_estimator import (
     estimate_cost_with_base as estimate_cost_with_base_impl,
     verify_image_token_cost as verify_image_token_cost_impl,
 )
-from lectern.utils.note_export import export_card_to_anki
 from lectern.utils.error_handling import capture_exception
 
 from lectern.utils.history import HistoryManager
@@ -31,6 +28,7 @@ from lectern.events.pipeline_emitter import PipelineEmitter
 from lectern.orchestration.pipeline_context import SessionContext
 from lectern.orchestration.phases import (
     ConceptMappingPhase,
+    ExportPhase,
     GenerationPhase,
     InitializationPhase,
     PhaseExecutionHalt,
@@ -147,239 +145,37 @@ class LecternGenerationService:
         try:
             history_mgr = HistoryManager()
             context = SessionContext.from_generation_config(cfg)
+            context.run_started_at = start_time
             ai = LecternAIClient(
                 model_name=context.config.model_name,
                 focus_prompt=context.config.focus_prompt,
                 slide_set_context=None,
             )
 
-            try:
-                await InitializationPhase().execute(context, emitter, ai)
-            except PhaseExecutionHalt as e:
-                if history_id:
-                    await asyncio.to_thread(
-                        history_mgr.update_entry, history_id, status=e.history_status
-                    )
-                return
-
-            if self._should_stop(context.config.stop_check):
-                await asyncio.to_thread(
-                    history_mgr.update_entry, history_id, status="cancelled"
-                )
-                await emitter.emit_event(
-                    self._cancelled_event("ai_session_init", start_time)
-                )
-                return
-
-            try:
-                await ConceptMappingPhase().execute(context, emitter, ai)
-            except PhaseExecutionHalt as e:
-                if history_id:
-                    await asyncio.to_thread(
-                        history_mgr.update_entry, history_id, status=e.history_status
-                    )
-                return
-
-            await GenerationPhase().execute(context, emitter, ai)
-
-            all_cards = context.all_cards
-            pages = context.pages
-            slide_set_name = context.slide_set_name
-
-            if not all_cards:
-                await emitter.emit_event(
-                    ServiceEvent("warning", "No cards were generated.")
-                )
-                await asyncio.to_thread(
-                    history_mgr.update_entry, history_id, status="error"
-                )
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "error",
-                        "Generation completed without any usable cards.",
-                        {
-                            "terminal": True,
-                            "stage": "generation",
-                            "elapsed_ms": self._elapsed_ms(start_time),
-                        },
-                    )
-                )
-                return
-
-            final_coverage = context.final_coverage
-
-            # 8. Creation in Anki
-            if context.config.skip_export:
-                # Draft Mode: Save state but don't export
-                await emitter.emit_event(
-                    ServiceEvent("info", "Skipping Anki export (Draft Mode)")
-                )
-
-                # IMPORTANT: Persist cards to DB so they survive app restart/refresh
-                await asyncio.to_thread(
-                    history_mgr.sync_session_state,
-                    session_id=context.config.session_id or history_id,
-                    cards=all_cards,
-                    status="completed",
-                    deck_name=context.config.deck_name,
-                    slide_set_name=slide_set_name,
-                    model_name=context.config.model_name,
-                    tags=context.config.tags,
-                    total_pages=len(pages),
-                    coverage_data=final_coverage,
-                )
-
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "done",
-                        "Draft Generation Complete",
-                        {
-                            "created": 0,
-                            "failed": 0,
-                            "total": len(all_cards),
-                            "elapsed": time.perf_counter() - start_time,
-                            "elapsed_ms": self._elapsed_ms(start_time),
-                            "cards": all_cards,  # Return cards for draft store
-                            "slide_set_name": slide_set_name,  # NOTE(Tags): Include for GUI draft sync
-                            "total_pages": len(pages),
-                            "coverage_data": final_coverage,
-                            "terminal": True,
-                        },
-                    )
-                )
-                return
-
-            if self._should_stop(context.config.stop_check):
-                await asyncio.to_thread(
-                    history_mgr.update_entry, history_id, status="cancelled"
-                )
-                await emitter.emit_event(
-                    self._cancelled_event(
-                        "export", start_time, {"generated_cards": len(all_cards)}
-                    )
-                )
-                return
-
-            # Re-check Anki right before export to avoid per-note warning spam if
-            # Anki became unavailable during generation.
-            anki_export_info = await get_connection_info()
-            if not (
-                anki_export_info.get("connected")
-                and anki_export_info.get("collection_available", False)
-            ):
-                reason = anki_export_info.get("error") or "AnkiConnect unavailable."
-                await emitter.emit_event(
-                    ServiceEvent(
-                        "error",
-                        f"Export skipped: {reason}",
-                        {
-                            "recoverable": False,
-                            "terminal": True,
-                            "stage": "export",
-                            "error_kind": anki_export_info.get("error_kind"),
-                            "elapsed_ms": self._elapsed_ms(start_time),
-                        },
-                    )
-                )
-                await asyncio.to_thread(
-                    history_mgr.update_entry, history_id, status="error"
-                )
-                return
-
-            await emitter.emit_event(
-                ServiceEvent(
-                    "step_start",
-                    f"Create {len(all_cards)} notes in Anki",
-                    {"phase": "exporting"},
-                )
-            )
-            await emitter.emit_event(
-                ServiceEvent(
-                    "progress_start",
-                    "Exporting",
-                    {"total": len(all_cards), "label": "Notes", "phase": "exporting"},
-                )
-            )
-            export_started_at = time.perf_counter()
-
-            created = 0
-            failed = 0
-
-            for idx, card in enumerate(all_cards, start=1):
-                result = await export_card_to_anki(
-                    card=card,
-                    deck_name=context.config.deck_name,
-                    slide_set_name=slide_set_name,
-                    fallback_model=config.DEFAULT_BASIC_MODEL,
-                    additional_tags=context.config.tags,
-                )
-
-                if result.success:
-                    created += 1
-                    await emitter.emit_event(
-                        ServiceEvent(
-                            "note",
-                            f"Created note {result.note_id}",
-                            {"id": result.note_id},
+            phases = [
+                InitializationPhase(),
+                ConceptMappingPhase(),
+                GenerationPhase(),
+                ExportPhase(),
+            ]
+            for index, phase in enumerate(phases):
+                try:
+                    await phase.execute(context, emitter, ai)
+                except PhaseExecutionHalt as e:
+                    if history_id:
+                        await asyncio.to_thread(
+                            history_mgr.update_entry, history_id, status=e.history_status
                         )
+                    return
+
+                if index == 0 and self._should_stop(context.config.stop_check):
+                    await asyncio.to_thread(
+                        history_mgr.update_entry, history_id, status="cancelled"
                     )
-                else:
-                    failed += 1
                     await emitter.emit_event(
-                        ServiceEvent(
-                            "warning", f"Failed to create note: {result.error}"
-                        )
+                        self._cancelled_event("ai_session_init", start_time)
                     )
-
-                await emitter.emit_event(
-                    ServiceEvent("progress_update", "", {"current": created + failed})
-                )
-
-            await emitter.emit_event(
-                ServiceEvent(
-                    "step_end",
-                    "Export Complete",
-                    {
-                        "success": True,
-                        "created": created,
-                        "failed": failed,
-                        "duration_ms": self._elapsed_ms(export_started_at),
-                    },
-                )
-            )
-
-            # Persist final state (including any note IDs created)
-            await asyncio.to_thread(
-                history_mgr.sync_session_state,
-                session_id=context.config.session_id or history_id,
-                cards=all_cards,
-                status="completed",
-                deck_name=context.config.deck_name,
-                slide_set_name=slide_set_name,
-                model_name=context.config.model_name,
-                tags=context.config.tags,
-                total_pages=len(pages),
-                coverage_data=final_coverage,
-            )
-
-            elapsed = time.perf_counter() - start_time
-            await emitter.emit_event(
-                ServiceEvent(
-                    "done",
-                    "Job Complete",
-                    {
-                        "created": created,
-                        "failed": failed,
-                        "total": len(all_cards),
-                        "elapsed": elapsed,
-                        "elapsed_ms": self._elapsed_ms(start_time),
-                        "slide_set_name": slide_set_name,  # NOTE(Tags): Include for GUI draft sync
-                        "total_pages": len(pages),
-                        "coverage_data": final_coverage,
-                        "terminal": True,
-                    },
-                )
-            )
+                    return
 
         except asyncio.CancelledError:
             # Sync cancelled status to DB before task exits

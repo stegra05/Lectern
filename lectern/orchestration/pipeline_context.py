@@ -122,6 +122,7 @@ class SessionContext:
     # Loop state
     batch_index: int = 0
     reflection_round: int = 0
+    run_started_at: float = 0.0
 
     def __post_init__(self) -> None:
         if self.config.pdf_path and not self.pdf.path:

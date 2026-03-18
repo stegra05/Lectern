@@ -94,10 +94,6 @@ def generation_env(mock_pdf_pages):
         new_callable=AsyncMock,
         return_value=anki_connected,
     ) as mock_info, patch(
-        "lectern.lectern_service.get_connection_info",
-        new_callable=AsyncMock,
-        return_value=anki_connected,
-    ), patch(
         "lectern.orchestration.phases.sample_examples_from_deck",
         new_callable=AsyncMock,
         return_value="",
@@ -525,10 +521,9 @@ class TestServiceIntegration:
         assert any("empty" in e.message.lower() for e in events if e.type == "error")
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("lectern.lectern_service.export_card_to_anki", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.export_card_to_anki", new_callable=AsyncMock)
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_run_with_export(
@@ -538,12 +533,11 @@ class TestServiceIntegration:
         mock_export,
         mock_ai_client_class,
         mock_info_phases,
-        mock_info_service,
         service,
     ):
         """Test the full run including Anki export."""
         anki_ok = {"connected": True, "collection_available": True}
-        mock_info_phases.return_value = mock_info_service.return_value = anki_ok
+        mock_info_phases.return_value = anki_ok
 
         mock_ai = MagicMock()
         mock_ai.upload_document = AsyncMock(
@@ -744,10 +738,9 @@ class TestServiceIntegration:
         assert stop_flag == True
 
     @pytest.mark.asyncio
-    @patch("lectern.lectern_service.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.orchestration.phases.get_connection_info", new_callable=AsyncMock)
     @patch("lectern.lectern_service.LecternAIClient")
-    @patch("lectern.lectern_service.export_card_to_anki", new_callable=AsyncMock)
+    @patch("lectern.orchestration.phases.export_card_to_anki", new_callable=AsyncMock)
     @patch("lectern.orchestration.phases.os.path.exists", return_value=True)
     @patch("lectern.orchestration.phases.os.path.getsize", return_value=1024)
     async def test_export_failure_reporting(
@@ -757,12 +750,11 @@ class TestServiceIntegration:
         mock_export,
         mock_ai_class,
         mock_info_phases,
-        mock_info_service,
         service,
     ):
         """Test that individual export failures are reported as warnings."""
         anki_ok = {"connected": True, "collection_available": True}
-        mock_info_phases.return_value = mock_info_service.return_value = anki_ok
+        mock_info_phases.return_value = anki_ok
         mock_ai = mock_ai_class.return_value
         mock_ai.upload_document = AsyncMock(
             return_value=UploadedDocument(

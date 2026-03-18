@@ -10,6 +10,7 @@ from lectern.events.service_events import ServiceEvent
 from lectern.orchestration.pipeline_context import PipelinePhase, SessionConfig, SessionContext
 from lectern.orchestration.phases import (
     ConceptMappingPhase,
+    ExportPhase,
     GenerationPhase,
     InitializationPhase,
     PhaseExecutionHalt,
@@ -72,6 +73,34 @@ def test_phases_implement_pipeline_phase_protocol() -> None:
     assert isinstance(InitializationPhase(), PipelinePhase)
     assert isinstance(ConceptMappingPhase(), PipelinePhase)
     assert isinstance(GenerationPhase(), PipelinePhase)
+    assert isinstance(ExportPhase(), PipelinePhase)
+
+
+@pytest.mark.asyncio
+async def test_export_phase_skip_export_bypasses_anki_calls() -> None:
+    phase = ExportPhase()
+    emitter = RecordingEmitter()
+    context = _context(skip_export=True)
+    context.slide_set_name = "Sample Slides"
+    context.pages = [{}]
+    context.final_coverage = {"covered": 1}
+    context.all_cards = [{"fields": {"Front": "Q", "Back": "A"}}]
+
+    with patch(
+        "lectern.orchestration.phases.HistoryManager"
+    ) as mock_history_class, patch(
+        "lectern.orchestration.phases.export_card_to_anki", new=AsyncMock()
+    ) as mock_export:
+        await phase.execute(context, emitter, MagicMock())
+
+    history = mock_history_class.return_value
+    history.sync_session_state.assert_called_once()
+    mock_export.assert_not_called()
+    assert any(
+        ev.type == "info" and "Skipping Anki export" in ev.message
+        for ev in emitter.events
+    )
+    assert any(ev.type == "done" for ev in emitter.events)
 
 
 @pytest.mark.asyncio

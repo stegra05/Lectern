@@ -20,6 +20,7 @@ from lectern.orchestration.phases import (
     InitializationPhase,
     ConceptMappingPhase,
     GenerationPhase,
+    ExportPhase,
     PhaseExecutionHalt,
 )
 
@@ -40,5 +41,6 @@ __all__ = [
     "InitializationPhase",
     "ConceptMappingPhase",
     "GenerationPhase",
+    "ExportPhase",
     "PhaseExecutionHalt",
 ]

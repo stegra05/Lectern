@@ -29,6 +29,15 @@ def test_stream_to_logger_implements_isatty():
 def test_service_delegates_generation_to_generation_phase():
     """Guard against reintroducing generation heuristics in the service layer."""
     source = _read_project_file("lectern/lectern_service.py")
-    assert "await GenerationPhase().execute(context, emitter, ai)" in source
+    assert "phases = [" in source
+    assert "GenerationPhase()" in source
+    assert "await phase.execute(context, emitter, ai)" in source
     assert "derive_effective_target(" not in source
     assert "estimate_card_cap(" not in source
+
+
+def test_service_delegates_export_to_export_phase():
+    """Guard against reintroducing export internals in the service layer."""
+    source = _read_project_file("lectern/lectern_service.py")
+    assert "ExportPhase()" in source
+    assert "export_card_to_anki(" not in source
