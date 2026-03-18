@@ -23,6 +23,12 @@ class _StubGeminiClient:
             "mime_type": "application/pdf",
         }
         self.upload_pdf_error: Exception | None = None
+        self.upload_document_result: Any = {
+            "uri": "gs://uploaded-document.pdf",
+            "mime_type": "application/pdf",
+            "duration_ms": 12,
+        }
+        self.upload_document_error: Exception | None = None
 
         self.concept_map_from_file_result: Any = {"concepts": []}
         self.concept_map_result: Any = {"concepts": []}
@@ -37,7 +43,9 @@ class _StubGeminiClient:
 
     async def upload_document(self, pdf_path: str) -> Any:
         self.upload_document_calls.append(pdf_path)
-        raise AssertionError("GeminiProvider should use upload_pdf compatibility path")
+        if self.upload_document_error is not None:
+            raise self.upload_document_error
+        return self.upload_document_result
 
     async def concept_map_from_file(
         self, file_uri: str, mime_type: str = "application/pdf"
@@ -65,21 +73,25 @@ class _StubGeminiClient:
 
 
 @pytest.mark.asyncio
-async def test_upload_document_uses_upload_pdf_retry_path() -> None:
+async def test_upload_document_uses_upload_document_path() -> None:
     client = _StubGeminiClient()
     provider = GeminiProvider(client=client)
 
     result = await provider.upload_document("slides.pdf")
 
-    assert result == {"uri": "gs://uploaded.pdf", "mime_type": "application/pdf"}
-    assert client.upload_pdf_calls == [("slides.pdf", 3)]
-    assert client.upload_document_calls == []
+    assert result == {
+        "uri": "gs://uploaded-document.pdf",
+        "mime_type": "application/pdf",
+        "duration_ms": 12,
+    }
+    assert client.upload_document_calls == ["slides.pdf"]
+    assert client.upload_pdf_calls == []
 
 
 @pytest.mark.asyncio
-async def test_upload_document_propagates_upload_pdf_error() -> None:
+async def test_upload_document_propagates_upload_document_error() -> None:
     client = _StubGeminiClient()
-    client.upload_pdf_error = RuntimeError("upload failed")
+    client.upload_document_error = RuntimeError("upload failed")
     provider = GeminiProvider(client=client)
 
     with pytest.raises(RuntimeError, match="upload failed"):

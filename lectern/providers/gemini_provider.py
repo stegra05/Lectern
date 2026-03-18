@@ -32,7 +32,7 @@ class GeminiProvider(AIProvider):
         return self._client.log_path
 
     async def upload_document(self, pdf_path: str) -> Any:
-        return await self._client.upload_pdf(pdf_path)
+        return await self._client.upload_document(pdf_path)
 
     async def build_concept_map(
         self,
