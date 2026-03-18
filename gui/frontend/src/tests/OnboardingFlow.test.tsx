@@ -56,6 +56,21 @@ vi.mock('framer-motion', async () => {
 
 import { api } from '../api';
 
+const BASE_HEALTH = {
+    status: 'ok',
+    anki_connected: true,
+    backend_ready: true,
+    gemini_configured: false,
+    provider_configured: false,
+    provider_ready: false,
+    active_provider: 'gemini',
+    diagnostics: {
+        anki: { connected: true, status: 'healthy' as const },
+        api_key: { configured: false, required: true },
+        provider: { name: 'gemini', configured: false, ready: false },
+    },
+};
+
 describe('OnboardingFlow', () => {
     const mockOnComplete = vi.fn();
 
@@ -78,8 +93,7 @@ describe('OnboardingFlow', () => {
 
     it('navigates to AI Service step on Anki success', async () => {
         vi.mocked(api.checkHealth).mockResolvedValue({
-            status: 'ok',
-            anki_connected: true,
+            ...BASE_HEALTH,
             gemini_configured: false,
         });
 
@@ -96,9 +110,15 @@ describe('OnboardingFlow', () => {
 
     it('completes onboarding when both services are configured', async () => {
         vi.mocked(api.checkHealth).mockResolvedValue({
-            status: 'ok',
-            anki_connected: true,
+            ...BASE_HEALTH,
             gemini_configured: true,
+            provider_configured: true,
+            provider_ready: true,
+            diagnostics: {
+                ...BASE_HEALTH.diagnostics,
+                api_key: { configured: true, required: true },
+                provider: { name: 'gemini', configured: true, ready: true },
+            },
         });
 
         renderWithQueryClient(<OnboardingFlow onComplete={mockOnComplete} />);
@@ -114,8 +134,7 @@ describe('OnboardingFlow', () => {
 
     it('submits API key successfully', async () => {
         vi.mocked(api.checkHealth).mockResolvedValue({
-            status: 'ok',
-            anki_connected: true,
+            ...BASE_HEALTH,
             gemini_configured: false,
         });
 
