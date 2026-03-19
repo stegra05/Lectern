@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from lectern.application.translators.event_translator import to_api_event
+from lectern.application.translators.event_translator import EventTranslator
 from lectern.domain.generation.events import (
     CardEmitted,
     CardsReplaced,
@@ -123,7 +123,8 @@ def test_to_api_event_maps_all_domain_event_variants(
     expected_message: str,
     expected_data: dict[str, object],
 ) -> None:
-    api_event = to_api_event(
+    translator = EventTranslator()
+    api_event = translator.to_api_event(
         domain_event,
         session_id=FIXED_SESSION_ID,
         sequence_no=FIXED_SEQUENCE_NO,
@@ -141,7 +142,8 @@ def test_to_api_event_maps_all_domain_event_variants(
 
 def test_to_api_event_uses_current_epoch_ms_when_now_ms_not_provided() -> None:
     before_ms = int(time.time() * 1000)
-    api_event = to_api_event(
+    translator = EventTranslator()
+    api_event = translator.to_api_event(
         PhaseStarted(phase="generation"),
         session_id=FIXED_SESSION_ID,
         sequence_no=FIXED_SEQUENCE_NO,

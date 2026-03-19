@@ -90,6 +90,7 @@ class PhaseCompleted:
 @dataclass(frozen=True)
 class SessionCompleted:
     summary: dict[str, Any]
+    terminal: bool = field(default=True, init=False)
     event_type: DomainEventType = field(default=DomainEventType.SESSION_COMPLETED, init=False)
 
 
@@ -97,6 +98,7 @@ class SessionCompleted:
 class SessionCancelled:
     stage: str
     reason: str
+    terminal: bool = field(default=True, init=False)
     event_type: DomainEventType = field(default=DomainEventType.SESSION_CANCELLED, init=False)
 
 
@@ -121,5 +123,5 @@ class DomainEventRecord:
     event: DomainEvent
 
     @property
-    def idempotency_key(self) -> tuple[str, int]:
-        return (self.session_id, self.sequence_no)
+    def idempotency_key(self) -> str:
+        return f"{self.session_id}:{self.sequence_no}"

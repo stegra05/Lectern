@@ -7,6 +7,8 @@ from lectern.domain.generation.events import (
     DomainEventRecord,
     DomainEventType,
     PhaseStarted,
+    SessionCancelled,
+    SessionCompleted,
     SessionStarted,
 )
 
@@ -29,14 +31,14 @@ def test_domain_event_catalog_matches_v2_spec() -> None:
     assert actual == expected
 
 
-def test_domain_event_record_exposes_idempotency_key_tuple() -> None:
+def test_domain_event_record_exposes_idempotency_key_string() -> None:
     record = DomainEventRecord(
         session_id="session-123",
         sequence_no=7,
         event=SessionStarted(session_id="session-123", mode="start"),
     )
 
-    assert record.idempotency_key == ("session-123", 7)
+    assert record.idempotency_key == "session-123:7"
 
 
 def test_domain_event_record_sequence_can_be_ordered_per_session() -> None:
@@ -52,6 +54,18 @@ def test_domain_event_record_sequence_can_be_ordered_per_session() -> None:
     )
 
     assert second.sequence_no > first.sequence_no
+
+
+def test_session_completed_is_terminal_event() -> None:
+    event = SessionCompleted(summary={"cards_exported": 3})
+
+    assert event.terminal is True
+
+
+def test_session_cancelled_is_terminal_event() -> None:
+    event = SessionCancelled(stage="generation", reason="user_cancelled")
+
+    assert event.terminal is True
 
 
 @pytest.mark.parametrize("card_uid", ["", "   "])
