@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -74,7 +73,6 @@ class ConfigManager:
         """Initialize config manager. Called once via instance()."""
         self._config: Dict[str, Any] = {}
         self._config_path = get_app_data_dir() / "user_config.json"
-        self._legacy_config_path = Path(__file__).resolve().parent / "user_config.json"
         self._load()
 
     @classmethod
@@ -149,11 +147,9 @@ class ConfigManager:
             logger.warning(f"Failed to save user_config.json: {e}")
 
     def _prepare_config_path(self) -> None:
-        """Ensure config directory exists and migrate from legacy path."""
+        """Ensure config directory exists."""
         try:
             self._config_path.parent.mkdir(parents=True, exist_ok=True)
-            if self._legacy_config_path.exists() and not self._config_path.exists():
-                shutil.copy2(self._legacy_config_path, self._config_path)
         except Exception as e:
             logger.warning(f"Failed to prepare user_config.json path: {e}")
 

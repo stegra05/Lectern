@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool
 
 from lectern.utils.history import HistoryManager
 from lectern.utils.database import DatabaseManager
+from gui.backend.card_identity import ensure_cards_have_uid
 from gui.backend.dependencies import get_history_manager
 
 router = APIRouter()
@@ -133,4 +134,5 @@ async def get_session(session_id: str):
     entry = await run_in_threadpool(db.get_entry_by_session_id, session_id)
     if not entry:
         return {"cards": [], "session_id": session_id, "not_found": True}
+    entry["cards"] = ensure_cards_have_uid(entry.get("cards"))
     return entry

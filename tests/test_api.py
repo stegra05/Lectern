@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi.testclient import TestClient
 from gui.backend.main import app
 from lectern.lectern_service import LecternGenerationService, ServiceEvent
+from lectern.utils.history import HistoryManager
 from gui.backend.dependencies import get_generation_service, get_history_manager
 
 client = TestClient(app)
@@ -182,3 +183,31 @@ class TestHistoryAPI:
             assert response.json()[0]["filename"] == "test.pdf"
         finally:
             app.dependency_overrides.clear()
+
+    def test_get_session_injects_uid_for_legacy_cards(self):
+        """Legacy session cards without uid are normalized before response."""
+        history_mgr = HistoryManager()
+        history_mgr.clear_all()
+        session_id = "legacy-session-cards-no-uid"
+
+        try:
+            history_mgr.add_entry(
+                filename="legacy.pdf",
+                deck="Deck A",
+                session_id=session_id,
+                status="draft",
+            )
+            history_mgr.sync_session_state(
+                session_id=session_id,
+                cards=[{"front": "Legacy", "back": "Card"}],
+                model_name="gemini-3-flash",
+            )
+
+            response = client.get(f"/session/{session_id}")
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["session_id"] == session_id
+            assert len(payload["cards"]) == 1
+            assert payload["cards"][0].get("uid")
+        finally:
+            history_mgr.clear_all()

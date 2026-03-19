@@ -269,38 +269,6 @@ class TestConfigPersistence:
             assert config_dir.exists()
 
 
-class TestLegacyPathMigration:
-    """Test migration from legacy config path."""
-
-    def test_migrates_legacy_config(self, temp_config_dir: Path) -> None:
-        """Legacy config file is copied to new location."""
-        # Create legacy config in the module directory
-        legacy_path = Path(__file__).parent.parent / "lectern" / "user_config.json"
-
-        # Clean up any existing file first
-        if legacy_path.exists():
-            legacy_path.unlink()
-
-        try:
-            legacy_path.write_text(json.dumps({"migrated_key": "migrated_value"}))
-
-            with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
-                ConfigManager._reset_instance()
-                config = ConfigManager.instance()
-
-                # Should have loaded the migrated config
-                assert config.get("migrated_key") == "migrated_value"
-
-                # New location should now exist
-                new_path = temp_config_dir / "user_config.json"
-                assert new_path.exists()
-
-        finally:
-            # Cleanup legacy file
-            if legacy_path.exists():
-                legacy_path.unlink()
-
-
 class TestDynamicAttributeAccess:
     """Test __getattr__ for dynamic config access."""
 

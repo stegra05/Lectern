@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from html import unescape
 from typing import Any, Dict, List
 
-from lectern.card_quality import CardQualityEvaluator
+from lectern.card_quality import CardQualityEvaluator, _get_card_front, _strip_markup
 from lectern.coverage import (
     compute_coverage_data,
     get_card_concept_ids,
@@ -18,8 +17,6 @@ from lectern.domain_types import CardData, ConceptMapData, CoverageData
 logger = logging.getLogger(__name__)
 
 # Default values for reflection configuration
-_HTML_RE = re.compile(r"<[^>]+>")
-_WHITESPACE_RE = re.compile(r"\s+")
 _CLOZE_RE = re.compile(r"\{\{c\d+::(.*?)(?:::[^}]*)?\}\}")
 _NON_WORD_RE = re.compile(r"[^\w\s]")
 _CARD_QUALITY_EVALUATOR = CardQualityEvaluator()
@@ -38,34 +35,6 @@ def get_card_key(card: CardData) -> str:
     val = _CLOZE_RE.sub(r"\1", val)
     val = _NON_WORD_RE.sub(" ", val)
     return " ".join(val.lower().split())
-
-
-def _strip_markup(value: str) -> str:
-    return _WHITESPACE_RE.sub(
-        " ", _HTML_RE.sub(" ", unescape(str(value or "")))
-    ).strip()
-
-
-def _get_card_field(card: CardData, field_name: str) -> str:
-    fields = card.get("fields") or {}
-    if isinstance(fields, dict):
-        return str(fields.get(field_name) or "")
-    return ""
-
-
-def _get_card_front(card: CardData) -> str:
-    return str(
-        card.get("front")
-        or _get_card_field(card, "Front")
-        or card.get("text")
-        or _get_card_field(card, "Text")
-        or ""
-    )
-
-
-def _get_card_back(card: CardData) -> str:
-    return str(card.get("back") or _get_card_field(card, "Back") or "")
-
 
 def _estimate_card_quality(
     card: CardData,

@@ -16,6 +16,7 @@ from lectern import config
 from lectern.cost_estimator import recompute_estimate
 from lectern.lectern_service import LecternGenerationService
 from lectern.utils.history import HistoryManager
+from gui.backend.card_identity import ensure_cards_have_uid
 from gui.backend.session import SessionManager, LECTERN_TEMP_PREFIX
 from gui.backend.dependencies import (
     get_session_manager,
@@ -336,9 +337,10 @@ async def generate_cards(
 
         # Emit session_resumed event if resuming an existing session
         if existing_session:
+            resumed_cards = ensure_cards_have_uid(existing_session.get("cards"))
             resume_data = {
                 "session_id": session.session_id,
-                "cards": existing_session.get("cards", []),
+                "cards": resumed_cards,
                 "coverage_data": existing_session.get("coverage_data"),
                 "total_pages": existing_session.get("total_pages"),
                 "current_phase": existing_session.get("current_phase"),

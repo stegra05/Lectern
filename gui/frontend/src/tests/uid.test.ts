@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { stampUid, getCardContentKey, reconcileCardUids } from '../utils/uid';
+import { stampUid, reconcileCardUids } from '../utils/uid';
 import type { Card } from '../api';
 
 describe('uid utils', () => {
@@ -14,72 +14,45 @@ describe('uid utils', () => {
             expect(stampUid(card)._uid).toBe('existing-uid');
         });
 
-        it('adds _uid when missing', () => {
-            const card: Card = { front: 'A', back: 'B' };
+        it('adds _uid from backend uid when missing', () => {
+            const card: Card = { front: 'A', back: 'B', uid: 'backend-uid' };
             const result = stampUid(card);
-            expect(result._uid).toBeDefined();
-            expect(typeof result._uid).toBe('string');
-            expect(result._uid!.length).toBeGreaterThan(0);
+            expect(result._uid).toBe('backend-uid');
         });
-    });
-
-    describe('getCardContentKey', () => {
-        it('uses front when available', () => {
-            expect(getCardContentKey({ front: 'Hello World' })).toBe('hello world');
-        });
-
-        it('uses fields.Front when front is empty', () => {
-            expect(getCardContentKey({ fields: { Front: 'Test' } })).toBe('test');
-        });
-
-        it('uses text for cloze cards', () => {
-            expect(getCardContentKey({ text: 'Cloze content' })).toBe('cloze content');
-        });
-
-        it('normalizes whitespace', () => {
-            expect(getCardContentKey({ front: '  multiple   spaces  ' })).toBe('multiple spaces');
+        
+        it('throws when backend uid is missing', () => {
+            const card: Card = { front: 'A', back: 'B' };
+            expect(() => stampUid(card)).toThrow('Missing required backend uid on card payload');
         });
     });
 
     describe('reconcileCardUids', () => {
-        it('preserves _uid when content matches', () => {
+        it('preserves _uid when backend uid matches', () => {
             const existing: Card[] = [
-                { front: 'A', back: 'B', _uid: 'uid-1' },
-                { front: 'C', back: 'D', _uid: 'uid-2' },
+                { front: 'A', back: 'B', uid: 'u1', _uid: 'uid-1' },
+                { front: 'C', back: 'D', uid: 'u2', _uid: 'uid-2' },
             ];
             const incoming: Card[] = [
-                { front: 'A', back: 'B' },
-                { front: 'C', back: 'D' },
+                { front: 'A', back: 'B', uid: 'u1' },
+                { front: 'C', back: 'D', uid: 'u2' },
             ];
             const result = reconcileCardUids(existing, incoming);
             expect(result[0]._uid).toBe('uid-1');
             expect(result[1]._uid).toBe('uid-2');
         });
 
-        it('stamps new _uid for cards with different content', () => {
-            const existing: Card[] = [{ front: 'A', back: 'B', _uid: 'uid-1' }];
-            const incoming: Card[] = [{ front: 'X', back: 'Y' }];
+        it('uses incoming backend uid when no previous mapping exists', () => {
+            const existing: Card[] = [{ front: 'A', back: 'B', uid: 'u1', _uid: 'uid-1' }];
+            const incoming: Card[] = [{ front: 'X', back: 'Y', uid: 'u2' }];
             const result = reconcileCardUids(existing, incoming);
-            expect(result[0]._uid).toBeDefined();
-            expect(result[0]._uid).not.toBe('uid-1');
+            expect(result[0]._uid).toBe('u2');
         });
 
-        it('does not reuse same _uid for duplicate content keys', () => {
-            const existing: Card[] = [{ front: 'Same', back: 'X', _uid: 'uid-1' }];
-            const incoming: Card[] = [
-                { front: 'Same', back: 'X' },
-                { front: 'Same', back: 'X' },
-            ];
-            const result = reconcileCardUids(existing, incoming);
-            expect(result[0]._uid).toBe('uid-1');
-            expect(result[1]._uid).toBeDefined();
-            expect(result[1]._uid).not.toBe('uid-1');
-        });
-
-        it('handles empty existing', () => {
+        it('throws when incoming backend uid is missing', () => {
             const incoming: Card[] = [{ front: 'A', back: 'B' }];
-            const result = reconcileCardUids([], incoming);
-            expect(result[0]._uid).toBeDefined();
+            expect(() => reconcileCardUids([], incoming)).toThrow(
+                'Missing required backend uid on card payload'
+            );
         });
     });
 });
