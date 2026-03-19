@@ -203,6 +203,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/save-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save File */
+        post: operations["save_file_save_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/session/{session_id}": {
         parameters: {
             query?: never;
@@ -626,6 +643,23 @@ export interface components {
             actions: components["schemas"]["RemediationAction"][];
             /** Summary */
             summary?: null | string;
+        };
+        /** SaveFileRequest */
+        SaveFileRequest: {
+            /** Content */
+            content: string;
+            /** Suggested Filename */
+            suggested_filename: string;
+        };
+        /** SaveFileResponse */
+        SaveFileResponse: {
+            /** Path */
+            path?: null | string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "cancelled" | "success";
         };
         /** SessionEntryResponse */
         SessionEntryResponse: {
@@ -1128,6 +1162,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistoryDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_file_save_file_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveFileResponse"];
                 };
             };
             /** @description Validation Error */

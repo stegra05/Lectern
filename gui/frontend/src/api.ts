@@ -247,6 +247,20 @@ export const api = {
         ) as SaveConfigResponse;
     },
 
+    saveFile: async (
+        content: string,
+        suggestedFilename: string
+    ): Promise<components['schemas']['SaveFileResponse']> => {
+        const { data, error } = await apiClient.POST('/save-file', {
+            body: {
+                content,
+                suggested_filename: suggestedFilename,
+            },
+        });
+        if (error) throw new Error((error as unknown as { detail?: string }).detail || 'Failed to save file');
+        return data as components['schemas']['SaveFileResponse'];
+    },
+
     getHistory: async (): Promise<HistoryResponse> => {
         const data = unwrapData(await apiClient.GET('/history'), 'Failed to fetch history');
         return data.map((entry) => ({
