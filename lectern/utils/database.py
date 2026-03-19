@@ -403,6 +403,74 @@ class DatabaseManager:
         params.append(session_id)
 
         with self.get_connection() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM history WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            if existing is None:
+                return False
+
+            cursor = conn.execute(
+                f'UPDATE history SET {", ".join(updates)} WHERE session_id = ?', params
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def sync_session_snapshot(
+        self,
+        *,
+        session_id: str,
+        cards: List[Dict[str, Any]],
+        status: Optional[str] = None,
+        deck_name: Optional[str] = None,
+        slide_set_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        total_pages: Optional[int] = None,
+        coverage_data: Optional[Dict[str, Any]] = None,
+        source_file_name: Optional[str] = None,
+        source_pdf_sha256: Optional[str] = None,
+    ) -> bool:
+        """Atomically persist session cards + metadata + status/card_count."""
+        updates: List[str] = ["cards = ?"]
+        params: List[Any] = [json.dumps(cards)]
+
+        if deck_name is not None:
+            updates.append("deck = ?")
+            params.append(deck_name)
+        if slide_set_name is not None:
+            updates.append("slide_set_name = ?")
+            params.append(slide_set_name)
+        if model_name is not None:
+            updates.append("model_name = ?")
+            params.append(model_name)
+        if tags is not None:
+            updates.append("tags = ?")
+            params.append(json.dumps(tags))
+        if total_pages is not None:
+            updates.append("total_pages = ?")
+            params.append(total_pages)
+        if coverage_data is not None:
+            updates.append("coverage_data = ?")
+            params.append(json.dumps(coverage_data))
+        if source_file_name is not None:
+            updates.append("source_file_name = ?")
+            params.append(source_file_name)
+        if source_pdf_sha256 is not None:
+            updates.append("source_pdf_sha256 = ?")
+            params.append(source_pdf_sha256)
+
+        if status is not None:
+            updates.append("status = ?")
+            params.append(status)
+
+        updates.append("card_count = ?")
+        params.append(len(cards))
+        updates.append("last_modified = ?")
+        params.append(datetime.now().isoformat())
+        params.append(session_id)
+
+        with self.get_connection() as conn:
             cursor = conn.execute(
                 f'UPDATE history SET {", ".join(updates)} WHERE session_id = ?', params
             )

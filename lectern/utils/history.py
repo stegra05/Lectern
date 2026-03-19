@@ -60,10 +60,10 @@ class HistoryManager:
         if not session_id:
             return False
 
-        # Update cards and metadata
-        success = self.db.update_session_cards(
+        return self.db.sync_session_snapshot(
             session_id=session_id,
             cards=cards,
+            status=status,
             deck_name=deck_name,
             slide_set_name=slide_set_name,
             model_name=model_name,
@@ -73,19 +73,6 @@ class HistoryManager:
             source_file_name=source_file_name,
             source_pdf_sha256=source_pdf_sha256,
         )
-
-        # If status or card_count provided, update core record
-        if status or cards is not None:
-            # Note: We use cards list as source of truth for count if cards provided
-            entry = self.db.get_entry_by_session_id(session_id)
-            if entry:
-                self.db.update_history(
-                    entry["id"],
-                    status=status,
-                    card_count=len(cards) if cards is not None else None,
-                )
-
-        return success
 
     def get_entry(self, entry_id: str) -> Optional[Dict[str, Any]]:
         return self.db.get_entry(entry_id)

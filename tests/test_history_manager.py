@@ -173,3 +173,87 @@ def test_database_manager_persists_feedback_summary_from_cards():
         assert entry["feedback_last_updated"] is not None
     finally:
         db.delete_entry(entry_id)
+
+
+def test_history_manager_sync_session_state_uses_atomic_db_path(monkeypatch):
+    mgr = HistoryManager()
+    called: dict[str, object] = {}
+
+    def _fake_sync_session_snapshot(**kwargs):
+        called["kwargs"] = kwargs
+        return True
+
+    monkeypatch.setattr(
+        mgr.db, "sync_session_snapshot", _fake_sync_session_snapshot, raising=False
+    )
+    monkeypatch.setattr(
+        mgr.db,
+        "update_session_cards",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy update_session_cards path used")
+        ),
+    )
+    monkeypatch.setattr(
+        mgr.db,
+        "update_history",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy update_history path used")
+        ),
+    )
+    monkeypatch.setattr(
+        mgr.db,
+        "get_entry_by_session_id",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy get_entry_by_session_id path used")
+        ),
+    )
+
+    cards = [{"front": "Q", "back": "A"}]
+    ok = mgr.sync_session_state(
+        session_id="atomic-delegation-session",
+        cards=cards,
+        status="completed",
+        model_name="gemini-3-flash",
+    )
+
+    assert ok is True
+    assert called["kwargs"]["session_id"] == "atomic-delegation-session"
+    assert called["kwargs"]["cards"] == cards
+    assert called["kwargs"]["status"] == "completed"
+
+
+def test_database_sync_session_snapshot_updates_status_count_and_cards_atomically():
+    db = DatabaseManager()
+    session_id = "atomic-session-sync"
+    entry_id = db.add_history("atomic.pdf", "Deck", session_id=session_id, status="draft")
+
+    try:
+        cards = [{"front": "Q1", "back": "A1"}]
+        ok = db.sync_session_snapshot(
+            session_id=session_id,
+            cards=cards,
+            status="completed",
+            model_name="gemini-3-flash",
+            tags=["a", "b"],
+        )
+
+        assert ok is True
+        entry = db.get_entry_by_session_id(session_id)
+        assert entry is not None
+        assert entry["status"] == "completed"
+        assert entry["card_count"] == 1
+        assert entry["cards"] == cards
+        assert entry["model_name"] == "gemini-3-flash"
+        assert entry["tags"] == ["a", "b"]
+    finally:
+        db.delete_entry(entry_id)
+
+
+def test_database_sync_session_snapshot_returns_false_for_missing_session():
+    db = DatabaseManager()
+    ok = db.sync_session_snapshot(
+        session_id="missing-atomic-session",
+        cards=[],
+        status="draft",
+    )
+    assert ok is False
