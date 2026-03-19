@@ -348,3 +348,53 @@ class TestGroundingConfigDefaults:
 
     def test_grounding_non_progress_max_batches_default(self) -> None:
         assert config_module.GROUNDING_NON_PROGRESS_MAX_BATCHES == 2
+
+
+class TestDynamicBatchConfigDefaults:
+    """Test dynamic hybrid batch module-level defaults and fallbacks."""
+
+    def test_dynamic_batch_env_overrides_are_loaded(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "DYNAMIC_BATCH_TARGET_RATIO": "0.15",
+                "DYNAMIC_MIN_NOTES_PER_BATCH": "10",
+                "DYNAMIC_MAX_NOTES_PER_BATCH": "25",
+                "PAGE_GUARDRAIL_MIN_RATIO": "0.7",
+                "PAGE_GUARDRAIL_MAX_RATIO": "1.3",
+                "PAGE_GUARDRAIL_MIN_FLOOR": "8",
+            },
+            clear=False,
+        ):
+            import importlib
+
+            importlib.reload(config_module)
+            assert config_module.DYNAMIC_BATCH_TARGET_RATIO == 0.15
+            assert config_module.DYNAMIC_MIN_NOTES_PER_BATCH == 10
+            assert config_module.DYNAMIC_MAX_NOTES_PER_BATCH == 25
+            assert config_module.PAGE_GUARDRAIL_MIN_RATIO == 0.7
+            assert config_module.PAGE_GUARDRAIL_MAX_RATIO == 1.3
+            assert config_module.PAGE_GUARDRAIL_MIN_FLOOR == 8
+
+    def test_dynamic_batch_invalid_env_values_fallback_to_defaults(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "DYNAMIC_BATCH_TARGET_RATIO": "nan",
+                "DYNAMIC_MIN_NOTES_PER_BATCH": "0",
+                "DYNAMIC_MAX_NOTES_PER_BATCH": "-3",
+                "PAGE_GUARDRAIL_MIN_RATIO": "-1",
+                "PAGE_GUARDRAIL_MAX_RATIO": "-2",
+                "PAGE_GUARDRAIL_MIN_FLOOR": "-9",
+            },
+            clear=False,
+        ):
+            import importlib
+
+            importlib.reload(config_module)
+            assert config_module.DYNAMIC_BATCH_TARGET_RATIO == 0.15
+            assert config_module.DYNAMIC_MIN_NOTES_PER_BATCH == 10
+            assert config_module.DYNAMIC_MAX_NOTES_PER_BATCH == 25
+            assert config_module.PAGE_GUARDRAIL_MIN_RATIO == 0.7
+            assert config_module.PAGE_GUARDRAIL_MAX_RATIO == 1.3
+            assert config_module.PAGE_GUARDRAIL_MIN_FLOOR == 8

@@ -173,6 +173,27 @@ def save_user_config(config: Dict[str, Any]) -> None:
         mgr.set(key, value)
 
 
+def _safe_float_env(name: str, default: float) -> float:
+    """Read float env var with parse and finiteness fallback."""
+    raw = os.getenv(name, str(default))
+    try:
+        value = float(raw)
+    except Exception:
+        return float(default)
+    if value != value or value in (float("inf"), float("-inf")):
+        return float(default)
+    return value
+
+
+def _safe_int_env(name: str, default: int) -> int:
+    """Read int env var with parse fallback."""
+    raw = os.getenv(name, str(default))
+    try:
+        return int(raw)
+    except Exception:
+        return int(default)
+
+
 def assert_required_config() -> None:
     """Raise a ValueError if critical configuration is missing."""
     api_key = get_gemini_key() or os.getenv("GEMINI_API_KEY", "")
@@ -233,6 +254,26 @@ SCRIPT_SUGGESTED_CARDS_PER_1K: float = float(
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 MIN_NOTES_PER_BATCH: int = int(os.getenv("MIN_NOTES_PER_BATCH", "20"))
 MAX_NOTES_PER_BATCH: int = int(os.getenv("MAX_NOTES_PER_BATCH", "50"))
+DYNAMIC_BATCH_TARGET_RATIO: float = _safe_float_env("DYNAMIC_BATCH_TARGET_RATIO", 0.15)
+DYNAMIC_MIN_NOTES_PER_BATCH: int = _safe_int_env("DYNAMIC_MIN_NOTES_PER_BATCH", 10)
+DYNAMIC_MAX_NOTES_PER_BATCH: int = _safe_int_env("DYNAMIC_MAX_NOTES_PER_BATCH", 25)
+PAGE_GUARDRAIL_MIN_RATIO: float = _safe_float_env("PAGE_GUARDRAIL_MIN_RATIO", 0.7)
+PAGE_GUARDRAIL_MAX_RATIO: float = _safe_float_env("PAGE_GUARDRAIL_MAX_RATIO", 1.3)
+PAGE_GUARDRAIL_MIN_FLOOR: int = _safe_int_env("PAGE_GUARDRAIL_MIN_FLOOR", 8)
+
+# Spec-aligned threshold enforcement for hybrid batching knobs
+if DYNAMIC_BATCH_TARGET_RATIO <= 0:
+    DYNAMIC_BATCH_TARGET_RATIO = 0.15
+if DYNAMIC_MIN_NOTES_PER_BATCH < 1:
+    DYNAMIC_MIN_NOTES_PER_BATCH = 10
+if DYNAMIC_MAX_NOTES_PER_BATCH < 1:
+    DYNAMIC_MAX_NOTES_PER_BATCH = 25
+if PAGE_GUARDRAIL_MIN_RATIO < 0:
+    PAGE_GUARDRAIL_MIN_RATIO = 0.7
+if PAGE_GUARDRAIL_MAX_RATIO < 0:
+    PAGE_GUARDRAIL_MAX_RATIO = 1.3
+if PAGE_GUARDRAIL_MIN_FLOOR < 0:
+    PAGE_GUARDRAIL_MIN_FLOOR = 8
 SCRIPT_BASE_CHARS: int = int(os.getenv("SCRIPT_BASE_CHARS", "1000"))
 GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "1.0"))
 USE_NATIVE_PDF: bool = os.getenv("USE_NATIVE_PDF", "true").lower() in (

@@ -14,6 +14,7 @@ Before generating any cards, the engine sends the *entire* parsed PDF to Gemini 
 ### 2. Batched Generation + Grounding Gate
 Cards are not generated all at once. The engine splits work into batches to avoid context bloat and hallucination, then applies a grounding gate before promotion.
 - **Avoid List:** Each generation batch includes a list of previously generated card fronts to ensure Gemini doesn't repeat itself.
+- **Hybrid Batch Sizing:** Batch size is primarily target-aware and secondarily page-guardrailed. The system computes a target-derived size from `total_cards_cap * DYNAMIC_BATCH_TARGET_RATIO`, constrains it within page-derived guardrail bounds, then applies final dynamic min/max clamps. This keeps batches quality-oriented while still respecting document shape.
 - **Pacing System:** Managed by `ai_pacing.py`. Based on the character density per page, the app switches between **Script** (>1500 chars/page), **Normal**, and **Slides** mode to adjust the token budget and card target density dynamically.
 - **Micro Repair Loop:** Candidates that fail grounding/provenance quality checks can be repaired in focused retry passes.
 - **Promotion Gate:** Only cards that pass grounding checks are promoted into the working set for downstream phases.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -34,6 +35,102 @@ class PhaseExecutionHalt(Exception):
     """Signal that pipeline execution should stop after a terminal phase event."""
 
     history_status: str = "error"
+
+
+def _compute_hybrid_batch_size(
+    *,
+    total_cards_cap: int,
+    page_count: int,
+    dynamic_ratio: float | None = None,
+    dynamic_min: int | None = None,
+    dynamic_max: int | None = None,
+    guardrail_min_ratio: float | None = None,
+    guardrail_max_ratio: float | None = None,
+    guardrail_floor: int | None = None,
+) -> int:
+    def _sanitize_float(
+        value: Any,
+        default: float,
+        *,
+        min_inclusive: float | None = None,
+        greater_than: float | None = None,
+    ) -> float:
+        try:
+            parsed = float(value)
+        except Exception:
+            return default
+        if math.isnan(parsed) or math.isinf(parsed):
+            return default
+        if min_inclusive is not None and parsed < min_inclusive:
+            return default
+        if greater_than is not None and parsed <= greater_than:
+            return default
+        return parsed
+
+    def _sanitize_int(
+        value: Any,
+        default: int,
+        *,
+        min_inclusive: int | None = None,
+    ) -> int:
+        try:
+            parsed = int(value)
+        except Exception:
+            return default
+        if min_inclusive is not None and parsed < min_inclusive:
+            return default
+        return parsed
+
+    ratio = _sanitize_float(
+        dynamic_ratio if dynamic_ratio is not None else config.DYNAMIC_BATCH_TARGET_RATIO,
+        0.15,
+        greater_than=0.0,
+    )
+    dmin = _sanitize_int(
+        dynamic_min if dynamic_min is not None else config.DYNAMIC_MIN_NOTES_PER_BATCH,
+        10,
+        min_inclusive=1,
+    )
+    dmax = _sanitize_int(
+        dynamic_max if dynamic_max is not None else config.DYNAMIC_MAX_NOTES_PER_BATCH,
+        25,
+        min_inclusive=1,
+    )
+    gmin_r = _sanitize_float(
+        guardrail_min_ratio
+        if guardrail_min_ratio is not None
+        else config.PAGE_GUARDRAIL_MIN_RATIO,
+        0.7,
+        min_inclusive=0.0,
+    )
+    gmax_r = _sanitize_float(
+        guardrail_max_ratio
+        if guardrail_max_ratio is not None
+        else config.PAGE_GUARDRAIL_MAX_RATIO,
+        1.3,
+        min_inclusive=0.0,
+    )
+    gfloor = _sanitize_int(
+        guardrail_floor if guardrail_floor is not None else config.PAGE_GUARDRAIL_MIN_FLOOR,
+        8,
+        min_inclusive=0,
+    )
+
+    if dmin > dmax:
+        dmin, dmax = dmax, dmin
+    if gmin_r > gmax_r:
+        gmin_r, gmax_r = gmax_r, gmin_r
+
+    page_center = max(0, page_count // 2)
+    if total_cards_cap <= 0:
+        target_batch = page_center
+    else:
+        target_batch = round(total_cards_cap * ratio)
+
+    guardrail_min = max(gfloor, round(page_center * gmin_r))
+    guardrail_max = max(guardrail_min, round(page_center * gmax_r))
+    hybrid_batch = max(guardrail_min, min(guardrail_max, target_batch))
+    return max(dmin, min(dmax, hybrid_batch))
 
 
 class InitializationPhase(PipelinePhase):
@@ -429,9 +526,9 @@ class GenerationPhase(PipelinePhase):
                 )
             )
 
-        batch_size = max(
-            config.MIN_NOTES_PER_BATCH,
-            min(config.MAX_NOTES_PER_BATCH, len(context.pages) // 2),
+        batch_size = _compute_hybrid_batch_size(
+            total_cards_cap=setup.total_cards_cap,
+            page_count=len(context.pages),
         )
         context.targets.actual_batch_size = int(batch_size)
 

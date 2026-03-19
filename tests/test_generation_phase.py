@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from lectern import config
 from lectern.events.domain import ProgressUpdatedEvent
 from lectern.events.service_events import ServiceEvent
+from lectern.orchestration import phases
 from lectern.orchestration.phases import GenerationPhase
 from lectern.orchestration.pipeline_context import SessionConfig, SessionContext
 from lectern.orchestration.session_orchestrator import (
@@ -113,6 +114,146 @@ def test_prepare_generation_computes_targets_and_initial_coverage() -> None:
     assert orchestrator.state.examples == "few-shot examples"
 
 
+def test_compute_hybrid_batch_size_prefers_target_with_page_guardrail() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert helper(total_cards_cap=100, page_count=60) == 21
+
+
+def test_compute_hybrid_batch_size_small_target_hits_dynamic_min() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert helper(total_cards_cap=20, page_count=20) == 10
+
+
+def test_compute_hybrid_batch_size_normalizes_inverted_bounds() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert (
+        helper(
+            total_cards_cap=100,
+            page_count=60,
+            dynamic_min=30,
+            dynamic_max=12,
+            guardrail_min_ratio=0.0,
+            guardrail_max_ratio=10.0,
+            guardrail_floor=0,
+        )
+        == 15
+    )
+
+
+def test_compute_hybrid_batch_size_applies_guardrail_max_cap() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert (
+        helper(
+            total_cards_cap=100,
+            page_count=16,
+            guardrail_min_ratio=0.0,
+            guardrail_max_ratio=0.8,
+            guardrail_floor=0,
+            dynamic_min=1,
+            dynamic_max=100,
+        )
+        == 6
+    )
+
+
+def test_compute_hybrid_batch_size_applies_dynamic_max_clamp() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert (
+        helper(
+            total_cards_cap=200,
+            page_count=100,
+            dynamic_ratio=0.5,
+            dynamic_min=1,
+            dynamic_max=17,
+            guardrail_min_ratio=0.0,
+            guardrail_max_ratio=10.0,
+            guardrail_floor=0,
+        )
+        == 17
+    )
+
+
+def test_compute_hybrid_batch_size_normalizes_inverted_guardrail_ratios() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert (
+        helper(
+            total_cards_cap=100,
+            page_count=60,
+            guardrail_min_ratio=1.3,
+            guardrail_max_ratio=0.7,
+        )
+        == 21
+    )
+
+
+def test_compute_hybrid_batch_size_uses_python_round_semantics() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert (
+        helper(
+            total_cards_cap=50,
+            page_count=20,
+            dynamic_ratio=0.25,
+            dynamic_min=1,
+            dynamic_max=100,
+            guardrail_min_ratio=0.0,
+            guardrail_max_ratio=10.0,
+            guardrail_floor=0,
+        )
+        == 12
+    )
+
+
+def test_compute_hybrid_batch_size_non_positive_cap_falls_back_to_page_center() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert helper(total_cards_cap=0, page_count=60) == 25
+
+
+def test_compute_hybrid_batch_size_zero_pages_returns_valid_bounded_result() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    result = helper(total_cards_cap=100, page_count=0)
+    assert 10 <= result <= 25
+    assert result == 10
+
+
+@pytest.mark.parametrize(
+    "invalid_ratio",
+    [0, -0.1, "oops", float("nan"), float("inf"), float("-inf")],
+)
+def test_compute_hybrid_batch_size_invalid_ratio_falls_back_to_default(
+    invalid_ratio: object,
+) -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert helper(total_cards_cap=100, page_count=60, dynamic_ratio=invalid_ratio) == 21
+
+
+def test_compute_hybrid_batch_size_invalid_min_max_and_floor_fallback_to_defaults() -> None:
+    helper = getattr(phases, "_compute_hybrid_batch_size", None)
+    assert helper is not None
+    assert (
+        helper(
+            total_cards_cap=100,
+            page_count=16,
+            dynamic_ratio=1.0,
+            dynamic_min=0,
+            dynamic_max=-3,
+            guardrail_min_ratio=0.0,
+            guardrail_max_ratio=10.0,
+            guardrail_floor=-9,
+        )
+        == 25
+    )
+
+
 @pytest.mark.asyncio
 async def test_generation_phase_maps_domain_events_and_updates_context() -> None:
     emitter = RecordingEmitter()
@@ -161,6 +302,7 @@ async def test_generation_phase_maps_domain_events_and_updates_context() -> None
     assert context.targets.effective_target == 2.5
     assert context.targets.total_cards_cap == 42
     assert context.targets.is_script_mode is True
+    assert context.targets.actual_batch_size == 10
     assert context.all_cards == [{"front": "Q1", "back": "A1"}]
     assert context.final_coverage["total_pages"] == 8
     assert any(ev.type == "progress_update" for ev in emitter.events)
