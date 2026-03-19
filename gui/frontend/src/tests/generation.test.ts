@@ -25,10 +25,20 @@ vi.mock('../store', () => ({
 }));
 
 vi.mock('../utils/uid', () => ({
-    stampUid: (card: Record<string, unknown>) => ({ ...card, _uid: (card as { _uid?: string })._uid ?? 'mock-uid' }),
-    stampUids: (cards: Record<string, unknown>[]) => cards.map(c => ({ ...c, _uid: (c as { _uid?: string })._uid ?? 'mock-uid' })),
+    stampUid: (card: Record<string, unknown>) => ({
+        ...card,
+        _uid: (card as { _uid?: string; uid?: string })._uid ?? (card as { uid?: string }).uid ?? 'mock-uid',
+    }),
+    stampUids: (cards: Record<string, unknown>[]) =>
+        cards.map((c) => ({
+            ...c,
+            _uid: (c as { _uid?: string; uid?: string })._uid ?? (c as { uid?: string }).uid ?? 'mock-uid',
+        })),
     reconcileCardUids: (_existing: Record<string, unknown>[], incoming: Record<string, unknown>[]) =>
-        incoming.map(c => ({ ...c, _uid: (c as { _uid?: string })._uid ?? 'mock-uid' })),
+        incoming.map((c) => ({
+            ...c,
+            _uid: (c as { _uid?: string; uid?: string })._uid ?? (c as { uid?: string }).uid ?? 'mock-uid',
+        })),
 }));
 
 describe('generation logic', () => {

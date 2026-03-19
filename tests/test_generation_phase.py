@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -232,6 +233,61 @@ def test_generate_rejects_resume_when_source_pdf_hash_mismatches() -> None:
             in evt.get("data", {}).get("mismatched_fields", [])
             for evt in events
         )
+    finally:
+        app.dependency_overrides.clear()
+        history_mgr.clear_all()
+
+
+def test_generate_session_resumed_includes_uid_for_legacy_cards() -> None:
+    history_mgr = HistoryManager()
+    history_mgr.clear_all()
+
+    session_id = "resume-legacy-card-uid"
+    pdf_bytes = b"legacy-resume-content"
+    source_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+    try:
+        history_mgr.add_entry(
+            filename="resume.pdf",
+            deck="Deck A",
+            session_id=session_id,
+            status="draft",
+            source_file_name="resume.pdf",
+            source_pdf_sha256=source_hash,
+        )
+        history_mgr.sync_session_state(
+            session_id=session_id,
+            cards=[{"front": "Legacy Q", "back": "Legacy A"}],
+            model_name="gemini-3-flash",
+            source_file_name="resume.pdf",
+            source_pdf_sha256=source_hash,
+        )
+
+        async def mock_run(*args, **kwargs):
+            del args, kwargs
+            yield ServiceEvent("done", "Finished")
+
+        mock_service = MagicMock()
+        mock_service.run = mock_run
+        app.dependency_overrides[get_generation_service] = lambda: mock_service
+
+        response = client.post(
+            "/generate",
+            files={"pdf_file": ("resume.pdf", pdf_bytes, "application/pdf")},
+            data={
+                "deck_name": "Deck A",
+                "model_name": "gemini-3-flash",
+                "tags": "[]",
+                "session_id": session_id,
+            },
+        )
+
+        assert response.status_code == 200
+        events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+        resumed_event = next(evt for evt in events if evt["type"] == "session_resumed")
+        resumed_cards = resumed_event["data"]["cards"]
+        assert len(resumed_cards) == 1
+        assert resumed_cards[0].get("uid")
     finally:
         app.dependency_overrides.clear()
         history_mgr.clear_all()

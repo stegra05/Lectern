@@ -118,10 +118,7 @@ export const processGenerationEvent = (
             if (!payload) return prev;
 
             const normalizedCard = normalizeCardMetadata(payload.card as unknown as Card);
-            // Prefer backend uid; fall back to client stampUid for legacy compatibility
-            const cardWithUid = normalizedCard.uid
-                ? { ...normalizedCard, _uid: normalizedCard.uid }
-                : stampUid(normalizedCard);
+            const cardWithUid = stampUid(normalizedCard);
             const nextCards = [...prev.cards, cardWithUid];
             return {
                 cards: nextCards,

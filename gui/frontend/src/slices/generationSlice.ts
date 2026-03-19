@@ -129,8 +129,7 @@ export const createGenerationActions = (
     })),
   appendCard: (card) =>
     set((state) => ({
-      // Prefer backend uid; fall back to client stampUid
-      cards: [...state.cards, card.uid ? { ...card, _uid: card.uid } : stampUid(card)],
+      cards: [...state.cards, stampUid(card)],
     })),
   reset: () => {
     const currentState = get();
