@@ -121,3 +121,38 @@ class HistoryManager:
     def recover_interrupted_sessions(self) -> int:
         """Mark stale in-flight draft sessions as interrupted."""
         return self.db.recover_interrupted_sessions()
+
+    def get_feedback_summary(self) -> Dict[str, Any]:
+        """Aggregate historical feedback signals for adaptive tuning."""
+        entries = self.get_all()
+        positive_count = 0
+        negative_count = 0
+        reason_frequency: Dict[str, int] = {}
+
+        for entry in entries:
+            cards = entry.get("cards") or []
+            for card in cards:
+                if not isinstance(card, dict):
+                    continue
+                vote = str(card.get("feedback_vote") or "").strip().lower()
+                reason = str(card.get("feedback_reason") or "").strip()
+                if vote == "up":
+                    positive_count += 1
+                elif vote == "down":
+                    negative_count += 1
+                    if reason:
+                        reason_frequency[reason] = reason_frequency.get(reason, 0) + 1
+
+        negative_reasons = sorted(
+            reason_frequency.keys(),
+            key=lambda key: reason_frequency[key],
+            reverse=True,
+        )[:3]
+
+        total_signals = positive_count + negative_count
+        return {
+            "positive_count": positive_count,
+            "negative_count": negative_count,
+            "total_signals": total_signals,
+            "negative_reasons": negative_reasons,
+        }

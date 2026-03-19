@@ -5,7 +5,6 @@ import {
   getAnkiPreflight,
   getHealthRemediation,
   isHealthReady,
-  type HealthStatusLike,
 } from '../lib/healthDiagnostics';
 
 const healthyDiagnosticsHealth: HealthStatus = {
@@ -95,32 +94,6 @@ describe('healthDiagnostics', () => {
     expect(remediation.kind).toBe('missing_api_key');
     expect(remediation.message).toBe('Gemini API key is missing.');
     expect(remediation.hint).toBe('Open Settings and provide a Gemini API key.');
-    expect(remediation.canRetry).toBe(false);
-  });
-
-  it('falls back to legacy fields when diagnostics are absent', () => {
-    const legacyHealth: HealthStatusLike = {
-      ...healthyDiagnosticsHealth,
-      diagnostics: undefined,
-      anki_connected: false,
-    };
-
-    const remediation = getHealthRemediation(legacyHealth);
-
-    expect(remediation.kind).toBe('anki_offline');
-    expect(remediation.canRetry).toBe(true);
-  });
-
-  it('falls back to legacy Gemini readiness when diagnostics are absent', () => {
-    const legacyHealth: HealthStatusLike = {
-      ...healthyDiagnosticsHealth,
-      diagnostics: undefined,
-      gemini_configured: false,
-    };
-
-    const remediation = getHealthRemediation(legacyHealth);
-
-    expect(remediation.kind).toBe('missing_api_key');
     expect(remediation.canRetry).toBe(false);
   });
 

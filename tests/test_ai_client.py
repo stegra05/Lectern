@@ -260,28 +260,6 @@ async def test_concept_map(ai_client, mock_genai_client):
         assert ai_client._prompt_config.language == "en"
 
 
-@pytest.mark.asyncio
-async def test_upload_pdf_retries_then_succeeds(ai_client, mock_genai_client):
-    upload_fail = Exception("temporary upload failure")
-    upload_ok = MagicMock(uri="gs://file.pdf", mime_type="application/pdf")
-    mock_genai_client.aio.files.upload.side_effect = [upload_fail, upload_ok]
-
-    # Create a temp file for validation
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp.write(b"%PDF-1.4 fake content")
-        tmp_path = tmp.name
-
-    try:
-        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            result = await ai_client.upload_pdf(tmp_path, retries=2)
-
-        assert result["uri"] == "gs://file.pdf"
-        assert mock_genai_client.aio.files.upload.call_count == 2
-        mock_sleep.assert_called_once()
-    finally:
-        os.unlink(tmp_path)
-
-
 # --- Tests for upload_document() ---
 
 
@@ -402,27 +380,6 @@ async def test_upload_document_no_uri_raises_document_upload_error(
             await ai_client.upload_document(tmp_path)
 
         assert "invalid response" in exc_info.value.user_message.lower()
-    finally:
-        os.unlink(tmp_path)
-
-
-@pytest.mark.asyncio
-async def test_upload_pdf_backward_compatible(ai_client, mock_genai_client):
-    """Test that upload_pdf returns legacy dict format for backward compatibility."""
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp.write(b"%PDF-1.4 fake content")
-        tmp_path = tmp.name
-
-    try:
-        mock_upload = MagicMock(uri="gs://file.pdf", mime_type="application/pdf")
-        mock_genai_client.aio.files.upload.return_value = mock_upload
-
-        result = await ai_client.upload_pdf(tmp_path)
-
-        # Should return dict, not UploadedDocument
-        assert isinstance(result, dict)
-        assert result["uri"] == "gs://file.pdf"
-        assert result["mime_type"] == "application/pdf"
     finally:
         os.unlink(tmp_path)
 

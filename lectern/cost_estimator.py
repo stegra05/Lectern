@@ -48,10 +48,6 @@ def extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:
         }
 
 
-# Alias for backward compatibility with older mocks/calls
-_extract_pdf_metadata = extract_pdf_metadata
-
-
 def detect_content_mode(*, chars_per_page: float, force_mode: str | None = None) -> str:
     if force_mode:
         normalized = force_mode.lower()
@@ -233,10 +229,10 @@ async def estimate_cost_with_base(
     image_count = metadata["image_count"]
 
     ai = LecternAIClient(model_name=model_name)
-    uploaded_pdf = await ai.upload_pdf(pdf_path)
+    uploaded_doc = await ai.upload_document(pdf_path)
     token_count = await ai.count_tokens_for_pdf(
-        file_uri=uploaded_pdf["uri"],
-        mime_type=uploaded_pdf.get("mime_type", "application/pdf"),
+        file_uri=uploaded_doc.uri,
+        mime_type=uploaded_doc.mime_type,
         prompt="Analyze this PDF for card generation cost estimation.",
     )
     model = model_name or config.DEFAULT_GEMINI_MODEL

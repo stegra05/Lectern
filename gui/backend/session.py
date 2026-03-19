@@ -102,10 +102,6 @@ class SessionManager:
         with self._lock:
             self._sessions.pop(session_id, None)
 
-    def prune(self) -> None:
-        # Legacy no-op kept for compatibility with existing call sites.
-        return
-
     def _cleanup_session_files(self, session: SessionState) -> None:
         if (
             session.pdf_path

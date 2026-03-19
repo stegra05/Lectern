@@ -468,11 +468,11 @@ class TestServiceIntegration:
             "image_count": 0,
         }
         mock_ai = MagicMock()
-        mock_ai.upload_pdf = AsyncMock(
-            return_value={
-                "uri": "gs://fake.pdf",
-                "mime_type": "application/pdf",
-            }
+        mock_ai.upload_document = AsyncMock(
+            return_value=MagicMock(
+                uri="gs://fake.pdf",
+                mime_type="application/pdf",
+            )
         )
         mock_ai.count_tokens_for_pdf = AsyncMock(return_value=100)
         mock_ai_client_class.return_value = mock_ai
@@ -926,8 +926,11 @@ class TestServiceIntegration:
             "image_count": 0,
         }
         mock_ai = mock_ai_client_class.return_value
-        mock_ai.upload_pdf = AsyncMock(
-            return_value={"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
+        mock_ai.upload_document = AsyncMock(
+            return_value=MagicMock(
+                uri="gs://fake.pdf",
+                mime_type="application/pdf",
+            )
         )
         mock_ai.count_tokens_for_pdf = AsyncMock(return_value=100)
 
@@ -954,8 +957,11 @@ class TestServiceIntegration:
             "image_count": 0,
         }
         mock_ai = mock_ai_client_class.return_value
-        mock_ai.upload_pdf = AsyncMock(
-            return_value={"uri": "gs://fake.pdf", "mime_type": "application/pdf"}
+        mock_ai.upload_document = AsyncMock(
+            return_value=MagicMock(
+                uri="gs://fake.pdf",
+                mime_type="application/pdf",
+            )
         )
         mock_ai.count_tokens_for_pdf = AsyncMock(return_value=100)
 

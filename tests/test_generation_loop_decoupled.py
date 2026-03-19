@@ -125,6 +125,41 @@ class TestGenerationLoopPure:
         assert isinstance(card_event.card["quality_flags"], list)
 
     @pytest.mark.asyncio
+    async def test_generation_uses_feedback_adaptive_pacing_hint(self):
+        ai = MagicMock()
+        ai.generate_cards = AsyncMock(
+            return_value={"cards": [{"front": "Q1", "back": "A1"}], "done": True}
+        )
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{}] * 8
+        orchestrator.state.concept_map = {}
+
+        config = GenerationConfig(
+            total_cards_cap=10,
+            actual_batch_size=5,
+            recent_card_window=100,
+            focus_prompt=None,
+            effective_target=2.0,
+            stop_check=None,
+            examples="",
+            feedback_summary={
+                "positive_count": 1,
+                "negative_count": 6,
+                "total_signals": 7,
+                "negative_reasons": ["too shallow"],
+            },
+        )
+
+        _ = [e async for e in orchestrator.run_generation(ai_client=ai, config=config)]
+
+        pacing_hint = ai.generate_cards.await_args.kwargs["pacing_hint"]
+        assert "ADAPTIVE FEEDBACK" in pacing_hint
+        assert "TARGET GOAL: ~1.7 cards per slide" in pacing_hint
+        assert "too shallow" in pacing_hint
+
+    @pytest.mark.asyncio
     async def test_yields_card_events_with_uuids(self):
         ai = MagicMock()
         ai.generate_cards = AsyncMock(

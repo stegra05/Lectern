@@ -18,6 +18,7 @@ interface CardItemProps {
     onCancelEdit: () => void;
     onSaveEdit: (index: number) => void;
     onFieldChange: (field: string, value: string) => void;
+    onFeedbackChange: (vote: 'up' | 'down' | null, reason: string) => void;
     onSetConfirmModal: (modal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number }) => void;
     onToggleSelection: (uid: string) => void;
     onSelectRange: (uid: string) => void;
@@ -42,6 +43,7 @@ export const CardItem = memo(function CardItem({
     onCancelEdit,
     onSaveEdit,
     onFieldChange,
+    onFeedbackChange,
     onSetConfirmModal,
     onToggleSelection,
     onSelectRange,
@@ -89,6 +91,7 @@ export const CardItem = memo(function CardItem({
                     onSave={() => onSaveEdit(originalIndex)}
                     onCancel={onCancelEdit}
                     onChange={onFieldChange}
+                    onFeedbackChange={onFeedbackChange}
                     isSaving={false}
                 />
             ) : (

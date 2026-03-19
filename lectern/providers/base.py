@@ -17,9 +17,8 @@ class AIProvider(Protocol):
     async def build_concept_map(
         self,
         *,
-        file_uri: str | None = None,
+        file_uri: str,
         mime_type: str = "application/pdf",
-        pdf_content: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]: ...
 
     async def generate_cards(

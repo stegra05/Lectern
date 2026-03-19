@@ -84,6 +84,7 @@ class GenerationConfig:
     focus_prompt: Optional[str]
     effective_target: float
     stop_check: Optional[Callable[[], bool]]
+    feedback_summary: dict[str, Any] | None = None
     recent_card_window: int = 100
     examples: str = ""
 
@@ -284,7 +285,12 @@ class SessionOrchestrator:
         self.state.last_coverage_data = coverage
         return coverage
 
-    def _compute_pacing_hint(self, target_density: float, focus_prompt: str) -> str:
+    def _compute_pacing_hint(
+        self,
+        target_density: float,
+        focus_prompt: str,
+        feedback_summary: dict[str, Any] | None = None,
+    ) -> str:
         """Compute pacing hint for AI context."""
         coverage = self.state.last_coverage_data
         covered_slides = coverage.get("covered_pages", [])
@@ -295,6 +301,7 @@ class SessionOrchestrator:
             total_pages=len(self.state.pages),
             focus_prompt=focus_prompt,
             target_density=target_density,
+            feedback_summary=feedback_summary,
         )
         return pacing.hint
 
@@ -378,6 +385,7 @@ class SessionOrchestrator:
                 pacing_hint = self._compute_pacing_hint(
                     target_density=config.effective_target,
                     focus_prompt=config.focus_prompt or "",
+                    feedback_summary=config.feedback_summary,
                 )
 
                 # Pure AI call (no side effects)

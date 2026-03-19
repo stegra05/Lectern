@@ -192,6 +192,7 @@ export const useLecternActions = () => useLecternStore(useShallow((s) => ({
     cancelEdit: s.cancelEdit,
     saveEdit: s.saveEdit,
     handleFieldChange: s.handleFieldChange,
+    handleFeedbackChange: s.handleFeedbackChange,
     startSync: s.startSync,
     finishSync: s.finishSync,
     dismissSyncSuccess: s.dismissSyncSuccess,

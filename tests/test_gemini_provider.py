@@ -11,18 +11,11 @@ class _StubGeminiClient:
     log_path = "/tmp/test-gemini-provider.log"
 
     def __init__(self) -> None:
-        self.upload_pdf_calls: list[tuple[str, int]] = []
         self.upload_document_calls: list[str] = []
         self.concept_map_from_file_calls: list[tuple[str, str]] = []
-        self.concept_map_calls: list[list[dict[str, Any]]] = []
         self.generate_more_cards_calls: list[dict[str, Any]] = []
         self.reflect_calls: list[dict[str, Any]] = []
 
-        self.upload_pdf_result: Any = {
-            "uri": "gs://uploaded.pdf",
-            "mime_type": "application/pdf",
-        }
-        self.upload_pdf_error: Exception | None = None
         self.upload_document_result: Any = {
             "uri": "gs://uploaded-document.pdf",
             "mime_type": "application/pdf",
@@ -31,15 +24,8 @@ class _StubGeminiClient:
         self.upload_document_error: Exception | None = None
 
         self.concept_map_from_file_result: Any = {"concepts": []}
-        self.concept_map_result: Any = {"concepts": []}
         self.generate_more_cards_result: Any = {"cards": [], "done": True}
         self.reflect_result: Any = {"reflection": "", "cards": [], "done": True}
-
-    async def upload_pdf(self, pdf_path: str, retries: int = 3) -> Any:
-        self.upload_pdf_calls.append((pdf_path, retries))
-        if self.upload_pdf_error is not None:
-            raise self.upload_pdf_error
-        return self.upload_pdf_result
 
     async def upload_document(self, pdf_path: str) -> Any:
         self.upload_document_calls.append(pdf_path)
@@ -52,10 +38,6 @@ class _StubGeminiClient:
     ) -> Any:
         self.concept_map_from_file_calls.append((file_uri, mime_type))
         return self.concept_map_from_file_result
-
-    async def concept_map(self, pdf_content: list[dict[str, Any]]) -> Any:
-        self.concept_map_calls.append(pdf_content)
-        return self.concept_map_result
 
     async def generate_more_cards(self, **kwargs: Any) -> Any:
         self.generate_more_cards_calls.append(kwargs)
@@ -85,7 +67,6 @@ async def test_upload_document_uses_upload_document_path() -> None:
         "duration_ms": 12,
     }
     assert client.upload_document_calls == ["slides.pdf"]
-    assert client.upload_pdf_calls == []
 
 
 @pytest.mark.asyncio
@@ -109,31 +90,17 @@ async def test_build_concept_map_prefers_native_file_path() -> None:
     assert client.concept_map_from_file_calls == [
         ("gs://slides.pdf", "application/pdf")
     ]
-    assert client.concept_map_calls == []
-
-
-@pytest.mark.asyncio
-async def test_build_concept_map_uses_pdf_content_when_no_file_uri() -> None:
-    client = _StubGeminiClient()
-    provider = GeminiProvider(client=client)
-    payload = [{"page": 1, "text": "content"}]
-
-    result = await provider.build_concept_map(pdf_content=payload)
-
-    assert result == {"concepts": []}
-    assert client.concept_map_calls == [payload]
-    assert client.concept_map_from_file_calls == []
 
 
 @pytest.mark.asyncio
 async def test_schema_guard_returns_empty_dict_for_non_dict_payloads() -> None:
     client = _StubGeminiClient()
-    client.concept_map_result = "not-a-dict"
+    client.concept_map_from_file_result = "not-a-dict"
     client.generate_more_cards_result = []
     client.reflect_result = None
     provider = GeminiProvider(client=client)
 
-    assert await provider.build_concept_map(pdf_content=[]) == {}
+    assert await provider.build_concept_map(file_uri="gs://slides.pdf") == {}
     assert await provider.generate_cards(limit=2) == {}
     assert await provider.reflect_cards(limit=2) == {}
 

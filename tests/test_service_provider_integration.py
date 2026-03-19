@@ -18,26 +18,26 @@ class _FakeProvider:
         self.slide_set_context_calls: list[tuple[str, str]] = []
         self._generation_done = False
 
-    async def upload_document(self, pdf_path: str) -> dict[str, Any]:
+    async def upload_document(self, pdf_path: str) -> Any:
         self.upload_document_calls.append(pdf_path)
-        return {
-            "uri": "gs://provider-uploaded.pdf",
-            "mime_type": "application/pdf",
-            "duration_ms": 12,
-        }
+        from lectern.ai_client import UploadedDocument
+
+        return UploadedDocument(
+            uri="gs://provider-uploaded.pdf",
+            mime_type="application/pdf",
+            duration_ms=12,
+        )
 
     async def build_concept_map(
         self,
         *,
-        file_uri: str | None = None,
+        file_uri: str,
         mime_type: str = "application/pdf",
-        pdf_content: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         self.build_concept_map_calls.append(
             {
                 "file_uri": file_uri,
                 "mime_type": mime_type,
-                "pdf_content": pdf_content,
             }
         )
         return {

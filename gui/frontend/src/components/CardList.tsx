@@ -18,6 +18,7 @@ interface CardListProps {
     onCancelEdit: () => void;
     onSaveEdit: (index: number) => void;
     onFieldChange: (field: string, value: string) => void;
+    onFeedbackChange: (vote: 'up' | 'down' | null, reason: string) => void;
     onSetConfirmModal: (modal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number }) => void;
     onToggleSelection: (uid: string) => void;
     onSelectRange: (uid: string) => void;
@@ -40,6 +41,7 @@ function RenderCardItem({
     onCancelEdit,
     onSaveEdit,
     onFieldChange,
+    onFeedbackChange,
     onSetConfirmModal,
     onToggleSelection,
     onSelectRange,
@@ -55,6 +57,7 @@ function RenderCardItem({
     onCancelEdit: () => void;
     onSaveEdit: (index: number) => void;
     onFieldChange: (field: string, value: string) => void;
+    onFeedbackChange: (vote: 'up' | 'down' | null, reason: string) => void;
     onSetConfirmModal: (modal: { isOpen: boolean; type: 'lectern' | 'anki'; index: number; noteId?: number }) => void;
     onToggleSelection: (uid: string) => void;
     onSelectRange: (uid: string) => void;
@@ -76,6 +79,7 @@ function RenderCardItem({
             onCancelEdit={onCancelEdit}
             onSaveEdit={onSaveEdit}
             onFieldChange={onFieldChange}
+            onFeedbackChange={onFeedbackChange}
             onSetConfirmModal={onSetConfirmModal}
             onToggleSelection={onToggleSelection}
             onSelectRange={onSelectRange}
@@ -102,6 +106,7 @@ export const CardList = memo(function CardList({
     onCancelEdit,
     onSaveEdit,
     onFieldChange,
+    onFeedbackChange,
     onSetConfirmModal,
     onToggleSelection,
     onSelectRange,
@@ -178,6 +183,7 @@ export const CardList = memo(function CardList({
                             onCancelEdit={onCancelEdit}
                             onSaveEdit={onSaveEdit}
                             onFieldChange={onFieldChange}
+                            onFeedbackChange={onFeedbackChange}
                             onSetConfirmModal={onSetConfirmModal}
                             onToggleSelection={onToggleSelection}
                             onSelectRange={onSelectRange}

@@ -18,9 +18,6 @@ class _StubGeminiClient:
     ):
         return {"uri": file_uri, "mime_type": mime_type}
 
-    async def concept_map(self, pdf_content: list[dict[str, object]]):
-        return {"concepts": pdf_content}
-
     async def generate_more_cards(self, **kwargs):
         return {"cards": [], "done": True, "kwargs": kwargs}
 
@@ -32,6 +29,13 @@ class _StubGeminiClient:
 
     def drain_warnings(self) -> list[str]:
         return []
+
+
+@pytest.mark.asyncio
+async def test_create_provider_build_concept_map_uses_file_uri() -> None:
+    provider = create_provider("gemini", client=_StubGeminiClient())
+    result = await provider.build_concept_map(file_uri="gs://slides.pdf")
+    assert result == {"uri": "gs://slides.pdf", "mime_type": "application/pdf"}
 
 
 def test_create_provider_selects_supported_provider() -> None:

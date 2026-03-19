@@ -203,11 +203,25 @@ class ConceptMappingPhase(PipelinePhase):
         try:
             uploaded_doc = await ai_client.upload_document(context.config.pdf_path)
             if isinstance(uploaded_doc, UploadedDocument):
-                context.uploaded_pdf = uploaded_doc.to_dict()
+                uri = uploaded_doc.uri
+                mime_type = uploaded_doc.mime_type
                 duration_ms = uploaded_doc.duration_ms
             else:
-                context.uploaded_pdf = dict(uploaded_doc)
-                duration_ms = int(context.uploaded_pdf.get("duration_ms") or 0)
+                uri = getattr(uploaded_doc, "uri", None)
+                mime_type = getattr(uploaded_doc, "mime_type", None)
+                duration_ms = int(getattr(uploaded_doc, "duration_ms", 0) or 0)
+                if isinstance(uploaded_doc, dict):
+                    uri = uri or uploaded_doc.get("uri")
+                    mime_type = mime_type or uploaded_doc.get("mime_type")
+                    duration_ms = int(uploaded_doc.get("duration_ms") or duration_ms or 0)
+                if not uri:
+                    raise TypeError("upload_document returned invalid payload (missing uri)")
+                if not mime_type:
+                    mime_type = "application/pdf"
+            context.uploaded_pdf = {
+                "uri": str(uri),
+                "mime_type": str(mime_type),
+            }
             await emitter.emit_event(
                 ServiceEvent(
                     "step_end",
@@ -264,13 +278,6 @@ class ConceptMappingPhase(PipelinePhase):
                 mime_type=context.uploaded_pdf.get("mime_type", "application/pdf"),
             )
             concept_map = raw_concept_map if isinstance(raw_concept_map, dict) else {}
-            if not concept_map:
-                try:
-                    legacy_map = await ai_client.build_concept_map(pdf_content=[])
-                    if isinstance(legacy_map, dict):
-                        concept_map = legacy_map
-                except Exception:
-                    pass
 
             advised_pages = int(concept_map.get("page_count") or 0)
             advised_chars = int(concept_map.get("estimated_text_chars") or 0)
@@ -446,6 +453,9 @@ class GenerationPhase(PipelinePhase):
             focus_prompt=context.config.focus_prompt,
             effective_target=setup.effective_target,
             stop_check=context.config.stop_check,
+            feedback_summary=await asyncio.to_thread(
+                HistoryManager().get_feedback_summary
+            ),
             examples=context.examples,
         )
         async for event in orchestrator.run_generation(

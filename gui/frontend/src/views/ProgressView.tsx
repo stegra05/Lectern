@@ -394,6 +394,7 @@ export function ProgressView() {
                     onCancelEdit={actions.cancelEdit}
                     onSaveEdit={review.saveEdit}
                     onFieldChange={actions.handleFieldChange}
+                    onFeedbackChange={actions.handleFeedbackChange}
                     onSetConfirmModal={actions.setConfirmModal}
                     onToggleSelection={actions.toggleCardSelection}
                     onSelectRange={actions.selectCardRange}

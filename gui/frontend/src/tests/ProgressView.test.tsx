@@ -78,6 +78,7 @@ const { defaultState, storeState } = vi.hoisted(() => {
         cancelEdit: vi.fn(),
         saveEdit: vi.fn(),
         handleFieldChange: vi.fn(),
+        handleFeedbackChange: vi.fn(),
         handleSync: vi.fn(),
         handleSyncPreview: vi.fn(),
         setConfirmModal: vi.fn(),
@@ -186,6 +187,7 @@ vi.mock('../hooks/useProgressViewModel', () => {
                     cancelEdit: storeState.cancelEdit,
                     saveEdit: storeState.saveEdit,
                     handleFieldChange: storeState.handleFieldChange,
+                    handleFeedbackChange: storeState.handleFeedbackChange,
                     handleSync: storeState.handleSync,
                     dismissSyncSuccess: vi.fn(),
                     dismissSyncPartialFailure: vi.fn(),
@@ -455,7 +457,8 @@ describe('ProgressView', () => {
             editForm: { fields: { Front: 'A', Back: 'B' }, _uid: '123' },
             saveEdit: vi.fn(),
             cancelEdit: vi.fn(),
-            handleFieldChange: vi.fn()
+            handleFieldChange: vi.fn(),
+            handleFeedbackChange: vi.fn(),
         });
 
         render(<ProgressView />);

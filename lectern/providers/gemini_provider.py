@@ -37,17 +37,13 @@ class GeminiProvider(AIProvider):
     async def build_concept_map(
         self,
         *,
-        file_uri: str | None = None,
+        file_uri: str,
         mime_type: str = "application/pdf",
-        pdf_content: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        if file_uri:
-            result = await self._client.concept_map_from_file(
-                file_uri=file_uri,
-                mime_type=mime_type,
-            )
-        else:
-            result = await self._client.concept_map(pdf_content or [])
+        result = await self._client.concept_map_from_file(
+            file_uri=file_uri,
+            mime_type=mime_type,
+        )
         return coerce_response_dict(result)
 
     async def generate_cards(

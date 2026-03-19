@@ -1,17 +1,6 @@
-import type { components } from '../generated/api';
 import type { HealthStatus } from '../schemas/api';
 
-type HealthDiagnostics = components['schemas']['HealthDiagnostics'];
-
-type OptionalHealthDiagnostics = {
-  anki?: Partial<HealthDiagnostics['anki']> | null;
-  api_key?: Partial<HealthDiagnostics['api_key']> | null;
-  provider?: Partial<HealthDiagnostics['provider']> | null;
-};
-
-export type HealthStatusLike = Partial<Omit<HealthStatus, 'diagnostics'>> & {
-  diagnostics?: OptionalHealthDiagnostics | null;
-};
+type HealthDiagnostics = NonNullable<HealthStatus['diagnostics']>;
 
 export type HealthRemediationKind =
   | 'none'
@@ -39,22 +28,16 @@ const DEFAULT_ANKI_HINT =
 const DEFAULT_API_KEY_HINT = 'Open Settings and provide the required API key.';
 const DEFAULT_PROVIDER_HINT = 'Review provider settings and try again.';
 
-function getDiagnostics(
-  health: HealthStatusLike | null | undefined
-): OptionalHealthDiagnostics | undefined {
-  return health?.diagnostics ?? undefined;
-}
-
 function textOrUndefined(value: string | null | undefined): string | undefined {
   const text = value?.trim();
   return text ? text : undefined;
 }
 
 function getProviderName(
-  health: HealthStatusLike | null | undefined,
-  diagnostics: OptionalHealthDiagnostics | undefined
+  health: HealthStatus,
+  diagnostics: HealthDiagnostics
 ): string | undefined {
-  return textOrUndefined(diagnostics?.provider?.name) ?? textOrUndefined(health?.active_provider);
+  return textOrUndefined(diagnostics.provider?.name) ?? textOrUndefined(health.active_provider);
 }
 
 function providerLabel(name: string | undefined): string {
@@ -66,21 +49,16 @@ function isUnsupportedProvider(providerReason: string | undefined): boolean {
   return providerReason?.toLowerCase().includes('unsupported') ?? false;
 }
 
-function isGeminiProvider(providerName: string | undefined): boolean {
-  return providerName?.toLowerCase() === 'gemini';
-}
-
 export function getHealthRemediation(
-  health: HealthStatusLike | null | undefined
+  health: HealthStatus | null | undefined
 ): HealthRemediation {
-  if (!health) {
+  if (!health || !health.diagnostics) {
     return { kind: 'none', canRetry: false };
   }
 
-  const runtimeHealth = health;
-  const diagnostics = getDiagnostics(health);
-  const ankiDiagnostics = diagnostics?.anki;
-  const ankiConnected = ankiDiagnostics?.connected ?? runtimeHealth.anki_connected ?? false;
+  const diagnostics = health.diagnostics;
+  const ankiDiagnostics = diagnostics.anki;
+  const ankiConnected = ankiDiagnostics.connected;
 
   if (!ankiConnected) {
     const ankiStatus = ankiDiagnostics?.status;
@@ -107,11 +85,11 @@ export function getHealthRemediation(
     };
   }
 
-  const providerDiagnostics = diagnostics?.provider;
-  const apiKeyDiagnostics = diagnostics?.api_key;
-  const providerName = getProviderName(runtimeHealth, diagnostics);
-  const providerReason = textOrUndefined(providerDiagnostics?.reason);
-  const providerHint = textOrUndefined(providerDiagnostics?.hint);
+  const providerDiagnostics = diagnostics.provider;
+  const apiKeyDiagnostics = diagnostics.api_key;
+  const providerName = getProviderName(health, diagnostics);
+  const providerReason = textOrUndefined(providerDiagnostics.reason);
+  const providerHint = textOrUndefined(providerDiagnostics.hint);
 
   if (isUnsupportedProvider(providerReason)) {
     return {
@@ -125,18 +103,16 @@ export function getHealthRemediation(
     };
   }
 
-  const apiKeyRequired =
-    apiKeyDiagnostics?.required ??
-    (providerName ? isGeminiProvider(providerName) : true);
-  const apiKeyConfigured = apiKeyDiagnostics?.configured ?? runtimeHealth.gemini_configured ?? false;
+  const apiKeyRequired = apiKeyDiagnostics.required;
+  const apiKeyConfigured = apiKeyDiagnostics.configured;
 
   if (apiKeyRequired && !apiKeyConfigured) {
     const title = `${providerLabel(providerName)} API key required`;
     const message =
-      textOrUndefined(apiKeyDiagnostics?.reason) ??
+      textOrUndefined(apiKeyDiagnostics.reason) ??
       `${providerLabel(providerName)} API key is missing.`;
     const hint =
-      textOrUndefined(apiKeyDiagnostics?.hint) ?? providerHint ?? DEFAULT_API_KEY_HINT;
+      textOrUndefined(apiKeyDiagnostics.hint) ?? providerHint ?? DEFAULT_API_KEY_HINT;
 
     return {
       kind: 'missing_api_key',
@@ -147,12 +123,10 @@ export function getHealthRemediation(
     };
   }
 
-  const providerReady =
-    providerDiagnostics?.ready ?? runtimeHealth.provider_ready ?? apiKeyConfigured;
-  const providerConfigured =
-    providerDiagnostics?.configured ?? runtimeHealth.provider_configured ?? providerReady;
+  const providerReady = providerDiagnostics.ready;
+  const providerConfigured = providerDiagnostics.configured;
 
-  if (!providerReady || !providerConfigured || runtimeHealth.backend_ready === false) {
+  if (!providerReady || !providerConfigured || health.backend_ready === false) {
     return {
       kind: 'provider_not_ready',
       title: `${providerLabel(providerName)} provider not ready`,
@@ -167,45 +141,38 @@ export function getHealthRemediation(
   return { kind: 'none', canRetry: false };
 }
 
-export function isHealthReady(health: HealthStatusLike | null | undefined): boolean {
-  if (!health) {
+export function isHealthReady(health: HealthStatus | null | undefined): boolean {
+  if (!health || !health.diagnostics) {
     return false;
   }
 
-  const runtimeHealth = health;
-  if (runtimeHealth.backend_ready === false) {
+  if (health.backend_ready === false) {
     return false;
   }
 
-  const diagnostics = getDiagnostics(health);
-  const ankiConnected = diagnostics?.anki?.connected ?? runtimeHealth.anki_connected ?? false;
+  const diagnostics = health.diagnostics;
+  const ankiConnected = diagnostics.anki.connected;
   if (!ankiConnected) {
     return false;
   }
 
-  const providerName = getProviderName(runtimeHealth, diagnostics);
-  const providerReady =
-    diagnostics?.provider?.ready ?? runtimeHealth.provider_ready ?? runtimeHealth.gemini_configured ?? false;
-  const providerConfigured =
-    diagnostics?.provider?.configured ?? runtimeHealth.provider_configured ?? providerReady;
-  const apiKeyRequired =
-    diagnostics?.api_key?.required ?? (providerName ? isGeminiProvider(providerName) : true);
-  const apiKeyConfigured =
-    diagnostics?.api_key?.configured ?? runtimeHealth.gemini_configured ?? false;
+  const providerReady = diagnostics.provider.ready;
+  const providerConfigured = diagnostics.provider.configured;
+  const apiKeyRequired = diagnostics.api_key.required;
+  const apiKeyConfigured = diagnostics.api_key.configured;
 
   return Boolean(providerReady && providerConfigured && (!apiKeyRequired || apiKeyConfigured));
 }
 
 export function getAnkiPreflight(
-  health: HealthStatusLike | null | undefined
+  health: HealthStatus | null | undefined
 ): AnkiPreflight {
-  if (!health) {
+  if (!health || !health.diagnostics) {
     return { status: 'checking' };
   }
 
-  const runtimeHealth = health;
-  const diagnostics = getDiagnostics(health);
-  const ankiConnected = diagnostics?.anki?.connected ?? runtimeHealth.anki_connected ?? false;
+  const diagnostics = health.diagnostics;
+  const ankiConnected = diagnostics.anki.connected;
 
   if (ankiConnected) {
     return { status: 'connected' };
@@ -214,8 +181,8 @@ export function getAnkiPreflight(
   return {
     status: 'disconnected',
     hint:
-      textOrUndefined(diagnostics?.anki?.hint) ??
-      textOrUndefined(diagnostics?.anki?.reason) ??
+      textOrUndefined(diagnostics.anki.hint) ??
+      textOrUndefined(diagnostics.anki.reason) ??
       DEFAULT_ANKI_HINT,
   };
 }

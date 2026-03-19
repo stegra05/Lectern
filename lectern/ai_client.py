@@ -45,10 +45,6 @@ class UploadedDocument:
     retries: int = 0
     file_size_bytes: int | None = None
 
-    def to_dict(self) -> dict[str, str]:
-        """Return legacy dict format for backward compatibility."""
-        return {"uri": self.uri, "mime_type": self.mime_type}
-
 
 class DocumentUploadError(Exception):
     """Raised when document upload fails after all retries."""
@@ -590,17 +586,6 @@ class LecternAIClient:
             retries=max(0, attempt_count - 1),
             file_size_bytes=file_size,
         )
-
-    async def upload_pdf(self, pdf_path: str, retries: int = 3) -> Dict[str, str]:
-        """Upload a PDF to Gemini Files API and return metadata.
-
-        This is a backward-compatible wrapper around upload_document().
-        Note: Skips local file validation to maintain original behavior.
-        """
-        result = await self.upload_document(
-            pdf_path, retries=retries, validate_file=False
-        )
-        return result.to_dict()
 
     async def _concept_map_for_parts(
         self, parts: List[Dict[str, Any]]
