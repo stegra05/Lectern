@@ -103,6 +103,17 @@ export const GenerationDoneDataSchema = z.object({
 }).passthrough();
 export type GenerationDoneData = z.infer<typeof GenerationDoneDataSchema>;
 
+/** `warning` payload details for generation stopped reasons. */
+export const GenerationStoppedDetailsSchema = z.object({
+  consecutive_zero_promoted_batches: z.number().optional(),
+  last_batch_generated_candidates_count: z.number().optional(),
+  last_batch_grounding_promoted_count: z.number().optional(),
+  last_batch_grounding_dropped_count: z.number().optional(),
+  last_batch_duplicate_drop_count: z.number().optional(),
+  last_batch_gate_failure_drop_count: z.number().optional(),
+});
+export type GenerationStoppedDetails = z.infer<typeof GenerationStoppedDetailsSchema>;
+
 /** Sync stream `done` payload: `{ failed?: number, created?: number, cards?: Card[] }` */
 export const SyncDoneDataSchema = z.object({
   failed: z.number().optional(),
@@ -204,6 +215,15 @@ export function validateGenerationDoneData(data: unknown): GenerationDoneData | 
   const result = GenerationDoneDataSchema.safeParse(data);
   if (!result.success) {
     console.warn('Invalid done payload (generation):', result.error.message);
+    return null;
+  }
+  return result.data;
+}
+
+export function validateGenerationStoppedDetails(data: unknown): GenerationStoppedDetails | null {
+  const result = GenerationStoppedDetailsSchema.safeParse(data);
+  if (!result.success) {
+    console.warn('Invalid warning payload details (generation stopped):', result.error.message);
     return null;
   }
   return result.data;

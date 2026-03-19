@@ -1,7 +1,7 @@
 """Tests for decoupled generation loop - no HTTP/SSE mocking required."""
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from lectern.orchestration.session_orchestrator import (
     SessionOrchestrator,
@@ -90,6 +90,8 @@ class TestGenerationLoopPure:
                         "back": "A1",
                         "source_pages": [1],
                         "concept_ids": ["important"],
+                        "rationale": "Anchored in the key concept on slide 1.",
+                        "source_excerpt": "Important concept appears in slide 1 notes.",
                     }
                 ],
                 "done": True,
@@ -165,8 +167,20 @@ class TestGenerationLoopPure:
         ai.generate_cards = AsyncMock(
             return_value={
                 "cards": [
-                    {"front": "Q1", "back": "A1", "source_pages": [1]},
-                    {"front": "Q2", "back": "A2", "source_pages": [2]},
+                    {
+                        "front": "Q1",
+                        "back": "A1",
+                        "source_pages": [1],
+                        "rationale": "Directly supported by source page 1.",
+                        "source_excerpt": "Evidence snippet from page 1.",
+                    },
+                    {
+                        "front": "Q2",
+                        "back": "A2",
+                        "source_pages": [2],
+                        "rationale": "Directly supported by source page 2.",
+                        "source_excerpt": "Evidence snippet from page 2.",
+                    },
                 ],
                 "done": False,
             }
@@ -242,7 +256,15 @@ class TestGenerationLoopPure:
         ai = MagicMock()
         ai.generate_cards = AsyncMock(
             return_value={
-                "cards": [{"front": "Q1", "back": "A1"}],
+                "cards": [
+                    {
+                        "front": "Q1",
+                        "back": "A1",
+                        "source_pages": [1],
+                        "rationale": "Grounded in page 1 content.",
+                        "source_excerpt": "Q1/A1 evidence on page 1.",
+                    }
+                ],
                 "done": True,
             }
         )
@@ -377,6 +399,331 @@ class TestGenerationLoopPure:
             events[-1], (CoverageThresholdMetEvent, GenerationStoppedEvent)
         )
 
+    @pytest.mark.asyncio
+    async def test_continues_past_first_batch_when_explicit_target_requested(self):
+        first_batch = [
+            {
+                "front": f"Q{i}",
+                "back": f"A{i}",
+                "source_pages": list(range(1, 11)),
+                "rationale": f"Grounded rationale for Q{i}.",
+                "source_excerpt": f"Supporting excerpt for Q{i}.",
+            }
+            for i in range(1, 6)
+        ]
+        second_batch = [
+            {
+                "front": f"Q{i}",
+                "back": f"A{i}",
+                "source_pages": list(range(1, 11)),
+                "rationale": f"Grounded rationale for Q{i}.",
+                "source_excerpt": f"Supporting excerpt for Q{i}.",
+            }
+            for i in range(6, 11)
+        ]
+
+        ai = MagicMock()
+        ai.generate_cards = AsyncMock(
+            side_effect=[
+                {"cards": first_batch, "done": True},
+                {"cards": second_batch, "done": True},
+            ]
+        )
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{"number": i} for i in range(1, 11)]
+        orchestrator.state.concept_map = {}
+
+        config = GenerationConfig(
+            total_cards_cap=10,
+            actual_batch_size=5,
+            recent_card_window=100,
+            focus_prompt=None,
+            effective_target=1.0,
+            stop_check=None,
+            examples="",
+            explicit_target_requested=True,
+        )
+
+        events = [
+            e async for e in orchestrator.run_generation(ai_client=ai, config=config)
+        ]
+
+        assert ai.generate_cards.await_count == 2
+        assert len([e for e in events if isinstance(e, CardGeneratedEvent)]) == 10
+
+        threshold_events = [
+            e for e in events if isinstance(e, CoverageThresholdMetEvent)
+        ]
+        if threshold_events:
+            assert threshold_events[0].batch_index != 1
+
+    @pytest.mark.asyncio
+    async def test_generation_drops_cards_after_failed_repairs(self, monkeypatch):
+        monkeypatch.setattr("lectern.config.GROUNDING_NON_PROGRESS_MAX_BATCHES", 1)
+        ai = MagicMock()
+        ai.generate_cards = AsyncMock(
+            return_value={
+                "cards": [
+                    {
+                        "front": "Weak",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "",
+                        "source_excerpt": "",
+                    }
+                ],
+                "done": False,
+            }
+        )
+        ai.reflect_cards = AsyncMock(
+            side_effect=[
+                {
+                    "cards": [
+                        {
+                            "front": "Weak repaired 1",
+                            "back": "A",
+                            "source_pages": [1],
+                            "concept_ids": ["c1"],
+                            "rationale": "",
+                            "source_excerpt": "",
+                        }
+                    ],
+                    "done": False,
+                },
+                {
+                    "cards": [
+                        {
+                            "front": "Weak repaired 2",
+                            "back": "A",
+                            "source_pages": [1],
+                            "concept_ids": ["c1"],
+                            "rationale": "",
+                            "source_excerpt": "",
+                        }
+                    ],
+                    "done": False,
+                },
+            ]
+        )
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{"number": 1}]
+        orchestrator.state.concept_map = {"concepts": [{"id": "c1"}], "relations": []}
+
+        events = [
+            e
+            async for e in orchestrator.run_generation(
+                ai_client=ai,
+                config=GenerationConfig(
+                    total_cards_cap=1,
+                    actual_batch_size=1,
+                    recent_card_window=100,
+                    focus_prompt=None,
+                    effective_target=1.0,
+                    stop_check=None,
+                    examples="",
+                ),
+            )
+        ]
+
+        assert not [e for e in events if isinstance(e, CardGeneratedEvent)]
+        assert ai.reflect_cards.await_count == 2
+        completed = [e for e in events if isinstance(e, GenerationBatchCompletedEvent)][0]
+        assert completed.grounding_promoted_count == 0
+        assert completed.grounding_dropped_count == 1
+        warning_details = [
+            e.details for e in events if isinstance(e, WarningEmittedEvent) and e.details
+        ]
+        assert any(details.get("reason") == "grounding_gate_failed" for details in warning_details)
+
+    @pytest.mark.asyncio
+    async def test_generation_promotes_only_gate_pass_cards(self, monkeypatch):
+        monkeypatch.setattr("lectern.config.GROUNDING_NON_PROGRESS_MAX_BATCHES", 1)
+        ai = MagicMock()
+        ai.generate_cards = AsyncMock(
+            return_value={
+                "cards": [
+                    {
+                        "front": "Grounded",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "Grounded rationale",
+                        "source_excerpt": "Grounded excerpt",
+                    },
+                    {
+                        "front": "Weak",
+                        "back": "B",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "",
+                        "source_excerpt": "",
+                    },
+                ],
+                "done": False,
+            }
+        )
+        ai.reflect_cards = AsyncMock(return_value={"cards": [], "done": False})
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{"number": 1}]
+        orchestrator.state.concept_map = {"concepts": [{"id": "c1"}], "relations": []}
+
+        events = [
+            e
+            async for e in orchestrator.run_generation(
+                ai_client=ai,
+                config=GenerationConfig(
+                    total_cards_cap=2,
+                    actual_batch_size=2,
+                    recent_card_window=100,
+                    focus_prompt=None,
+                    effective_target=1.0,
+                    stop_check=None,
+                    examples="",
+                ),
+            )
+        ]
+
+        cards = [e.card for e in events if isinstance(e, CardGeneratedEvent)]
+        assert len(cards) == 1
+        assert cards[0]["front"] == "Grounded"
+        completed = [e for e in events if isinstance(e, GenerationBatchCompletedEvent)][0]
+        assert completed.generated_candidates_count == 2
+        assert completed.grounding_promoted_count == 1
+        assert completed.grounding_dropped_count == 1
+
+    @pytest.mark.asyncio
+    async def test_grounding_non_progress_stop_reason_and_details(self, monkeypatch):
+        monkeypatch.setattr("lectern.config.GROUNDING_NON_PROGRESS_MAX_BATCHES", 1)
+        ai = MagicMock()
+        ai.generate_cards = AsyncMock(
+            return_value={
+                "cards": [
+                    {
+                        "front": "Dup-1",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "ok",
+                        "source_excerpt": "ok",
+                    },
+                    {
+                        "front": "Dup-2",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "ok",
+                        "source_excerpt": "ok",
+                    },
+                    {
+                        "front": "Weak",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "",
+                        "source_excerpt": "",
+                    },
+                ],
+                "done": False,
+            }
+        )
+        ai.reflect_cards = AsyncMock(return_value={"cards": [], "done": False})
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{"number": 1}]
+        orchestrator.state.concept_map = {"concepts": [{"id": "c1"}], "relations": []}
+        orchestrator.state.all_cards = [{"front": "Dup-1"}, {"front": "Dup-2"}]
+        orchestrator.state.seen_keys = {"dup 1", "dup 2"}
+
+        events = [
+            e
+            async for e in orchestrator.run_generation(
+                ai_client=ai,
+                config=GenerationConfig(
+                    total_cards_cap=4,
+                    actual_batch_size=3,
+                    recent_card_window=100,
+                    focus_prompt=None,
+                    effective_target=1.0,
+                    stop_check=None,
+                    examples="",
+                ),
+            )
+        ]
+
+        stop = [e for e in events if isinstance(e, GenerationStoppedEvent)][0]
+        assert stop.reason == "grounding_non_progress_duplicates"
+        assert stop.details["consecutive_zero_promoted_batches"] == 1
+        assert stop.details["last_batch_generated_candidates_count"] == 3
+        assert stop.details["last_batch_grounding_promoted_count"] == 0
+        assert stop.details["last_batch_grounding_dropped_count"] == 3
+        assert stop.details["last_batch_duplicate_drop_count"] == 2
+        assert stop.details["last_batch_gate_failure_drop_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_grounding_non_progress_tie_prefers_gate_failures(self, monkeypatch):
+        monkeypatch.setattr("lectern.config.GROUNDING_NON_PROGRESS_MAX_BATCHES", 1)
+        ai = MagicMock()
+        ai.generate_cards = AsyncMock(
+            return_value={
+                "cards": [
+                    {
+                        "front": "Dup",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "ok",
+                        "source_excerpt": "ok",
+                    },
+                    {
+                        "front": "Weak",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "",
+                        "source_excerpt": "",
+                    },
+                ],
+                "done": False,
+            }
+        )
+        ai.reflect_cards = AsyncMock(return_value={"cards": [], "done": False})
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{"number": 1}]
+        orchestrator.state.concept_map = {"concepts": [{"id": "c1"}], "relations": []}
+        orchestrator.state.all_cards = [{"front": "Dup"}]
+        orchestrator.state.seen_keys = {"dup"}
+
+        events = [
+            e
+            async for e in orchestrator.run_generation(
+                ai_client=ai,
+                config=GenerationConfig(
+                    total_cards_cap=3,
+                    actual_batch_size=2,
+                    recent_card_window=100,
+                    focus_prompt=None,
+                    effective_target=1.0,
+                    stop_check=None,
+                    examples="",
+                ),
+            )
+        ]
+
+        stop = [e for e in events if isinstance(e, GenerationStoppedEvent)][0]
+        assert stop.reason == "grounding_non_progress_gate_failures"
+        assert stop.details["last_batch_duplicate_drop_count"] == 1
+        assert stop.details["last_batch_gate_failure_drop_count"] == 1
+
 
 class TestReflectionLoopPure:
     """Test reflection loop without SSE/HTTP mocking."""
@@ -494,6 +841,73 @@ class TestReflectionLoopPure:
         assert len(warning_events) >= 1
         assert "Reflection error" in warning_events[0].message
 
+    @pytest.mark.asyncio
+    async def test_reflection_keeps_original_when_replacement_fails_gate(self):
+        ai = MagicMock()
+        ai.reflect_cards = AsyncMock(
+            return_value={
+                "cards": [
+                    {
+                        "front": "Replacement",
+                        "back": "A",
+                        "source_pages": [1],
+                        "concept_ids": ["c1"],
+                        "rationale": "",
+                        "source_excerpt": "",
+                    }
+                ],
+                "reflection": "attempted replacement",
+                "done": True,
+            }
+        )
+        ai.drain_warnings.return_value = []
+
+        orchestrator = SessionOrchestrator()
+        orchestrator.state.pages = [{"number": 1}]
+        orchestrator.state.concept_map = {"concepts": [{"id": "c1"}], "relations": []}
+        original = {
+            "front": "Original",
+            "back": "A",
+            "source_pages": [1],
+            "concept_ids": ["c1"],
+            "rationale": "grounded",
+            "source_excerpt": "grounded excerpt",
+        }
+        orchestrator.state.all_cards = [original]
+        orchestrator.state.seen_keys = {"original"}
+
+        replacement = {
+            "front": "Replacement",
+            "back": "A",
+            "source_pages": [1],
+            "concept_ids": ["c1"],
+            "rationale": "",
+            "source_excerpt": "",
+        }
+        with patch(
+            "lectern.orchestration.session_orchestrator._select_best_reflection_cards",
+            return_value=([replacement], {"quality_delta": 1.0}),
+        ):
+            events = [
+                e
+                async for e in orchestrator.run_reflection(
+                    ai_client=ai,
+                    config=ReflectionConfig(
+                        total_cards_cap=10,
+                        rounds=1,
+                        recent_card_window=100,
+                        hard_cap_multiplier=1.2,
+                        hard_cap_padding=5,
+                        stop_check=None,
+                    ),
+                )
+            ]
+
+        replaced = [e for e in events if isinstance(e, CardsReplacedEvent)][0]
+        assert replaced.cards[0]["front"] == "Original"
+        assert orchestrator.state.all_cards[0]["front"] == "Original"
+        assert orchestrator.state.seen_keys == {"original"}
+
 
 class TestSSEEmitter:
     """Test SSE transformation layer."""
@@ -594,6 +1008,38 @@ class TestSSEEmitter:
         service_event = SSEEmitter.domain_to_service_event(event)
         assert service_event.type == "warning"
         assert "model_done" in service_event.message
+
+    def test_generation_batch_completed_event_transforms_grounding_fields(self):
+        event = GenerationBatchCompletedEvent(
+            batch_index=3,
+            cards_added=4,
+            model_done=False,
+            generated_candidates_count=6,
+            grounding_repair_attempted_count=2,
+            grounding_promoted_count=1,
+            grounding_dropped_count=1,
+            grounding_drop_reasons={"missing_source": 1},
+        )
+        service_event = SSEEmitter.domain_to_service_event(event)
+        assert service_event.type == "info"
+        assert service_event.data["batch"] == 3
+        assert service_event.data["added"] == 4
+        assert service_event.data["generated_candidates_count"] == 6
+        assert service_event.data["grounding_repair_attempted_count"] == 2
+        assert service_event.data["grounding_promoted_count"] == 1
+        assert service_event.data["grounding_dropped_count"] == 1
+        assert service_event.data["grounding_drop_reasons"] == {"missing_source": 1}
+
+    def test_generation_stopped_event_transforms_details_payload(self):
+        event = GenerationStoppedEvent(
+            reason="grounding_non_progress",
+            details={"non_progress_batches": 2},
+        )
+        service_event = SSEEmitter.domain_to_service_event(event)
+        assert service_event.type == "warning"
+        assert service_event.message == "Generation stopped: grounding_non_progress"
+        assert service_event.data["reason"] == "grounding_non_progress"
+        assert service_event.data["details"] == {"non_progress_batches": 2}
 
     def test_ndjson_conversion(self):
         event = CardGeneratedEvent(

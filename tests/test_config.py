@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+import lectern.config as config_module
 from lectern.config import ConfigManager, save_user_config
 
 
@@ -334,3 +335,16 @@ class TestConfigDefaults:
 
         for key, expected_value in expected_defaults.items():
             assert config.get(key) == expected_value, f"Default for {key} mismatch"
+
+
+class TestGroundingConfigDefaults:
+    """Test grounding-related module-level defaults."""
+
+    def test_grounding_gate_min_quality_default(self) -> None:
+        assert config_module.GROUNDING_GATE_MIN_QUALITY == 60.0
+
+    def test_grounding_retry_max_attempts_default(self) -> None:
+        assert config_module.GROUNDING_RETRY_MAX_ATTEMPTS == 2
+
+    def test_grounding_non_progress_max_batches_default(self) -> None:
+        assert config_module.GROUNDING_NON_PROGRESS_MAX_BATCHES == 2

@@ -216,6 +216,15 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
 MIN_CARDS_PER_SLIDE: float = float(os.getenv("MIN_CARDS_PER_SLIDE", "0.8"))
 CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2"))
 CHARS_PER_CARD_TARGET: int = int(os.getenv("CHARS_PER_CARD_TARGET", "200"))
+GROUNDING_GATE_MIN_QUALITY: float = float(
+    os.getenv("GROUNDING_GATE_MIN_QUALITY", "60.0")
+)
+GROUNDING_RETRY_MAX_ATTEMPTS: int = int(
+    os.getenv("GROUNDING_RETRY_MAX_ATTEMPTS", "2")
+)
+GROUNDING_NON_PROGRESS_MAX_BATCHES: int = int(
+    os.getenv("GROUNDING_NON_PROGRESS_MAX_BATCHES", "2")
+)
 DENSE_THRESHOLD_CHARS_PER_PAGE: int = int(
     os.getenv("DENSE_THRESHOLD_CHARS_PER_PAGE", "1500")
 )

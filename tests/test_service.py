@@ -275,6 +275,8 @@ class TestServiceIntegration:
                     "fields": {"Front": "Q1", "Back": "A1"},
                     "slide_number": 1,
                     "slide_topic": "Topic",
+                    "rationale": "Q1 is grounded in slide 1 content.",
+                    "source_excerpt": "Slide 1 introduces Q1 topic explicitly.",
                 },
             ],
             "done": True,
@@ -314,7 +316,14 @@ class TestServiceIntegration:
     ):
         env = generation_env
         env["ai"].generate_more_cards.return_value = {
-            "cards": [{"fields": {"Front": "Q1", "Back": "A1"}}],
+            "cards": [
+                {
+                    "fields": {"Front": "Q1", "Back": "A1"},
+                    "slide_number": 1,
+                    "rationale": "Grounded example for orchestration order test.",
+                    "source_excerpt": "Supporting excerpt for Q1.",
+                }
+            ],
             "done": True,
         }
 
@@ -420,7 +429,16 @@ class TestServiceIntegration:
         )
         mock_ai.concept_map_from_file = AsyncMock(return_value={})
         mock_ai.generate_more_cards = AsyncMock(
-            return_value={"cards": [{"fields": {"Front": "Q1"}}]}
+            return_value={
+                "cards": [
+                    {
+                        "fields": {"Front": "Q1", "Back": "A1"},
+                        "slide_number": 1,
+                        "rationale": "Grounded stop-check fixture card.",
+                        "source_excerpt": "Evidence text for Q1.",
+                    }
+                ]
+            }
         )
         mock_ai.drain_warnings = MagicMock(return_value=[])
         mock_ai_client_class.return_value = mock_ai
@@ -569,7 +587,16 @@ class TestServiceIntegration:
             return_value={"slide_set_name": "Test Set"}
         )
         mock_ai.generate_more_cards = AsyncMock(
-            return_value={"cards": [{"fields": {"Front": "Q", "Back": "A"}}]}
+            return_value={
+                "cards": [
+                    {
+                        "fields": {"Front": "Q", "Back": "A"},
+                        "slide_number": 1,
+                        "rationale": "Export fixture grounded on slide 1.",
+                        "source_excerpt": "Export scenario evidence.",
+                    }
+                ]
+            }
         )
         mock_ai.get_history = AsyncMock(return_value=[])
         mock_ai.reflect = AsyncMock(return_value={"cards": []})
@@ -649,7 +676,16 @@ class TestServiceIntegration:
                 return_value={"slide_set_name": "Test"}
             )
             mock_ai.generate_more_cards = AsyncMock(
-                return_value={"cards": [{"fields": {"Front": "Q1"}}]}
+                return_value={
+                    "cards": [
+                        {
+                            "fields": {"Front": "Q1", "Back": "A1"},
+                            "slide_number": 1,
+                            "rationale": "Sampling-exception fixture grounded.",
+                            "source_excerpt": "Sampling exception evidence.",
+                        }
+                    ]
+                }
             )
             mock_ai.get_history = AsyncMock(return_value=[])
             mock_ai.reflect = AsyncMock(return_value={"cards": []})
@@ -740,10 +776,29 @@ class TestServiceIntegration:
         )
         mock_ai.get_history = AsyncMock(return_value=[])
         mock_ai.generate_more_cards = AsyncMock(
-            return_value={"cards": [{"fields": {"Front": f"Q{i}"}} for i in range(30)]}
+            return_value={
+                "cards": [
+                    {
+                        "fields": {"Front": f"Q{i}", "Back": f"A{i}"},
+                        "slide_number": (i % 10) + 1,
+                        "rationale": f"Grounded rationale for Q{i}.",
+                        "source_excerpt": f"Supporting excerpt for Q{i}.",
+                    }
+                    for i in range(30)
+                ]
+            }
         )
         mock_ai.reflect = AsyncMock(
-            return_value={"cards": [{"fields": {"Front": "Refined"}}]}
+            return_value={
+                "cards": [
+                    {
+                        "fields": {"Front": "Refined", "Back": "A refined"},
+                        "slide_number": 1,
+                        "rationale": "Reflected card keeps grounding.",
+                        "source_excerpt": "Reflection evidence on slide 1.",
+                    }
+                ]
+            }
         )
         mock_ai.drain_warnings = MagicMock(return_value=[])
 
@@ -787,7 +842,16 @@ class TestServiceIntegration:
         )
         mock_ai.concept_map_from_file = AsyncMock(return_value={})
         mock_ai.generate_more_cards = AsyncMock(
-            return_value={"cards": [{"fields": {"Front": "Q"}}]}
+            return_value={
+                "cards": [
+                    {
+                        "fields": {"Front": "Q", "Back": "A"},
+                        "slide_number": 1,
+                        "rationale": "Export-failure fixture grounded.",
+                        "source_excerpt": "Export-failure supporting excerpt.",
+                    }
+                ]
+            }
         )
         mock_ai.get_history = AsyncMock(return_value=[])
         mock_ai.reflect = AsyncMock(return_value={"cards": []})
@@ -843,7 +907,16 @@ class TestServiceIntegration:
                 return_value={"page_count": 1, "estimated_text_chars": 5000}
             )
             mock_ai.generate_more_cards = AsyncMock(
-                return_value={"cards": [{"fields": {"Front": "Q"}}]}
+                return_value={
+                    "cards": [
+                        {
+                            "fields": {"Front": "Q", "Back": "A"},
+                            "slide_number": 1,
+                            "rationale": "Script-mode fixture grounded.",
+                            "source_excerpt": "Script-mode supporting excerpt.",
+                        }
+                    ]
+                }
             )
             mock_ai.get_history = AsyncMock(return_value=[])
             mock_ai.reflect = AsyncMock(return_value={"cards": []})
@@ -889,7 +962,15 @@ class TestServiceIntegration:
             )
             mock_ai.generate_more_cards = AsyncMock(
                 return_value={
-                    "cards": [{"fields": {"Front": f"Q{i}"}} for i in range(60)]
+                    "cards": [
+                        {
+                            "fields": {"Front": f"Q{i}", "Back": f"A{i}"},
+                            "slide_number": (i % 20) + 1,
+                            "rationale": f"Grounded rationale for Q{i}.",
+                            "source_excerpt": f"Supporting excerpt for Q{i}.",
+                        }
+                        for i in range(60)
+                    ]
                 }
             )
             mock_ai.get_history = AsyncMock(return_value=[])
