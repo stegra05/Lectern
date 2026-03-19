@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 
 
 class GenerationErrorCode(str, Enum):
@@ -17,3 +18,19 @@ class GenerationErrorCode(str, Enum):
     CANCEL_IDEMPOTENT_NOOP = "cancel_idempotent_noop"
     STREAM_DISCONNECTED = "stream_disconnected"
     INTERNAL_UNEXPECTED = "internal_unexpected"
+
+
+class GenerationApplicationError(Exception):
+    def __init__(
+        self,
+        code: GenerationErrorCode,
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        self.code = code
+        self.message = message
+        self.details = details
+        self.context = context
+        super().__init__(f"{code.value}: {message}")

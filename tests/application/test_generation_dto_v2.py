@@ -9,7 +9,7 @@ from lectern.application.dto import (
     ResumeGenerationRequest,
     StartGenerationRequest,
 )
-from lectern.application.errors import GenerationErrorCode
+from lectern.application.errors import GenerationApplicationError, GenerationErrorCode
 
 
 def test_start_generation_request_defaults_stream_version() -> None:
@@ -103,3 +103,18 @@ def test_error_code_enum_matches_spec_exactly() -> None:
 
     actual = {code.value for code in GenerationErrorCode}
     assert actual == expected
+
+
+def test_generation_application_error_exposes_contract_fields() -> None:
+    error = GenerationApplicationError(
+        code=GenerationErrorCode.INVALID_INPUT,
+        message="after_sequence_no must be >= 0",
+        details={"field": "after_sequence_no"},
+        context={"session_id": "session-123"},
+    )
+
+    assert error.code is GenerationErrorCode.INVALID_INPUT
+    assert error.message == "after_sequence_no must be >= 0"
+    assert error.details == {"field": "after_sequence_no"}
+    assert error.context == {"session_id": "session-123"}
+    assert str(error) == "invalid_input: after_sequence_no must be >= 0"
