@@ -84,6 +84,26 @@ _CARD_DATA = [
 CARD_EXAMPLES = _make_example_str(_CARD_DATA, "Examples:")
 
 
+_MAX_FOCUS_PROMPT_LEN = 180
+
+
+def _sanitize_focus_prompt(value: str) -> str:
+    """Normalize focus input for safe prompt interpolation."""
+    sanitized = str(value or "")
+    # Keep focus to a single line and strip fence-like/backtick control noise.
+    sanitized = sanitized.replace("\r", " ").replace("\n", " ").replace("`", "")
+    # Quote trimming avoids breaking surrounding prompt quotes.
+    sanitized = sanitized.replace('"', "'")
+    # Collapse whitespace and cap length to prevent prompt flooding.
+    sanitized = " ".join(sanitized.split())
+    for blocked in ("system:", "assistant:", "user:", "ignore previous instructions"):
+        sanitized = sanitized.replace(blocked, "")
+        sanitized = sanitized.replace(blocked.upper(), "")
+        sanitized = sanitized.replace(blocked.title(), "")
+    sanitized = " ".join(sanitized.split())
+    return sanitized[:_MAX_FOCUS_PROMPT_LEN].strip()
+
+
 @dataclass
 class PromptConfig:
     language: str = "en"
@@ -93,6 +113,11 @@ class PromptConfig:
 class PromptBuilder:
     def __init__(self, config: PromptConfig):
         self.cfg = config
+        self._safe_focus_prompt = (
+            _sanitize_focus_prompt(config.focus_prompt)
+            if config.focus_prompt
+            else ""
+        )
 
     @property
     def system(self) -> str:
@@ -100,9 +125,9 @@ class PromptBuilder:
         lang_instruction = f"Output language: {self.cfg.language}"
 
         focus_context = ""
-        if self.cfg.focus_prompt:
+        if self._safe_focus_prompt:
             focus_context = (
-                f'USER FOCUS: "{self.cfg.focus_prompt}"\n'
+                f'USER FOCUS: "{self._safe_focus_prompt}"\n'
                 "Instruction: Prioritize concepts related to this focus. "
                 "Adjust card styles (e.g. more definitions vs. comparisons) to match the user's intent.\n"
             )
@@ -124,9 +149,9 @@ class PromptBuilder:
     def concept_map(self) -> str:
         """Build the concept map prompt."""
         focus_context = ""
-        if self.cfg.focus_prompt:
+        if self._safe_focus_prompt:
             focus_context = (
-                f'- Focus: USER REQUESTED "{self.cfg.focus_prompt}". '
+                f'- Focus: USER REQUESTED "{self._safe_focus_prompt}". '
                 "Ensure concepts relevant to this focus are prioritized and detailed.\n"
             )
 
@@ -161,9 +186,9 @@ class PromptBuilder:
         """Build the card generation prompt."""
 
         focus_instruction = ""
-        if self.cfg.focus_prompt:
+        if self._safe_focus_prompt:
             focus_instruction = (
-                f'- User Focus: "{self.cfg.focus_prompt}". '
+                f'- User Focus: "{self._safe_focus_prompt}". '
                 "Ensure generated cards align with this goal (e.g. if asking for definitions, prefer Cloze/Basic defs)."
             )
 
@@ -209,9 +234,9 @@ class PromptBuilder:
     ) -> str:
         """Build the reflection prompt."""
         focus_context = ""
-        if self.cfg.focus_prompt:
+        if self._safe_focus_prompt:
             focus_context = (
-                f'- Check alignment with user focus: "{self.cfg.focus_prompt}"\n'
+                f'- Check alignment with user focus: "{self._safe_focus_prompt}"\n'
             )
 
         cards_context = ""

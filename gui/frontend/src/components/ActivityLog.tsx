@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect } from 'react';
+import { memo, useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Copy, Check, Loader2, Download } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -32,11 +32,22 @@ export const ActivityLog = memo(function ActivityLog({
     variant = 'generating',
 }: ActivityLogProps) {
     const logsEndRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 
     // Auto-scroll logs
     useEffect(() => {
-        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [logs.length]);
+        if (isAutoScrollEnabled) {
+            logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs.length, isAutoScrollEnabled]);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        // If we're within 50px of the bottom, keep auto-scroll enabled
+        const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 50;
+        setIsAutoScrollEnabled(isAtBottom);
+    };
 
     if (variant === 'done') {
         return (
@@ -66,7 +77,7 @@ export const ActivityLog = memo(function ActivityLog({
     }
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 p-4">
+        <div className="flex-1 flex flex-col min-h-0 p-4 relative">
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <Terminal className="w-3.5 h-3.5 text-text-muted" />
@@ -101,9 +112,13 @@ export const ActivityLog = memo(function ActivityLog({
                 </div>
             </div>
 
-            <div className="bg-background rounded-lg p-3 font-mono text-[11px] flex-1 overflow-y-auto border border-border min-h-0 scrollbar-thin scrollbar-thumb-border">
+            <div 
+                ref={containerRef}
+                onScroll={handleScroll}
+                className="bg-background rounded-lg p-3 font-mono text-[11px] flex-1 overflow-y-auto border border-border min-h-0 scrollbar-thin scrollbar-thumb-border"
+            >
                 {/* Status header */}
-                <div className="flex items-center justify-between mb-2 border-b border-border pb-2">
+                <div className="flex items-center justify-between mb-2 border-b border-border pb-2 sticky top-0 bg-background z-10">
                     <span className="flex items-center gap-1.5 text-primary/70">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                         <span className="font-bold text-[10px] tracking-wide">PROCESSING</span>
@@ -148,6 +163,21 @@ export const ActivityLog = memo(function ActivityLog({
                     <div ref={logsEndRef} />
                 </div>
             </div>
+            
+            {!isAutoScrollEnabled && logs.length > 0 && (
+                <div className="absolute bottom-6 right-6 z-20">
+                    <button 
+                        onClick={() => {
+                            setIsAutoScrollEnabled(true);
+                            logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="bg-primary text-background text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg hover:bg-primary/90 flex items-center gap-1.5"
+                    >
+                        <span className="w-1.5 h-1.5 rounded-full bg-background animate-pulse" />
+                        RESUME SCROLL
+                    </button>
+                </div>
+            )}
         </div>
     );
 });

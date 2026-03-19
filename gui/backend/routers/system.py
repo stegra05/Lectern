@@ -103,7 +103,18 @@ class ConfigNoChangeResponse(BaseModel):
     status: Literal["no_change"]
 
 
+class ConfigUpdateResponseBase(BaseModel):
+    pass
+
 ConfigUpdateResponse = Union[ConfigUpdatedResponse, ConfigNoChangeResponse]
+
+class SaveFileRequest(BaseModel):
+    content: str
+    suggested_filename: str
+
+class SaveFileResponse(BaseModel):
+    status: Literal["success", "cancelled"]
+    path: Optional[str] = None
 
 # --- Endpoints ---
 
@@ -395,3 +406,36 @@ async def update_config(cfg: ConfigUpdate):
         return result
 
     return {"status": "no_change"}
+
+@router.post("/save-file", response_model=SaveFileResponse)
+async def save_file(request: SaveFileRequest):
+    import webview
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Check if we're running in a webview context
+    if not webview.windows:
+        raise HTTPException(status_code=400, detail="Not running in a desktop window context")
+        
+    window = webview.windows[0]
+    
+    try:
+        # Open native save dialog
+        result = window.create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename=request.suggested_filename,
+            file_types=('Text Files (*.txt)', 'All Files (*.*)')
+        )
+        
+        if result and len(result) > 0:
+            file_path = result[0]
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(request.content)
+            return {"status": "success", "path": file_path}
+            
+        return {"status": "cancelled"}
+        
+    except Exception as e:
+        logger.error(f"Failed to save file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

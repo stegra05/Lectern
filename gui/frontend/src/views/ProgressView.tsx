@@ -20,6 +20,7 @@ import { useTrickleProgress } from '../hooks/useTrickleProgress';
 import { useTimeEstimate } from '../hooks/useTimeEstimate';
 import { useReviewOrchestrator } from '../hooks/useReviewOrchestrator';
 import { useLecternStore } from '../store';
+import { api } from '../api';
 import type { SyncPreview } from '../api';
 import {
     selectFilteredCards,
@@ -101,7 +102,7 @@ export function ProgressView() {
         progressData.total
     );
 
-    const handleExportLogs = useCallback(() => {
+    const handleExportLogs = useCallback(async () => {
         const text = logEntries
             .map(
                 (log) => {
@@ -111,15 +112,13 @@ export function ProgressView() {
             )
             .join('\n\n');
 
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `lectern-log-${sessionId || 'export'}.txt`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        const suggestedFilename = `lectern-log-${sessionId || 'export'}.txt`;
+        
+        try {
+            await api.saveFile(text, suggestedFilename);
+        } catch (err) {
+            console.error('Failed to export logs:', err);
+        }
     }, [logEntries, sessionId]);
 
     const handlePreviewSync = useCallback(async () => {

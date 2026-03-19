@@ -157,22 +157,13 @@ class SessionContext:
     @classmethod
     def from_generation_config(
         cls,
-        cfg: Any,
+        cfg: "GenerationConfig",
     ) -> "SessionContext":
         """Create context from legacy GenerationConfig.
 
         This factory method enables gradual migration from the existing
         GenerationConfig dataclass to SessionContext.
         """
-        required_fields = ("pdf_path", "deck_name", "model_name", "tags")
-        missing = [field for field in required_fields if not hasattr(cfg, field)]
-        if missing:
-            missing_text = ", ".join(missing)
-            raise TypeError(
-                "from_generation_config expects legacy lectern_service.GenerationConfig "
-                f"(missing: {missing_text})"
-            )
-
         config = SessionConfig(
             pdf_path=cfg.pdf_path,
             deck_name=cfg.deck_name,

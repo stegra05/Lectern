@@ -167,12 +167,9 @@ class LecternAIClient:
             ],
         )
 
-        # NOTE(ChatInit): Depending on SDK version, aio.chats.create() may return
-        # either a Chat object or an awaitable that resolves to one.
         self._chat: Any = self._client.aio.chats.create(
             model=self._model_name, config=self._generation_config
         )
-        self._pending_history_serialized: list[dict[str, Any]] | None = None
         self._thinking_supported: bool = _model_supports_thinking(self._model_name)
         self._warnings: list[str] = []
         self._last_parse_error: str = ""
@@ -311,7 +308,6 @@ class LecternAIClient:
 
     async def _send_with_thinking_fallback(self, message: Any, call_config: Any) -> Any:
         """Send a message; if thinking_level is rejected, retry without it."""
-        await self._ensure_chat()
         has_thinking = call_config.thinking_config is not None
         logger.debug(
             "[AI] send_message: model=%s, thinking=%s, config_keys=%s",
@@ -345,12 +341,6 @@ class LecternAIClient:
                     message=message, config=clean_config
                 )
             raise
-
-    async def _ensure_chat(self) -> None:
-        """Resolve coroutine-returning chat creation before chat usage."""
-        if inspect.isawaitable(self._chat):
-            self._chat = await self._chat
-            self._pending_history_serialized = None
 
     def set_slide_set_context(self, deck_name: str, slide_set_name: str) -> None:
         self._slide_set_context = {
@@ -760,23 +750,10 @@ class LecternAIClient:
             "parse_error": self._last_parse_error,
         }
 
-    def _safe_parse_json(
-        self,
-        text: str,
-        model_class: Type[BaseModel],
-    ) -> Dict[str, Any] | None:
-        """Backward-compatible helper used by tests; strict JSON only."""
-        mock_response = type("MockResponse", (), {"parsed": None, "text": text})()
-        return self._parse_structured_response(mock_response, model_class)
-
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""
         serialized = []
         try:
-            if inspect.isawaitable(self._chat):
-                if self._pending_history_serialized is not None:
-                    return self._pending_history_serialized
-                return []
             for item in self._chat.history:
                 serialized.append(item.model_dump(exclude_none=True))
         except Exception as e:
@@ -788,9 +765,6 @@ class LecternAIClient:
         """Restore chat history from a list of dicts."""
         try:
             parsed_history = [types.Content(**item) for item in history]
-            self._pending_history_serialized = [
-                item.model_dump(exclude_none=True) for item in parsed_history
-            ]
             self._chat = self._client.aio.chats.create(
                 model=self._model_name,
                 config=self._generation_config,

@@ -15,7 +15,7 @@ def _estimate_page_count_from_pdf_bytes(pdf_bytes: bytes) -> int:
     matches = re.findall(rb"/Type\s*/Page\b", pdf_bytes)
     if matches:
         return len(matches)
-    return max(1, int(len(pdf_bytes) / 80000))
+    return 1
 
 
 def extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:

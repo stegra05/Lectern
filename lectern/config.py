@@ -82,11 +82,6 @@ class ConfigManager:
             cls._instance = cls()
         return cls._instance
 
-    @classmethod
-    def _reset_instance(cls) -> None:
-        """Reset the singleton instance. Only for testing."""
-        cls._instance = None
-
     def get(self, key: str, default: Any = None) -> Any:
         """Get config value with priority: Env Var > User Config > Default.
 

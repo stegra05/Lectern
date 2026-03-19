@@ -142,12 +142,12 @@ def isolated_config() -> Generator[None, None, None]:
     from lectern.config import ConfigManager
 
     # Reset before test
-    ConfigManager._reset_instance()
+    ConfigManager._instance = None
 
     yield
 
     # Reset after test
-    ConfigManager._reset_instance()
+    ConfigManager._instance = None
 
 
 @pytest.fixture

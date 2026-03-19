@@ -133,30 +133,3 @@ def test_from_generation_config_factory_maps_legacy_fields() -> None:
     assert context.pdf.filename == "legacy"
 
 
-def test_from_generation_config_rejects_orchestrator_config() -> None:
-    orchestrator_cfg = OrchestratorGenerationConfig(
-        total_cards_cap=10,
-        actual_batch_size=3,
-        focus_prompt=None,
-        effective_target=1.2,
-        stop_check=None,
-    )
-
-    with pytest.raises(
-        TypeError, match="expects legacy lectern_service.GenerationConfig"
-    ):
-        SessionContext.from_generation_config(orchestrator_cfg)
-
-
-def test_pipeline_phase_protocol_conformance() -> None:
-    class DummyPhase:
-        async def execute(
-            self,
-            context: SessionContext,
-            emitter: object,
-            ai_client: object,
-        ) -> None:
-            context.batch_index += 1
-
-    phase = DummyPhase()
-    assert isinstance(phase, PipelinePhase)

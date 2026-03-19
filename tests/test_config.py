@@ -20,7 +20,7 @@ from lectern.config import ConfigManager, save_user_config
 def reset_config_and_env(tmp_path: Path):
     """Ensure ConfigManager singleton is reset and env vars are cleared before/after each test."""
     # Reset singleton before test
-    ConfigManager._reset_instance()
+    ConfigManager._instance = None
 
     # Save and clear relevant env vars
     env_vars_to_clear = [
@@ -52,7 +52,7 @@ def reset_config_and_env(tmp_path: Path):
             del os.environ[var]
 
     # Reset singleton after test
-    ConfigManager._reset_instance()
+    ConfigManager._instance = None
 
 
 @pytest.fixture
@@ -76,7 +76,7 @@ class TestConfigManagerSingleton:
     def test_reset_instance_allows_new_instance(self) -> None:
         """Reset allows creation of a new instance."""
         instance1 = ConfigManager.instance()
-        ConfigManager._reset_instance()
+        ConfigManager._instance = None
         instance2 = ConfigManager.instance()
 
         # After reset, should be a different object
@@ -105,7 +105,7 @@ class TestConfigPriority:
     def test_env_var_overrides_default(self) -> None:
         """Environment variable takes precedence over default."""
         with patch.dict(os.environ, {"DEFAULT_GEMINI_MODEL": "custom-model"}):
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
             config = ConfigManager.instance()
 
             assert config.get("gemini_model") == "custom-model"
@@ -117,7 +117,7 @@ class TestConfigPriority:
         config_path.write_text(json.dumps({"anki_url": "http://custom:8765"}))
 
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
             config = ConfigManager.instance()
 
             assert config.get("anki_url") == "http://custom:8765"
@@ -130,7 +130,7 @@ class TestConfigPriority:
 
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
             with patch.dict(os.environ, {"ANKI_CONNECT_URL": "http://env:8765"}):
-                ConfigManager._reset_instance()
+                ConfigManager._instance = None
                 config = ConfigManager.instance()
 
                 assert config.get("anki_url") == "http://env:8765"
@@ -189,7 +189,7 @@ class TestConfigGetSet:
         }
 
         for config_key, env_key in env_mappings.items():
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
             with patch.dict(os.environ, {env_key: f"test_{config_key}"}):
                 config = ConfigManager.instance()
                 assert config.get(config_key) == f"test_{config_key}"
@@ -201,7 +201,7 @@ class TestConfigPersistence:
     def test_set_persists_to_file(self, temp_config_dir: Path) -> None:
         """Set operation writes to JSON file."""
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
             config = ConfigManager.instance()
 
             config.set("anki_url", "http://persisted:8765")
@@ -225,7 +225,7 @@ class TestConfigPersistence:
         )
 
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
             config = ConfigManager.instance()
 
             assert config.get("anki_url") == "http://preexisting:8765"
@@ -237,7 +237,7 @@ class TestConfigPersistence:
         config_path.write_text("{ invalid json }")
 
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
             config = ConfigManager.instance()
 
             # Should fall back to empty config
@@ -246,7 +246,7 @@ class TestConfigPersistence:
 
     def test_save_handles_write_error(self, caplog) -> None:
         """Save error is logged but doesn't raise."""
-        ConfigManager._reset_instance()
+        ConfigManager._instance = None
         config = ConfigManager.instance()
 
         with patch("builtins.open", side_effect=PermissionError("Write denied")):
@@ -261,7 +261,7 @@ class TestConfigPersistence:
         # Don't create the directory - ConfigManager should create it
 
         with patch("lectern.config.get_app_data_dir", return_value=config_dir):
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
             config = ConfigManager.instance()
 
             config.set("test", "value")
@@ -275,7 +275,7 @@ class TestDynamicAttributeAccess:
 
     def test_module_level_attribute_access(self) -> None:
         """Module-level attributes return live config values."""
-        ConfigManager._reset_instance()
+        ConfigManager._instance = None
         ConfigManager.instance().set("gemini_model", "dynamic-model")
 
         # Access via module attribute
@@ -285,7 +285,7 @@ class TestDynamicAttributeAccess:
 
     def test_module_attribute_for_anki_url(self) -> None:
         """ANKI_CONNECT_URL is accessible via module attribute."""
-        ConfigManager._reset_instance()
+        ConfigManager._instance = None
         ConfigManager.instance().set("anki_url", "http://module:8765")
 
         import lectern.config as config_module
@@ -306,7 +306,7 @@ class TestSaveUserConfigHelper:
     def test_save_user_config_delegates_to_manager(self, temp_config_dir: Path) -> None:
         """save_user_config updates ConfigManager for each key."""
         with patch("lectern.config.get_app_data_dir", return_value=temp_config_dir):
-            ConfigManager._reset_instance()
+            ConfigManager._instance = None
 
             save_user_config(
                 {"anki_url": "http://helper:8765", "basic_model": "HelperBasic"}
