@@ -59,6 +59,8 @@ class _FakeProvider:
                     "fields": {"Front": "What is TDD?", "Back": "Test-first workflow"},
                     "slide_number": 1,
                     "slide_topic": "Testing",
+                    "rationale": "Definition is explicitly stated on slide 1.",
+                    "source_excerpt": "Slide 1 defines TDD as a test-first workflow.",
                 }
             ],
             "done": True,

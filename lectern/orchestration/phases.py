@@ -453,6 +453,7 @@ class GenerationPhase(PipelinePhase):
             focus_prompt=context.config.focus_prompt,
             effective_target=setup.effective_target,
             stop_check=context.config.stop_check,
+            explicit_target_requested=context.config.target_card_count is not None,
             feedback_summary=await asyncio.to_thread(
                 HistoryManager().get_feedback_summary
             ),

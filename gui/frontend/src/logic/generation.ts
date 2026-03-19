@@ -11,6 +11,7 @@ import {
     validateCardsReplacedData,
     validateControlSnapshotData,
     validateGenerationDoneData,
+    validateGenerationStoppedDetails,
     validateStepEndData,
 } from '../schemas/sse';
 
@@ -210,6 +211,37 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'warning') {
+        const data =
+            event.data && typeof event.data === 'object'
+                ? (event.data as Record<string, unknown>)
+                : undefined;
+        const reason = typeof data?.reason === 'string' ? data.reason : '';
+        const details = data ? validateGenerationStoppedDetails(data) : null;
+
+        if (reason === 'grounding_non_progress_duplicates') {
+            const duplicateDrops = details?.last_batch_duplicate_drop_count ?? 0;
+            useLecternStore
+                .getState()
+                .addToast(
+                    'warning',
+                    `Generation stopped: duplicate saturation (${duplicateDrops} duplicate drops).`,
+                    8000
+                );
+            return;
+        }
+
+        if (reason === 'grounding_non_progress_gate_failures') {
+            const gateFailureDrops = details?.last_batch_gate_failure_drop_count ?? 0;
+            useLecternStore
+                .getState()
+                .addToast(
+                    'warning',
+                    `Generation stopped: grounding gate failures (${gateFailureDrops} failures).`,
+                    8000
+                );
+            return;
+        }
+
         const msg = event.message || 'Warning';
         useLecternStore.getState().addToast('warning', msg, 8000);
     }

@@ -117,20 +117,43 @@ class SSEEmitter:
             )
 
         elif isinstance(event, GenerationBatchCompletedEvent):
+            data = {
+                "batch": event.batch_index,
+                "added": event.cards_added,
+                "model_done": event.model_done,
+            }
+            if event.generated_candidates_count is not None:
+                data["generated_candidates_count"] = event.generated_candidates_count
+            if event.grounding_repair_attempted_count is not None:
+                data["grounding_repair_attempted_count"] = (
+                    event.grounding_repair_attempted_count
+                )
+            if event.grounding_promoted_count is not None:
+                data["grounding_promoted_count"] = event.grounding_promoted_count
+            if event.grounding_dropped_count is not None:
+                data["grounding_dropped_count"] = event.grounding_dropped_count
+            if event.grounding_drop_reasons is not None:
+                data["grounding_drop_reasons"] = event.grounding_drop_reasons
             return ServiceEvent(
                 type="info",
                 message=f"Batch {event.batch_index} summary: +{event.cards_added} cards",
-                data={
-                    "batch": event.batch_index,
-                    "added": event.cards_added,
-                    "model_done": event.model_done,
-                },
+                data=data,
             )
 
         elif isinstance(event, GenerationStoppedEvent):
+            is_grounding_non_progress = event.reason.startswith("grounding_non_progress")
+            warning_reasons = {"user_cancel"}
             return ServiceEvent(
-                type="warning" if event.reason == "user_cancel" else "info",
+                type=(
+                    "warning"
+                    if event.reason in warning_reasons or is_grounding_non_progress
+                    else "info"
+                ),
                 message=f"Generation stopped: {event.reason}",
+                data={
+                    "reason": event.reason,
+                    "details": event.details,
+                },
             )
 
         elif isinstance(event, CardsReplacedEvent):

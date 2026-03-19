@@ -131,6 +131,11 @@ class GenerationBatchCompletedEvent(DomainEvent):
     )
     cards_added: int = 0
     model_done: bool = False
+    generated_candidates_count: Optional[int] = None
+    grounding_repair_attempted_count: Optional[int] = None
+    grounding_promoted_count: Optional[int] = None
+    grounding_dropped_count: Optional[int] = None
+    grounding_drop_reasons: Optional[Dict[str, int]] = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +146,7 @@ class GenerationStoppedEvent(DomainEvent):
         default=DomainEventType.GENERATION_STOPPED, init=False
     )
     reason: str = ""  # "user_cancel", "no_new_cards"
+    details: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from lectern.card_quality import CardQualityEvaluator, _get_card_front, _strip_markup
 from lectern.coverage import (
@@ -59,6 +59,47 @@ def _annotate_card_quality(
     annotated["quality_score"] = round(score, 1)
     annotated["quality_flags"] = flags
     return annotated
+
+
+@dataclass(frozen=True)
+class RepairResult:
+    input_card_key: str
+    status: Literal["ok", "invalid_payload", "missing_output"]
+    card: CardData | None = None
+
+
+_GROUNDING_PROVENANCE_FLAGS = (
+    "missing_source_excerpt",
+    "missing_rationale",
+    "missing_source_pages",
+)
+
+
+def evaluate_grounding_gate(
+    card: CardData, *, min_quality: float
+) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    flags = set(card.get("quality_flags") or [])
+    for provenance_flag in _GROUNDING_PROVENANCE_FLAGS:
+        if provenance_flag in flags:
+            reasons.append(provenance_flag)
+    if float(card.get("quality_score") or 0.0) < min_quality:
+        reasons.append("below_quality_threshold")
+    return not reasons, reasons
+
+
+def partition_by_gate(
+    cards: list[CardData], *, min_quality: float
+) -> tuple[list[CardData], list[CardData]]:
+    promotable: list[CardData] = []
+    needs_repair: list[CardData] = []
+    for card in cards:
+        passes, _ = evaluate_grounding_gate(card, min_quality=min_quality)
+        if passes:
+            promotable.append(card)
+        else:
+            needs_repair.append(card)
+    return promotable, needs_repair
 
 
 def _coverage_is_sufficient(coverage_data: CoverageData) -> bool:

@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadSession, recoverSessionOnRefresh, processGenerationEvent } from '../logic/generation';
 import { api } from '../api';
+import { validateGenerationStoppedDetails } from '../schemas/sse';
 import type { Step } from '../store-types';
 import type { Phase } from '../components/PhaseIndicator';
 import type { LecternStore, StoreState } from '../store-types';
 import { createBatchActions } from '../slices/reviewSlice';
+
+const storeSpies = vi.hoisted(() => ({
+    incrementSetupStep: vi.fn(),
+    addToast: vi.fn(),
+    cards: [] as unknown[],
+}));
 
 // Mock dependencies
 vi.mock('../api', () => ({
@@ -16,11 +23,7 @@ vi.mock('../api', () => ({
 
 vi.mock('../store', () => ({
     useLecternStore: {
-        getState: vi.fn(() => ({
-            incrementSetupStep: vi.fn(),
-            addToast: vi.fn(),
-            cards: [],
-        })),
+        getState: vi.fn(() => storeSpies),
     },
 }));
 
@@ -48,6 +51,8 @@ describe('generation logic', () => {
     beforeEach(() => {
         setMock = vi.fn() as unknown as StoreSetter;
         vi.clearAllMocks();
+        storeSpies.incrementSetupStep.mockClear();
+        storeSpies.addToast.mockClear();
         localStorage.clear();
     });
 
@@ -302,6 +307,97 @@ describe('generation logic', () => {
             );
 
             expect(removeItemSpy).not.toHaveBeenCalledWith('lectern_active_session_id');
+        });
+    });
+
+    describe('processGenerationEvent warning', () => {
+        it('shows duplicate saturation warning for grounding_non_progress_duplicates', () => {
+            const setFn = vi.fn();
+
+            processGenerationEvent(
+                {
+                    type: 'warning',
+                    message: 'Generation stopped: grounding_non_progress_duplicates',
+                    data: {
+                        reason: 'grounding_non_progress_duplicates',
+                        last_batch_duplicate_drop_count: 3,
+                    },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            expect(storeSpies.addToast).toHaveBeenCalledWith(
+                'warning',
+                'Generation stopped: duplicate saturation (3 duplicate drops).',
+                8000
+            );
+        });
+
+        it('shows gate failures warning for grounding_non_progress_gate_failures', () => {
+            const setFn = vi.fn();
+
+            processGenerationEvent(
+                {
+                    type: 'warning',
+                    message: 'Generation stopped: grounding_non_progress_gate_failures',
+                    data: {
+                        reason: 'grounding_non_progress_gate_failures',
+                        last_batch_gate_failure_drop_count: 5,
+                    },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            expect(storeSpies.addToast).toHaveBeenCalledWith(
+                'warning',
+                'Generation stopped: grounding gate failures (5 failures).',
+                8000
+            );
+        });
+
+        it('falls back to legacy warning message when reason is absent', () => {
+            const setFn = vi.fn();
+
+            processGenerationEvent(
+                {
+                    type: 'warning',
+                    message: 'Legacy warning payload',
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            expect(storeSpies.addToast).toHaveBeenCalledWith('warning', 'Legacy warning payload', 8000);
+        });
+    });
+
+    describe('GenerationStoppedDetailsSchema parser', () => {
+        it('parses generation stopped details payload with optional counts', () => {
+            const parsed = validateGenerationStoppedDetails({
+                consecutive_zero_promoted_batches: 2,
+                last_batch_generated_candidates_count: 8,
+                last_batch_grounding_promoted_count: 0,
+                last_batch_grounding_dropped_count: 8,
+                last_batch_duplicate_drop_count: 3,
+                last_batch_gate_failure_drop_count: 5,
+            });
+
+            expect(parsed?.consecutive_zero_promoted_batches).toBe(2);
+            expect(parsed?.last_batch_generated_candidates_count).toBe(8);
+            expect(parsed?.last_batch_grounding_promoted_count).toBe(0);
+            expect(parsed?.last_batch_grounding_dropped_count).toBe(8);
+            expect(parsed?.last_batch_duplicate_drop_count).toBe(3);
+            expect(parsed?.last_batch_gate_failure_drop_count).toBe(5);
+        });
+
+        it('returns null when generation stopped details have invalid types', () => {
+            const parsed = validateGenerationStoppedDetails({
+                consecutive_zero_promoted_batches: 'two',
+            });
+
+            expect(parsed).toBeNull();
         });
     });
 

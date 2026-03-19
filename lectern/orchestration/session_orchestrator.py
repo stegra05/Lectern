@@ -12,10 +12,11 @@ import asyncio
 import json
 import time
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Optional
 
-from lectern import config
+from lectern import config as app_config
 from lectern.ai_pacing import PacingState
 from lectern.cost_estimator import derive_effective_target, estimate_card_cap
 from lectern.coverage import (
@@ -54,6 +55,7 @@ from lectern.generation_loop import (
     _rebuild_seen_keys,
     _select_best_reflection_cards,
     collect_card_fronts,
+    evaluate_grounding_gate,
     get_card_key,
 )
 from lectern.utils.error_handling import capture_exception
@@ -84,6 +86,7 @@ class GenerationConfig:
     focus_prompt: Optional[str]
     effective_target: float
     stop_check: Optional[Callable[[], bool]]
+    explicit_target_requested: bool = False
     feedback_summary: dict[str, Any] | None = None
     recent_card_window: int = 100
     examples: str = ""
@@ -228,7 +231,7 @@ class SessionOrchestrator:
             estimated_text_chars=estimated_text_chars,
             target_card_count=setup_config.target_card_count,
             density_target=None,
-            script_base_chars=config.SCRIPT_BASE_CHARS,
+            script_base_chars=app_config.SCRIPT_BASE_CHARS,
             force_mode=document_type,
         )
 
@@ -238,7 +241,7 @@ class SessionOrchestrator:
             image_count=setup_config.image_count,
             density_target=None,
             target_card_count=setup_config.target_card_count,
-            script_base_chars=config.SCRIPT_BASE_CHARS,
+            script_base_chars=app_config.SCRIPT_BASE_CHARS,
             force_mode=document_type,
         )
 
@@ -345,7 +348,7 @@ class SessionOrchestrator:
         Yields immutable DomainEvent objects. All state mutations
         happen internally.
         """
-        targeted_retry_budget = 1
+        zero_promoted_batches = 0
 
         while len(self.state.all_cards) < config.total_cards_cap:
             self.state.batch_index += 1
@@ -418,26 +421,280 @@ class SessionOrchestrator:
                         message=f"Generation response could not be fully parsed; treating batch as exhausted. {parse_error}",
                     )
 
-                # State Mutation: Add cards with UUID injection
-                added_count = 0
+                generated_candidates = [
+                    card for card in (new_cards if isinstance(new_cards, list) else []) if isinstance(card, dict)
+                ]
+                generated_candidates_count = len(generated_candidates)
+                grounding_repair_attempted_count = 0
+                grounding_drop_reasons: Counter[str] = Counter()
+                duplicate_drop_count = 0
+                gate_failure_drop_count = 0
+
                 high_priority_ids = self._high_priority_ids_from_coverage(
                     self.state.last_coverage_data
                 )
-                for card in new_cards:
+
+                deduped_candidates: list[CardData] = []
+                dedupe_seen_keys: set[str] = set()
+                for card in generated_candidates:
                     annotated_card = _annotate_card_quality(
                         card,
                         high_priority_ids=high_priority_ids,
                     )
                     key = get_card_key(annotated_card)
-                    if self._add_card(annotated_card, key):
-                        # INJECT UUID before yielding (for React key stability)
-                        self._inject_uuid(annotated_card)
-                        added_count += 1
-                        yield CardGeneratedEvent(
+                    if not key or key in self.state.seen_keys or key in dedupe_seen_keys:
+                        grounding_drop_reasons["duplicate"] += 1
+                        duplicate_drop_count += 1
+                        yield WarningEmittedEvent(
                             batch_index=batch_index,
-                            card=annotated_card,
-                            is_refined=False,
+                            message="Dropped duplicate candidate card during grounding gate.",
+                            details={
+                                "reason": "duplicate",
+                                "card_key": key,
+                            },
                         )
+                        continue
+                    dedupe_seen_keys.add(key)
+                    deduped_candidates.append(annotated_card)
+
+                promotable_cards: list[CardData] = []
+                weak_cards: list[tuple[CardData, list[str]]] = []
+                promoted_keys: set[str] = set()
+
+                for candidate in deduped_candidates:
+                    candidate_key = get_card_key(candidate)
+                    try:
+                        passes_gate, reasons = evaluate_grounding_gate(
+                            candidate,
+                            min_quality=app_config.GROUNDING_GATE_MIN_QUALITY,
+                        )
+                    except Exception as gate_error:
+                        gate_failure_drop_count += 1
+                        grounding_drop_reasons["grounding_gate_error"] += 1
+                        yield WarningEmittedEvent(
+                            batch_index=batch_index,
+                            message="Grounding gate evaluation failed; dropping candidate.",
+                            details={
+                                "reason": "grounding_gate_error",
+                                "card_key": candidate_key,
+                                "error": str(gate_error),
+                            },
+                        )
+                        continue
+
+                    if passes_gate:
+                        promotable_cards.append(candidate)
+                        promoted_keys.add(candidate_key)
+                    else:
+                        weak_cards.append((candidate, reasons))
+
+                retries_allowed = max(0, int(app_config.GROUNDING_RETRY_MAX_ATTEMPTS))
+                repair_queue = list(weak_cards)
+                for attempt_idx in range(retries_allowed):
+                    if not repair_queue:
+                        break
+                    strict_attempt = attempt_idx == 1
+                    next_repair_queue: list[tuple[CardData, list[str]]] = []
+
+                    for weak_card, prior_reasons in repair_queue:
+                        grounding_repair_attempted_count += 1
+                        weak_key = get_card_key(weak_card)
+                        repair_instruction = (
+                            "\nSTRICT GROUNDING REPAIR MODE:\n"
+                            "- Keep all facts directly grounded in source evidence.\n"
+                            "- You MUST provide source_pages, rationale, and source_excerpt.\n"
+                            "- If grounding cannot be improved, return the original card unchanged.\n"
+                        ) if strict_attempt else ""
+                        attempt_coverage_gaps = (
+                            f"{build_reflection_gap_text(self.state.last_coverage_data)}\n"
+                            "Grounding repair task for one weak candidate.\n"
+                            f"Current gate failures: {', '.join(prior_reasons) if prior_reasons else 'unknown'}.\n"
+                            f"{repair_instruction}"
+                        )
+
+                        try:
+                            repair_out = await ai_client.reflect_cards(
+                                limit=1,
+                                all_card_fronts=collect_card_fronts(
+                                    self.state.all_cards
+                                )[-200:],
+                                cards_to_refine_json=json.dumps(
+                                    [weak_card], ensure_ascii=False
+                                ),
+                                coverage_gaps=attempt_coverage_gaps,
+                            )
+                        except Exception as repair_error:
+                            if attempt_idx < retries_allowed - 1:
+                                next_repair_queue.append((weak_card, ["repair_call_failed"]))
+                                continue
+                            gate_failure_drop_count += 1
+                            grounding_drop_reasons["repair_call_failed"] += 1
+                            yield WarningEmittedEvent(
+                                batch_index=batch_index,
+                                message="Dropped weak card after grounding repair call failure.",
+                                details={
+                                    "reason": "repair_call_failed",
+                                    "card_key": weak_key,
+                                    "attempt": attempt_idx + 1,
+                                    "error": str(repair_error),
+                                },
+                            )
+                            continue
+
+                        for w in ai_client.drain_warnings():
+                            yield WarningEmittedEvent(
+                                batch_index=batch_index,
+                                message=w,
+                            )
+
+                        repaired_cards = repair_out.get("cards", [])
+                        repaired_card = (
+                            repaired_cards[0]
+                            if isinstance(repaired_cards, list)
+                            and repaired_cards
+                            and isinstance(repaired_cards[0], dict)
+                            else None
+                        )
+                        if repaired_card is None:
+                            if attempt_idx < retries_allowed - 1:
+                                next_repair_queue.append(
+                                    (weak_card, ["invalid_repaired_payload"])
+                                )
+                                continue
+                            gate_failure_drop_count += 1
+                            grounding_drop_reasons["invalid_repaired_payload"] += 1
+                            yield WarningEmittedEvent(
+                                batch_index=batch_index,
+                                message="Dropped weak card after invalid repaired payload.",
+                                details={
+                                    "reason": "invalid_repaired_payload",
+                                    "card_key": weak_key,
+                                    "attempt": attempt_idx + 1,
+                                },
+                            )
+                            continue
+
+                        repaired_annotated = _annotate_card_quality(
+                            repaired_card,
+                            high_priority_ids=high_priority_ids,
+                        )
+                        repaired_key = get_card_key(repaired_annotated)
+                        if (
+                            not repaired_key
+                            or repaired_key in self.state.seen_keys
+                            or repaired_key in promoted_keys
+                        ):
+                            if attempt_idx < retries_allowed - 1:
+                                next_repair_queue.append((weak_card, ["duplicate"]))
+                                continue
+                            duplicate_drop_count += 1
+                            grounding_drop_reasons["duplicate"] += 1
+                            yield WarningEmittedEvent(
+                                batch_index=batch_index,
+                                message="Dropped repaired candidate as duplicate.",
+                                details={
+                                    "reason": "duplicate",
+                                    "card_key": repaired_key,
+                                    "attempt": attempt_idx + 1,
+                                },
+                            )
+                            continue
+
+                        try:
+                            repaired_passes, repaired_reasons = evaluate_grounding_gate(
+                                repaired_annotated,
+                                min_quality=app_config.GROUNDING_GATE_MIN_QUALITY,
+                            )
+                        except Exception as gate_error:
+                            if attempt_idx < retries_allowed - 1:
+                                next_repair_queue.append(
+                                    (repaired_annotated, ["grounding_gate_error"])
+                                )
+                                continue
+                            gate_failure_drop_count += 1
+                            grounding_drop_reasons["grounding_gate_error"] += 1
+                            yield WarningEmittedEvent(
+                                batch_index=batch_index,
+                                message="Dropped repaired candidate after gate evaluation error.",
+                                details={
+                                    "reason": "grounding_gate_error",
+                                    "card_key": repaired_key,
+                                    "attempt": attempt_idx + 1,
+                                    "error": str(gate_error),
+                                },
+                            )
+                            continue
+
+                        if repaired_passes:
+                            promotable_cards.append(repaired_annotated)
+                            promoted_keys.add(repaired_key)
+                            continue
+
+                        if attempt_idx < retries_allowed - 1:
+                            next_repair_queue.append((repaired_annotated, repaired_reasons))
+                            continue
+
+                        gate_failure_drop_count += 1
+                        for reason in repaired_reasons or ["grounding_gate_failed"]:
+                            grounding_drop_reasons[reason] += 1
+                        yield WarningEmittedEvent(
+                            batch_index=batch_index,
+                            message="Dropped weak card after failed grounding repairs.",
+                            details={
+                                "reason": "grounding_gate_failed",
+                                "card_key": repaired_key,
+                                "attempt": attempt_idx + 1,
+                                "gate_fail_reasons": repaired_reasons,
+                            },
+                        )
+
+                    repair_queue = next_repair_queue
+
+                if retries_allowed == 0:
+                    for weak_card, reasons in weak_cards:
+                        gate_failure_drop_count += 1
+                        for reason in reasons or ["grounding_gate_failed"]:
+                            grounding_drop_reasons[reason] += 1
+                        yield WarningEmittedEvent(
+                            batch_index=batch_index,
+                            message="Dropped weak card without repair attempts.",
+                            details={
+                                "reason": "grounding_gate_failed",
+                                "card_key": get_card_key(weak_card),
+                                "gate_fail_reasons": reasons,
+                            },
+                        )
+
+                for weak_card, reasons in repair_queue:
+                    gate_failure_drop_count += 1
+                    for reason in reasons or ["grounding_gate_failed"]:
+                        grounding_drop_reasons[reason] += 1
+                    yield WarningEmittedEvent(
+                        batch_index=batch_index,
+                        message="Dropped weak card after exhausting grounding repair attempts.",
+                        details={
+                            "reason": "grounding_gate_failed",
+                            "card_key": get_card_key(weak_card),
+                            "gate_fail_reasons": reasons,
+                        },
+                    )
+
+                # State Mutation: Add promoted cards with UUID injection
+                added_count = 0
+                for promoted_card in promotable_cards:
+                    promoted_key = get_card_key(promoted_card)
+                    if not self._add_card(promoted_card, promoted_key):
+                        continue
+                    self._inject_uuid(promoted_card)
+                    added_count += 1
+                    yield CardGeneratedEvent(
+                        batch_index=batch_index,
+                        card=promoted_card,
+                        is_refined=False,
+                    )
+
+                grounding_promoted_count = added_count
+                grounding_dropped_count = generated_candidates_count - grounding_promoted_count
 
                 # Update coverage after adding cards
                 self._compute_coverage()
@@ -455,10 +712,19 @@ class SessionOrchestrator:
                     batch_index=batch_index,
                     cards_added=added_count,
                     model_done=model_done,
+                    generated_candidates_count=generated_candidates_count,
+                    grounding_repair_attempted_count=grounding_repair_attempted_count,
+                    grounding_promoted_count=grounding_promoted_count,
+                    grounding_dropped_count=grounding_dropped_count,
+                    grounding_drop_reasons=dict(grounding_drop_reasons),
                 )
 
                 # Check if done
-                if model_done and self._is_coverage_sufficient():
+                if (
+                    model_done
+                    and self._is_coverage_sufficient()
+                    and not config.explicit_target_requested
+                ):
                     yield CoverageThresholdMetEvent(
                         batch_index=batch_index,
                         coverage_data=coverage,
@@ -466,31 +732,32 @@ class SessionOrchestrator:
                     )
                     break
 
-                # Handle no new cards
+                # Handle non-progress batches
                 if added_count == 0:
-                    if new_cards:
-                        yield WarningEmittedEvent(
-                            batch_index=batch_index,
-                            message="Batch returned cards, but all were duplicates.",
-                        )
+                    zero_promoted_batches += 1
+                else:
+                    zero_promoted_batches = 0
 
-                    has_coverage_gaps = bool(
-                        self.state.last_coverage_data.get("missing_high_priority")
-                        or self.state.last_coverage_data.get("uncovered_concepts")
-                        or self.state.last_coverage_data.get("uncovered_pages")
+                if (
+                    zero_promoted_batches
+                    >= app_config.GROUNDING_NON_PROGRESS_MAX_BATCHES
+                ):
+                    stop_reason = (
+                        "grounding_non_progress_duplicates"
+                        if duplicate_drop_count > gate_failure_drop_count
+                        else "grounding_non_progress_gate_failures"
                     )
-
-                    if has_coverage_gaps and targeted_retry_budget > 0:
-                        targeted_retry_budget -= 1
-                        yield WarningEmittedEvent(
-                            batch_index=batch_index,
-                            message="Retrying generation with an explicit coverage-gap prompt before stopping.",
-                        )
-                        continue
-
                     yield GenerationStoppedEvent(
                         batch_index=batch_index,
-                        reason="no_new_cards",
+                        reason=stop_reason,
+                        details={
+                            "consecutive_zero_promoted_batches": zero_promoted_batches,
+                            "last_batch_generated_candidates_count": generated_candidates_count,
+                            "last_batch_grounding_promoted_count": grounding_promoted_count,
+                            "last_batch_grounding_dropped_count": grounding_dropped_count,
+                            "last_batch_duplicate_drop_count": duplicate_drop_count,
+                            "last_batch_gate_failure_drop_count": gate_failure_drop_count,
+                        },
                     )
                     break
 
@@ -578,22 +845,70 @@ class SessionOrchestrator:
                     total_pages=len(self.state.pages),
                 )
 
+                min_quality = app_config.GROUNDING_GATE_MIN_QUALITY
+                high_priority_ids = self._high_priority_ids_from_coverage(
+                    self.state.last_coverage_data
+                )
+                accepted_cards: list[CardData] = []
+                for idx, original_card in enumerate(cards_to_refine):
+                    replacement = (
+                        selected_cards[idx] if idx < len(selected_cards) else original_card
+                    )
+                    annotated_replacement = _annotate_card_quality(
+                        replacement, high_priority_ids=high_priority_ids
+                    )
+                    try:
+                        replacement_passes_gate, replacement_reasons = (
+                            evaluate_grounding_gate(
+                                annotated_replacement, min_quality=min_quality
+                            )
+                        )
+                    except Exception as gate_error:
+                        replacement_passes_gate = False
+                        replacement_reasons = ["grounding_gate_error"]
+                        yield WarningEmittedEvent(
+                            batch_index=self.state.reflection_round,
+                            message="Reflection replacement gate evaluation failed; keeping original card.",
+                            details={
+                                "reason": "grounding_gate_error",
+                                "card_key": get_card_key(annotated_replacement),
+                                "error": str(gate_error),
+                            },
+                        )
+                    if replacement_passes_gate:
+                        accepted_cards.append(annotated_replacement)
+                    else:
+                        accepted_original = _annotate_card_quality(
+                            original_card, high_priority_ids=high_priority_ids
+                        )
+                        accepted_cards.append(accepted_original)
+                        if replacement is not original_card:
+                            yield WarningEmittedEvent(
+                                batch_index=self.state.reflection_round,
+                                message="Reflection replacement failed grounding gate; keeping original card.",
+                                details={
+                                    "reason": "reflection_replacement_gate_failed",
+                                    "card_key": get_card_key(annotated_replacement),
+                                    "gate_fail_reasons": replacement_reasons,
+                                },
+                            )
+
                 original_keys = [get_card_key(card) for card in cards_to_refine]
-                selected_keys = [get_card_key(card) for card in selected_cards]
+                selected_keys = [get_card_key(card) for card in accepted_cards]
                 did_change = selected_keys != original_keys or any(
                     dict(selected) != dict(original)
-                    for selected, original in zip(selected_cards, cards_to_refine)
+                    for selected, original in zip(accepted_cards, cards_to_refine)
                 )
 
                 # State Mutation: Replace cards
                 self.state.all_cards = (
-                    selected_cards + self.state.all_cards[batch_size:]
+                    accepted_cards + self.state.all_cards[batch_size:]
                 )
                 self.state.seen_keys = _rebuild_seen_keys(self.state.all_cards)
 
                 # Inject UUIDs and emit
                 if did_change:
-                    for card in selected_cards:
+                    for card in accepted_cards:
                         self._inject_uuid(card)
                         yield CardGeneratedEvent(
                             batch_index=self.state.reflection_round,
