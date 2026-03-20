@@ -8,6 +8,8 @@ This is the ONLY layer that knows about:
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from typing import Any, Literal
 from typing import Generator
 
 from lectern.events.domain import (
@@ -27,9 +29,34 @@ from lectern.events.domain import (
     ReflectionStoppedEvent,
     WarningEmittedEvent,
 )
-from lectern.events.service_events import EventType, ServiceEvent
-
 from gui.backend.streaming import ndjson_event
+
+EventType = Literal[
+    "status",
+    "info",
+    "warning",
+    "error",
+    "step_start",
+    "step_end",
+    "progress_start",
+    "progress_update",
+    "card",
+    "note",
+    "done",
+    "cancelled",
+    "note_created",
+    "note_updated",
+    "note_recreated",
+    "cards_replaced",
+    "control_snapshot",
+]
+
+
+@dataclass(frozen=True)
+class ServiceEvent:
+    type: EventType
+    message: str
+    data: dict[str, Any] = field(default_factory=dict)
 
 _DOMAIN_TO_SERVICE_EVENT_TYPE: dict[DomainEventType, EventType] = {
     DomainEventType.GENERATION_BATCH_STARTED: "status",
