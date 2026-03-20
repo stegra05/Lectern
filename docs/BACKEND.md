@@ -8,10 +8,18 @@ The backend (`gui/backend/`) is a FastAPI application that serves the React fron
 
 ## Core Modules
 
-### Routing (`gui/backend/routers/`)
+### Routing (`gui/backend/routers/` + `gui/backend/interface_v2/routers/`)
 - `anki.py`: Proxies requests to the local AnkiConnect instance.
-- `generation.py`: Triggers AI pipeline and handles the SSE `/stream` endpoint.
+- `generation.py`: Legacy generation transport.
+- `generation_v2.py`: V2 generation transport (`POST /generate-v2`) with NDJSON envelopes.
 - `system.py`: Configuration and environment checks.
+
+### Generation V2 Transport Contract (`/generate-v2`)
+- Streams `ApiEventV2` envelopes as newline-delimited JSON (`application/x-ndjson`).
+- Validates cursor input (`after_sequence_no >= 0`) and rejects cursor usage without `session_id`.
+- Resume with cursor replays history first (`replay_stream`) and then continues live resume (`run_resume_stream`).
+- Pre-stream domain failures map to HTTP status codes with structured error details.
+- Post-stream failures emit a terminal `error_emitted` event because HTTP status is already fixed once streaming starts.
 
 ### The Service Layer
 The bridge between FastAPI and the AI engine is `lectern_service.py` (located in `lectern/`), which uses `phase_handlers.py` to manage discrete logic for each generation stage. This module owns the pipeline, calculates pacing, tracks state, and yields events. The backend's `service.py` acts as a thin wrapper to expose this orchestrator to the API routes.

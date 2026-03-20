@@ -21,3 +21,8 @@ Cards are not generated all at once. The engine splits work into batches to avoi
 
 ### 3. Reflection Pass
 A post-generation QA pass. The system reviews promoted cards against learning best practices (atomicity, clarity) and improves them while preserving grounding quality (replacements are re-checked before acceptance). The number of reflection rounds is dynamic based on PDF length to manage costs without sacrificing quality on smaller sets.
+
+## Stream Semantics for UI Recovery
+The V2 transport (`/generate-v2`) emits monotonic `sequence_no` values in each envelope. The frontend stores the latest `sequence_no` as a replay cursor and sends it back as `after_sequence_no` when resuming.
+
+On resume with a cursor, the backend replays missed events before live resume events so the UI can reconstruct state without gaps. Stream failures before the first event are returned as HTTP errors; failures after streaming starts are represented as terminal `error_emitted` events.
