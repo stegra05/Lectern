@@ -297,6 +297,50 @@ async def test_resume_runner_failure_emits_terminal_error_event() -> None:
 
 
 @pytest.mark.asyncio
+async def test_resume_stream_maps_history_persist_failure_to_terminal_error_event() -> None:
+    history = _HistoryStub(_CallHistory([]))
+    history.sessions["s1"] = {
+        "session_id": "s1",
+        "status": "stopped",
+        "stream_version": 2,
+        "cursor": 0,
+    }
+
+    async def resume_runner(
+        _: ResumeGenerationRequest,
+        __: dict[str, Any],
+    ) -> AsyncIterator[DomainEvent]:
+        yield SessionStarted(session_id="s1", mode="resume")
+
+    async def always_fail_sync(_: dict[str, Any]) -> None:
+        raise RuntimeError("sync down")
+
+    history.sync_state = always_fail_sync  # type: ignore[method-assign]
+
+    service = GenerationAppServiceImpl(
+        history=history,
+        runtime_store=SessionRuntimeStore(),
+        resume_runner=resume_runner,
+        now_ms=lambda: 1,
+    )
+
+    out = await _collect(
+        service.run_resume_stream(
+            ResumeGenerationRequest(
+                session_id="s1",
+                pdf_path="/tmp/a.pdf",
+                deck_name="Deck",
+                model_name="gemini",
+            )
+        )
+    )
+
+    assert len(out) == 1
+    assert out[0].type == "error_emitted"
+    assert out[0].data["code"] == "history_persist_failed"
+
+
+@pytest.mark.asyncio
 async def test_cancel_idempotent_noop_when_not_running() -> None:
     service = GenerationAppServiceImpl(
         history=_HistoryStub(_CallHistory([])),
@@ -331,6 +375,37 @@ async def test_sync_state_retried_after_append_success_when_retryable_failure() 
     assert len(out) == 1
     assert history.append_calls == 1
     assert history.sync_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_start_stream_maps_history_persist_failure_to_terminal_error_event() -> None:
+    history = _HistoryStub(_CallHistory([]))
+
+    async def start_runner(_: StartGenerationRequest) -> AsyncIterator[DomainEvent]:
+        yield SessionStarted(session_id="session-1", mode="start")
+
+    async def always_fail_sync(_: dict[str, Any]) -> None:
+        raise RuntimeError("sync down")
+
+    history.sync_state = always_fail_sync  # type: ignore[method-assign]
+
+    service = GenerationAppServiceImpl(
+        history=history,
+        runtime_store=SessionRuntimeStore(),
+        start_runner=start_runner,
+        session_id_factory=lambda: "session-1",
+        now_ms=lambda: 1,
+    )
+
+    out = await _collect(
+        service.run_generation_stream(
+            StartGenerationRequest("/tmp/a.pdf", "Deck", "gemini", [])
+        )
+    )
+
+    assert len(out) == 1
+    assert out[0].type == "error_emitted"
+    assert out[0].data["code"] == "history_persist_failed"
 
 
 @pytest.mark.asyncio

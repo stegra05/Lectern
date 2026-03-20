@@ -120,7 +120,7 @@ class GenerationAppServiceImpl(GenerationAppService):
                     sequence_no=sequence_no,
                     now_ms=self._now_ms(),
                 )
-        except (RuntimeError, OSError, ValueError, TypeError) as exc:
+        except (GenerationApplicationError, RuntimeError, OSError, ValueError, TypeError) as exc:
             if handle.cancel_requested:
                 sequence_no, cancelled_event = await self._emit_cancelled_terminal(
                     session_id=session_id,
@@ -136,18 +136,27 @@ class GenerationAppServiceImpl(GenerationAppService):
                 )
                 return
             sequence_no += 1
+            if isinstance(exc, GenerationApplicationError):
+                error_code = exc.code.value
+                error_message = exc.message
+            else:
+                error_code = GenerationErrorCode.INTERNAL_UNEXPECTED.value
+                error_message = str(exc)
             event = ErrorEmitted(
-                code=GenerationErrorCode.INTERNAL_UNEXPECTED.value,
-                message=str(exc),
+                code=error_code,
+                message=error_message,
                 stage="generation",
                 recoverable=False,
             )
-            await self._persist_record_and_snapshot(
-                session_id=session_id,
-                sequence_no=sequence_no,
-                stream_version=req.stream_version,
-                event=event,
-            )
+            try:
+                await self._persist_record_and_snapshot(
+                    session_id=session_id,
+                    sequence_no=sequence_no,
+                    stream_version=req.stream_version,
+                    event=event,
+                )
+            except GenerationApplicationError:
+                pass
             yield self._translator.to_api_event(
                 event,
                 session_id=session_id,
@@ -231,7 +240,7 @@ class GenerationAppServiceImpl(GenerationAppService):
                     sequence_no=sequence_no,
                     now_ms=self._now_ms(),
                 )
-        except (RuntimeError, OSError, ValueError, TypeError) as exc:
+        except (GenerationApplicationError, RuntimeError, OSError, ValueError, TypeError) as exc:
             if handle.cancel_requested:
                 sequence_no, cancelled_event = await self._emit_cancelled_terminal(
                     session_id=req.session_id,
@@ -248,18 +257,27 @@ class GenerationAppServiceImpl(GenerationAppService):
                 return
 
             sequence_no += 1
+            if isinstance(exc, GenerationApplicationError):
+                error_code = exc.code.value
+                error_message = exc.message
+            else:
+                error_code = GenerationErrorCode.INTERNAL_UNEXPECTED.value
+                error_message = str(exc)
             error_event = ErrorEmitted(
-                code=GenerationErrorCode.INTERNAL_UNEXPECTED.value,
-                message=str(exc),
+                code=error_code,
+                message=error_message,
                 stage="resume",
                 recoverable=False,
             )
-            await self._persist_record_and_snapshot(
-                session_id=req.session_id,
-                sequence_no=sequence_no,
-                stream_version=req.stream_version,
-                event=error_event,
-            )
+            try:
+                await self._persist_record_and_snapshot(
+                    session_id=req.session_id,
+                    sequence_no=sequence_no,
+                    stream_version=req.stream_version,
+                    event=error_event,
+                )
+            except GenerationApplicationError:
+                pass
             yield self._translator.to_api_event(
                 error_event,
                 session_id=req.session_id,
