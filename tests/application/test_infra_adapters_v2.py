@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 from typing import Any
@@ -13,6 +14,7 @@ from lectern.orchestration.pipeline_context import PDFMetadata
 from lectern.infrastructure.extractors.pdf_extractor import PdfExtractorAdapter
 from lectern.infrastructure.gateways.anki_gateway import AnkiGateway
 from lectern.infrastructure.persistence.history_repository_sqlite import (
+    HistoryRepositoryCorruptionError,
     HistoryRepositorySqlite,
 )
 from lectern.infrastructure.providers.gemini_adapter import GeminiAdapter
@@ -292,7 +294,7 @@ async def test_history_repository_replay_returns_ascending_domain_records(
 
 
 @pytest.mark.asyncio
-async def test_history_repository_replay_skips_unknown_and_corrupt_events(
+async def test_history_repository_replay_raises_on_unknown_and_corrupt_events(
     tmp_path: Path,
 ) -> None:
     repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
@@ -314,7 +316,7 @@ async def test_history_repository_replay_skips_unknown_and_corrupt_events(
     )
 
     db_path = tmp_path / "history_v2.sqlite3"
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.execute(
             """
             INSERT INTO session_events (session_id, sequence_no, event_class, event_payload)
@@ -353,10 +355,89 @@ async def test_history_repository_replay_skips_unknown_and_corrupt_events(
         )
         conn.commit()
 
-    records = await repo.get_events_after("session-1", after_sequence_no=0)
+    with pytest.raises(HistoryRepositoryCorruptionError) as exc_info:
+        await repo.get_events_after("session-1", after_sequence_no=0)
 
-    assert [record.sequence_no for record in records] == [1]
-    assert records[0].event.message == "first"
+    assert exc_info.value.session_id == "session-1"
+    assert exc_info.value.sequence_no == 2
+    assert "Unsupported event class" in exc_info.value.reason
+
+
+@pytest.mark.asyncio
+async def test_history_repository_replay_raises_on_sequence_gap(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+
+    await repo.create_session({"session_id": "session-1", "status": "running"})
+    await repo.append_events(
+        "session-1",
+        [
+            DomainEventRecord(
+                session_id="session-1",
+                sequence_no=1,
+                event=WarningEmitted(
+                    code="warn-1",
+                    message="first",
+                    details={"index": 1},
+                ),
+            ),
+            DomainEventRecord(
+                session_id="session-1",
+                sequence_no=3,
+                event=WarningEmitted(
+                    code="warn-3",
+                    message="third",
+                    details={"index": 3},
+                ),
+            ),
+        ],
+    )
+
+    with pytest.raises(HistoryRepositoryCorruptionError) as exc_info:
+        await repo.get_events_after("session-1", after_sequence_no=0)
+
+    assert exc_info.value.session_id == "session-1"
+    assert exc_info.value.sequence_no == 2
+    assert "gap detected" in exc_info.value.reason
+
+
+@pytest.mark.asyncio
+async def test_history_repository_sync_state_first_write_is_atomic_under_concurrency(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+    session_id = "session-concurrent-init"
+
+    await asyncio.gather(
+        *[
+            repo.sync_state(
+                {
+                    "session_id": session_id,
+                    "status": "running",
+                    "phase": "extract",
+                    "cursor": index,
+                }
+            )
+            for index in range(20)
+        ]
+    )
+
+    session = await repo.get_session(session_id)
+    assert session is not None
+    assert session["status"] == "running"
+    assert session["phase"] == "extract"
+    assert isinstance(session["cursor"], int)
+    assert 0 <= session["cursor"] < 20
+
+    db_path = tmp_path / "history_v2.sqlite3"
+    with closing(sqlite3.connect(db_path)) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+    assert row is not None
+    assert int(row[0]) == 1
 
 
 @pytest.mark.asyncio

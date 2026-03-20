@@ -39,6 +39,16 @@ _EVENT_TYPES: dict[str, type[DomainEvent]] = {
 }
 
 
+class HistoryRepositoryCorruptionError(ValueError):
+    def __init__(self, session_id: str, sequence_no: int, reason: str) -> None:
+        self.session_id = session_id
+        self.sequence_no = sequence_no
+        self.reason = reason
+        super().__init__(
+            f"Corrupt history for session '{session_id}' at sequence {sequence_no}: {reason}"
+        )
+
+
 class HistoryRepositorySqlite(HistoryRepositoryPort):
     """SQLite-backed history repository for event replay in v2."""
 
@@ -109,15 +119,9 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
         conn: sqlite3.Connection,
         session_id: str,
     ) -> None:
-        row = conn.execute(
-            "SELECT 1 FROM sessions WHERE session_id = ?",
-            (session_id,),
-        ).fetchone()
-        if row is not None:
-            return
         conn.execute(
             """
-            INSERT INTO sessions (session_id, payload, phase, status, updated_at)
+            INSERT OR IGNORE INTO sessions (session_id, payload, phase, status, updated_at)
             VALUES (?, '{}', NULL, NULL, unixepoch())
             """,
             (session_id,),
@@ -255,17 +259,31 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
             ).fetchall()
 
         records: list[DomainEventRecord] = []
+        expected_sequence_no = after_sequence_no + 1
         for row in rows:
-            event = self._decode_event_payload(row["event_payload"])
-            if event is None:
-                continue
+            sequence_no = int(row["sequence_no"])
+            if sequence_no != expected_sequence_no:
+                raise HistoryRepositoryCorruptionError(
+                    session_id,
+                    expected_sequence_no,
+                    f"gap detected before stored sequence {sequence_no}",
+                )
+            try:
+                event = self._decode_event_payload(row["event_payload"])
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise HistoryRepositoryCorruptionError(
+                    session_id,
+                    sequence_no,
+                    str(exc),
+                ) from exc
             records.append(
                 DomainEventRecord(
                     session_id=session_id,
-                    sequence_no=int(row["sequence_no"]),
+                    sequence_no=sequence_no,
                     event=event,
                 )
             )
+            expected_sequence_no += 1
         return records
 
     def _safe_load_json_object(self, raw_payload: Any) -> dict[str, Any]:
@@ -277,14 +295,16 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
             return {}
         return decoded if isinstance(decoded, dict) else {}
 
-    def _decode_event_payload(self, raw_payload: Any) -> DomainEvent | None:
-        payload = self._safe_load_json_object(raw_payload)
-        if not payload:
-            return None
+    def _decode_event_payload(self, raw_payload: Any) -> DomainEvent:
+        if not isinstance(raw_payload, str):
+            raise TypeError("event payload must be a JSON string")
         try:
-            return self._dict_to_event(payload)
-        except (TypeError, ValueError):
-            return None
+            decoded = json.loads(raw_payload)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ValueError("event payload is not valid JSON") from exc
+        if not isinstance(decoded, dict) or not decoded:
+            raise ValueError("event payload must be a non-empty JSON object")
+        return self._dict_to_event(decoded)
 
     def _dataclass_to_dict(self, value: Any) -> dict[str, Any]:
         if not is_dataclass(value):
