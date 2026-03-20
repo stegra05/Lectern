@@ -7,7 +7,6 @@ from lectern.infrastructure.gateways.anki_gateway import AnkiGateway
 from lectern.infrastructure.persistence.history_repository_sqlite import HistoryRepositorySqlite
 from lectern.infrastructure.providers.gemini_adapter import GeminiAdapter
 from lectern.infrastructure.runtime.session_runtime_store import SessionRuntimeStore
-from lectern.lectern_service import LecternGenerationService
 from lectern.utils.history import HistoryManager
 from lectern.utils.path_utils import get_app_data_dir
 from gui.backend.session import session_manager, SessionManager
@@ -21,11 +20,6 @@ def get_session_manager() -> SessionManager:
 def get_history_manager() -> HistoryManager:
     """Dependency provider for the HistoryManager."""
     return HistoryManager()
-
-
-def get_generation_service() -> LecternGenerationService:
-    """Dependency provider for the LecternGenerationService."""
-    return LecternGenerationService()
 
 
 @lru_cache(maxsize=1)

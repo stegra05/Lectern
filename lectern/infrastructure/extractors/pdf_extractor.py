@@ -1,12 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from lectern.application.ports import PdfExtractorPort
 from lectern.cost_estimator import extract_pdf_metadata
-from lectern.orchestration.pipeline_context import PDFMetadata
+
+
+@dataclass
+class PDFMetadata:
+    path: str = ""
+    filename: str = ""
+    title: str = ""
+    file_size: int = 0
+    page_count: int = 0
+    text_chars: int = 0
+    image_count: int = 0
+    metadata_pages: int = 0
+    metadata_chars: int = 0
 
 
 class PdfExtractorAdapter(PdfExtractorPort):

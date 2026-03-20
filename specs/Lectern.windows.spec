@@ -35,7 +35,7 @@ a = Analysis(
         'win32ctypes', 'win32ctypes.core', 'win32ctypes.core._common',
         'win32ctypes.core.ctypes', 'win32ctypes.core.ctypes._util',
         'keyrings.alt',
-        'lectern', 'lectern.lectern_service', 'lectern.config',
+        'lectern', 'lectern.config',
     ] + hiddenimports,
     hookspath=[],
     hooksconfig={},

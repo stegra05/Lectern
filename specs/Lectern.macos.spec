@@ -24,7 +24,7 @@ a = Analysis(
     ] + datas,
     hiddenimports=['webview', 'uvicorn', 'objc', 'Cocoa', 'WebKit', 'PIL', 'PIL.Image',
                    'pypdf', 'httpx',
-                   'lectern', 'lectern.lectern_service', 'lectern.config'] + hiddenimports,
+                   'lectern', 'lectern.config'] + hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
