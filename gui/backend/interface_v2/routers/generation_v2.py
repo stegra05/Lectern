@@ -11,9 +11,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from lectern import config
 from gui.backend.dependencies import get_generation_app_service_v2
 from gui.backend.interface_v2.serializers.events_v2 import serialize_api_event_v2
+from lectern import config
 from lectern.application.dto import (
     ApiEventV2,
     CancelGenerationRequest,
@@ -178,7 +178,7 @@ def _terminal_error_event(
 async def generate_v2(
     pdf_file: UploadFile = File(...),
     deck_name: str = Form(...),
-    model_name: str = Form(config.DEFAULT_GEMINI_MODEL),
+    model_name: str | None = Form(None),
     tags: str = Form("[]"),
     focus_prompt: str = Form(""),
     target_card_count: int | None = Form(None),
@@ -211,13 +211,14 @@ async def generate_v2(
             os.remove(tmp_path)
         raise _to_http_error(exc) from exc
 
+    resolved_model_name = model_name or str(config.DEFAULT_GEMINI_MODEL)
     stage = "resume" if session_id else "generation"
     if session_id:
         req = ResumeGenerationRequest(
             session_id=session_id,
             pdf_path=tmp_path,
             deck_name=deck_name,
-            model_name=model_name,
+            model_name=resolved_model_name,
             stream_version=2,
         )
         resume_stream = app_service.run_resume_stream(req)
@@ -243,7 +244,7 @@ async def generate_v2(
         req = StartGenerationRequest(
             pdf_path=tmp_path,
             deck_name=deck_name,
-            model_name=model_name,
+            model_name=resolved_model_name,
             tags=tags_list,
             focus_prompt=focus_prompt or None,
             target_card_count=target_card_count,

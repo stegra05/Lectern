@@ -66,6 +66,44 @@ def test_generate_v2_stream_emits_v2_envelope() -> None:
     assert payload[1]["sequence_no"] == 2
 
 
+def test_generate_v2_uses_runtime_default_model_when_not_provided() -> None:
+    service = AsyncMock()
+    captured_req: StartGenerationRequest | None = None
+
+    async def run_generation_stream(
+        req: StartGenerationRequest,
+    ) -> AsyncIterator[ApiEventV2]:
+        nonlocal captured_req
+        captured_req = req
+        yield ApiEventV2(
+            session_id="session-default-model",
+            sequence_no=1,
+            type="session_completed",
+            message="",
+            timestamp=1,
+            data={},
+        )
+
+    service.run_generation_stream = run_generation_stream
+    service.run_resume_stream = AsyncMock()
+    service.cancel = AsyncMock()
+    service.replay_stream = AsyncMock()
+
+    app.dependency_overrides[get_generation_app_service_v2] = lambda: service
+    try:
+        response = client.post(
+            "/generate-v2",
+            files={"pdf_file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+            data={"deck_name": "Deck A"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured_req is not None
+    assert captured_req.model_name == str(generation_v2.config.DEFAULT_GEMINI_MODEL)
+
+
 def test_generate_v2_pre_stream_error_maps_to_http() -> None:
     service = AsyncMock()
 
