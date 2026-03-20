@@ -50,7 +50,7 @@ test.describe('Card Review and Sync', () => {
     const startButton = page.getByRole('button', { name: 'Start Generation' });
     await expect(startButton).toBeEnabled({ timeout: 15000 });
     await Promise.all([
-      page.waitForRequest((req) => req.url().includes('/generate') && req.method() === 'POST'),
+      page.waitForRequest((req) => req.url().includes('/generate-v2') && req.method() === 'POST'),
       startButton.click(),
     ]);
 

@@ -78,8 +78,8 @@ export async function mockAllApiRoutes(page: Page): Promise<void> {
     return route.fulfill({ json: { name: 'New Deck', success: true } });
   });
 
-  // Estimation
-  await page.route('**/estimate', (route: Route) =>
+  // Estimation (V2)
+  await page.route('**/estimate-v2', (route: Route) =>
     route.fulfill({ json: estimationMock })
   );
 
@@ -107,8 +107,8 @@ export async function mockAllApiRoutes(page: Page): Promise<void> {
     route.fulfill({ json: versionMock })
   );
 
-  // Generation stream (NDJSON)
-  await page.route('**/generate', (route: Route) =>
+  // Generation stream (NDJSON, V2)
+  await page.route('**/generate-v2', (route: Route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/x-ndjson',
@@ -125,13 +125,13 @@ export async function mockAllApiRoutes(page: Page): Promise<void> {
     })
   );
 
-  // Stop generation
-  await page.route('**/stop', (route: Route) =>
+  // Stop generation (V2)
+  await page.route('**/stop-v2', (route: Route) =>
     route.fulfill({ json: { stopped: true, message: 'Generation stopped' } })
   );
 
-  // Session data
-  await page.route('**/session/**', (route: Route) =>
+  // Session data (V2)
+  await page.route('**/session-v2/**', (route: Route) =>
     route.fulfill({
       json: {
         id: 'history-entry-001',

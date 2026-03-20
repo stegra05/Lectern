@@ -1,21 +1,10 @@
-{"type":"session_start","message":"Session started","data":{"session_id":"test-session-123"},"timestamp":1705312800000}
-{"type":"step_start","message":"Starting concept extraction","data":{"step":"concept","label":"Analyzing document structure"},"timestamp":1705312800100}
-{"type":"progress_start","message":"Extracting concepts","data":{"total":10,"phase":"concept","label":"Processing pages"},"timestamp":1705312800200}
-{"type":"progress_update","message":"Processed page 1","data":{"current":1,"total":10,"phase":"concept"},"timestamp":1705312801000}
-{"type":"progress_update","message":"Processed page 2","data":{"current":2,"total":10,"phase":"concept"},"timestamp":1705312802000}
-{"type":"progress_update","message":"Processed page 3","data":{"current":3,"total":10,"phase":"concept"},"timestamp":1705312803000}
-{"type":"step_end","message":"Concept extraction complete","data":{"step":"concept"},"timestamp":1705312804000}
-{"type":"step_start","message":"Starting card generation","data":{"step":"generating","label":"Creating flashcards"},"timestamp":1705312804100}
-{"type":"progress_start","message":"Generating cards","data":{"total":5,"phase":"generating","label":"Creating flashcards"},"timestamp":1705312804200}
-{"type":"card","message":"Card generated","data":{"card":{"front":"What is photosynthesis?","back":"The process by which plants convert light energy into chemical energy stored in glucose.","slide_number":1,"source_pages":[1],"concept_ids":["concept-1"],"uid":"card-001"}},"timestamp":1705312805000}
-{"type":"progress_update","message":"Generated card 1","data":{"current":1,"total":5,"phase":"generating"},"timestamp":1705312805100}
-{"type":"card","message":"Card generated","data":{"card":{"front":"What are the reactants in photosynthesis?","back":"Carbon dioxide (CO2) and water (H2O)","slide_number":2,"source_pages":[2],"concept_ids":["concept-2"],"uid":"card-002"}},"timestamp":1705312806000}
-{"type":"progress_update","message":"Generated card 2","data":{"current":2,"total":5,"phase":"generating"},"timestamp":1705312806100}
-{"type":"card","message":"Card generated","data":{"card":{"front":"What are the products of photosynthesis?","back":"Glucose (C6H12O6) and oxygen (O2)","slide_number":3,"source_pages":[3],"concept_ids":["concept-3"],"uid":"card-003"}},"timestamp":1705312807000}
-{"type":"progress_update","message":"Generated card 3","data":{"current":3,"total":5,"phase":"generating"},"timestamp":1705312807100}
-{"type":"card","message":"Card generated","data":{"card":{"front":"Where does photosynthesis occur in plant cells?","back":"In the chloroplasts, specifically in the thylakoid membranes","slide_number":4,"source_pages":[4],"concept_ids":["concept-4"],"uid":"card-004"}},"timestamp":1705312808000}
-{"type":"progress_update","message":"Generated card 4","data":{"current":4,"total":5,"phase":"generating"},"timestamp":1705312808100}
-{"type":"card","message":"Card generated","data":{"card":{"front":"What is the role of chlorophyll in photosynthesis?","back":"Chlorophyll absorbs light energy, primarily in the blue and red wavelengths, to power the photosynthetic reactions.","slide_number":5,"source_pages":[5],"concept_ids":["concept-5"],"uid":"card-005"}},"timestamp":1705312809000}
-{"type":"progress_update","message":"Generated card 5","data":{"current":5,"total":5,"phase":"generating"},"timestamp":1705312809100}
-{"type":"step_end","message":"Card generation complete","data":{"step":"generating"},"timestamp":1705312810000}
-{"type":"done","message":"Generation complete","data":{"card_count":5,"total_pages":10},"timestamp":1705312811000}
+{"event_version":2,"session_id":"test-session-123","sequence_no":0,"type":"session_started","message":"Session started","timestamp":1705312800000,"data":{"mode":"start"}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":1,"type":"phase_started","message":"Starting concept extraction","timestamp":1705312800100,"data":{"phase":"concept"}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":2,"type":"progress_updated","message":"Processed page 1","timestamp":1705312801000,"data":{"phase":"concept","current":1,"total":3}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":3,"type":"phase_completed","message":"Concept extraction complete","timestamp":1705312802000,"data":{"phase":"concept","summary":{"page_count":10}}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":4,"type":"phase_started","message":"Starting card generation","timestamp":1705312802100,"data":{"phase":"generating"}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":5,"type":"card_emitted","message":"Card generated","timestamp":1705312803000,"data":{"card":{"front":"What is photosynthesis?","back":"The process by which plants convert light energy into chemical energy stored in glucose.","slide_number":1,"source_pages":[1],"uid":"card-001"}}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":6,"type":"progress_updated","message":"Generated card 1","timestamp":1705312803100,"data":{"phase":"generating","current":1,"total":2}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":7,"type":"card_emitted","message":"Card generated","timestamp":1705312804000,"data":{"card":{"front":"What are the reactants in photosynthesis?","back":"Carbon dioxide (CO2) and water (H2O)","slide_number":2,"source_pages":[2],"uid":"card-002"}}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":8,"type":"progress_updated","message":"Generated card 2","timestamp":1705312804100,"data":{"phase":"generating","current":2,"total":2}}
+{"event_version":2,"session_id":"test-session-123","sequence_no":9,"type":"session_completed","message":"Generation complete","timestamp":1705312805000,"data":{"summary":{"cards_generated":2,"total_pages":10}}}
