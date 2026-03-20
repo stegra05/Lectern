@@ -1,5 +1,15 @@
-from lectern.utils.history import HistoryManager
+from functools import lru_cache
+
+from lectern.application.generation_app_service import GenerationAppServiceImpl
+from lectern.application.translators.event_translator import EventTranslator
+from lectern.infrastructure.extractors.pdf_extractor import PdfExtractorAdapter
+from lectern.infrastructure.gateways.anki_gateway import AnkiGateway
+from lectern.infrastructure.persistence.history_repository_sqlite import HistoryRepositorySqlite
+from lectern.infrastructure.providers.gemini_adapter import GeminiAdapter
+from lectern.infrastructure.runtime.session_runtime_store import SessionRuntimeStore
 from lectern.lectern_service import LecternGenerationService
+from lectern.utils.history import HistoryManager
+from lectern.utils.path_utils import get_app_data_dir
 from gui.backend.session import session_manager, SessionManager
 
 
@@ -16,3 +26,17 @@ def get_history_manager() -> HistoryManager:
 def get_generation_service() -> LecternGenerationService:
     """Dependency provider for the LecternGenerationService."""
     return LecternGenerationService()
+
+
+@lru_cache(maxsize=1)
+def get_generation_app_service_v2() -> GenerationAppServiceImpl:
+    """Build and cache the V2 generation app service with concrete adapters."""
+    db_path = get_app_data_dir() / "state" / "history_v2.sqlite3"
+    return GenerationAppServiceImpl(
+        history=HistoryRepositorySqlite(db_path=db_path),
+        runtime_store=SessionRuntimeStore(),
+        translator=EventTranslator(),
+        pdf_extractor=PdfExtractorAdapter(),
+        ai_provider=GeminiAdapter(),
+        anki_gateway=AnkiGateway(),
+    )

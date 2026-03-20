@@ -16,8 +16,11 @@ from lectern.application.dto import (
 )
 from lectern.application.errors import GenerationApplicationError, GenerationErrorCode
 from lectern.application.ports import (
+    AIProviderPort,
+    AnkiGatewayPort,
     GenerationAppService,
     HistoryRepositoryPort,
+    PdfExtractorPort,
     RuntimeSessionStorePort,
 )
 from lectern.application.translators.event_translator import EventTranslator
@@ -48,6 +51,9 @@ class GenerationAppServiceImpl(GenerationAppService):
         history: HistoryRepositoryPort,
         runtime_store: RuntimeSessionStorePort,
         translator: EventTranslator | None = None,
+        pdf_extractor: PdfExtractorPort | None = None,
+        ai_provider: AIProviderPort | None = None,
+        anki_gateway: AnkiGatewayPort | None = None,
         start_runner: Callable[[StartGenerationRequest], AsyncIterator[DomainEvent]] | None = None,
         resume_runner: Callable[
             [ResumeGenerationRequest, dict[str, Any]],
@@ -60,6 +66,9 @@ class GenerationAppServiceImpl(GenerationAppService):
         self._history = history
         self._runtime_store = runtime_store
         self._translator = translator or EventTranslator()
+        self._pdf_extractor = pdf_extractor
+        self._ai_provider = ai_provider
+        self._anki_gateway = anki_gateway
         self._start_runner = start_runner or self._empty_start_runner
         self._resume_runner = resume_runner or self._empty_resume_runner
         self._session_id_factory = session_id_factory or (lambda: uuid.uuid4().hex)
