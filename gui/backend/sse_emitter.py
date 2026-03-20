@@ -55,7 +55,7 @@ EventType = Literal[
 @dataclass(frozen=True)
 class ServiceEvent:
     type: EventType
-    message: str
+    message: str = ""
     data: dict[str, Any] = field(default_factory=dict)
 
 _DOMAIN_TO_SERVICE_EVENT_TYPE: dict[DomainEventType, EventType] = {

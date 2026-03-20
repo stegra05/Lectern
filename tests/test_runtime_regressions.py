@@ -28,25 +28,26 @@ def test_stream_to_logger_implements_isatty():
 
 
 def test_service_delegates_generation_to_generation_phase():
-    """Guard against reintroducing generation heuristics in the service layer."""
-    service_source = _read_project_file("lectern/lectern_service.py")
-    orchestrator_source = _read_project_file("lectern/orchestration/session_orchestrator.py")
-    phases_source = _read_project_file("lectern/orchestration/phases.py")
+    """Guard V2 router contract for generation/start-resume streaming."""
+    router_source = _read_project_file("gui/backend/interface_v2/routers/generation_v2.py")
 
-    assert "run_orchestration_entry(" in service_source
-    assert "build_orchestration_phases()" in orchestrator_source
-    assert "GenerationPhase()" in phases_source
-    assert "derive_effective_target(" not in service_source
-    assert "estimate_card_cap(" not in service_source
+    assert "/generate-v2" in router_source
+    assert "run_generation_stream(req)" in router_source
+    assert "run_resume_stream(req)" in router_source
+    assert "replay_stream(" in router_source
+    assert "serialize_api_event_v2(" in router_source
+    assert "lectern.lectern_service" not in router_source
 
 
 def test_service_delegates_export_to_export_phase():
-    """Guard against reintroducing export internals in the service layer."""
-    service_source = _read_project_file("lectern/lectern_service.py")
-    phases_source = _read_project_file("lectern/orchestration/phases.py")
+    """Guard V2 app service stream-version and translation invariants."""
+    app_service_source = _read_project_file("lectern/application/generation_app_service.py")
 
-    assert "ExportPhase()" in phases_source
-    assert "export_card_to_anki(" not in service_source
+    assert "stream_version" in app_service_source
+    assert "stored_stream_version != req.stream_version" in app_service_source
+    assert "GenerationErrorCode.RESUME_VERSION_MISMATCH" in app_service_source
+    assert "_translator.to_api_event(" in app_service_source
+    assert "ServiceEvent" not in app_service_source
 
 
 def _extract_quoted_literals(block: str) -> set[str]:
@@ -55,7 +56,7 @@ def _extract_quoted_literals(block: str) -> set[str]:
 
 def test_backend_event_types_are_supported_by_frontend_sse_schema():
     """Guard backend/frontend event contract drift."""
-    backend_source = _read_project_file("lectern/events/service_events.py")
+    backend_source = _read_project_file("gui/backend/sse_emitter.py")
     frontend_sse_source = _read_project_file("gui/frontend/src/schemas/sse.ts")
 
     backend_match = re.search(r"EventType\s*=\s*Literal\[(.*?)\]", backend_source, re.S)
@@ -76,3 +77,12 @@ def test_backend_event_types_are_supported_by_frontend_sse_schema():
         "Frontend SSE schema is missing backend event types: "
         f"{sorted(missing_in_frontend)}"
     )
+
+
+def test_service_event_message_defaults_to_empty_string():
+    """Guard constructor compatibility for callers omitting message."""
+    from gui.backend.sse_emitter import ServiceEvent
+
+    event = ServiceEvent(type="info")
+
+    assert event.message == ""
