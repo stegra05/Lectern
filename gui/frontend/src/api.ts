@@ -225,15 +225,25 @@ const parseNDJSONStreamV2 = async (
 
         for (const line of lines) {
             if (line.trim()) {
-                const raw = JSON.parse(line);
-                emitValidated(raw);
+                try {
+                    const raw = JSON.parse(line);
+                    emitValidated(raw);
+                } catch (e) {
+                    console.error("Failed to parse/validate event:", line, e);
+                    throw e;
+                }
             }
         }
     }
 
     if (buffer.trim()) {
-        const raw = JSON.parse(buffer);
-        emitValidated(raw);
+        try {
+            const raw = JSON.parse(buffer);
+            emitValidated(raw);
+        } catch (e) {
+            console.error("Failed to parse/validate event:", buffer, e);
+            throw e;
+        }
     }
 };
 
