@@ -10,9 +10,10 @@ The backend (`gui/backend/`) is a FastAPI application that serves the React fron
 
 ### Routing (`gui/backend/routers/` + `gui/backend/interface_v2/routers/`)
 - `anki.py`: Proxies requests to the local AnkiConnect instance.
-- `generation.py`: Legacy generation transport.
-- `generation_v2.py`: V2 generation transport (`POST /generate-v2`) with NDJSON envelopes.
+- `history.py`: Legacy history endpoints for existing UI screens.
 - `system.py`: Configuration and environment checks.
+- `generation_v2.py`: V2 generation transport (`POST /generate-v2`) with NDJSON envelopes.
+- `history_v2.py`: V2 event/session history transport.
 
 ### Generation V2 Transport Contract (`/generate-v2`)
 - Streams `ApiEventV2` envelopes as newline-delimited JSON (`application/x-ndjson`).
@@ -21,12 +22,13 @@ The backend (`gui/backend/`) is a FastAPI application that serves the React fron
 - Pre-stream domain failures map to HTTP status codes with structured error details.
 - Post-stream failures emit a terminal `error_emitted` event because HTTP status is already fixed once streaming starts.
 
-### The Service Layer
-The bridge between FastAPI and the AI engine is `lectern_service.py` (located in `lectern/`), which uses `phase_handlers.py` to manage discrete logic for each generation stage. This module owns the pipeline, calculates pacing, tracks state, and yields events. The backend's `service.py` acts as a thin wrapper to expose this orchestrator to the API routes.
+### The Service Layer (V2-only)
+The bridge between FastAPI and the generation engine is `GenerationAppServiceImpl` in `lectern/application/generation_app_service.py`. Backend dependencies wire this service with concrete adapters (`lectern/infrastructure/*`) for PDF extraction, Gemini provider access, Anki export, runtime session coordination, and SQLite-backed event history.
 
 ### State & Session Management
 - `gui/backend/session.py`: Tracks in-memory active runs and temp-file lifecycle.
-- `lectern/utils/history.py` + `lectern/utils/database.py`: Persist session state/history in SQLite (`lectern.db`) for resume/history views.
+- `lectern/infrastructure/persistence/history_repository_sqlite.py`: V2 event/session persistence in `history_v2.sqlite3`.
+- `lectern/utils/history.py` + `lectern/utils/database.py`: Legacy history store still used by existing history screens.
 - Startup recovery in `gui/backend/main.py` marks stale in-flight draft sessions as `interrupted` so crashed runs do not remain in a misleading generating phase.
 
 ### AnkiConnect Integration

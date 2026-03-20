@@ -9,9 +9,10 @@ from typing import Any
 import pytest
 
 from lectern.domain.generation.events import DomainEventRecord, WarningEmitted
-from lectern.orchestration.pipeline_context import PDFMetadata
-
-from lectern.infrastructure.extractors.pdf_extractor import PdfExtractorAdapter
+from lectern.infrastructure.extractors.pdf_extractor import (
+    PDFMetadata,
+    PdfExtractorAdapter,
+)
 from lectern.infrastructure.gateways.anki_gateway import AnkiGateway
 from lectern.infrastructure.persistence.history_repository_sqlite import (
     HistoryRepositoryCorruptionError,

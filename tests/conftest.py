@@ -178,14 +178,18 @@ def mock_history_manager() -> Generator[MagicMock, None, None]:
 
 @pytest.fixture
 def mock_generation_service() -> Generator[MagicMock, None, None]:
-    """Mock LecternGenerationService for testing."""
-    with patch(
-        "lectern.lectern_service.LecternGenerationService"
-    ) as mock_service_class:
+    """Mock V2 generation app service for router tests."""
+    with patch("gui.backend.dependencies.get_generation_app_service_v2") as mock_getter:
         mock_service = MagicMock()
-        mock_service.run_generation = AsyncMock()
-        mock_service.estimate_cost = AsyncMock(
-            return_value={"cost": 0.05, "tokens": 1000, "estimated_card_count": 10}
+        mock_service.run_generation_stream = AsyncMock()
+        mock_service.run_resume_stream = AsyncMock()
+        mock_service.replay_stream = AsyncMock()
+        mock_service.cancel = AsyncMock(
+            return_value={
+                "ok": True,
+                "session_id": "test-session",
+                "code": "cancel_idempotent_noop",
+            }
         )
-        mock_service_class.return_value = mock_service
+        mock_getter.return_value = mock_service
         yield mock_service

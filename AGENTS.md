@@ -34,7 +34,7 @@ Every change to this codebase must follow these principles:
 
 | Path | Purpose |
 |------|---------|
-| `lectern/` | Core engine (AI client, PDF parsing, Anki integration, service orchestration) |
+| `lectern/` | Core engine (AI client, PDF parsing, Anki integration, V2 app orchestration) |
 | `gui/backend/` | FastAPI routers, session management, SSE emission |
 | `gui/frontend/` | React app with Zustand state, Tailwind styling |
 | `tests/` | Python unit tests mirroring package structure |
@@ -47,10 +47,10 @@ Every change to this codebase must follow these principles:
 
 ### Backend (Python/FastAPI)
 
-- **Routers:** `gui/backend/routers/` — `anki.py`, `generation.py`, `system.py`
+- **Routers:** `gui/backend/routers/` + `gui/backend/interface_v2/routers/` — `anki.py`, `history.py`, `system.py`, `generation_v2.py`, `history_v2.py`
 - **Models:** Pydantic for all data structures
 - **Dependency Injection:** FastAPI's `Depends()` for services
-- **Events:** Type-safe events defined in `lectern/events/service_events.py`
+- **Events:** V2 API events from `lectern/application/dto.py` and domain events from `lectern/domain/generation/events.py`
 
 ### Frontend (React/TypeScript)
 
@@ -59,22 +59,15 @@ Every change to this codebase must follow these principles:
 - **Styling:** Tailwind CSS + Framer Motion
 - **API:** `api.ts` for REST calls, SSE for real-time updates
 
-### Events (Shared System)
+### Events (V2 System)
 
-Events are defined once in `lectern/events/service_events.py` and consumed by both frontend and backend:
+Generation transport is V2-only. Backend emits `ApiEventV2` envelopes (`event_version: 2`) and frontend maps them in `gui/frontend/src/logic/generation.ts`.
 
-```python
-EventType = Literal[
-    "status", "info", "warning", "error",
-    "step_start", "step_end",
-    "progress_start", "progress_update",
-    "card", "note", "done", "cancelled",
-    "note_created", "note_updated", "note_recreated",
-    "cards_replaced", "control_snapshot"
-]
-```
-
-Adding a new event requires updating both `EventType` in Python and `processGenerationEvent` in the frontend.
+If you add a new V2 event type, update all of:
+- `ApiEventType` in `lectern/application/dto.py`
+- translator mapping in `lectern/application/translators/event_translator.py`
+- frontend schema in `gui/frontend/src/schemas/sse-v2.ts`
+- frontend handling in `gui/frontend/src/logic/generation.ts`
 
 ### Type Safety
 
@@ -89,9 +82,10 @@ Adding a new event requires updating both `EventType` in Python and `processGene
 ### Backend Tests
 
 ```bash
-pytest tests/                    # All tests
-pytest tests/test_service.py     # Specific file
-pytest -k "anki"                 # Pattern match
+pytest tests/                                   # All tests
+pytest tests/application/test_generation_app_service_v2.py -v  # V2 app service
+pytest tests/interface/test_generation_v2_router.py -v         # V2 transport
+pytest -k "anki"                               # Pattern match
 ```
 
 - Tests mirror package structure (`tests/test_ai_client.py` → `lectern/ai_client.py`)

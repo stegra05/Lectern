@@ -149,16 +149,16 @@ Interfaces with Google Gemini for intelligent card generation.
 | Rate limiting | Coordinated by `ai_pacing.py` |
 | Self-correction | Reflection step for quality |
 
-### Service Layer (`lectern_service.py`)
+### Service Layer (`lectern/application/generation_app_service.py`)
 
-Central orchestrator managing the generation pipeline.
+V2 application orchestration managing generation streams and persistence.
 
 | Responsibility | Implementation |
 | :--- | :--- |
-| State management | Track generation progress |
-| Event emission | SSE for real-time UI updates |
-| Resume support | Persist state for recovery |
-| Pacing strategy | Adjust density based on content |
+| Use-case orchestration | `run_generation_stream`, `run_resume_stream`, `replay_stream`, `cancel` |
+| Event translation | `EventTranslator` maps domain events into API V2 envelopes |
+| Session persistence | `HistoryRepositorySqlite` with monotonic sequence numbers |
+| Runtime coordination | `SessionRuntimeStore` enforces single active generation session |
 
 ### GUI (`gui/`)
 

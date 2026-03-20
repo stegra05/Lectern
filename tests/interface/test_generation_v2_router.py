@@ -188,6 +188,52 @@ def test_generate_v2_rejects_after_sequence_no_without_session_id() -> None:
     assert detail["details"] == {"field": "after_sequence_no"}
 
 
+def test_generate_v2_rejects_malformed_tags_json() -> None:
+    service = AsyncMock()
+    service.run_generation_stream = AsyncMock()
+    service.run_resume_stream = AsyncMock()
+    service.cancel = AsyncMock()
+    service.replay_stream = AsyncMock()
+
+    app.dependency_overrides[get_generation_app_service_v2] = lambda: service
+    try:
+        response = client.post(
+            "/generate-v2",
+            files={"pdf_file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+            data={"deck_name": "Deck A", "tags": "{not-json"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "invalid_input"
+    assert detail["details"] == {"field": "tags", "reason": "invalid_json"}
+
+
+def test_generate_v2_rejects_non_string_tag_payloads() -> None:
+    service = AsyncMock()
+    service.run_generation_stream = AsyncMock()
+    service.run_resume_stream = AsyncMock()
+    service.cancel = AsyncMock()
+    service.replay_stream = AsyncMock()
+
+    app.dependency_overrides[get_generation_app_service_v2] = lambda: service
+    try:
+        response = client.post(
+            "/generate-v2",
+            files={"pdf_file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+            data={"deck_name": "Deck A", "tags": "[1,2,3]"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "invalid_input"
+    assert detail["details"] == {"field": "tags", "reason": "invalid_type"}
+
+
 def test_generate_v2_resume_with_after_sequence_no_replays_before_resume() -> None:
     service = AsyncMock()
 
