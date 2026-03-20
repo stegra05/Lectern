@@ -29,11 +29,17 @@ def get_generation_service() -> LecternGenerationService:
 
 
 @lru_cache(maxsize=1)
+def get_history_repository_v2() -> HistoryRepositorySqlite:
+    """Build and cache the V2 history repository."""
+    db_path = get_app_data_dir() / "state" / "history_v2.sqlite3"
+    return HistoryRepositorySqlite(db_path=db_path)
+
+
+@lru_cache(maxsize=1)
 def get_generation_app_service_v2() -> GenerationAppServiceImpl:
     """Build and cache the V2 generation app service with concrete adapters."""
-    db_path = get_app_data_dir() / "state" / "history_v2.sqlite3"
     return GenerationAppServiceImpl(
-        history=HistoryRepositorySqlite(db_path=db_path),
+        history=get_history_repository_v2(),
         runtime_store=SessionRuntimeStore(),
         translator=EventTranslator(),
         pdf_extractor=PdfExtractorAdapter(),

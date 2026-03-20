@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from lectern import config
@@ -15,14 +16,37 @@ from gui.backend.dependencies import get_generation_app_service_v2
 from gui.backend.interface_v2.serializers.events_v2 import serialize_api_event_v2
 from lectern.application.dto import (
     ApiEventV2,
+    CancelGenerationRequest,
     ReplayStreamRequest,
     ResumeGenerationRequest,
     StartGenerationRequest,
 )
 from lectern.application.errors import GenerationApplicationError, GenerationErrorCode
 from lectern.application.generation_app_service import GenerationAppServiceImpl
+from lectern.cost_estimator import estimate_cost_with_base as estimate_cost_with_base_impl
 
 router = APIRouter()
+
+
+class EstimateV2Response(BaseModel):
+    tokens: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    input_cost: float | None = None
+    output_cost: float | None = None
+    cost: float | None = None
+    pages: int | None = None
+    text_chars: int | None = None
+    model: str | None = None
+    suggested_card_count: int | None = None
+    estimated_card_count: int | None = None
+    image_count: int | None = None
+    document_type: str | None = None
+
+
+class StopV2Response(BaseModel):
+    stopped: bool
+    session_id: str
 
 
 def _to_http_status(code: GenerationErrorCode) -> int:
@@ -81,6 +105,54 @@ def _save_upload(pdf_file: UploadFile) -> str:
         for chunk in iter(lambda: pdf_file.file.read(65536), b""):
             tmp.write(chunk)
         return tmp.name
+
+
+@router.post("/estimate-v2", response_model=EstimateV2Response)
+async def estimate_v2(
+    pdf_file: UploadFile = File(...),
+    model_name: str | None = Form(None),
+    target_card_count: int | None = Form(None),
+) -> dict[str, object]:
+    tmp_path = await run_in_threadpool(_save_upload, pdf_file)
+    try:
+        estimate, _base = await estimate_cost_with_base_impl(
+            tmp_path,
+            model_name=model_name,
+            target_card_count=target_card_count,
+        )
+        return estimate
+    except (RuntimeError, OSError, ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "estimate_failed",
+                "message": str(exc),
+            },
+        ) from exc
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+@router.post("/stop-v2", response_model=StopV2Response)
+async def stop_v2(
+    session_id: str | None = None,
+    app_service: GenerationAppServiceImpl = Depends(get_generation_app_service_v2),
+) -> dict[str, object]:
+    if not session_id:
+        raise _to_http_error(
+            GenerationApplicationError(
+                GenerationErrorCode.INVALID_INPUT,
+                "session_id is required",
+                details={"field": "session_id"},
+            )
+        )
+
+    result = await app_service.cancel(CancelGenerationRequest(session_id=session_id))
+    return {
+        "stopped": result.get("code") == "cancelled",
+        "session_id": str(result.get("session_id") or session_id),
+    }
 
 
 def _terminal_error_event(

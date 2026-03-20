@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from gui.backend.dependencies import get_generation_app_service_v2
 from gui.backend.main import app
+from gui.backend.interface_v2.routers import generation_v2
 from lectern.application.dto import ApiEventV2, StartGenerationRequest
 from lectern.application.errors import GenerationApplicationError, GenerationErrorCode
 
@@ -241,3 +242,94 @@ def test_generate_v2_resume_with_after_sequence_no_replays_before_resume() -> No
     assert [event["sequence_no"] for event in payload] == [3, 4, 5]
     assert payload[0]["type"] == "phase_started"
     assert payload[-1]["type"] == "session_completed"
+
+
+def test_estimate_v2_returns_estimation_payload() -> None:
+    async def fake_estimate_cost_with_base(
+        _pdf_path: str,
+        model_name: str | None = None,
+        target_card_count: int | None = None,
+    ):
+        return (
+            {
+                "tokens": 120,
+                "input_tokens": 150,
+                "output_tokens": 200,
+                "input_cost": 0.01,
+                "output_cost": 0.02,
+                "cost": 0.03,
+                "pages": 3,
+                "text_chars": 900,
+                "model": model_name or "gemini-2.5-flash",
+                "suggested_card_count": 3,
+                "estimated_card_count": target_card_count or 4,
+                "image_count": 0,
+                "document_type": "slides",
+            },
+            {
+                "token_count": 120,
+                "page_count": 3,
+                "text_chars": 900,
+                "image_count": 0,
+                "model": model_name or "gemini-2.5-flash",
+            },
+        )
+
+    original_impl = generation_v2.estimate_cost_with_base_impl
+    generation_v2.estimate_cost_with_base_impl = fake_estimate_cost_with_base
+    try:
+        response = client.post(
+            "/estimate-v2",
+            files={"pdf_file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+            data={"model_name": "gemini-2.5-flash", "target_card_count": "4"},
+        )
+    finally:
+        generation_v2.estimate_cost_with_base_impl = original_impl
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tokens"] == 120
+    assert payload["estimated_card_count"] == 4
+    assert payload["model"] == "gemini-2.5-flash"
+
+
+def test_stop_v2_calls_cancel_with_session_id() -> None:
+    service = AsyncMock()
+    service.run_generation_stream = AsyncMock()
+    service.run_resume_stream = AsyncMock()
+    service.cancel = AsyncMock(
+        return_value={"ok": True, "session_id": "session-1", "code": "cancelled"}
+    )
+    service.replay_stream = AsyncMock()
+
+    app.dependency_overrides[get_generation_app_service_v2] = lambda: service
+    try:
+        response = client.post("/stop-v2?session_id=session-1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {"stopped": True, "session_id": "session-1"}
+    service.cancel.assert_awaited_once()
+    cancel_req = service.cancel.await_args.args[0]
+    assert cancel_req.session_id == "session-1"
+
+
+def test_stop_v2_requires_session_id() -> None:
+    service = AsyncMock()
+    service.run_generation_stream = AsyncMock()
+    service.run_resume_stream = AsyncMock()
+    service.cancel = AsyncMock()
+    service.replay_stream = AsyncMock()
+
+    app.dependency_overrides[get_generation_app_service_v2] = lambda: service
+    try:
+        response = client.post("/stop-v2")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "invalid_input"
+    assert detail["details"] == {"field": "session_id"}
+    service.cancel.assert_not_awaited()

@@ -31,9 +31,9 @@ def test_critical_endpoints_have_typed_response_schemas():
         ("/history", "delete"),
         ("/history/{entry_id}", "delete"),
         ("/history/batch-delete", "post"),
-        ("/estimate", "post"),
-        ("/stop", "post"),
-        ("/session/{session_id}", "get"),
+        ("/estimate-v2", "post"),
+        ("/stop-v2", "post"),
+        ("/session-v2/{session_id}", "get"),
         ("/anki/notes", "delete"),
         ("/anki/notes/{note_id}", "put"),
     ]

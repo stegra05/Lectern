@@ -61,6 +61,10 @@ const ENV_API_URL =
     typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_URL : undefined;
 const API_URL = ENV_API_URL || getApiUrl();
 const apiClient = createClient<paths>({ baseUrl: API_URL });
+const V2_GENERATE_PATH = '/generate-v2';
+const V2_ESTIMATE_PATH = '/estimate-v2';
+const V2_STOP_PATH = '/stop-v2';
+const V2_SESSION_PATH = '/session-v2';
 
 export interface GenerateRequest {
     pdf_file: File;
@@ -387,44 +391,18 @@ export const api = {
             });
         }
 
-        const payload = await apiClient.POST('/estimate', {
-            body: formData as unknown as components['schemas']['Body_estimate_cost_estimate_post'],
-            bodySerializer: (body) => body as unknown as FormData,
+        const response = await fetch(`${API_URL}${V2_ESTIMATE_PATH}`, {
+            method: 'POST',
+            body: formData,
             signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
-        const data = unwrapData(payload, 'Failed to estimate cost');
-        return normalizeEstimation(data as Record<string, unknown>);
-    },
-
-    generate: async (req: GenerateRequest, onEvent: (event: ProgressEvent) => void) => {
-        const formData = new FormData();
-        formData.append("pdf_file", req.pdf_file);
-        formData.append("deck_name", req.deck_name);
-        if (req.model_name) formData.append("model_name", req.model_name);
-        if (req.tags) formData.append("tags", JSON.stringify(req.tags));
-        if (req.context_deck) formData.append("context_deck", req.context_deck);
-        formData.append("focus_prompt", req.focus_prompt || "");
-        if (req.target_card_count !== undefined) {
-            formData.append("target_card_count", String(req.target_card_count));
-        }
-        if (req.session_id) {
-            formData.append("session_id", req.session_id);
-        }
-
-        const { response } = await apiClient.POST('/generate', {
-            body: formData as unknown as components['schemas']['Body_generate_cards_generate_post'],
-            bodySerializer: (body) => body as unknown as FormData,
-            parseAs: 'stream',
-        });
-
         if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errBody}`);
+            throw new Error('Failed to estimate cost');
         }
-
-        await parseNDJSONStream(response, onEvent);
+        const data = (await response.json()) as Record<string, unknown>;
+        return normalizeEstimation(data);
     },
 
     generateV2: async (req: GenerateRequest, onEvent: (event: ProgressEventV2) => void) => {
@@ -445,7 +423,7 @@ export const api = {
             formData.append("after_sequence_no", String(req.after_sequence_no));
         }
 
-        const { response } = await apiClient.POST('/generate-v2', {
+        const { response } = await apiClient.POST(V2_GENERATE_PATH as keyof paths, {
             body: formData as unknown as components['schemas']['Body_generate_cards_generate_post'],
             bodySerializer: (body) => body as unknown as FormData,
             parseAs: 'stream',
@@ -460,21 +438,22 @@ export const api = {
     },
 
     stopGeneration: async (sessionId?: string): Promise<StopResponse> => {
-        return unwrapData(
-            await apiClient.POST('/stop', {
-                params: sessionId ? { query: { session_id: sessionId } } : undefined,
-            }),
-            'Failed to stop generation'
-        );
+        const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+        const response = await fetch(`${API_URL}${V2_STOP_PATH}${query}`, {
+            method: 'POST',
+        });
+        if (!response.ok) {
+            throw new Error('Failed to stop generation');
+        }
+        return (await response.json()) as StopResponse;
     },
 
     getSession: async (sessionId: string): Promise<SessionData> => {
-        const data = unwrapData(
-            await apiClient.GET('/session/{session_id}', {
-                params: { path: { session_id: sessionId } },
-            }),
-            'Failed to load session'
-        );
+        const response = await fetch(`${API_URL}${V2_SESSION_PATH}/${encodeURIComponent(sessionId)}`);
+        if (!response.ok) {
+            throw new Error('Failed to load session');
+        }
+        const data = (await response.json()) as SessionData;
         return {
             ...data,
             cards: ((data.cards ?? []) as Card[]),
