@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 import sqlite3
 from typing import Any
@@ -51,6 +52,30 @@ async def test_pdf_extractor_adapter_maps_extract_pdf_metadata_to_typed_metadata
     assert metadata.image_count == 3
     assert metadata.metadata_pages == 7
     assert metadata.metadata_chars == 4200
+
+
+@pytest.mark.asyncio
+async def test_pdf_extractor_adapter_handles_file_stat_race(
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "missing-after-parse.pdf"
+
+    def fake_extract(path: str) -> dict[str, int]:
+        Path(path).write_bytes(b"temporary")
+        Path(path).unlink()
+        return {
+            "page_count": 1,
+            "text_chars": 25,
+            "image_count": 0,
+        }
+
+    adapter = PdfExtractorAdapter(extractor=fake_extract)
+
+    metadata = await adapter.extract_metadata(str(pdf_path))
+
+    assert metadata.file_size == 0
+    assert metadata.page_count == 1
+    assert metadata.text_chars == 25
 
 
 class _StubGeminiProvider:
@@ -264,6 +289,93 @@ async def test_history_repository_replay_returns_ascending_domain_records(
 
     assert [record.sequence_no for record in records] == [1, 2, 3]
     assert [record.event.message for record in records] == ["first", "second", "third"]
+
+
+@pytest.mark.asyncio
+async def test_history_repository_replay_skips_unknown_and_corrupt_events(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+
+    await repo.create_session({"session_id": "session-1", "status": "running"})
+    await repo.append_events(
+        "session-1",
+        [
+            DomainEventRecord(
+                session_id="session-1",
+                sequence_no=1,
+                event=WarningEmitted(
+                    code="warn-1",
+                    message="first",
+                    details={"index": 1},
+                ),
+            )
+        ],
+    )
+
+    db_path = tmp_path / "history_v2.sqlite3"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO session_events (session_id, sequence_no, event_class, event_payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "session-1",
+                2,
+                "UnknownEvent",
+                '{"event_class":"UnknownEvent","data":{}}',
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO session_events (session_id, sequence_no, event_class, event_payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "session-1",
+                3,
+                "WarningEmitted",
+                '{not-json',
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO session_events (session_id, sequence_no, event_class, event_payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "session-1",
+                4,
+                "WarningEmitted",
+                '{"event_class":"WarningEmitted","data":{"code":"warn-4"}}',
+            ),
+        )
+        conn.commit()
+
+    records = await repo.get_events_after("session-1", after_sequence_no=0)
+
+    assert [record.sequence_no for record in records] == [1]
+    assert records[0].event.message == "first"
+
+
+@pytest.mark.asyncio
+async def test_history_repository_sync_state_preserves_parallel_phase_update(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+
+    await repo.create_session({"session_id": "session-1", "status": "running", "phase": "init"})
+
+    await asyncio.gather(
+        repo.sync_state({"session_id": "session-1", "status": "running", "cursor": 10}),
+        repo.update_phase("session-1", "extract"),
+    )
+
+    session = await repo.get_session("session-1")
+    assert session is not None
+    assert session["phase"] == "extract"
+    assert session["cursor"] == 10
 
 
 @pytest.mark.asyncio

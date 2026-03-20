@@ -48,8 +48,10 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
+        conn = sqlite3.connect(str(self._db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
         return conn
 
     def _init_db(self) -> None:
@@ -102,52 +104,68 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
             )
             conn.commit()
 
+    def _insert_session_if_missing(
+        self,
+        conn: sqlite3.Connection,
+        session_id: str,
+    ) -> None:
+        row = conn.execute(
+            "SELECT 1 FROM sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if row is not None:
+            return
+        conn.execute(
+            """
+            INSERT INTO sessions (session_id, payload, phase, status, updated_at)
+            VALUES (?, '{}', NULL, NULL, unixepoch())
+            """,
+            (session_id,),
+        )
+
     async def update_phase(self, session_id: str, phase: str) -> None:
         await asyncio.to_thread(self._update_phase_sync, session_id, phase)
 
     def _update_phase_sync(self, session_id: str, phase: str) -> None:
         with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT payload FROM sessions WHERE session_id = ?", (session_id,)
-            ).fetchone()
-            if row is None:
-                return
-            payload = json.loads(row["payload"])
-            payload["phase"] = phase
-            conn.execute(
-                """
-                UPDATE sessions
-                SET payload = ?, phase = ?, updated_at = unixepoch()
-                WHERE session_id = ?
-                """,
-                (json.dumps(payload), phase, session_id),
-            )
-            conn.commit()
+            with conn:
+                updated = conn.execute(
+                    """
+                    UPDATE sessions
+                    SET payload = json_set(payload, '$.phase', json(?)),
+                        phase = ?,
+                        updated_at = unixepoch()
+                    WHERE session_id = ?
+                    """,
+                    (json.dumps(phase), phase, session_id),
+                ).rowcount
+                if updated == 0:
+                    return
 
     async def append_events(self, session_id: str, events: list[DomainEventRecord]) -> None:
         await asyncio.to_thread(self._append_events_sync, session_id, events)
 
     def _append_events_sync(self, session_id: str, events: list[DomainEventRecord]) -> None:
         with closing(self._connect()) as conn:
-            for record in events:
-                event_payload = {
-                    "event_class": type(record.event).__name__,
-                    "data": self._dataclass_to_dict(record.event),
-                }
-                conn.execute(
-                    """
-                    INSERT INTO session_events
-                    (session_id, sequence_no, event_class, event_payload)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        session_id,
-                        int(record.sequence_no),
-                        type(record.event).__name__,
-                        json.dumps(event_payload),
-                    ),
-                )
-            conn.commit()
+            with conn:
+                for record in events:
+                    event_payload = {
+                        "event_class": type(record.event).__name__,
+                        "data": self._dataclass_to_dict(record.event),
+                    }
+                    conn.execute(
+                        """
+                        INSERT INTO session_events
+                        (session_id, sequence_no, event_class, event_payload)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (
+                            session_id,
+                            int(record.sequence_no),
+                            type(record.event).__name__,
+                            json.dumps(event_payload),
+                        ),
+                    )
 
     async def sync_state(self, snapshot: Any) -> None:
         await asyncio.to_thread(self._sync_state_sync, snapshot)
@@ -159,46 +177,39 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
             return
 
         with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT payload FROM sessions WHERE session_id = ?", (session_id,)
-            ).fetchone()
-            current = json.loads(row["payload"]) if row else {}
-            current.update(payload)
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO sessions (session_id, payload, phase, status, updated_at)
-                VALUES (?, ?, ?, ?, unixepoch())
-                """,
-                (
-                    session_id,
-                    json.dumps(current),
-                    current.get("phase"),
-                    current.get("status"),
-                ),
-            )
-            conn.commit()
+            with conn:
+                self._insert_session_if_missing(conn, session_id)
+                patch_json = json.dumps(payload)
+                conn.execute(
+                    """
+                    UPDATE sessions
+                    SET payload = json_patch(payload, ?),
+                        phase = json_extract(json_patch(payload, ?), '$.phase'),
+                        status = json_extract(json_patch(payload, ?), '$.status'),
+                        updated_at = unixepoch()
+                    WHERE session_id = ?
+                    """,
+                    (patch_json, patch_json, patch_json, session_id),
+                )
 
     async def mark_terminal(self, session_id: str, status: str) -> None:
         await asyncio.to_thread(self._mark_terminal_sync, session_id, status)
 
     def _mark_terminal_sync(self, session_id: str, status: str) -> None:
         with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT payload FROM sessions WHERE session_id = ?", (session_id,)
-            ).fetchone()
-            if row is None:
-                return
-            payload = json.loads(row["payload"])
-            payload["status"] = status
-            conn.execute(
-                """
-                UPDATE sessions
-                SET payload = ?, status = ?, updated_at = unixepoch()
-                WHERE session_id = ?
-                """,
-                (json.dumps(payload), status, session_id),
-            )
-            conn.commit()
+            with conn:
+                updated = conn.execute(
+                    """
+                    UPDATE sessions
+                    SET payload = json_set(payload, '$.status', json(?)),
+                        status = ?,
+                        updated_at = unixepoch()
+                    WHERE session_id = ?
+                    """,
+                    (json.dumps(status), status, session_id),
+                ).rowcount
+                if updated == 0:
+                    return
 
     async def get_session(self, session_id: str) -> dict[str, Any] | None:
         return await asyncio.to_thread(self._get_session_sync, session_id)
@@ -209,7 +220,7 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
                 "SELECT payload FROM sessions WHERE session_id = ?",
                 (session_id,),
             ).fetchone()
-            return None if row is None else json.loads(row["payload"])
+            return None if row is None else self._safe_load_json_object(row["payload"])
 
     async def get_events_after(
         self,
@@ -245,8 +256,9 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
 
         records: list[DomainEventRecord] = []
         for row in rows:
-            payload = json.loads(row["event_payload"])
-            event = self._dict_to_event(payload)
+            event = self._decode_event_payload(row["event_payload"])
+            if event is None:
+                continue
             records.append(
                 DomainEventRecord(
                     session_id=session_id,
@@ -255,6 +267,24 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
                 )
             )
         return records
+
+    def _safe_load_json_object(self, raw_payload: Any) -> dict[str, Any]:
+        if not isinstance(raw_payload, str):
+            return {}
+        try:
+            decoded = json.loads(raw_payload)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return decoded if isinstance(decoded, dict) else {}
+
+    def _decode_event_payload(self, raw_payload: Any) -> DomainEvent | None:
+        payload = self._safe_load_json_object(raw_payload)
+        if not payload:
+            return None
+        try:
+            return self._dict_to_event(payload)
+        except (TypeError, ValueError):
+            return None
 
     def _dataclass_to_dict(self, value: Any) -> dict[str, Any]:
         if not is_dataclass(value):

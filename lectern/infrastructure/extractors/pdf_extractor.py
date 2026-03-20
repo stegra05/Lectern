@@ -24,12 +24,16 @@ class PdfExtractorAdapter(PdfExtractorPort):
         path = Path(pdf_path)
         page_count = int(raw.get("page_count", 0) or 0)
         text_chars = int(raw.get("text_chars", 0) or 0)
+        try:
+            file_size = path.stat().st_size
+        except OSError:
+            file_size = 0
 
         return PDFMetadata(
             path=pdf_path,
             filename=path.stem,
             title=path.stem,
-            file_size=path.stat().st_size if path.exists() else 0,
+            file_size=file_size,
             page_count=page_count,
             text_chars=text_chars,
             image_count=int(raw.get("image_count", 0) or 0),
