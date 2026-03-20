@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { loadSession, recoverSessionOnRefresh, processGenerationEvent } from '../logic/generation';
+import {
+    loadSession,
+    recoverSessionOnRefresh,
+    processGenerationEvent,
+    processGenerationEventV2,
+    getReplayCursorFromV2Event,
+} from '../logic/generation';
 import { api } from '../api';
 import { validateGenerationStoppedDetails } from '../schemas/sse';
 import type { Step } from '../store-types';
@@ -18,6 +24,7 @@ vi.mock('../api', () => ({
     api: {
         getSession: vi.fn(),
         stopGeneration: vi.fn(),
+        generateV2: vi.fn(),
     },
 }));
 
@@ -165,6 +172,162 @@ describe('generation logic', () => {
             expect(result).toHaveProperty('totalPages');
             expect((result as { cards: unknown[] }).cards).toHaveLength(1);
             expect((result as { totalPages: number }).totalPages).toBe(10);
+        });
+    });
+
+    describe('processGenerationEventV2', () => {
+        it('accepts v2 session_started envelope and updates sessionId', () => {
+            const setFn = vi.fn();
+
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 1,
+                    type: 'session_started',
+                    message: '',
+                    timestamp: Date.now(),
+                    data: { mode: 'start' },
+                },
+                setFn
+            );
+
+            expect(setFn).toHaveBeenCalled();
+            expect(setFn.mock.calls[0][0]({ replayCursor: null } as unknown as StoreState)).toMatchObject({
+                sessionId: 's1',
+                replayCursor: 1,
+            });
+        });
+
+        it('extracts replay cursor from v2 sequence_no', () => {
+            const cursor = getReplayCursorFromV2Event({
+                event_version: 2,
+                session_id: 's1',
+                sequence_no: 42,
+                type: 'progress_updated',
+                message: '',
+                timestamp: Date.now(),
+                data: { phase: 'generation', current: 1, total: 2 },
+            });
+
+            expect(cursor).toBe(42);
+        });
+
+        it('maps warning_emitted code/details to legacy warning reason payload', () => {
+            const setFn = vi.fn();
+
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 7,
+                    type: 'warning_emitted',
+                    message: 'warn',
+                    timestamp: Date.now(),
+                    data: {
+                        code: 'grounding_non_progress_duplicates',
+                        details: { last_batch_duplicate_drop_count: 3 },
+                    },
+                },
+                setFn
+            );
+
+            expect(storeSpies.addToast).toHaveBeenCalledWith(
+                'warning',
+                'Generation stopped: duplicate saturation (3 duplicate drops).',
+                8000
+            );
+        });
+
+        it('maps phase_completed summary to legacy step_end page_count/coverage_data payload', () => {
+            const setFn = vi.fn();
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 8,
+                    type: 'phase_completed',
+                    message: '',
+                    timestamp: Date.now(),
+                    data: {
+                        phase: 'generation',
+                        duration_ms: 1200,
+                        summary: {
+                            total_pages: 15,
+                        },
+                    },
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const result = update({
+                totalPages: 0,
+                coverageData: null,
+            } as unknown as StoreState);
+            expect(result).toMatchObject({
+                totalPages: 15,
+            });
+        });
+
+        it('stores replayCursor monotonically from sequence_no', () => {
+            const setFn = vi.fn();
+
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 10,
+                    type: 'progress_updated',
+                    message: '',
+                    timestamp: Date.now(),
+                    data: { phase: 'generation', current: 1, total: 2 },
+                },
+                setFn
+            );
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 7,
+                    type: 'progress_updated',
+                    message: '',
+                    timestamp: Date.now(),
+                    data: { phase: 'generation', current: 2, total: 2 },
+                },
+                setFn
+            );
+
+            const first = setFn.mock.calls[0][0]({ replayCursor: null } as unknown as StoreState);
+            const second = setFn.mock.calls[3][0]({ replayCursor: 10 } as unknown as StoreState);
+            expect(first).toMatchObject({ replayCursor: 10 });
+            expect(second).toMatchObject({ replayCursor: 10 });
+        });
+    });
+
+    describe('handleResume cursor handoff', () => {
+        it('passes replayCursor into generateV2 request as after_sequence_no', async () => {
+            const getMock = vi.fn(() => ({
+                deckName: 'Deck A',
+                focusPrompt: '',
+                targetDeckSize: 10,
+                replayCursor: 15,
+            }));
+            const setFn = vi.fn();
+            const pdfFile = new File(['%PDF-1.4'], 'resume.pdf', { type: 'application/pdf' });
+
+            vi.mocked(api.generateV2).mockResolvedValue(undefined);
+
+            const { handleResume } = await import('../logic/generation');
+            await handleResume('s1', pdfFile, setFn as unknown as (partial: Partial<StoreState> | ((state: StoreState) => Partial<StoreState>)) => void, getMock as unknown as () => LecternStore);
+
+            expect(api.generateV2).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    session_id: 's1',
+                    after_sequence_no: 15,
+                }),
+                expect.any(Function)
+            );
         });
     });
 

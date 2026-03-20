@@ -2,6 +2,7 @@ import createClient from 'openapi-fetch';
 
 import type { components, paths } from './generated/api';
 import { ProgressEventSchema } from './schemas/sse';
+import { ApiEventV2Schema } from './schemas/sse-v2';
 import { validateOrThrow } from './schemas/validate';
 import type {
   AnkiNoteResponse,
@@ -70,6 +71,7 @@ export interface GenerateRequest {
     focus_prompt?: string;
     target_card_count?: number;
     session_id?: string;
+    after_sequence_no?: number;
 }
 
 export type SnapshotStatus =
@@ -117,6 +119,26 @@ export interface ProgressEvent {
     | "step_start"
     | "step_end"
     | "control_snapshot";
+    message: string;
+    data?: unknown;
+    timestamp: number;
+}
+
+export interface ProgressEventV2 {
+    event_version: 2;
+    session_id: string;
+    sequence_no: number;
+    type:
+    | "session_started"
+    | "phase_started"
+    | "progress_updated"
+    | "card_emitted"
+    | "cards_replaced"
+    | "warning_emitted"
+    | "error_emitted"
+    | "phase_completed"
+    | "session_completed"
+    | "session_cancelled";
     message: string;
     data?: unknown;
     timestamp: number;
@@ -176,6 +198,42 @@ const parseNDJSONStream = async (
             console.error("Failed to parse/validate event:", buffer, e);
             throw e;
         }
+    }
+};
+
+const parseNDJSONStreamV2 = async (
+    res: Response,
+    onEvent: (event: ProgressEventV2) => void
+): Promise<void> => {
+    if (!res.body) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    const emitValidated = (raw: unknown) => {
+        const event = validateOrThrow(ApiEventV2Schema, raw);
+        onEvent(event as ProgressEventV2);
+    };
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+            if (line.trim()) {
+                const raw = JSON.parse(line);
+                emitValidated(raw);
+            }
+        }
+    }
+
+    if (buffer.trim()) {
+        const raw = JSON.parse(buffer);
+        emitValidated(raw);
     }
 };
 
@@ -357,6 +415,38 @@ export const api = {
         }
 
         await parseNDJSONStream(response, onEvent);
+    },
+
+    generateV2: async (req: GenerateRequest, onEvent: (event: ProgressEventV2) => void) => {
+        const formData = new FormData();
+        formData.append("pdf_file", req.pdf_file);
+        formData.append("deck_name", req.deck_name);
+        if (req.model_name) formData.append("model_name", req.model_name);
+        if (req.tags) formData.append("tags", JSON.stringify(req.tags));
+        if (req.context_deck) formData.append("context_deck", req.context_deck);
+        formData.append("focus_prompt", req.focus_prompt || "");
+        if (req.target_card_count !== undefined) {
+            formData.append("target_card_count", String(req.target_card_count));
+        }
+        if (req.session_id) {
+            formData.append("session_id", req.session_id);
+        }
+        if (req.after_sequence_no !== undefined) {
+            formData.append("after_sequence_no", String(req.after_sequence_no));
+        }
+
+        const { response } = await apiClient.POST('/generate-v2', {
+            body: formData as unknown as components['schemas']['Body_generate_cards_generate_post'],
+            bodySerializer: (body) => body as unknown as FormData,
+            parseAs: 'stream',
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errBody}`);
+        }
+
+        await parseNDJSONStreamV2(response, onEvent);
     },
 
     stopGeneration: async (sessionId?: string): Promise<StopResponse> => {

@@ -55,6 +55,7 @@ export type StoreState = {
     progress: { current: number; total: number };
     currentPhase: Phase;
     sessionId: string | null;
+    replayCursor: number | null;
     isError: boolean;
     isCancelling: boolean;
     isResuming: boolean;

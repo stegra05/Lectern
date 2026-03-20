@@ -1,4 +1,4 @@
-import { api, type ProgressEvent, type Card, type CoverageData, type SessionData, type ControlSnapshot } from '../api';
+import { api, type ProgressEvent, type ProgressEventV2, type Card, type CoverageData, type SessionData, type ControlSnapshot } from '../api';
 import type { StoreState, LecternStore, Phase, RubricSummary } from '../store-types';
 import { processStreamEvent } from './stream';
 import { applyControlSnapshot } from './snapshot';
@@ -17,6 +17,79 @@ import {
 
 const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
+};
+
+export const getReplayCursorFromV2Event = (event: ProgressEventV2): number => event.sequence_no;
+
+export const mapV2EventToLegacyEvent = (event: ProgressEventV2): ProgressEvent => {
+    const typeMap: Record<ProgressEventV2["type"], ProgressEvent["type"]> = {
+        session_started: "session_start",
+        phase_started: "step_start",
+        progress_updated: "progress_update",
+        card_emitted: "card",
+        cards_replaced: "cards_replaced",
+        warning_emitted: "warning",
+        error_emitted: "error",
+        phase_completed: "step_end",
+        session_completed: "done",
+        session_cancelled: "cancelled",
+    };
+
+    let data = event.data;
+    if (event.type === "session_started") {
+        data = {
+            session_id: event.session_id,
+            ...(typeof event.data === "object" && event.data ? (event.data as Record<string, unknown>) : {}),
+        };
+    } else if (event.type === "card_emitted" && event.data && typeof event.data === "object") {
+        const raw = event.data as Record<string, unknown>;
+        data = { card: raw.card };
+    } else if (event.type === "phase_started" && event.data && typeof event.data === "object") {
+        const raw = event.data as Record<string, unknown>;
+        data = { phase: raw.phase };
+    } else if (event.type === "warning_emitted" && event.data && typeof event.data === "object") {
+        const raw = event.data as Record<string, unknown>;
+        const details = (raw.details ?? {}) as Record<string, unknown>;
+        data = {
+            reason: typeof raw.code === "string" ? raw.code : "",
+            ...details,
+        };
+    } else if (event.type === "phase_completed" && event.data && typeof event.data === "object") {
+        const raw = event.data as Record<string, unknown>;
+        const summary = (raw.summary ?? {}) as Record<string, unknown>;
+        data = {
+            phase: raw.phase,
+            page_count: summary.page_count ?? summary.total_pages,
+            coverage_data: summary.coverage_data,
+        };
+    } else if (event.type === "session_completed" && event.data && typeof event.data === "object") {
+        const raw = event.data as Record<string, unknown>;
+        const summary = (raw.summary ?? {}) as Record<string, unknown>;
+        data = {
+            total_pages: summary.total_pages,
+            coverage_data: summary.coverage_data,
+            rubric_summary: summary.rubric_summary,
+        };
+    }
+
+    return {
+        type: typeMap[event.type],
+        message: event.message,
+        data,
+        timestamp: event.timestamp,
+    };
+};
+
+export const processGenerationEventV2 = (
+    event: ProgressEventV2,
+    set: (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void
+) => {
+    const cursor = getReplayCursorFromV2Event(event);
+    set((state) => ({
+        sessionId: event.session_id,
+        replayCursor: state.replayCursor === null ? cursor : Math.max(state.replayCursor, cursor),
+    }));
+    processGenerationEvent(mapV2EventToLegacyEvent(event), set);
 };
 
 const normalizeRubricSummary = (value: unknown): RubricSummary | null => {
@@ -260,6 +333,7 @@ export const handleGenerate = async (
         cards: [],
         progress: { current: 0, total: 0 },
         sessionId: null,
+        replayCursor: null,
         isError: false,
         isCancelling: false,
         isResuming: false,
@@ -271,14 +345,14 @@ export const handleGenerate = async (
         lastSnapshotTimestamp: null,
     });
     try {
-        await api.generate(
+        await api.generateV2(
             {
                 pdf_file: state.pdfFile,
                 deck_name: state.deckName,
                 focus_prompt: state.focusPrompt,
                 target_card_count: state.targetDeckSize,
             },
-            (event) => processGenerationEvent(event, set)
+            (event) => processGenerationEventV2(event, set)
         );
     } catch (e: unknown) {
         const error = e as Error;
@@ -337,12 +411,14 @@ export const handleResume = async (
 ) => {
     const state = get();
     if (!pdfFile || !state.deckName) return;
+    const resumeCursor = state.replayCursor ?? undefined;
 
     set({
         step: 'generating',
         logs: [],
         progress: { current: 0, total: 0 },
         sessionId,
+        replayCursor: state.replayCursor,
         isError: false,
         isCancelling: false,
         isResuming: true,
@@ -353,15 +429,16 @@ export const handleResume = async (
         lastSnapshotTimestamp: null,
     });
     try {
-        await api.generate(
+        await api.generateV2(
             {
                 pdf_file: pdfFile,
                 deck_name: state.deckName,
                 focus_prompt: state.focusPrompt,
                 target_card_count: state.targetDeckSize,
                 session_id: sessionId,
+                after_sequence_no: resumeCursor,
             },
-            (event) => processGenerationEvent(event, set)
+            (event) => processGenerationEventV2(event, set)
         );
     } catch (e: unknown) {
         const error = e as Error;
@@ -418,6 +495,7 @@ export const loadSession = async (
             coverageData: session.coverage_data || null,
             deckName: session.deck_name || session.deck || '',
             sessionId,
+            replayCursor: null,
             isHistorical: true,
             rubricSummary: null,
             step: 'done',
@@ -444,6 +522,7 @@ export const recoverSessionOnRefresh = async (
         const cards = stampUids(normalizeCardsMetadata(snapshot.cards || []));
         set({
             sessionId,
+            replayCursor: null,
             cards,
             totalPages: deriveTotalPages(cards, snapshot.total_pages),
             coverageData: snapshot.coverage_data || null,
@@ -456,6 +535,6 @@ export const recoverSessionOnRefresh = async (
     } catch (error) {
         console.warn('Session recovery failed:', error);
         clearActiveSessionId();
-        set({ sessionId: null });
+        set({ sessionId: null, replayCursor: null });
     }
 };

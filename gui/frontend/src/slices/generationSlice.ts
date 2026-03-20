@@ -16,6 +16,7 @@ export const getGenerationState = () => ({
   isError: false,
   isCancelling: false,
   isResuming: false,
+  replayCursor: null as number | null,
   estimation: null as import("../api").Estimation | null,
   isEstimating: false,
   estimationError: null as string | null,
