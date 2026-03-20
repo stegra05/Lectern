@@ -61,7 +61,7 @@ const ENV_API_URL =
     typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_URL : undefined;
 const API_URL = ENV_API_URL || getApiUrl();
 const apiClient = createClient<paths>({ baseUrl: API_URL });
-const V2_GENERATE_PATH = '/generate-v2';
+const V2_GENERATE_PATH = '/generate-v2' as const;
 const V2_ESTIMATE_PATH = '/estimate-v2';
 const V2_STOP_PATH = '/stop-v2';
 const V2_SESSION_PATH = '/session-v2';
@@ -423,8 +423,8 @@ export const api = {
             formData.append("after_sequence_no", String(req.after_sequence_no));
         }
 
-        const { response } = await apiClient.POST(V2_GENERATE_PATH as keyof paths, {
-            body: formData as unknown as components['schemas']['Body_generate_cards_generate_post'],
+        const { response } = await apiClient.POST(V2_GENERATE_PATH, {
+            body: formData as unknown as components['schemas']['Body_generate_v2_generate_v2_post'],
             bodySerializer: (body) => body as unknown as FormData,
             parseAs: 'stream',
         });

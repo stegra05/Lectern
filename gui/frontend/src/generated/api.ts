@@ -97,7 +97,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/estimate": {
+    "/estimate-v2": {
         parameters: {
             query?: never;
             header?: never;
@@ -106,15 +106,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Estimate Cost */
-        post: operations["estimate_cost_estimate_post"];
+        /** Estimate V2 */
+        post: operations["estimate_v2_estimate_v2_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/generate": {
+    "/generate-v2": {
         parameters: {
             query?: never;
             header?: never;
@@ -123,8 +123,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate Cards */
-        post: operations["generate_cards_generate_post"];
+        /** Generate V2 */
+        post: operations["generate_v2_generate_v2_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -220,6 +220,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/session-v2/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session V2 */
+        get: operations["get_session_v2_session_v2__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/session/{session_id}": {
         parameters: {
             query?: never;
@@ -237,7 +254,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stop": {
+    "/stop-v2": {
         parameters: {
             query?: never;
             header?: never;
@@ -246,8 +263,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stop Generation */
-        post: operations["stop_generation_stop_post"];
+        /** Stop V2 */
+        post: operations["stop_v2_stop_v2_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -396,8 +413,8 @@ export interface components {
             /** Status */
             status?: null | string;
         };
-        /** Body_estimate_cost_estimate_post */
-        Body_estimate_cost_estimate_post: {
+        /** Body_estimate_v2_estimate_v2_post */
+        Body_estimate_v2_estimate_v2_post: {
             /** Model Name */
             model_name?: null | string;
             /**
@@ -408,13 +425,10 @@ export interface components {
             /** Target Card Count */
             target_card_count?: number | null;
         };
-        /** Body_generate_cards_generate_post */
-        Body_generate_cards_generate_post: {
-            /**
-             * Context Deck
-             * @default
-             */
-            context_deck: string;
+        /** Body_generate_v2_generate_v2_post */
+        Body_generate_v2_generate_v2_post: {
+            /** After Sequence No */
+            after_sequence_no?: number | null;
             /** Deck Name */
             deck_name: string;
             /**
@@ -422,8 +436,11 @@ export interface components {
              * @default
              */
             focus_prompt: string;
-            /** Model Name */
-            model_name?: null | string;
+            /**
+             * Model Name
+             * @default gemini-3.1-pro-preview
+             */
+            model_name: string;
             /**
              * Pdf File
              * Format: binary
@@ -511,8 +528,8 @@ export interface components {
             /** Decks */
             decks: string[];
         };
-        /** EstimateResponse */
-        EstimateResponse: {
+        /** EstimateV2Response */
+        EstimateV2Response: {
             /** Cost */
             cost?: null | number;
             /** Document Type */
@@ -716,10 +733,49 @@ export interface components {
             /** Session Id */
             session_id: string;
         };
-        /** StopResponse */
-        StopResponse: {
-            /** Message */
-            message?: null | string;
+        /** SessionNotFoundResponseV2 */
+        SessionNotFoundResponseV2: {
+            /** Cards */
+            cards: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Not Found
+             * @constant
+             */
+            not_found: true;
+            /** Session Id */
+            session_id: string;
+        };
+        /** SessionResponseV2 */
+        SessionResponseV2: {
+            /** Cards */
+            cards: {
+                [key: string]: unknown;
+            }[];
+            /** Coverage Data */
+            coverage_data?: {
+                [key: string]: unknown;
+            } | null;
+            /** Cursor */
+            cursor?: number | null;
+            /** Deck */
+            deck?: null | string;
+            /** Deck Name */
+            deck_name?: null | string;
+            /** Logs */
+            logs?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Session Id */
+            session_id: string;
+            /** Status */
+            status?: null | string;
+            /** Total Pages */
+            total_pages?: number | null;
+        };
+        /** StopV2Response */
+        StopV2Response: {
             /** Session Id */
             session_id: string;
             /** Stopped */
@@ -985,7 +1041,7 @@ export interface operations {
             };
         };
     };
-    estimate_cost_estimate_post: {
+    estimate_v2_estimate_v2_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -994,7 +1050,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_estimate_cost_estimate_post"];
+                "multipart/form-data": components["schemas"]["Body_estimate_v2_estimate_v2_post"];
             };
         };
         responses: {
@@ -1004,7 +1060,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EstimateResponse"];
+                    "application/json": components["schemas"]["EstimateV2Response"];
                 };
             };
             /** @description Validation Error */
@@ -1018,7 +1074,7 @@ export interface operations {
             };
         };
     };
-    generate_cards_generate_post: {
+    generate_v2_generate_v2_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1027,7 +1083,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_generate_cards_generate_post"];
+                "multipart/form-data": components["schemas"]["Body_generate_v2_generate_v2_post"];
             };
         };
         responses: {
@@ -1208,6 +1264,37 @@ export interface operations {
             };
         };
     };
+    get_session_v2_session_v2__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionNotFoundResponseV2"] | components["schemas"]["SessionResponseV2"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_session_session__session_id__get: {
         parameters: {
             query?: never;
@@ -1239,7 +1326,7 @@ export interface operations {
             };
         };
     };
-    stop_generation_stop_post: {
+    stop_v2_stop_v2_post: {
         parameters: {
             query?: {
                 session_id?: null | string;
@@ -1256,7 +1343,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StopResponse"];
+                    "application/json": components["schemas"]["StopV2Response"];
                 };
             };
             /** @description Validation Error */

@@ -20,6 +20,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     progress: { current: 0, total: 0 },
     currentPhase: 'idle',
     sessionId: null,
+    replayCursor: null,
     isError: false,
     isCancelling: false,
     isResuming: false,

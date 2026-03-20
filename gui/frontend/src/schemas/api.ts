@@ -132,7 +132,7 @@ export interface HistoryEntry {
 }
 export type HistoryResponse = HistoryEntry[];
 
-export type StopResponse = Omit<components['schemas']['StopResponse'], 'session_id'> & {
+export type StopResponse = Omit<components['schemas']['StopV2Response'], 'session_id'> & {
   session_id?: string;
 };
 
