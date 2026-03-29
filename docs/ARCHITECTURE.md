@@ -30,9 +30,9 @@ graph TB
         PyWebView["PyWebView<br/>Native Window"]
         
         subgraph Backend["Python Backend"]
-            FastAPI["FastAPI<br/>REST + SSE"]
-            Service["Lectern Service<br/>Orchestrator"]
-            AIClient["AI Client<br/>Gemini SDK"]
+            FastAPI["FastAPI<br/>REST + NDJSON stream"]
+            Service["GenerationAppServiceImpl<br/>V2 orchestrator"]
+            AIClient["GeminiAdapter/GeminiProvider<br/>AI provider stack"]
             PDFParser["PDF Parser<br/>pypdf"]
             AnkiConn["Anki Connector<br/>REST Client"]
         end
@@ -43,7 +43,7 @@ graph TB
     end
     
     PyWebView --> React
-    React -->|"HTTP/SSE"| FastAPI
+    React -->|"HTTP + NDJSON"| FastAPI
     FastAPI --> Service
     Service --> AIClient
     Service --> PDFParser
@@ -136,18 +136,16 @@ Extracts content from lecture slides for multimodal prompting and cost estimatio
 | Image extraction | Convert to base64 for AI prompts |
 | Page tracking | Preserve slide numbers for citation |
 
-### AI Client (`ai_client.py`)
+### AI Provider Stack (`lectern/infrastructure/providers/gemini_adapter.py`)
 
-Interfaces with Google Gemini for intelligent card generation.
+The V2 app service talks to Gemini through an adapter/provider stack.
 
 | Responsibility | Implementation |
 | :--- | :--- |
-| Multimodal prompting | Send text + images together |
-| Prompt management | Centralized in `ai_prompts.py` |
-| Concept mapping | First pass builds knowledge graph |
-| Iterative generation | Batch cards with history tracking |
-| Rate limiting | Coordinated by `ai_pacing.py` |
-| Self-correction | Reflection step for quality |
+| Application port bridge | `GeminiAdapter` implements `AIProviderPort` |
+| Provider contract | `GeminiProvider` adapts `LecternAIClient` |
+| Multimodal prompting | `LecternAIClient` sends text + images |
+| Generation loop support | generate/reflect/repair methods with warning draining |
 
 ### Service Layer (`lectern/application/generation_app_service.py`)
 

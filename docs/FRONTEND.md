@@ -13,11 +13,15 @@ Zustand is the single source of truth. All application state, from user preferen
 - **Persistence:** Critical settings (like the density target or selected Anki deck) are automatically synced to `localStorage`.
 - **Session persistence boundary:** Active generation session persistence is handled by a dedicated storage service (`logic/activeSessionStorage.ts`) driven by store subscriptions, not by event reducers.
 
-## Server-Sent Events (SSE)
-Because AI generation is a long-running process, the frontend relies on an event stream.
-1. The user triggers generation via a REST call (`api.ts`).
-2. The UI immediately opens an `EventSource` connection to the FastAPI backend.
-3. The backend yields standard `ServiceEvent` objects.
-4. The frontend's `processGenerationEvent()` function parses events and performs state-only updates in Zustand, keeping stream processing pure while side effects are handled elsewhere.
+## Generation Event Streaming (V2 NDJSON)
+Because AI generation is a long-running process, the frontend consumes a V2 NDJSON event stream over `fetch` (not `EventSource`).
+1. The user triggers generation via `api.ts` (`/generate-v2`).
+2. The frontend reads newline-delimited JSON envelopes from the response body.
+3. Each envelope is validated against `ApiEventV2Schema` (`schemas/sse-v2.ts`).
+4. `processGenerationEventV2()` maps V2 events into legacy UI event shapes (`mapV2EventToLegacyEvent`) and then applies state updates through `processGenerationEvent()`.
 
-*(Adding a new event type requires updates to both `EventType` in the Python backend and `processGenerationEvent` in the frontend).*
+If you add a new V2 event type, update all of:
+- `ApiEventType` in `lectern/application/dto.py`
+- translator mapping in `lectern/application/translators/event_translator.py`
+- frontend schema in `gui/frontend/src/schemas/sse-v2.ts`
+- frontend handling in `gui/frontend/src/logic/generation.ts`
