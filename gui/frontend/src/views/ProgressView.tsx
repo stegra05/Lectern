@@ -260,89 +260,63 @@ export function ProgressView() {
         <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-border">
                 {/* Generation Insights */}
-                <SidebarPane title="Quality & Trust" icon={Layers} defaultOpen={true}>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
-                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">Page coverage</p>
-                            <p className="text-lg font-semibold text-text-main">{pageCoveragePct}%</p>
+                <SidebarPane title="Session Overview" icon={Layers} defaultOpen={true}>
+                    {/* Top: Card Counts */}
+                    <div className="grid grid-cols-3 gap-2 text-xs mb-4">
+                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2 flex flex-col items-center justify-center">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold text-center">Total Cards</span>
+                            <span className="text-2xl font-semibold text-primary">{allCards.length}</span>
                         </div>
-                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
-                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">Concept coverage</p>
-                            <p className="text-lg font-semibold text-text-main">{conceptCoveragePct}%</p>
+                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2 flex flex-col items-center justify-center">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold text-center">Basic</span>
+                            <span className="text-2xl font-semibold text-accent">{typeCounts.basic}</span>
                         </div>
-                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
-                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">High-priority concepts</p>
-                            <p className="text-lg font-semibold text-text-main">{highPriorityCovered}/{highPriorityTotal}</p>
-                        </div>
-                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
-                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">Cards below threshold</p>
-                            <p className="text-lg font-semibold text-text-main">{belowThresholdCount}</p>
+                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2 flex flex-col items-center justify-center">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold text-center">Cloze</span>
+                            <span className="text-2xl font-semibold text-blue-400">{typeCounts.cloze}</span>
                         </div>
                     </div>
-                    <p className="mt-3 text-xs text-text-muted">
-                        Gaps remain in {missingHighPriorityCount} high-priority concepts and {uncoveredPageCount} pages.
-                    </p>
 
-                    <details className="mt-3 rounded-lg border border-border/60 bg-surface/20 p-3" open>
-                        <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                            Card Quality
-                        </summary>
-                        {rubricSummary ? (
-                            <div className="mt-2 space-y-2">
-                                <div className="grid grid-cols-3 gap-2 text-xs">
-                                    <div>
-                                        <p className="text-text-muted">Avg</p>
-                                        <p className="font-semibold text-text-main">{rubricSummary.avg_quality.toFixed(1)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-text-muted">Min</p>
-                                        <p className="font-semibold text-text-main">{rubricSummary.min_quality.toFixed(1)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-text-muted">Max</p>
-                                        <p className="font-semibold text-text-main">{rubricSummary.max_quality.toFixed(1)}</p>
-                                    </div>
-                                </div>
-                                <p className="text-[11px] text-text-muted">
-                                    {rubricSummary.below_threshold_count} of {rubricSummary.total_cards} cards below threshold {rubricSummary.threshold.toFixed(1)}.
-                                </p>
+                    {/* Middle: Coverage Progress */}
+                    <div className="rounded-lg border border-border/60 bg-surface/20 p-4 flex flex-col items-center justify-center mb-4">
+                        <h4 className="text-[10px] uppercase tracking-wider text-text-muted font-bold mb-3">Concept Coverage</h4>
+                        <div className="relative w-24 h-24 mb-3">
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-surface" />
+                                <circle 
+                                    cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" 
+                                    strokeDasharray={251.2} 
+                                    strokeDashoffset={251.2 - (251.2 * conceptCoveragePct) / 100}
+                                    className="text-primary transition-all duration-1000 ease-out" 
+                                />
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-2xl font-bold text-text-main">{conceptCoveragePct}%</span>
                             </div>
-                        ) : (
-                            <p className="mt-2 text-[11px] text-text-muted">No rubric data available for this run.</p>
-                        )}
-                    </details>
+                        </div>
+                        <p className="text-xs text-text-muted font-medium">Page Coverage: <span className="text-text-main">{pageCoveragePct}%</span></p>
+                    </div>
 
-                    <details className="mt-2 rounded-lg border border-border/60 bg-surface/20 p-3">
-                        <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                            Run Reliability
-                        </summary>
-                        <div className="mt-2 space-y-1 text-xs text-text-main">
-                            <p>Warnings: {warningCount}</p>
-                            <p>Recoverable errors: {recoverableErrorCount}</p>
-                            <p>Fatal errors: {fatalErrorCount}</p>
-                            {completionOutcome?.target_shortfall && completionOutcome.target_shortfall > 0 && (
-                                <p className="text-text-muted">
-                                    Generated {completionOutcome.cards_generated ?? allCards.length} of requested {completionOutcome.requested_card_target}.
-                                </p>
-                            )}
-                            {completionOutcome?.termination_reason_text && (
-                                <p className="text-text-muted">{completionOutcome.termination_reason_text}</p>
-                            )}
-                        </div>
-                    </details>
-
-                    <div className="mt-3 flex items-center justify-between px-2 py-1 rounded-lg border border-border/60 bg-surface/20">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cards</span>
-                            <span className="text-sm font-semibold text-text-main">{allCards.length}</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Basic</span>
-                            <span className="text-sm font-semibold text-text-main">{typeCounts.basic}</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cloze</span>
-                            <span className="text-sm font-semibold text-blue-400">{typeCounts.cloze}</span>
+                    {/* Bottom: Generation Health */}
+                    <div className="rounded-lg border border-border/60 bg-surface/20 p-3">
+                        <h4 className="text-[10px] uppercase tracking-wider text-text-muted font-bold mb-2">Generation Health</h4>
+                        <div className="space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-text-muted">High-Priority Concepts:<br/>{highPriorityCovered}/{highPriorityTotal} Captured</span>
+                                {highPriorityTotal > 0 && highPriorityCovered === highPriorityTotal ? (
+                                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                ) : (
+                                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                )}
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-text-muted">Cards Below Threshold:<br/>{belowThresholdCount}</span>
+                                {belowThresholdCount === 0 ? (
+                                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                ) : (
+                                    <span className="text-amber-500 font-bold">Needs Review</span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </SidebarPane>

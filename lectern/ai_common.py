@@ -155,11 +155,21 @@ def _append_session_log(
     try:
         max_response_chars = getattr(config, "LOG_MAX_RESPONSE_CHARS", 20000)
         truncated_response = response_text[:max_response_chars] if response_text else ""
-        with open(log_path, "a+", encoding="utf-8") as f:
-            f.seek(0)
+        
+        import os
+        mode = "r+" if os.path.exists(log_path) else "w+"
+        
+        with open(log_path, mode, encoding="utf-8") as f:
             existing = f.read().strip()
             if existing:
-                payload = json.loads(existing)
+                try:
+                    payload = json.loads(existing)
+                except json.JSONDecodeError:
+                    # Fallback if file is somehow corrupt
+                    payload = {
+                        "timestamp_utc": datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f"),
+                        "exchanges": [],
+                    }
             else:
                 payload = {
                     "timestamp_utc": datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f"),

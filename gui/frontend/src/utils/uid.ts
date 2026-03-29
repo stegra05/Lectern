@@ -2,7 +2,8 @@ import type { Card } from '../api';
 
 const requireBackendUid = (card: Card): string => {
     if (!card.uid) {
-        throw new Error('Missing required backend uid on card payload');
+        console.warn('Missing required backend uid on card payload, using fallback', card);
+        return `fallback-${Math.random().toString(36).substring(2, 11)}`;
     }
     return card.uid;
 };

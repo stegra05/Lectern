@@ -101,6 +101,14 @@ export const processGenerationEventV2 = (
     event: ProgressEventV2,
     set: (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void
 ) => {
+    const state = useLecternStore.getState();
+    
+    // Discard events from stale sessions if we have an active one
+    if (state.sessionId && event.session_id !== state.sessionId && state.step === 'generating') {
+        console.warn(`[Stream] Ignoring event from stale session ${event.session_id} (active: ${state.sessionId})`);
+        return;
+    }
+
     const cursor = getReplayCursorFromV2Event(event);
     set((state) => ({
         sessionId: event.session_id,
@@ -378,6 +386,10 @@ export const handleGenerate = async (
 ) => {
     const state = get();
     if (!state.pdfFile || !state.deckName) return;
+    if (state.step === 'generating') {
+        console.warn("[Generate] Generation already in progress, ignoring request.");
+        return;
+    }
 
     set({
         step: 'generating',

@@ -157,8 +157,27 @@ class RepairCardResponse(BaseModel):
     parse_error: str = ""
 
 
+def _strip_additional_properties(schema: Dict[str, Any]) -> None:
+    """Recursively remove 'additionalProperties' from the schema.
+    Gemini structured output strictly forbids this key.
+    """
+    if not isinstance(schema, dict):
+        return
+
+    schema.pop("additionalProperties", None)
+    for value in schema.values():
+        if isinstance(value, dict):
+            _strip_additional_properties(value)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    _strip_additional_properties(item)
+
+
 def _schema_for(model: Type[BaseModel]) -> Dict[str, Any]:
-    return model.model_json_schema()
+    schema = model.model_json_schema()
+    _strip_additional_properties(schema)
+    return schema
 
 
 @lru_cache

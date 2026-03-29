@@ -75,7 +75,7 @@ test.describe('PDF Upload and Generation', () => {
     await expect(page.getByText('What is photosynthesis?')).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('What are the reactants in photosynthesis?')).toBeVisible();
 
-    // Sidebar insights should exist (done state)
-    await expect(page.getByText('Insights')).toBeVisible();
+    // Sidebar quality panel should exist (done state)
+    await expect(page.getByText('Quality & Trust')).toBeVisible();
   });
 });

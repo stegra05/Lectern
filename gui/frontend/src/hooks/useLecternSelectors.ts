@@ -112,10 +112,12 @@ export const useDeckState = () => useLecternStore(useShallow((s) => ({
 /** State for generation validation */
 export const useGenerationValidation = () => useLecternStore(useShallow((s) => {
     const sliderDisabled = s.isEstimating || (s.estimation?.suggested_card_count === undefined);
-    const canGenerate = !!s.pdfFile && !!s.deckName && !s.isEstimating && !sliderDisabled;
+    const isAlreadyGenerating = s.step !== 'dashboard';
+    const canGenerate = !!s.pdfFile && !!s.deckName && !s.isEstimating && !sliderDisabled && !isAlreadyGenerating;
 
     let disabledReason = '';
-    if (!s.pdfFile) disabledReason = 'Upload a PDF first';
+    if (isAlreadyGenerating) disabledReason = 'Generation in progress...';
+    else if (!s.pdfFile) disabledReason = 'Upload a PDF first';
     else if (!s.deckName) disabledReason = 'Select a target deck above';
     else if (s.isEstimating) disabledReason = 'Calculating cost estimate...';
     else if (sliderDisabled) disabledReason = 'Estimation in progress...';

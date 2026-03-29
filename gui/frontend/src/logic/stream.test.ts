@@ -30,6 +30,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     totalPages: 0,
     coverageData: null,
     rubricSummary: null,
+    completionOutcome: null,
     isHistorical: false,
     editingIndex: null,
     editForm: null,
