@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -156,6 +157,36 @@ async def test_service_persists_before_emitting() -> None:
     assert [event.sequence_no for event in out] == [1, 2, 3]
     assert calls[:3] == ["create", "append", "sync"]
     assert calls[3] == "translate:1"
+
+
+@pytest.mark.asyncio
+async def test_run_generation_stream_persists_session_list_metadata_on_create() -> None:
+    history = _HistoryStub(_CallHistory([]))
+
+    async def start_runner(_: StartGenerationRequest) -> AsyncIterator[DomainEvent]:
+        yield SessionStarted(session_id="session-1", mode="start")
+
+    service = GenerationAppServiceImpl(
+        history=history,
+        runtime_store=SessionRuntimeStore(),
+        start_runner=start_runner,
+        session_id_factory=lambda: "session-1",
+        now_ms=lambda: 1234,
+    )
+
+    req = StartGenerationRequest(
+        pdf_path="/tmp/my-slides.pdf",
+        deck_name="Neuroscience::Week1",
+        model_name="gemini",
+        tags=[],
+    )
+    await _collect(service.run_generation_stream(req))
+
+    created = history.sessions["session-1"]
+    assert created["deck_name"] == "Neuroscience::Week1"
+    assert created["source_file_name"] == Path(req.pdf_path).name
+    assert created["created_at_ms"] == 1234
+    assert created["card_count"] == 0
 
 
 @pytest.mark.asyncio

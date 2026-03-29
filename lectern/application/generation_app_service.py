@@ -5,6 +5,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from lectern.application.dto import (
@@ -97,6 +98,10 @@ class GenerationAppServiceImpl(GenerationAppService):
                 "status": "running",
                 "phase": "generation",
                 "cursor": 0,
+                "deck_name": req.deck_name,
+                "source_file_name": Path(req.pdf_path).name,
+                "created_at_ms": self._now_ms(),
+                "card_count": 0,
             }
         )
 

@@ -542,6 +542,140 @@ async def test_history_repository_rejects_duplicate_sequence_numbers(
         )
 
 
+@pytest.mark.asyncio
+async def test_history_repository_list_sessions_returns_payload_rows_ordered_by_updated_at(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "history_v2.sqlite3"
+    repo = HistoryRepositorySqlite(db_path=db_path)
+
+    await repo.create_session(
+        {
+            "session_id": "session-1",
+            "status": "running",
+            "deck_name": "Deck One",
+            "source_file_name": "one.pdf",
+            "card_count": 1,
+        }
+    )
+    await repo.create_session(
+        {
+            "session_id": "session-2",
+            "status": "completed",
+            "deck_name": "Deck Two",
+            "source_file_name": "two.pdf",
+            "card_count": 3,
+        }
+    )
+
+    with closing(sqlite3.connect(db_path)) as conn:
+        conn.execute(
+            "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
+            (100, "session-1"),
+        )
+        conn.execute(
+            "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
+            (200, "session-2"),
+        )
+        conn.commit()
+
+    rows = await repo.list_sessions(limit=10)
+
+    assert [row["session_id"] for row in rows] == ["session-2", "session-1"]
+    assert rows[0]["deck_name"] == "Deck Two"
+    assert rows[0]["source_file_name"] == "two.pdf"
+    assert rows[0]["card_count"] == 3
+    assert rows[0]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_history_repository_delete_session_removes_snapshot_and_events(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+
+    await repo.create_session({"session_id": "session-1", "status": "running"})
+    await repo.append_events(
+        "session-1",
+        [
+            DomainEventRecord(
+                session_id="session-1",
+                sequence_no=1,
+                event=WarningEmitted(
+                    code="warn-1",
+                    message="first",
+                    details={},
+                ),
+            )
+        ],
+    )
+
+    deleted = await repo.delete_session("session-1")
+
+    assert deleted is True
+    assert await repo.get_session("session-1") is None
+    assert await repo.get_events_after("session-1", after_sequence_no=0) == []
+    assert await repo.delete_session("session-1") is False
+
+
+@pytest.mark.asyncio
+async def test_history_repository_delete_sessions_deletes_selected_ids_only(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+    await repo.create_session({"session_id": "session-1", "status": "running"})
+    await repo.create_session({"session_id": "session-2", "status": "completed"})
+
+    count = await repo.delete_sessions(["session-1", "missing-session"])
+
+    assert count == 1
+    assert await repo.get_session("session-1") is None
+    assert await repo.get_session("session-2") is not None
+
+
+@pytest.mark.asyncio
+async def test_history_repository_delete_sessions_by_status_filters_rows(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+    await repo.create_session({"session_id": "session-running", "status": "running"})
+    await repo.create_session({"session_id": "session-done", "status": "completed"})
+
+    deleted = await repo.delete_sessions_by_status("running")
+
+    assert deleted == 1
+    assert await repo.get_session("session-running") is None
+    assert await repo.get_session("session-done") is not None
+
+
+@pytest.mark.asyncio
+async def test_history_repository_clear_sessions_removes_all_rows_and_events(
+    tmp_path: Path,
+) -> None:
+    repo = HistoryRepositorySqlite(db_path=tmp_path / "history_v2.sqlite3")
+
+    await repo.create_session({"session_id": "session-1", "status": "running"})
+    await repo.create_session({"session_id": "session-2", "status": "completed"})
+    await repo.append_events(
+        "session-1",
+        [
+            DomainEventRecord(
+                session_id="session-1",
+                sequence_no=1,
+                event=WarningEmitted(
+                    code="warn-1",
+                    message="first",
+                    details={},
+                ),
+            )
+        ],
+    )
+
+    deleted = await repo.clear_sessions()
+
+    assert deleted == 2
+    assert await repo.list_sessions(limit=10) == []
+    assert await repo.get_events_after("session-1", after_sequence_no=0) == []
 class _RuntimeHandle:
     def __init__(self) -> None:
         self.stop_calls = 0
