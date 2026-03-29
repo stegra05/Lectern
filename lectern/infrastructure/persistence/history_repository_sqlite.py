@@ -226,6 +226,91 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
             ).fetchone()
             return None if row is None else self._safe_load_json_object(row["payload"])
 
+    async def list_sessions(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._list_sessions_sync, limit)
+
+    def _list_sessions_sync(self, limit: int) -> list[dict[str, Any]]:
+        safe_limit = max(1, int(limit))
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                """
+                SELECT session_id, payload, phase, status, updated_at
+                FROM sessions
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            payload = self._safe_load_json_object(row["payload"])
+            payload.setdefault("session_id", row["session_id"])
+            payload.setdefault("phase", row["phase"])
+            payload.setdefault("status", row["status"])
+            payload.setdefault("updated_at", row["updated_at"])
+            out.append(payload)
+        return out
+
+    async def delete_session(self, session_id: str) -> bool:
+        return await asyncio.to_thread(self._delete_session_sync, session_id)
+
+    def _delete_session_sync(self, session_id: str) -> bool:
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(
+                    "DELETE FROM session_events WHERE session_id = ?",
+                    (session_id,),
+                )
+                deleted = conn.execute(
+                    "DELETE FROM sessions WHERE session_id = ?",
+                    (session_id,),
+                ).rowcount
+        return deleted > 0
+
+    async def delete_sessions(self, session_ids: list[str]) -> int:
+        return await asyncio.to_thread(self._delete_sessions_sync, session_ids)
+
+    def _delete_sessions_sync(self, session_ids: list[str]) -> int:
+        normalized_ids = [sid for sid in session_ids if isinstance(sid, str) and sid]
+        if not normalized_ids:
+            return 0
+        placeholders = ",".join("?" for _ in normalized_ids)
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(
+                    f"DELETE FROM session_events WHERE session_id IN ({placeholders})",
+                    normalized_ids,
+                )
+                deleted = conn.execute(
+                    f"DELETE FROM sessions WHERE session_id IN ({placeholders})",
+                    normalized_ids,
+                ).rowcount
+        return int(deleted)
+
+    async def delete_sessions_by_status(self, status: str) -> int:
+        return await asyncio.to_thread(self._delete_sessions_by_status_sync, status)
+
+    def _delete_sessions_by_status_sync(self, status: str) -> int:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT session_id FROM sessions WHERE status = ?",
+                (status,),
+            ).fetchall()
+        session_ids = [str(row["session_id"]) for row in rows]
+        return self._delete_sessions_sync(session_ids)
+
+    async def clear_sessions(self) -> int:
+        return await asyncio.to_thread(self._clear_sessions_sync)
+
+    def _clear_sessions_sync(self) -> int:
+        with closing(self._connect()) as conn:
+            with conn:
+                count_row = conn.execute("SELECT COUNT(*) as count FROM sessions").fetchone()
+                count = int(count_row["count"]) if count_row is not None else 0
+                conn.execute("DELETE FROM session_events")
+                conn.execute("DELETE FROM sessions")
+        return count
+
     async def get_events_after(
         self,
         session_id: str,
