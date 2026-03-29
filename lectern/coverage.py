@@ -29,10 +29,12 @@ def normalize_page_references(value: Any) -> List[int]:
 
     refs: List[int] = []
     if isinstance(value, list):
+        seen: Set[int] = set()
         for item in value:
             normalized = normalize_positive_int(item)
-            if normalized is not None and normalized not in refs:
+            if normalized is not None and normalized not in seen:
                 refs.append(normalized)
+                seen.add(normalized)
     return refs
 
 
