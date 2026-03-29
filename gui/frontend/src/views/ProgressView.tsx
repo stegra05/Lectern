@@ -50,7 +50,6 @@ export function ProgressView() {
         totalPages,
         coverageData,
         rubricSummary,
-        completionOutcome,
     } = session;
     const { logs: logEntries, copied } = logs;
     const { progress: progressData, conceptProgress, progressPct } = progress;
@@ -109,35 +108,6 @@ export function ProgressView() {
     const belowThresholdCount =
         rubricSummary?.below_threshold_count ??
         qualityScores.filter((score) => score < 60).length;
-    const missingHighPriorityCount =
-        (coverageData?.missing_high_priority ?? []).length ||
-        Math.max(highPriorityTotal - highPriorityCovered, 0);
-    const uncoveredPageCount =
-        (coverageData?.uncovered_pages ?? []).length ||
-        Math.max((toNumber(coverageData?.total_pages) ?? totalPages) - (toNumber(coverageData?.covered_page_count) ?? 0), 0);
-
-    const warningCount = useMemo(
-        () => logEntries.filter((log) => log.type === 'warning').length,
-        [logEntries]
-    );
-    const recoverableErrorCount = useMemo(
-        () =>
-            logEntries.filter((log) => {
-                if (log.type !== 'error') return false;
-                const data = log.data as Record<string, unknown> | undefined;
-                return data?.recoverable === true;
-            }).length,
-        [logEntries]
-    );
-    const fatalErrorCount = useMemo(
-        () =>
-            logEntries.filter((log) => {
-                if (log.type !== 'error') return false;
-                const data = log.data as Record<string, unknown> | undefined;
-                return data?.recoverable !== true;
-            }).length,
-        [logEntries]
-    );
 
     // Reset filters when step changes - using render-time reset pattern to avoid cascading effects
     const [prevStep, setPrevStep] = useState(step);
