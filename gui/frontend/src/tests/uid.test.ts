@@ -20,9 +20,10 @@ describe('uid utils', () => {
             expect(result._uid).toBe('backend-uid');
         });
         
-        it('throws when backend uid is missing', () => {
+        it('returns fallback when backend uid is missing', () => {
             const card: Card = { front: 'A', back: 'B' };
-            expect(() => stampUid(card)).toThrow('Missing required backend uid on card payload');
+            const result = stampUid(card);
+            expect(result._uid).toMatch(/^fallback-/);
         });
     });
 
@@ -48,11 +49,10 @@ describe('uid utils', () => {
             expect(result[0]._uid).toBe('u2');
         });
 
-        it('throws when incoming backend uid is missing', () => {
+        it('returns fallback when incoming backend uid is missing', () => {
             const incoming: Card[] = [{ front: 'A', back: 'B' }];
-            expect(() => reconcileCardUids([], incoming)).toThrow(
-                'Missing required backend uid on card payload'
-            );
+            const result = reconcileCardUids([], incoming);
+            expect(result[0]._uid).toMatch(/^fallback-/);
         });
     });
 });

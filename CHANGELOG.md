@@ -5,10 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.15.0] - 2026-03-29
+
+### Added
+- **V2 Generation Runners**: Introduced next-generation runners with specialized Repair and Resume pipelines for handling aborted sessions.
+- **Enhanced API Integration**: Improved OpenAPI client generation and strict type enforcement between backend and frontend.
 
 ### Changed
 - **V2-only Architecture**: Removed remaining V1-only backend test coverage and updated architecture docs to reflect the V2 generation stack as the only supported path.
+
+### Fixed
+- **History Routing**: Unified session persistence by routing all history endpoints to the V2 store.
+- **Schema Stability**: Stabilized OpenAPI schema ordering to prevent CI drift.
+- **Test Reliability**: Fixed regression in UID and HomeView frontend tests caused by updated safe-fail and validation logic.
+- **Anki Health**: Improved health probe non-blocking behavior when Anki is unavailable.
 
 ### Removed
 - **V1 Session/Historical Compatibility**: No migration path is provided for V1 generation history or in-flight V1 sessions when moving to the V2 generation stack.
