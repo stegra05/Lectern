@@ -28,8 +28,8 @@ def normalize_page_references(value: Any) -> List[int]:
         return [normalized] if normalized is not None else []
 
     refs: List[int] = []
-    seen: set[int] = set()
     if isinstance(value, list):
+        seen: Set[int] = set()
         for item in value:
             normalized = normalize_positive_int(item)
             if normalized is not None and normalized not in seen:
