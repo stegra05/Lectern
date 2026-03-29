@@ -36,7 +36,7 @@ Welcome to the codebase! We maintain a comprehensive, centralized Wiki in the `d
 - **[Development Guide](docs/DEVELOPMENT.md):** Local setup, running the app, testing, and CI/CD.
 - **[Design System](docs/DESIGN_SYSTEM.md):** The UI/UX philosophy and Tailwind conventions.
 - **[AI Pipeline](docs/AI_PIPELINE.md):** Gemini integration, the 3-phase loop, and pacing strategy.
-- **[Frontend Architecture](docs/FRONTEND.md):** React, Zustand state management, and SSE.
+- **[Frontend Architecture](docs/FRONTEND.md):** React, Zustand state management, and V2 NDJSON event streaming.
 - **[Backend Architecture](docs/BACKEND.md):** FastAPI routing, PyWebView wrapper, and AnkiConnect.
 
 <br>
