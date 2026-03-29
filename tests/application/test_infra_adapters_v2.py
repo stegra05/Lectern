@@ -85,6 +85,7 @@ class _StubGeminiProvider:
     def __init__(self) -> None:
         self.generate_calls: list[dict[str, Any]] = []
         self.reflect_calls: list[dict[str, Any]] = []
+        self.repair_calls: list[dict[str, Any]] = []
         self._warnings: list[str] = ["provider-warning-1", "provider-warning-2"]
 
     async def upload_document(self, pdf_path: str) -> dict[str, str]:
@@ -121,6 +122,25 @@ class _StubGeminiProvider:
             "reflection": "Looks good",
             "cards": [{"uid": "r-1", "front": "Q2", "back": "A2"}],
             "done": True,
+            "parse_error": "",
+        }
+
+    async def repair_card(
+        self,
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: Any = None,
+    ) -> dict[str, Any]:
+        self.repair_calls.append(
+            {
+                "card": card,
+                "reasons": reasons,
+                "context": context,
+            }
+        )
+        return {
+            "card": {"uid": "fixed-1", "front": "Fixed Q", "back": "Fixed A"},
             "parse_error": "",
         }
 
@@ -202,6 +222,29 @@ async def test_gemini_adapter_maps_provider_results_and_warnings() -> None:
     ]
     assert reflect_result["reflection"] == "Looks good"
     assert reflect_result["warnings"] == ["provider-warning-reflect"]
+
+
+@pytest.mark.asyncio
+async def test_gemini_adapter_maps_repair_card_and_warnings() -> None:
+    provider = _StubGeminiProvider()
+    adapter = GeminiAdapter(provider=provider)
+    provider._warnings = ["repair-warning"]
+
+    result = await adapter.repair_card(
+        card={"front": "Q", "back": "A"},
+        reasons=["missing_source_excerpt"],
+        context={"strict": False},
+    )
+
+    assert provider.repair_calls == [
+        {
+            "card": {"front": "Q", "back": "A"},
+            "reasons": ["missing_source_excerpt"],
+            "context": {"strict": False},
+        }
+    ]
+    assert result["card"]["uid"] == "fixed-1"
+    assert result["warnings"] == ["repair-warning"]
 
 
 @pytest.mark.asyncio

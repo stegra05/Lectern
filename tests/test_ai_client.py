@@ -1,6 +1,7 @@
 import pytest
 import os
 import tempfile
+from typing import Any
 from unittest.mock import patch, MagicMock, AsyncMock
 from lectern.ai_client import LecternAIClient, UploadedDocument, DocumentUploadError
 from lectern.ai_schemas import CardGenerationResponse, card_generation_schema
@@ -50,4 +51,49 @@ async def test_update_language(ai_client):
     assert "Language" in sent_prompt
     assert "de" in sent_prompt
 
+
+@pytest.mark.asyncio
+async def test_repair_card_uses_repair_prompt_and_returns_structured_result(ai_client):
+    mock_response = MagicMock()
+    mock_response.text = '{"card": {"front": "Q repaired", "back": "A repaired"}, "parse_error": ""}'
+
+    captured: dict[str, Any] = {}
+
+    async def fake_send(message: Any, call_config: Any) -> Any:
+        captured["message"] = message
+        captured["call_config"] = call_config
+        return mock_response
+
+    ai_client._send_with_thinking_fallback = fake_send  # type: ignore[method-assign]
+
+    result = await ai_client.repair_card(
+        card={"front": "Q", "back": "A"},
+        reasons=["missing_source_excerpt", "below_quality_threshold"],
+        context={"strict": True},
+    )
+
+    assert result == {
+        "card": {"front": "Q repaired", "back": "A repaired"},
+        "parse_error": "",
+    }
+    sent_prompt = captured["message"]
+    assert "Repair exactly one flashcard" in sent_prompt
+    assert "missing_source_excerpt" in sent_prompt
+    assert "below_quality_threshold" in sent_prompt
+    assert "STRICT MODE" in sent_prompt
+
+
+@pytest.mark.asyncio
+async def test_repair_card_returns_parse_error_when_payload_invalid(ai_client):
+    mock_response = MagicMock()
+    mock_response.text = '{"cards": [], "done": true}'
+    ai_client._send_with_thinking_fallback = AsyncMock(return_value=mock_response)
+
+    result = await ai_client.repair_card(
+        card={"front": "Q"},
+        reasons=["missing_source_excerpt"],
+    )
+
+    assert result["card"] == {}
+    assert result["parse_error"]
 

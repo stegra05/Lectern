@@ -152,6 +152,11 @@ class ReflectionResponse(BaseModel):
     done: bool = False
 
 
+class RepairCardResponse(BaseModel):
+    card: Dict[str, Any]
+    parse_error: str = ""
+
+
 def _schema_for(model: Type[BaseModel]) -> Dict[str, Any]:
     return model.model_json_schema()
 
@@ -169,3 +174,8 @@ def card_generation_schema() -> Dict[str, Any]:
 @lru_cache
 def reflection_schema() -> Dict[str, Any]:
     return _schema_for(ReflectionResponse)
+
+
+@lru_cache
+def repair_card_schema() -> Dict[str, Any]:
+    return _schema_for(RepairCardResponse)

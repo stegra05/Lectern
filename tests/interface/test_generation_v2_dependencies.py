@@ -27,3 +27,11 @@ def test_get_generation_app_service_v2_wires_concrete_adapters() -> None:
     assert isinstance(service._pdf_extractor, PdfExtractorAdapter)
     assert isinstance(service._ai_provider, GeminiAdapter)
     assert isinstance(service._anki_gateway, AnkiGateway)
+
+
+def test_get_generation_app_service_v2_wires_runner_factories() -> None:
+    dependencies.get_generation_app_service_v2.cache_clear()
+    service = dependencies.get_generation_app_service_v2()
+
+    assert service._start_runner is not service._empty_start_runner
+    assert service._resume_runner is not service._empty_resume_runner

@@ -24,6 +24,9 @@ class _StubGeminiClient:
     async def reflect(self, **kwargs):
         return {"cards": [], "done": True, "kwargs": kwargs}
 
+    async def repair_card(self, **kwargs):
+        return {"card": {"front": "Q", "back": "A"}, "parse_error": "", "kwargs": kwargs}
+
     def set_slide_set_context(self, deck_name: str, slide_set_name: str) -> None:
         self._context = (deck_name, slide_set_name)
 

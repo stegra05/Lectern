@@ -42,6 +42,14 @@ class AIProvider(Protocol):
         coverage_gaps: str = "",
     ) -> dict[str, Any]: ...
 
+    async def repair_card(
+        self,
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: Any = None,
+    ) -> dict[str, Any]: ...
+
     def set_slide_set_context(self, *, deck_name: str, slide_set_name: str) -> None: ...
 
     def drain_warnings(self) -> list[str]: ...

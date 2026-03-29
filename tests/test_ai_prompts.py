@@ -57,6 +57,37 @@ def test_generation_prompt_requests_grounding_metadata():
     assert "source_excerpt" in prompt
 
 
+def test_repair_prompt_includes_reasons_and_strict_mode() -> None:
+    cfg = PromptConfig(language="en")
+    builder = PromptBuilder(cfg)
+
+    prompt = builder.repair(
+        card_json='{"front":"Q","back":"A"}',
+        reasons="missing_source_excerpt, below_quality_threshold",
+        strict=True,
+    )
+
+    assert "Repair exactly one flashcard" in prompt
+    assert "missing_source_excerpt, below_quality_threshold" in prompt
+    assert "STRICT MODE" in prompt
+    assert "{card, parse_error}" in prompt
+
+
+def test_repair_prompt_omits_strict_mode_when_not_requested() -> None:
+    cfg = PromptConfig(language="en")
+    builder = PromptBuilder(cfg)
+
+    prompt = builder.repair(
+        card_json='{"front":"Q","back":"A"}',
+        reasons="missing_source_excerpt",
+        strict=False,
+    )
+
+    assert "Repair exactly one flashcard" in prompt
+    assert "missing_source_excerpt" in prompt
+    assert "STRICT MODE" not in prompt
+
+
 def _parse_examples_helper(example_str):
     """
     Extract JSON objects from the example string.

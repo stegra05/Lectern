@@ -84,6 +84,20 @@ class GeminiProvider(AIProvider):
         )
         return coerce_response_dict(result)
 
+    async def repair_card(
+        self,
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: Any = None,
+    ) -> dict[str, Any]:
+        result = await self._client.repair_card(
+            card=card,
+            reasons=reasons,
+            context=context if isinstance(context, dict) else None,
+        )
+        return coerce_response_dict(result)
+
     def set_slide_set_context(self, *, deck_name: str, slide_set_name: str) -> None:
         self._client.set_slide_set_context(
             deck_name=deck_name, slide_set_name=slide_set_name

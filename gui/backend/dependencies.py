@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from lectern.application.generation_app_service import GenerationAppServiceImpl
+from lectern.application.runners.generation_runner import make_resume_runner, make_start_runner
 from lectern.application.translators.event_translator import EventTranslator
 from lectern.infrastructure.extractors.pdf_extractor import PdfExtractorAdapter
 from lectern.infrastructure.gateways.anki_gateway import AnkiGateway
@@ -32,11 +33,24 @@ def get_history_repository_v2() -> HistoryRepositorySqlite:
 @lru_cache(maxsize=1)
 def get_generation_app_service_v2() -> GenerationAppServiceImpl:
     """Build and cache the V2 generation app service with concrete adapters."""
+    history = get_history_repository_v2()
+    pdf_extractor = PdfExtractorAdapter()
+    ai_provider = GeminiAdapter()
     return GenerationAppServiceImpl(
-        history=get_history_repository_v2(),
+        history=history,
         runtime_store=SessionRuntimeStore(),
         translator=EventTranslator(),
-        pdf_extractor=PdfExtractorAdapter(),
-        ai_provider=GeminiAdapter(),
+        pdf_extractor=pdf_extractor,
+        ai_provider=ai_provider,
         anki_gateway=AnkiGateway(),
+        start_runner=make_start_runner(
+            pdf_extractor=pdf_extractor,
+            ai_provider=ai_provider,
+            history=history,
+        ),
+        resume_runner=make_resume_runner(
+            ai_provider=ai_provider,
+            history=history,
+            pdf_extractor=pdf_extractor,
+        ),
     )

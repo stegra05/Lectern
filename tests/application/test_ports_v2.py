@@ -82,3 +82,37 @@ def test_history_repository_replay_signature_matches_contract() -> None:
     assert params[2].kind is inspect.Parameter.KEYWORD_ONLY
     assert params[3].kind is inspect.Parameter.KEYWORD_ONLY
     assert params[3].default == 1000
+
+
+def test_ai_provider_port_exposes_required_methods() -> None:
+    protocol = ports.AIProviderPort
+
+    required_methods = {
+        "upload_document",
+        "build_concept_map",
+        "generate_cards",
+        "reflect_cards",
+        "repair_card",
+        "drain_warnings",
+    }
+
+    for method_name in required_methods:
+        assert method_name in protocol.__dict__
+        if method_name != "drain_warnings":
+            assert inspect.iscoroutinefunction(protocol.__dict__[method_name])
+
+
+def test_ai_provider_port_repair_card_signature_matches_contract() -> None:
+    signature = inspect.signature(ports.AIProviderPort.repair_card)
+    params = list(signature.parameters.values())
+
+    assert [param.name for param in params] == [
+        "self",
+        "card",
+        "reasons",
+        "context",
+    ]
+    assert params[1].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params[2].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params[3].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params[3].default is None

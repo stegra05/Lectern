@@ -50,6 +50,14 @@ class AIProviderPort(Protocol):
         context: ReflectionAIContext,
     ) -> ReflectResult: ...
 
+    async def repair_card(
+        self,
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: Any = None,
+    ) -> dict[str, Any]: ...
+
     def drain_warnings(self) -> list[str]: ...
 
 

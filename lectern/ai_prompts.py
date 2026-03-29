@@ -263,3 +263,21 @@ class PromptBuilder:
             f"{cards_context}"
             f"Return ONLY JSON: {{reflection, cards, done}}. Limit {limit} cards."
         )
+
+    def repair(self, *, card_json: str, reasons: str, strict: bool) -> str:
+        """Build the single-card repair prompt used by grounding retries."""
+        strict_line = (
+            "STRICT MODE: enforce missing provenance and grounding fields with no exceptions.\n"
+            if strict
+            else ""
+        )
+        return (
+            "Repair exactly one flashcard.\n"
+            f"Failure reasons: {reasons}\n"
+            f"{strict_line}"
+            f"Language: Ensure all content is in {self.cfg.language}.\n"
+            "Keep the card atomic and preserve intent while fixing grounding/provenance defects.\n"
+            "Return ONLY JSON: {card, parse_error}.\n"
+            "The card object must include valid Anki fields (`model_name` + `fields`) and may include metadata.\n"
+            f"Card to repair:\n{card_json}"
+        )

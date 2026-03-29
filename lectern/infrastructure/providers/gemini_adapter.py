@@ -51,5 +51,21 @@ class GeminiAdapter(AIProviderPort):
         mapped["warnings"] = self._provider.drain_warnings()
         return mapped
 
+    async def repair_card(
+        self,
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: Any = None,
+    ) -> dict[str, Any]:
+        result = await self._provider.repair_card(
+            card=card if isinstance(card, dict) else {},
+            reasons=list(reasons or []),
+            context=context if isinstance(context, dict) else None,
+        )
+        mapped = dict(result) if isinstance(result, dict) else {}
+        mapped["warnings"] = self._provider.drain_warnings()
+        return mapped
+
     def drain_warnings(self) -> list[str]:
         return self._provider.drain_warnings()

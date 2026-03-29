@@ -15,6 +15,7 @@ class _StubGeminiClient:
         self.concept_map_from_file_calls: list[tuple[str, str]] = []
         self.generate_more_cards_calls: list[dict[str, Any]] = []
         self.reflect_calls: list[dict[str, Any]] = []
+        self.repair_card_calls: list[dict[str, Any]] = []
 
         self.upload_document_result: Any = {
             "uri": "gs://uploaded-document.pdf",
@@ -26,6 +27,7 @@ class _StubGeminiClient:
         self.concept_map_from_file_result: Any = {"concepts": []}
         self.generate_more_cards_result: Any = {"cards": [], "done": True}
         self.reflect_result: Any = {"reflection": "", "cards": [], "done": True}
+        self.repair_card_result: Any = {"card": {"front": "Q", "back": "A"}, "parse_error": ""}
 
     async def upload_document(self, pdf_path: str) -> Any:
         self.upload_document_calls.append(pdf_path)
@@ -46,6 +48,18 @@ class _StubGeminiClient:
     async def reflect(self, **kwargs: Any) -> Any:
         self.reflect_calls.append(kwargs)
         return self.reflect_result
+
+    async def repair_card(
+        self,
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: dict[str, Any] | None = None,
+    ) -> Any:
+        self.repair_card_calls.append(
+            {"card": card, "reasons": reasons, "context": context}
+        )
+        return self.repair_card_result
 
     def set_slide_set_context(self, deck_name: str, slide_set_name: str) -> None:
         self._context = (deck_name, slide_set_name)
@@ -131,3 +145,46 @@ async def test_reflect_cards_propagates_client_errors() -> None:
 
     with pytest.raises(ValueError, match="reflection failed"):
         await provider.reflect_cards(limit=3)
+
+
+@pytest.mark.asyncio
+async def test_repair_card_delegates_to_client() -> None:
+    client = _StubGeminiClient()
+    provider = GeminiProvider(client=client)
+
+    out = await provider.repair_card(
+        card={"front": "Q", "back": "A"},
+        reasons=["missing_source_excerpt"],
+        context={"strict": True},
+    )
+
+    assert out == {"card": {"front": "Q", "back": "A"}, "parse_error": ""}
+    assert client.repair_card_calls == [
+        {
+            "card": {"front": "Q", "back": "A"},
+            "reasons": ["missing_source_excerpt"],
+            "context": {"strict": True},
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_repair_card_propagates_client_errors() -> None:
+    client = _StubGeminiClient()
+    provider = GeminiProvider(client=client)
+
+    async def _raise(
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: dict[str, Any] | None = None,
+    ) -> Any:
+        raise ValueError("repair failed")
+
+    client.repair_card = _raise  # type: ignore[method-assign]
+
+    with pytest.raises(ValueError, match="repair failed"):
+        await provider.repair_card(
+            card={"front": "Q"},
+            reasons=["missing_source_excerpt"],
+        )

@@ -25,9 +25,11 @@ from lectern.ai_prompts import PromptBuilder, PromptConfig
 from lectern.ai_schemas import (
     CardGenerationResponse,
     ConceptMapResponse,
+    RepairCardResponse,
     ReflectionResponse,
     card_generation_schema,
     concept_map_schema,
+    repair_card_schema,
     reflection_schema,
 )
 import logging
@@ -89,6 +91,7 @@ def _model_supports_thinking(model_name: str) -> bool:
 _CONCEPT_MAP_SCHEMA = concept_map_schema()
 _CARD_GENERATION_SCHEMA = card_generation_schema()
 _REFLECTION_SCHEMA = reflection_schema()
+_REPAIR_CARD_SCHEMA = repair_card_schema()
 
 
 def coerce_response_dict(payload: Any) -> dict[str, Any]:
@@ -749,6 +752,43 @@ class LecternAIClient:
             "done": True,
             "parse_error": self._last_parse_error,
         }
+
+    async def repair_card(
+        self,
+        *,
+        card: dict[str, Any],
+        reasons: list[str],
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Repair one card using provider-guided grounding/provenance reasons."""
+        payload = card if isinstance(card, dict) else {}
+        reason_text = ", ".join(str(item) for item in reasons if str(item).strip())
+        strict = bool((context or {}).get("strict"))
+
+        prompt = self._prompt_builder.repair(
+            card_json=json.dumps(payload, ensure_ascii=False),
+            reasons=reason_text,
+            strict=strict,
+        )
+
+        update: dict[str, Any] = {"response_schema": _REPAIR_CARD_SCHEMA}
+        thinking = self._thinking_config_for("reflection")
+        if thinking is not None:
+            update["thinking_config"] = thinking
+        call_config = self._generation_config.model_copy(update=update)
+
+        response = await self._send_with_thinking_fallback(prompt, call_config)
+
+        text = response.text or ""
+        _append_session_log(self._log_path, "repair", [{"text": prompt}], text, True)
+
+        parsed = self._parse_structured_response(response, RepairCardResponse)
+        if isinstance(parsed, dict):
+            repaired_card = parsed.get("card")
+            if isinstance(repaired_card, dict):
+                return {"card": repaired_card, "parse_error": ""}
+
+        return {"card": {}, "parse_error": self._last_parse_error}
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Export chat history as a list of dicts."""
