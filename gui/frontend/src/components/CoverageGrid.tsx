@@ -210,7 +210,7 @@ export function CoverageGrid({ totalPages, cards, coverageData, activePage, onPa
                                     ? "bg-primary text-background border-primary hover:bg-primary/90 shadow-[0_0_10px_rgba(163,230,53,0.3)] z-10" // Active state
                                     : isCovered
                                         ? "bg-primary/20 text-primary border-primary/30 hover:bg-primary/30 hover:border-primary/50"
-                                        : "bg-surface text-text-muted/30 border-transparent hover:border-border hover:text-text-muted hover:bg-surface/80"
+                                        : "bg-surface text-text-muted/60 border-transparent hover:border-border hover:text-text-main hover:bg-surface/80"
                             )}
                             title={`Page ${page}: ${count} card${count !== 1 ? 's' : ''}`}
                             disabled={!onPageClick}

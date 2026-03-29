@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Layers, Search, CheckSquare, Maximize2 } from 'lucide-react';
+import { Layers, Search, CheckSquare, Maximize2, LayoutGrid, List } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { SortOption } from '../hooks/types';
 
@@ -15,6 +15,8 @@ interface CardToolbarProps {
     onToggleMultiSelect: () => void;
     filteredCount: number;
     onFocusMode?: () => void;
+    isCompactMode: boolean;
+    onToggleCompactMode: (isCompact: boolean) => void;
 }
 
 /**
@@ -33,6 +35,8 @@ export const CardToolbar = memo(function CardToolbar({
     onToggleMultiSelect,
     filteredCount,
     onFocusMode,
+    isCompactMode,
+    onToggleCompactMode,
 }: CardToolbarProps) {
     return (
         <div className="h-14 px-6 border-b border-border flex items-center justify-between bg-surface/30 backdrop-blur-sm shrink-0 rounded-tr-2xl">
@@ -69,6 +73,36 @@ export const CardToolbar = memo(function CardToolbar({
             </div>
 
             <div className="flex items-center gap-3">
+                {/* View Mode Toggle */}
+                {step === 'done' && (
+                    <div className="flex items-center bg-surface/50 rounded-lg p-0.5 border border-border">
+                        <button
+                            onClick={() => onToggleCompactMode(false)}
+                            className={clsx(
+                                "p-1.5 rounded-md transition-colors",
+                                !isCompactMode 
+                                    ? "bg-primary/20 text-primary shadow-sm" 
+                                    : "text-text-muted hover:text-text-main hover:bg-surface"
+                            )}
+                            title="Card View"
+                        >
+                            <LayoutGrid className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                            onClick={() => onToggleCompactMode(true)}
+                            className={clsx(
+                                "p-1.5 rounded-md transition-colors",
+                                isCompactMode 
+                                    ? "bg-primary/20 text-primary shadow-sm" 
+                                    : "text-text-muted hover:text-text-main hover:bg-surface"
+                            )}
+                            title="Compact View"
+                        >
+                            <List className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                )}
+                
                 {/* Focus Mode Toggle */}
                 {step === 'done' && onFocusMode && (
                     <button

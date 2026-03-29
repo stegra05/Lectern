@@ -55,7 +55,7 @@ export function ProgressView() {
     const { progress: progressData, conceptProgress, progressPct } = progress;
     const { cards: allCards, editingIndex, editForm } = cards;
     const { isSyncing, syncPartialFailure, syncSuccess, syncProgress, syncLogs } = sync;
-    const { sortBy, searchQuery, isMultiSelectMode, selectedCards, confirmModal } = ui;
+    const { sortBy, searchQuery, isMultiSelectMode, selectedCards, confirmModal, isCompactMode } = ui;
 
     // Subscribing to memoized selectors to avoid recomputing derived state on unrelated renders
     const baseFilteredCards = useLecternStore(selectFilteredCards);
@@ -433,6 +433,8 @@ export function ProgressView() {
                     onToggleMultiSelect={actions.toggleMultiSelectMode}
                     filteredCount={filteredCards.length}
                     onFocusMode={() => setIsFocusMode(true)}
+                    isCompactMode={isCompactMode}
+                    onToggleCompactMode={actions.setCompactMode}
                 />
 
                 {/* Virtualized Cards List */}
@@ -446,6 +448,7 @@ export function ProgressView() {
                     selectedCards={selectedCards}
                     step={step}
                     isGenerating={step === 'generating'}
+                    isCompactMode={isCompactMode}
                     onStartEdit={actions.startEdit}
                     onCancelEdit={actions.cancelEdit}
                     onSaveEdit={review.saveEdit}

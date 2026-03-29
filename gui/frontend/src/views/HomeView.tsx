@@ -261,7 +261,8 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
             className="grid grid-cols-1 lg:grid-cols-12 gap-8"
         >
             {/* LEFT COLUMN: Source & Configuration */}
-            <motion.div variants={itemVariants} className="lg:col-span-7 space-y-8">
+            <motion.div variants={itemVariants} className="lg:col-span-7 flex justify-center">
+                <div className="w-full max-w-2xl space-y-8">
                 <SourceMaterialCard
                     file={sourceState.pdfFile}
                     onFileSelect={actions.setPdfFile}
@@ -274,6 +275,7 @@ export function HomeView({ handleGenerate, health }: HomeViewProps) {
                     onTargetDeckSizeChange={actions.setTargetDeckSize}
                     onFocusPromptChange={actions.setFocusPrompt}
                 />
+                </div>
             </motion.div>
 
             {/* RIGHT COLUMN: Summary & Action */}

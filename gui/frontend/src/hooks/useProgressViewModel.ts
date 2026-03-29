@@ -20,6 +20,7 @@ import {
     selectIsMultiSelectMode,
     selectSelectedCards,
     selectProgressPct,
+    selectIsCompactMode,
 } from '../selectors';
 
 export function useProgressViewModel() {
@@ -61,6 +62,7 @@ export function useProgressViewModel() {
     const searchQuery = useLecternStore(selectSearchQuery);
     const isMultiSelectMode = useLecternStore(selectIsMultiSelectMode);
     const selectedCards = useLecternStore(selectSelectedCards);
+    const isCompactMode = useLecternStore(selectIsCompactMode);
 
     return useMemo(() => ({
         // State
@@ -105,9 +107,10 @@ export function useProgressViewModel() {
                 isMultiSelectMode,
                 selectedCards,
                 confirmModal: stateSlice.confirmModal,
+                isCompactMode,
             }
         },
         // Actions
         actions,
-    }), [stateSlice, actions, step, currentPhase, progress, conceptProgress, setupStepsCompleted, allCards, progressPct, isSyncing, syncSuccess, syncPartialFailure, syncProgress, syncLogs, sortBy, searchQuery, isMultiSelectMode, selectedCards]);
+    }), [stateSlice, actions, step, currentPhase, progress, conceptProgress, setupStepsCompleted, allCards, progressPct, isSyncing, syncSuccess, syncPartialFailure, syncProgress, syncLogs, sortBy, searchQuery, isMultiSelectMode, selectedCards, isCompactMode]);
 }

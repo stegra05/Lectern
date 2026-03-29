@@ -149,7 +149,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                             {card.slide_topic}
                         </span>
                     )}
-                    <span className="text-[10px] text-text-muted/50 font-mono">
+                    <span className="text-[10px] text-text-muted/70 font-mono">
                         Tab to navigate | Cmd+Enter to save
                     </span>
                 </div>
@@ -309,7 +309,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                                             placeholder="Optional reason..."
                                             value={card.feedback_reason || ''}
                                             onChange={(e) => onFeedbackChange(card.feedback_vote || null, e.target.value)}
-                                            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:outline-none focus:border-primary/50"
+                                            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-main placeholder:text-text-muted/70 focus:outline-none focus:border-primary/50"
                                         />
                                     </div>
                                 </div>

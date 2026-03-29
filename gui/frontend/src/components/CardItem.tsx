@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Layers, Edit2, Archive, Trash2, CheckSquare, Square } from 'lucide-react';
 import { clsx } from 'clsx';
 import { CardEditor } from './CardEditor';
@@ -12,6 +12,7 @@ interface CardItemProps {
     isEditing: boolean;
     isSelected: boolean;
     isMultiSelectMode: boolean;
+    isCompactMode: boolean;
     step: 'dashboard' | 'config' | 'generating' | 'done';
     editForm: Card | null;
     onStartEdit: (index: number) => void;
@@ -37,6 +38,7 @@ export const CardItem = memo(function CardItem({
     isEditing,
     isSelected,
     isMultiSelectMode,
+    isCompactMode,
     step,
     editForm,
     onStartEdit,
@@ -51,9 +53,15 @@ export const CardItem = memo(function CardItem({
     const cloze = isCloze(card);
     const slideNumber = getCardSlideNumber(card);
 
+    const [isExpanded, setIsExpanded] = useState(false);
+
     // Handle card click with keyboard modifiers
     const handleCardClick = (e: React.MouseEvent) => {
-        if (!isMultiSelectMode || !card._uid || isEditing) return;
+        if (!isMultiSelectMode) {
+            if (isCompactMode && !isEditing) setIsExpanded(!isExpanded);
+            return;
+        }
+        if (!card._uid || isEditing) return;
 
         // Shift+Click: range selection
         if (e.shiftKey) {
@@ -72,7 +80,7 @@ export const CardItem = memo(function CardItem({
             onClick={handleCardClick}
             className={clsx(
                 "bg-surface rounded-xl shadow-sm relative overflow-hidden group transition-colors duration-200",
-                isMultiSelectMode && !isEditing && "cursor-pointer",
+                (isMultiSelectMode || isCompactMode) && !isEditing && "cursor-pointer",
                 isEditing
                     ? "border-2 border-primary/50 bg-primary/5"
                     : clsx(
@@ -132,14 +140,14 @@ export const CardItem = memo(function CardItem({
                             )}>
                                 {card.model_name || 'Basic'}
                             </span>
-                            <span className="text-text-muted/30">•</span>
+                            <span className="text-text-muted/60">•</span>
                             <span className="flex items-center gap-1 text-[10px] font-medium text-text-muted">
-                                <Layers className="w-3 h-3 opacity-50" />
+                                <Layers className="w-3 h-3" />
                                 SLIDE {slideNumber ?? '?'}
                             </span>
                             {typeof card.quality_score === 'number' && (
                                 <>
-                                    <span className="text-text-muted/30">•</span>
+                                    <span className="text-text-muted/60">•</span>
                                     <span
                                         className={clsx(
                                             "text-[10px] font-semibold",
@@ -157,7 +165,7 @@ export const CardItem = memo(function CardItem({
                             )}
                             {card.slide_topic && (
                                 <>
-                                    <span className="text-text-muted/30">•</span>
+                                    <span className="text-text-muted/60">•</span>
                                     <span className="text-[10px] text-text-muted truncate max-w-[200px]" title={card.slide_topic}>
                                         {card.slide_topic}
                                     </span>
@@ -195,12 +203,22 @@ export const CardItem = memo(function CardItem({
                         )}
                     </div>
 
-                    {/* Card body */}
-                    <div className="p-5 space-y-5">
+                    <div className={clsx(
+                        isCompactMode && !isExpanded ? "px-5 py-3 grid grid-cols-2 gap-4" : "p-5 space-y-5"
+                    )}>
                         {Object.entries(card.fields || {}).map(([key, value]) => (
-                            <div key={key}>
-                                <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">{key}</div>
-                                <div className="text-sm text-text-main leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: highlightCloze(String(value)) }} />
+                            <div key={key} className={clsx(isCompactMode && !isExpanded && "min-w-0")}>
+                                <div className={clsx(
+                                    "text-[10px] font-bold text-text-muted uppercase tracking-widest",
+                                    isCompactMode && !isExpanded ? "mb-0.5" : "mb-1.5"
+                                )}>{key}</div>
+                                <div 
+                                    className={clsx(
+                                        "text-text-main prose prose-invert max-w-none leading-relaxed",
+                                        isCompactMode && !isExpanded ? "text-xs truncate whitespace-nowrap" : "text-sm"
+                                    )} 
+                                    dangerouslySetInnerHTML={{ __html: highlightCloze(String(value)) }} 
+                                />
                             </div>
                         ))}
                     </div>

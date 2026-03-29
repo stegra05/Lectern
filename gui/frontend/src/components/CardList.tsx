@@ -14,6 +14,7 @@ interface CardListProps {
     selectedCards: Set<string>;
     step: 'dashboard' | 'config' | 'generating' | 'done';
     isGenerating: boolean;
+    isCompactMode: boolean;
     onStartEdit: (index: number) => void;
     onCancelEdit: () => void;
     onSaveEdit: (index: number) => void;
@@ -37,6 +38,7 @@ function RenderCardItem({
     isMultiSelectMode,
     selectedCards,
     step,
+    isCompactMode,
     onStartEdit,
     onCancelEdit,
     onSaveEdit,
@@ -53,6 +55,7 @@ function RenderCardItem({
     isMultiSelectMode: boolean;
     selectedCards: Set<string>;
     step: 'dashboard' | 'config' | 'generating' | 'done';
+    isCompactMode: boolean;
     onStartEdit: (index: number) => void;
     onCancelEdit: () => void;
     onSaveEdit: (index: number) => void;
@@ -74,6 +77,7 @@ function RenderCardItem({
             isSelected={isSelected}
             isMultiSelectMode={isMultiSelectMode}
             step={step}
+            isCompactMode={isCompactMode}
             editForm={isEditing ? editForm : null}
             onStartEdit={onStartEdit}
             onCancelEdit={onCancelEdit}
@@ -102,6 +106,7 @@ export const CardList = memo(function CardList({
     selectedCards,
     step,
     isGenerating,
+    isCompactMode,
     onStartEdit,
     onCancelEdit,
     onSaveEdit,
@@ -179,6 +184,7 @@ export const CardList = memo(function CardList({
                             isMultiSelectMode={isMultiSelectMode}
                             selectedCards={selectedCards}
                             step={step}
+                            isCompactMode={isCompactMode}
                             onStartEdit={onStartEdit}
                             onCancelEdit={onCancelEdit}
                             onSaveEdit={onSaveEdit}

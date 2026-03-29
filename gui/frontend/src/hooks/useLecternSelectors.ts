@@ -204,6 +204,7 @@ export const useLecternActions = () => useLecternStore(useShallow((s) => ({
     // UI actions
     setSortBy: s.setSortBy,
     setSearchQuery: s.setSearchQuery,
+    setCompactMode: s.setCompactMode,
 
     // Batch actions
     toggleMultiSelectMode: s.toggleMultiSelectMode,

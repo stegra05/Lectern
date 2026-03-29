@@ -38,6 +38,7 @@ const persistedKeys = [
   "totalSessionSpend",
   "deckName",
   "densityPreferences",
+  "isCompactMode",
 ] as const satisfies readonly (keyof StoreState)[];
 
 type PersistedState = Pick<StoreState, (typeof persistedKeys)[number]>;

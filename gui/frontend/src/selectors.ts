@@ -25,6 +25,7 @@ export const selectSyncProgress = (state: StoreState) => state.syncProgress;
 export const selectSyncLogs = (state: StoreState) => state.syncLogs;
 export const selectIsMultiSelectMode = (state: StoreState) => state.isMultiSelectMode;
 export const selectSelectedCards = (state: StoreState) => state.selectedCards;
+export const selectIsCompactMode = (state: StoreState) => state.isCompactMode;
 
 export const selectFilteredCards = createSelector(
   [selectCards, selectSearchQuery],

@@ -232,57 +232,51 @@ export const FocusMode: React.FC<FocusModeProps> = ({
             </div>
 
             {/* Floating Operations Dock */}
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-6 z-50 pointer-events-none">
-
-                {/* Keyboard Hints */}
-                <div className="flex items-center gap-16 text-[10px] font-bold uppercase tracking-[0.3em] text-text-muted/60">
-                    <span className="flex items-center gap-2"><kbd className="px-1.5 py-0.5 rounded bg-surface/50 border border-border/50 text-[9px] font-mono not-italic normal-case">←</kbd> Discard</span>
-                    <span className="flex items-center gap-2"><kbd className="px-1.5 py-0.5 rounded bg-surface/50 border border-border/50 text-[9px] font-mono not-italic normal-case">E</kbd> Edit</span>
-                    <span className="flex items-center gap-2">Keep <kbd className="px-1.5 py-0.5 rounded bg-surface/50 border border-border/50 text-[9px] font-mono not-italic normal-case">→</kbd></span>
-                </div>
-
-                {/* Dock Container */}
-                <div className="flex items-center gap-2 p-2 bg-[#121212]/95 border border-border/50 rounded-full shadow-2xl shadow-black pointer-events-auto">
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center z-50">
+                {/* Single Pill Control Center */}
+                <div className="flex items-center p-1.5 bg-[#1A1A1A]/90 backdrop-blur-md border border-white/10 rounded-full shadow-2xl shadow-black/80 pointer-events-auto transition-all">
+                    
                     <button
                         onClick={handleDelete}
-                        className="group flex items-center justify-center w-14 h-14 rounded-full hover:bg-red-500/10 hover:text-red-400 text-text-muted transition-all"
+                        className="group flex items-center justify-center w-12 h-12 rounded-full hover:bg-white/5 text-text-muted transition-colors"
                         title="Discard (Del)"
                     >
-                        <Trash2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                        <Trash2 className="w-4 h-4 group-hover:text-text-main transition-colors" />
                     </button>
 
-                    <div className="w-px h-8 bg-border/50" />
+                    <div className="w-px h-6 bg-white/10 mx-1" />
 
                     <button
                         onClick={() => onEdit(currentIndex)}
-                        className="group flex items-center justify-center w-14 h-14 rounded-full hover:bg-surface hover:text-text-main text-text-muted transition-all"
+                        className="group flex items-center justify-center w-12 h-12 rounded-full hover:bg-white/5 text-text-muted transition-colors"
                         title="Edit (E)"
                     >
-                        <Edit2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                        <Edit2 className="w-4 h-4 group-hover:text-text-main transition-colors" />
                     </button>
 
-                    <div className="w-px h-8 bg-border/50" />
+                    <div className="w-px h-6 bg-white/10 mx-1" />
 
                     <button
                         onClick={handleNext}
-                        className="group flex items-center justify-center gap-2 px-6 h-14 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all"
+                        className="group flex items-center justify-center gap-2 px-6 h-12 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
                         title="Keep (Space)"
                     >
-                        <span className="text-xs font-bold uppercase tracking-widest hidden md:block">Keep</span>
-                        <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest hidden md:block">Keep</span>
+                        <ChevronRight className="w-4 h-4" />
                     </button>
 
                     {currentIndex === cards.length - 1 && (
-                        <div className="pl-2 ml-2 border-l border-border/50 flex">
+                        <>
+                            <div className="w-px h-6 bg-white/10 mx-1" />
                             <button
                                 onClick={onSync}
-                                className="group flex items-center gap-2 px-8 h-14 rounded-full bg-primary hover:bg-primary/90 text-background transition-all shadow-[0_0_30px_rgba(132,204,22,0.2)] hover:shadow-[0_0_40px_rgba(132,204,22,0.4)]"
+                                className="group flex items-center gap-2 px-6 h-12 rounded-full bg-primary hover:bg-primary/90 text-background transition-all shadow-[0_0_20px_rgba(132,204,22,0.15)] hover:shadow-[0_0_30px_rgba(132,204,22,0.3)]"
                                 title="Sync All (Cmd+Enter)"
                             >
-                                <Sparkles className="w-4 h-4 fill-background" />
-                                <span className="text-sm font-bold uppercase tracking-wider">Sync Final</span>
+                                <Sparkles className="w-3.5 h-3.5 fill-background" />
+                                <span className="text-[11px] font-bold uppercase tracking-widest hidden md:block">Sync Final</span>
                             </button>
-                        </div>
+                        </>
                     )}
                 </div>
             </div>

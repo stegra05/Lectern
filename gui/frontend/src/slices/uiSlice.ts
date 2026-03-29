@@ -7,6 +7,7 @@ export const getUiState = () => ({
   searchQuery: "",
   sortBy: "creation" as SortOption,
   copied: false,
+  isCompactMode: false,
   toasts: [] as StoreToast[],
 });
 
@@ -19,6 +20,7 @@ export const createUiActions = (
 ): UiActions => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSortBy: (option) => set({ sortBy: option }),
+  setCompactMode: (isCompact) => set({ isCompactMode: isCompact }),
 });
 
 let toastIdCounter = 0;

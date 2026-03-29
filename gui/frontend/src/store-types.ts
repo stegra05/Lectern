@@ -96,6 +96,7 @@ export type StoreState = {
 
     // UI bits
     copied: boolean;
+    isCompactMode: boolean;
 
     // Toast
     toasts: StoreToast[];
@@ -174,6 +175,7 @@ export type ReviewActions = {
 export type UiActions = {
     setSearchQuery: (query: string) => void;
     setSortBy: (option: SortOption) => void;
+    setCompactMode: (isCompact: boolean) => void;
 };
 
 export type BatchActions = {
