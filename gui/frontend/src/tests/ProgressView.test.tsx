@@ -285,7 +285,7 @@ describe('ProgressView', () => {
             progress: { current: 10, total: 10 },
         });
         render(<ProgressView />);
-        expect(screen.getByText(/^Quality & Trust$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Session Overview$/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
     });
 

@@ -76,6 +76,6 @@ test.describe('PDF Upload and Generation', () => {
     await expect(page.getByText('What are the reactants in photosynthesis?')).toBeVisible();
 
     // Sidebar quality panel should exist (done state)
-    await expect(page.getByText('Quality & Trust')).toBeVisible();
+    await expect(page.getByText('Generation Health')).toBeVisible();
   });
 });
