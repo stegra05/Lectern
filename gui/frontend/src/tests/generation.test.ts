@@ -298,10 +298,127 @@ describe('generation logic', () => {
                 setFn
             );
 
-            const first = setFn.mock.calls[0][0]({ replayCursor: null } as unknown as StoreState);
-            const second = setFn.mock.calls[3][0]({ replayCursor: 10 } as unknown as StoreState);
-            expect(first).toMatchObject({ replayCursor: 10 });
-            expect(second).toMatchObject({ replayCursor: 10 });
+            const cursorUpdates = setFn.mock.calls
+                .map((call) => call[0])
+                .filter((update) => {
+                    const result = update({ replayCursor: 10, logs: [] } as unknown as StoreState) as Record<string, unknown>;
+                    return typeof result === 'object' && result !== null && 'replayCursor' in result;
+                });
+
+            expect(cursorUpdates).toHaveLength(2);
+            expect(cursorUpdates[0]({ replayCursor: null, logs: [] } as unknown as StoreState)).toMatchObject({ replayCursor: 10 });
+            expect(cursorUpdates[1]({ replayCursor: 10, logs: [] } as unknown as StoreState)).toMatchObject({ replayCursor: 10 });
+        });
+
+        it('sets currentPhase from phase_started even without control_snapshot', () => {
+            const setFn = vi.fn();
+
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 11,
+                    type: 'phase_started',
+                    message: '',
+                    timestamp: Date.now(),
+                    data: { phase: 'generation' },
+                },
+                setFn
+            );
+
+            const phaseUpdate = setFn.mock.calls
+                .map((call) => call[0])
+                .find((update) => {
+                    const result = update({ logs: [], currentPhase: 'idle' } as unknown as StoreState) as Record<string, unknown>;
+                    return typeof result === 'object' && result !== null && result.currentPhase === 'generating';
+                });
+
+            expect(phaseUpdate).toBeDefined();
+            const result = phaseUpdate!({ logs: [], currentPhase: 'idle' } as unknown as StoreState);
+            expect(result).toMatchObject({
+                currentPhase: 'generating',
+            });
+        });
+
+        it('sets currentPhase to complete on session_completed', () => {
+            const setFn = vi.fn();
+
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 12,
+                    type: 'session_completed',
+                    message: '',
+                    timestamp: Date.now(),
+                    data: { summary: { total_pages: 3 } },
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const result = update({
+                logs: [],
+                step: 'generating' as Step,
+                currentPhase: 'generating' as Phase,
+                totalPages: 0,
+                coverageData: null,
+            } as unknown as StoreState);
+
+            expect(result).toMatchObject({
+                step: 'done',
+                currentPhase: 'complete',
+            });
+        });
+
+        it('maps session_completed summary completion outcome fields to legacy done payload', () => {
+            const setFn = vi.fn();
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 13,
+                    type: 'session_completed',
+                    message: '',
+                    timestamp: Date.now(),
+                    data: {
+                        summary: {
+                            total_pages: 70,
+                            cards_generated: 68,
+                            requested_card_target: 120,
+                            target_shortfall: 52,
+                            termination_reason_code: 'coverage_sufficient_model_done',
+                            termination_reason_text:
+                                'Nice work. You already covered the key topics and concepts in good detail.',
+                            run_summary_text:
+                                'Generated 68 of requested 120 cards. Nice work. You already covered the key topics and concepts in good detail.',
+                        },
+                    },
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const result = update({
+                logs: [],
+                step: 'generating' as Step,
+                currentPhase: 'generating' as Phase,
+                totalPages: 0,
+                coverageData: null,
+                rubricSummary: null,
+                completionOutcome: null,
+            } as unknown as StoreState);
+
+            expect(result).toMatchObject({
+                step: 'done',
+                currentPhase: 'complete',
+                completionOutcome: {
+                    requested_card_target: 120,
+                    cards_generated: 68,
+                    target_shortfall: 52,
+                    termination_reason_code: 'coverage_sufficient_model_done',
+                },
+            });
         });
     });
 
@@ -374,7 +491,7 @@ describe('generation logic', () => {
     });
 
     describe('processGenerationEvent done', () => {
-        it('does not set currentPhase (Fix 2: Authority moved to snapshots)', () => {
+        it('sets currentPhase to complete on done', () => {
             const setFn = vi.fn();
             processGenerationEvent(
                 {
@@ -395,8 +512,7 @@ describe('generation logic', () => {
             
             const result = update(prevState);
             expect(result).toHaveProperty('step', 'done');
-            expect(result).not.toHaveProperty('currentPhase');
-            expect(result).not.toHaveProperty('progress');
+            expect(result).toHaveProperty('currentPhase', 'complete');
         });
 
         it('stores rubric summary from done payload', () => {
@@ -432,6 +548,42 @@ describe('generation logic', () => {
             const result = update(prevState);
             expect(result).toHaveProperty('rubricSummary');
             expect((result as { rubricSummary: { avg_quality: number } }).rubricSummary.avg_quality).toBe(55.2);
+        });
+
+        it('stores user-facing completion outcome summary from done payload', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'done',
+                    message: 'Generation complete',
+                    data: {
+                        total_pages: 70,
+                        requested_card_target: 120,
+                        cards_generated: 68,
+                        target_shortfall: 52,
+                        termination_reason_code: 'coverage_sufficient_model_done',
+                        termination_reason_text:
+                            'Nice work. You already covered the key topics and concepts in good detail.',
+                        run_summary_text:
+                            'Generated 68 of requested 120 cards. Nice work. You already covered the key topics and concepts in good detail.',
+                    },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const prevState = {
+                step: 'generating' as Step,
+                totalPages: 0,
+                coverageData: null,
+                rubricSummary: null,
+            };
+
+            const result = update(prevState);
+            expect(result).toHaveProperty('completionOutcome');
+            expect((result as { completionOutcome: { requested_card_target: number } }).completionOutcome.requested_card_target).toBe(120);
+            expect((result as { completionOutcome: { target_shortfall: number } }).completionOutcome.target_shortfall).toBe(52);
         });
     });
 

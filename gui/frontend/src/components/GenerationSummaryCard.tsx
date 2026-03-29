@@ -122,7 +122,7 @@ export function GenerationSummaryCard({
                     )}>
                         <DeckSelector
                             {...deckSelectorProps}
-                            disabled={isButtonDisabled && !summary.fileName}
+                            disabled={false}
                         />
                         {attemptedSubmit && !summary.deckName && (
                             <div className="absolute -bottom-5 left-0 text-xs text-red-400 flex items-center gap-1">

@@ -17,6 +17,8 @@ FORMATTING_RULES = (
     "- Never use Markdown (no **bold**, headers, or code fences).\n"
     "- Do not include images, <img> tags, or Markdown image syntax in card content.\n"
     "- JSON must escape backslashes (e.g., \\\\frac, \\\\alpha).\n"
+    "- Cards MUST be completely self-contained. NEVER use phrases like 'in the diagram', 'on this slide', or 'as shown'. If a concept relies on a visual, describe the visual's relationship explicitly in text.\n"
+    "- Cloze constraints: Maximum 2 deletions per card. Never cloze entire phrases or sentences—only single, highly specific terms. Ensure the surrounding context gives a clear, unambiguous clue.\n"
 )
 
 
@@ -208,13 +210,6 @@ class PromptBuilder:
             "- Format:\n"
             "    - Prefer Cloze for definitions/lists. Basic for open-ended questions.\n"
             "    - STRICTLY AVOID Markdown. Use HTML for formatting.\n"
-            "    - Output shape is strict:\n"
-            "      * Each card must include `model_name` and `fields`.\n"
-            "      * Basic cards use fields named `Front` and `Back`.\n"
-            "      * Cloze cards use a field named `Text`.\n"
-            "    - Return ONLY a JSON object with keys `cards` and `done`.\n"
-            "    - `cards` must be an array of card objects only.\n"
-            "    - `done` must be a boolean.\n"
             f"{avoid_text}"
             f"{slide_coverage}"
             f"{coverage_summary}"

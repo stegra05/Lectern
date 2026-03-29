@@ -1,4 +1,5 @@
 import httpx
+from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Literal, Optional, Union
@@ -8,6 +9,7 @@ from lectern import config, anki_connector
 from lectern.config import ConfigManager
 from lectern.providers.factory import DEFAULT_PROVIDER, is_supported_provider
 from lectern.utils.error_handling import capture_exception
+from lectern.utils.path_utils import get_app_data_dir
 
 router = APIRouter()
 
@@ -115,6 +117,12 @@ class SaveFileRequest(BaseModel):
 class SaveFileResponse(BaseModel):
     status: Literal["success", "cancelled"]
     path: Optional[str] = None
+
+
+class LogsClearResponse(BaseModel):
+    status: Literal["cleared"]
+    deleted_count: int
+    deleted_files: List[str]
 
 # --- Endpoints ---
 
@@ -407,6 +415,60 @@ async def update_config(cfg: ConfigUpdate):
 
     return {"status": "no_change"}
 
+
+def _relative_to_app_data(path: Path, app_data_dir: Path) -> str:
+    try:
+        return str(path.relative_to(app_data_dir))
+    except ValueError:
+        return str(path)
+
+
+def _clear_backend_log(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+    try:
+        path.write_text("", encoding="utf-8")
+        return True
+    except OSError:
+        path.unlink()
+        return True
+
+
+@router.delete("/logs", response_model=LogsClearResponse)
+async def clear_logs() -> dict:
+    app_data_dir = get_app_data_dir()
+    logs_dir = app_data_dir / "logs"
+
+    if not logs_dir.exists():
+        return {"status": "cleared", "deleted_count": 0, "deleted_files": []}
+
+    deleted_files: List[str] = []
+
+    backend_log = logs_dir / "backend.log"
+    try:
+        backend_log_cleared = _clear_backend_log(backend_log)
+    except OSError as exc:
+        user_msg, _ = capture_exception(exc, "Clear logs")
+        raise HTTPException(status_code=500, detail=user_msg) from exc
+    if backend_log_cleared:
+        deleted_files.append(_relative_to_app_data(backend_log, app_data_dir))
+
+    for path in sorted(logs_dir.glob("session-*.json")):
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            path.unlink()
+        except OSError as exc:
+            user_msg, _ = capture_exception(exc, "Clear logs")
+            raise HTTPException(status_code=500, detail=user_msg) from exc
+        deleted_files.append(_relative_to_app_data(path, app_data_dir))
+
+    return {
+        "status": "cleared",
+        "deleted_count": len(deleted_files),
+        "deleted_files": deleted_files,
+    }
+
 @router.post("/save-file", response_model=SaveFileResponse)
 async def save_file(request: SaveFileRequest):
     import webview
@@ -438,4 +500,3 @@ async def save_file(request: SaveFileRequest):
     except Exception as e:
         logger.error(f"Failed to save file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

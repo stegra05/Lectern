@@ -19,6 +19,7 @@ const ERROR_PATTERNS = {
     timeout: /timeout|timed out|etimedout/i,
     network: /network|fetch|econnrefused|enotfound|dns|internet|offline/i,
     serverError: /500|502|503|504|internal server error|bad gateway|service unavailable/i,
+    spendingCap: /resource_exhausted|spending cap|quota exceeded|insufficient quota|billing.*limit/i,
     rateLimit: /429|rate limit|too many requests/i,
     badRequest: /400|bad request|invalid.*request/i,
 } as const;
@@ -108,6 +109,16 @@ export function translateError(error: unknown, context?: 'estimation' | 'generat
             title: 'Network Error',
             message: 'Could not connect to the server.',
             action: 'Check your internet connection and try again.',
+            errorCode,
+        };
+    }
+
+    // Billing / spending-cap errors
+    if (ERROR_PATTERNS.spendingCap.test(message)) {
+        return {
+            title: 'Billing Limit Reached',
+            message: 'Your Gemini project has exceeded its spending cap.',
+            action: 'Increase the spending cap or switch to another API project/key, then try again.',
             errorCode,
         };
     }

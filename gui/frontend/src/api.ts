@@ -14,10 +14,11 @@ import type {
   DecksResponse,
   Estimation,
   HealthStatus,
-  HistoryBatchDeleteResponse,
-  HistoryClearResponse,
-  HistoryDeleteResponse,
-  HistoryResponse,
+    HistoryBatchDeleteResponse,
+    HistoryClearResponse,
+    HistoryDeleteResponse,
+    HistoryResponse,
+    LogsClearResponse,
   SaveConfigPayload,
   SaveConfigResponse,
   SessionData,
@@ -317,6 +318,10 @@ export const api = {
             }),
             'Failed to save config'
         ) as SaveConfigResponse;
+    },
+
+    clearLogs: async (): Promise<LogsClearResponse> => {
+        return unwrapData(await apiClient.DELETE('/logs'), 'Failed to clear logs');
     },
 
     saveFile: async (

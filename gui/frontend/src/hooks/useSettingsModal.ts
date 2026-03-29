@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useConfigQuery, useSaveConfigMutation, useVersionQuery } from '../queries';
+import { useConfigQuery, useSaveConfigMutation, useVersionQuery, useClearLogsMutation } from '../queries';
 import { api } from '../api';
 import type { Config, HealthStatus } from '../schemas/api';
 import { getAnkiPreflight } from '../lib/healthDiagnostics';
@@ -76,12 +76,14 @@ export function useSettingsModal(isOpen: boolean) {
   const [editedConfig, setEditedConfig] = useState<ConfigState | null>(null);
   const [newKey, setNewKey] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [logsClearSuccess, setLogsClearSuccess] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showBudget, setShowBudget] = useState(false);
 
   const { data: config, isLoading, isError, refetch: refetchConfig } = useConfigQuery();
   const { data: versionInfo, isLoading: versionLoading, refetch: refetchVersion } = useVersionQuery(isOpen);
   const saveConfigMutation = useSaveConfigMutation();
+  const clearLogsMutation = useClearLogsMutation();
 
   // Sync server config to local edit state when config loads/changes
   useEffect(() => {
@@ -172,6 +174,16 @@ export function useSettingsModal(isOpen: boolean) {
     }
   }, [editedConfig, hasChanges, ankiUrlError, newKey, saveConfigMutation]);
 
+  const clearLogs = useCallback(async () => {
+    try {
+      await clearLogsMutation.mutateAsync();
+      setLogsClearSuccess(true);
+      setTimeout(() => setLogsClearSuccess(false), 2500);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [clearLogsMutation]);
+
   return {
     config: editedConfig,
     isLoading,
@@ -194,6 +206,9 @@ export function useSettingsModal(isOpen: boolean) {
     ankiUrlError,
     hasChanges,
     saveSuccess,
+    logsClearSuccess,
+    clearLogs,
+    isClearingLogs: clearLogsMutation.isPending,
     showAdvanced,
     setShowAdvanced,
     showBudget,

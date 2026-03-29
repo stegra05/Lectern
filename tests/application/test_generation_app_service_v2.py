@@ -409,6 +409,37 @@ async def test_start_stream_maps_history_persist_failure_to_terminal_error_event
 
 
 @pytest.mark.asyncio
+async def test_start_stream_maps_provider_spending_cap_error_to_provider_generation_failed() -> None:
+    history = _HistoryStub(_CallHistory([]))
+
+    async def start_runner(_: StartGenerationRequest) -> AsyncIterator[DomainEvent]:
+        raise RuntimeError(
+            "429 RESOURCE_EXHAUSTED. Your project has exceeded its spending cap."
+        )
+        if False:
+            yield SessionStarted(session_id="session-1", mode="start")
+
+    service = GenerationAppServiceImpl(
+        history=history,
+        runtime_store=SessionRuntimeStore(),
+        start_runner=start_runner,
+        session_id_factory=lambda: "session-1",
+        now_ms=lambda: 1,
+    )
+
+    out = await _collect(
+        service.run_generation_stream(
+            StartGenerationRequest("/tmp/a.pdf", "Deck", "gemini", [])
+        )
+    )
+
+    assert len(out) == 1
+    assert out[0].type == "error_emitted"
+    assert out[0].data["code"] == "provider_generation_failed"
+    assert "spending cap" in out[0].message.lower()
+
+
+@pytest.mark.asyncio
 async def test_cancel_wins_before_terminal_emit_and_followup_cancel_is_noop() -> None:
     history = _HistoryStub(_CallHistory([]))
     session_id = "session-race"

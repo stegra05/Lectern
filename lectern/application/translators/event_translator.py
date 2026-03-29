@@ -36,7 +36,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="session_started",
-                message="",
+                message="Session started",
                 timestamp=timestamp,
                 data={"mode": event.mode},
             )
@@ -45,7 +45,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="phase_started",
-                message="",
+                message=f"Phase started: {event.phase}",
                 timestamp=timestamp,
                 data={"phase": event.phase},
             )
@@ -54,7 +54,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="progress_updated",
-                message="",
+                message=f"Progress update: {event.phase} {event.current}/{event.total}",
                 timestamp=timestamp,
                 data={"phase": event.phase, "current": event.current, "total": event.total},
             )
@@ -63,7 +63,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="card_emitted",
-                message="",
+                message=f"Card emitted (batch {event.batch_index})",
                 timestamp=timestamp,
                 data={"card": event.card_payload, "batch_index": event.batch_index},
             )
@@ -72,7 +72,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="cards_replaced",
-                message="",
+                message=f"Cards replaced (batch {event.batch_index})",
                 timestamp=timestamp,
                 data={"cards": event.cards, "coverage_data": event.coverage_data},
             )
@@ -99,7 +99,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="phase_completed",
-                message="",
+                message=f"Phase completed: {event.phase}",
                 timestamp=timestamp,
                 data={"phase": event.phase, "duration_ms": event.duration_ms, "summary": event.summary},
             )
@@ -108,7 +108,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="session_completed",
-                message="",
+                message="Session completed",
                 timestamp=timestamp,
                 data={"summary": event.summary},
             )
@@ -117,7 +117,7 @@ class EventTranslator:
                 session_id=session_id,
                 sequence_no=sequence_no,
                 type="session_cancelled",
-                message="",
+                message=f"Session cancelled: {event.reason}",
                 timestamp=timestamp,
                 data={"stage": event.stage, "reason": event.reason},
             )

@@ -9,6 +9,7 @@ vi.mock('../api', () => ({
     api: {
         getConfig: vi.fn(),
         saveConfig: vi.fn(),
+        clearLogs: vi.fn(),
         getVersion: vi.fn(),
         getDecks: vi.fn(),
         checkHealth: vi.fn(),
@@ -38,6 +39,7 @@ describe('SettingsModal', () => {
         vi.clearAllMocks();
         vi.mocked(api.getConfig).mockResolvedValue(defaultConfig);
         vi.mocked(api.saveConfig).mockResolvedValue({ success: true });
+        vi.mocked(api.clearLogs).mockResolvedValue({ status: 'cleared', deleted_count: 2, deleted_files: ['logs/backend.log', 'logs/session-1.json'] });
         vi.mocked(api.getVersion).mockResolvedValue({
             current: '1.2.0',
             latest: '1.2.0',
@@ -271,6 +273,31 @@ describe('SettingsModal', () => {
         await waitFor(() => {
             expect(screen.getByText('Update available!')).toBeInTheDocument();
             expect(screen.getByText('Download')).toBeInTheDocument();
+        });
+    });
+
+    it('clears non-essential logs from settings', async () => {
+        await act(async () => {
+            renderWithQueryClient(
+                <SettingsModal
+                    {...defaultProps}
+                    isOpen={true}
+                    onClose={mockOnClose}
+                />
+            );
+        });
+
+        await waitFor(() => {
+            expect(screen.getByDisplayValue('Gemini 3 Flash (Fast)')).toBeInTheDocument();
+        });
+
+        const clearLogsButton = screen.getByRole('button', { name: /Clear logs/i });
+        await act(async () => {
+            fireEvent.click(clearLogsButton);
+        });
+
+        await waitFor(() => {
+            expect(api.clearLogs).toHaveBeenCalledTimes(1);
         });
     });
 });

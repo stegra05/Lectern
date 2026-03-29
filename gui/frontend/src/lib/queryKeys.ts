@@ -21,4 +21,7 @@ export const queryKeys = {
 
   // Version info
   version: ['version'] as const,
+
+  // Log cleanup metadata
+  logs: ['logs'] as const,
 } as const;

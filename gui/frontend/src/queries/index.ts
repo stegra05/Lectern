@@ -1,6 +1,6 @@
 // React Query hooks for static server state
 export { useHealthQuery, type HealthStatus } from './useHealthQuery';
-export { useConfigQuery, useSaveConfigMutation } from './useConfigQuery';
+export { useConfigQuery, useSaveConfigMutation, useClearLogsMutation } from './useConfigQuery';
 export type { Config, SaveConfigPayload } from '../schemas/api';
 export { useDecksQuery, useCreateDeckMutation } from './useDecksQuery';
 export { useHistoryQuery, useDeleteHistoryMutation, useClearHistoryMutation, useBatchDeleteHistoryMutation, type HistoryEntry } from './useHistoryQuery';

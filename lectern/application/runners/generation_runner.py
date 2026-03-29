@@ -54,6 +54,7 @@ class _RunnerState:
     total_cards_cap: int
     actual_batch_size: int
     last_coverage_data: CoverageData
+    generation_termination_reason_code: str | None = None
 
 
 def _now_ms() -> int:
@@ -156,6 +157,54 @@ def _event_stage(event: DomainEvent) -> str:
     if isinstance(event, ProgressUpdated):
         return f"{event.phase}_progress"
     return "event"
+
+
+def _termination_reason_text(code: str) -> str:
+    if code == "coverage_sufficient_model_done":
+        return (
+            "Nice work. You already covered the key topics and concepts in good detail."
+        )
+    if code == "grounding_non_progress_duplicates":
+        return (
+            "You already built strong coverage. New grounded candidates were mostly repeats, so adding more would likely duplicate what you have."
+        )
+    if code == "grounding_non_progress_gate_failures":
+        return (
+            "You have a solid set now. Additional candidates were not meeting grounding quality standards."
+        )
+    if code == "max_cap_reached":
+        return "Nice progress. This session reached the configured maximum cards for one run."
+    return "Session complete with strong coverage."
+
+
+def _build_completion_summary(
+    *,
+    cards_generated: int,
+    duration_ms: int,
+    requested_card_target: int | None,
+    termination_reason_code: str,
+) -> dict[str, Any]:
+    target_shortfall = (
+        max(int(requested_card_target) - cards_generated, 0)
+        if requested_card_target is not None
+        else None
+    )
+    reason_text = _termination_reason_text(termination_reason_code)
+    if requested_card_target is not None:
+        run_summary = (
+            f"Generated {cards_generated} of requested {requested_card_target} cards. {reason_text}"
+        )
+    else:
+        run_summary = f"Generated {cards_generated} cards. {reason_text}"
+    return {
+        "cards_generated": cards_generated,
+        "duration_ms": duration_ms,
+        "requested_card_target": requested_card_target,
+        "target_shortfall": target_shortfall,
+        "termination_reason_code": termination_reason_code,
+        "termination_reason_text": reason_text,
+        "run_summary_text": run_summary,
+    }
 
 
 async def _emit_with_runner_state(
@@ -574,6 +623,7 @@ async def _run_generation_phase(
             yield event
 
         if model_done and _coverage_is_sufficient(state.last_coverage_data):
+            state.generation_termination_reason_code = "coverage_sufficient_model_done"
             break
 
         if grounding_promoted_count == 0:
@@ -587,6 +637,7 @@ async def _run_generation_phase(
                 if duplicate_drop_count > gate_failure_drop_count
                 else "grounding_non_progress_gate_failures"
             )
+            state.generation_termination_reason_code = reason
             async for event in _emit_with_runner_state(
                 history,
                 session_id,
@@ -612,7 +663,21 @@ async def _run_generation_phase(
             break
 
         if model_done:
-            break
+            async for event in _emit_with_runner_state(
+                history,
+                session_id,
+                cursor_ref,
+                state,
+                WarningEmitted(
+                    code="model_premature_done",
+                    message="Model reported done, but coverage is insufficient. Forcing another batch.",
+                    details={},
+                ),
+            ):
+                yield event
+
+    if state.generation_termination_reason_code is None:
+        state.generation_termination_reason_code = "max_cap_reached"
 
     generation_duration = int((time.perf_counter() - phase_started_at) * 1000)
     async for event in _emit_with_runner_state(
@@ -936,10 +1001,15 @@ def make_start_runner(
             cursor_ref,
             state,
             SessionCompleted(
-                summary={
-                    "cards_generated": len(state.all_cards),
-                    "duration_ms": total_duration,
-                }
+                summary=_build_completion_summary(
+                    cards_generated=len(state.all_cards),
+                    duration_ms=total_duration,
+                    requested_card_target=req.target_card_count,
+                    termination_reason_code=(
+                        state.generation_termination_reason_code
+                        or "generation_completed"
+                    ),
+                )
             ),
         ):
             yield event
@@ -1048,10 +1118,15 @@ def make_resume_runner(
             cursor_ref,
             state,
             SessionCompleted(
-                summary={
-                    "cards_generated": len(state.all_cards),
-                    "duration_ms": total_duration,
-                }
+                summary=_build_completion_summary(
+                    cards_generated=len(state.all_cards),
+                    duration_ms=total_duration,
+                    requested_card_target=_safe_int(session.get("target_card_count"), 0) or None,
+                    termination_reason_code=(
+                        state.generation_termination_reason_code
+                        or "generation_completed"
+                    ),
+                )
             ),
         ):
             yield event

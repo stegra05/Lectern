@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from google.genai.errors import APIError as GenAIAPIError
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -260,6 +261,15 @@ async def generate_v2(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise _to_http_error(exc) from exc
+    except (RuntimeError, OSError, ValueError, TypeError, GenAIAPIError) as exc:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise _to_http_error(
+            GenerationApplicationError(
+                GenerationErrorCode.INTERNAL_UNEXPECTED,
+                str(exc),
+            )
+        ) from exc
 
     async def event_stream() -> AsyncIterator[str]:
         last_session_id = session_id or "unknown-session"

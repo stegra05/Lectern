@@ -140,4 +140,36 @@ describe('CoverageGrid', () => {
         expect(screen.getByText(/Concepts 1\/2 \(50%\)/)).toBeInTheDocument();
         expect(screen.getByText(/High Priority 1\/1/)).toBeInTheDocument();
     });
+
+    it('renders inspectable coverage detail lists when metadata exists', () => {
+        render(
+            <CoverageGrid
+                totalPages={4}
+                cards={[{ front: 'A', back: 'B', source_pages: [1], concept_ids: ['c1'], _uid: '1' }]}
+                coverageData={{
+                    total_pages: 4,
+                    concept_catalog: [
+                        { id: 'c1', name: 'Concept One', importance: 'high', page_references: [1] },
+                        { id: 'c2', name: 'Concept Two', importance: 'high', page_references: [3] },
+                    ],
+                    uncovered_concepts: [
+                        { id: 'c2', name: 'Concept Two', importance: 'high', page_references: [3] },
+                    ],
+                    missing_high_priority: [
+                        { id: 'c2', name: 'Concept Two', importance: 'high', page_references: [3] },
+                    ],
+                    uncovered_relations: [
+                        { key: 'c1|depends_on|c2', source: 'Concept One', target: 'Concept Two', type: 'depends_on' },
+                    ],
+                }}
+            />
+        );
+
+        expect(screen.getByText(/Coverage Details/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Covered concepts$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Missing high-priority$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Uncovered relations$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Concept One$/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/Concept Two/i).length).toBeGreaterThan(0);
+    });
 });

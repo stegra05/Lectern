@@ -122,7 +122,13 @@ sys.stdout = StreamToLogger(logging.getLogger("STDOUT"), logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger("STDERR"), logging.ERROR)
 
 if hasattr(sys, "_MEIPASS"):
-    frontend_dist = os.path.join(getattr(sys, "_MEIPASS"), "frontend", "dist")
+    meipass = getattr(sys, "_MEIPASS")
+    frontend_dist = os.path.join(meipass, "frontend", "dist")
+    
+    # In macOS .app bundles, PyInstaller BUNDLE moves datas to Contents/Resources
+    mac_app_dist = os.path.abspath(os.path.join(meipass, "..", "Resources", "frontend", "dist"))
+    if not os.path.exists(frontend_dist) and os.path.exists(mac_app_dist):
+        frontend_dist = mac_app_dist
 else:
     frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 

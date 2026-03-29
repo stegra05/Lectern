@@ -3,7 +3,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Settings, AlertCircle, Save, HelpCircle, ChevronDown, ChevronUp, ExternalLink, Download, RefreshCw, DollarSign, RotateCcw } from 'lucide-react';
+import { X, Settings, AlertCircle, Save, HelpCircle, ChevronDown, ChevronUp, ExternalLink, Download, RefreshCw, DollarSign, RotateCcw, Trash2 } from 'lucide-react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSettingsModal } from '../hooks/useSettingsModal';
 import type { ConfigState } from '../hooks/useSettingsModal';
@@ -46,6 +46,9 @@ export interface SettingsModalViewProps {
   onSave: () => void;
   isSaving: boolean;
   saveSuccess: boolean;
+  logsClearSuccess: boolean;
+  onClearLogs: () => void;
+  isClearingLogs: boolean;
   showAdvanced: boolean;
   onToggleAdvanced: () => void;
   showBudget: boolean;
@@ -77,6 +80,9 @@ function SettingsModalView({
   onSave,
   isSaving,
   saveSuccess,
+  logsClearSuccess,
+  onClearLogs,
+  isClearingLogs,
   showAdvanced,
   onToggleAdvanced,
   showBudget,
@@ -319,6 +325,30 @@ function SettingsModalView({
                     <div className="w-full h-px bg-border my-4" />
 
                     <div className="space-y-4">
+                      <label className="text-sm font-medium text-text-muted flex items-center gap-2">Maintenance</label>
+                      <div className="p-4 rounded-xl border border-border bg-background space-y-3">
+                        <p className="text-xs text-text-muted">
+                          Clears non-essential diagnostics only (`backend.log` and `session-*.json`). Settings and history are preserved.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={onClearLogs}
+                          disabled={isClearingLogs}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-surface hover:bg-surface/80 text-text-muted hover:text-text-main rounded-lg text-xs font-medium transition-colors border border-border disabled:opacity-60 disabled:cursor-not-allowed"
+                          aria-label="Clear logs"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {isClearingLogs ? 'Clearing logs...' : 'Clear logs'}
+                        </button>
+                        {logsClearSuccess && (
+                          <p className="text-xs text-primary text-center font-medium">✓ Logs cleared</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="w-full h-px bg-border my-4" />
+
+                    <div className="space-y-4">
                       <label className="text-sm font-medium text-text-muted flex items-center gap-2">About</label>
                       <div className="p-4 rounded-xl border border-border bg-background space-y-4">
                         <div className="flex items-center justify-between">
@@ -416,6 +446,9 @@ export function SettingsModal({ isOpen, onClose, totalSessionSpend, onResetSessi
       onSave={state.saveConfig}
       isSaving={state.isSaving}
       saveSuccess={state.saveSuccess}
+      logsClearSuccess={state.logsClearSuccess}
+      onClearLogs={state.clearLogs}
+      isClearingLogs={state.isClearingLogs}
       showAdvanced={state.showAdvanced}
       onToggleAdvanced={() => state.setShowAdvanced(!state.showAdvanced)}
       showBudget={state.showBudget}

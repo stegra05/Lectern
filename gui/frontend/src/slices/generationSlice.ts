@@ -23,6 +23,7 @@ export const getGenerationState = () => ({
   totalPages: 0,
   coverageData: null as import("../api").CoverageData | null,
   rubricSummary: null as import("../store-types").RubricSummary | null,
+  completionOutcome: null as import("../store-types").CompletionOutcome | null,
   setupStepsCompleted: 0,
   conceptProgress: { current: 0, total: 0 },
   lastSnapshotTimestamp: null as number | null,

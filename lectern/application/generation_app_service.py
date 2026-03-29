@@ -7,6 +7,8 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from google.genai.errors import APIError as GenAIAPIError
+
 from lectern.application.dto import (
     ApiEventV2,
     CancelGenerationRequest,
@@ -45,6 +47,17 @@ class _RuntimeHandle:
 
 
 class GenerationAppServiceImpl(GenerationAppService):
+    _SPENDING_CAP_ERROR_MARKERS = (
+        "resource_exhausted",
+        "spending cap",
+        "quota exceeded",
+        "insufficient quota",
+    )
+    _RATE_LIMIT_ERROR_MARKERS = (
+        "rate limit",
+        "too many requests",
+    )
+
     def __init__(
         self,
         *,
@@ -74,6 +87,27 @@ class GenerationAppServiceImpl(GenerationAppService):
         self._session_id_factory = session_id_factory or (lambda: uuid.uuid4().hex)
         self._now_ms = now_ms or (lambda: int(time.time() * 1000))
         self._stream_lock = asyncio.Lock()
+
+    def _map_stream_exception(self, exc: Exception) -> tuple[str, str]:
+        if isinstance(exc, GenerationApplicationError):
+            return exc.code.value, exc.message
+
+        message = str(exc).strip() or "Unexpected generation error"
+        lowered = message.lower()
+
+        if any(marker in lowered for marker in self._SPENDING_CAP_ERROR_MARKERS):
+            return (
+                GenerationErrorCode.PROVIDER_GENERATION_FAILED.value,
+                "Gemini API spending cap reached for this project. Update billing/quota and try again.",
+            )
+
+        if any(marker in lowered for marker in self._RATE_LIMIT_ERROR_MARKERS):
+            return (
+                GenerationErrorCode.PROVIDER_GENERATION_FAILED.value,
+                "Gemini API rate limit reached. Please wait and try again.",
+            )
+
+        return GenerationErrorCode.INTERNAL_UNEXPECTED.value, message
 
     async def run_generation_stream(
         self,
@@ -129,7 +163,16 @@ class GenerationAppServiceImpl(GenerationAppService):
                     sequence_no=sequence_no,
                     now_ms=self._now_ms(),
                 )
-        except (GenerationApplicationError, RuntimeError, OSError, ValueError, TypeError) as exc:
+        except asyncio.CancelledError:
+            raise
+        except (
+            GenerationApplicationError,
+            RuntimeError,
+            OSError,
+            ValueError,
+            TypeError,
+            GenAIAPIError,
+        ) as exc:
             if handle.cancel_requested:
                 sequence_no, cancelled_event = await self._emit_cancelled_terminal(
                     session_id=session_id,
@@ -145,12 +188,7 @@ class GenerationAppServiceImpl(GenerationAppService):
                 )
                 return
             sequence_no += 1
-            if isinstance(exc, GenerationApplicationError):
-                error_code = exc.code.value
-                error_message = exc.message
-            else:
-                error_code = GenerationErrorCode.INTERNAL_UNEXPECTED.value
-                error_message = str(exc)
+            error_code, error_message = self._map_stream_exception(exc)
             event = ErrorEmitted(
                 code=error_code,
                 message=error_message,
@@ -249,7 +287,16 @@ class GenerationAppServiceImpl(GenerationAppService):
                     sequence_no=sequence_no,
                     now_ms=self._now_ms(),
                 )
-        except (GenerationApplicationError, RuntimeError, OSError, ValueError, TypeError) as exc:
+        except asyncio.CancelledError:
+            raise
+        except (
+            GenerationApplicationError,
+            RuntimeError,
+            OSError,
+            ValueError,
+            TypeError,
+            GenAIAPIError,
+        ) as exc:
             if handle.cancel_requested:
                 sequence_no, cancelled_event = await self._emit_cancelled_terminal(
                     session_id=req.session_id,
@@ -266,12 +313,7 @@ class GenerationAppServiceImpl(GenerationAppService):
                 return
 
             sequence_no += 1
-            if isinstance(exc, GenerationApplicationError):
-                error_code = exc.code.value
-                error_message = exc.message
-            else:
-                error_code = GenerationErrorCode.INTERNAL_UNEXPECTED.value
-                error_message = str(exc)
+            error_code, error_message = self._map_stream_exception(exc)
             error_event = ErrorEmitted(
                 code=error_code,
                 message=error_message,

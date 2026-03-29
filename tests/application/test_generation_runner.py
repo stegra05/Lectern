@@ -7,7 +7,13 @@ from typing import Any
 import pytest
 
 from lectern.application.dto import ResumeGenerationRequest, StartGenerationRequest
-from lectern.domain.generation.events import CardEmitted, DomainEventRecord, PhaseStarted, WarningEmitted
+from lectern.domain.generation.events import (
+    CardEmitted,
+    DomainEventRecord,
+    PhaseStarted,
+    SessionCompleted,
+    WarningEmitted,
+)
 from lectern.generation_utils import evaluate_grounding_gate, get_card_key
 
 
@@ -159,6 +165,13 @@ class _StubHistoryRepository:
 
 async def _collect_events(async_iter: Any) -> list[Any]:
     return [event async for event in async_iter]
+
+
+def _session_completed_summary(events: list[Any]) -> dict[str, Any]:
+    for event in events:
+        if isinstance(event, SessionCompleted):
+            return event.summary
+    raise AssertionError("SessionCompleted event not found")
 
 
 def test_get_card_key_normalizes_front_and_cloze_markup() -> None:
@@ -328,3 +341,35 @@ async def test_resume_runner_continues_reflection_phase_from_snapshot() -> None:
     )
     assert ai_provider.generate_calls == []
     assert ai_provider.reflect_calls
+
+
+@pytest.mark.asyncio
+async def test_start_runner_emits_user_facing_under_target_completion_summary() -> None:
+    from lectern.application.runners.generation_runner import make_start_runner
+
+    ai_provider = _StubAIProvider()
+    ai_provider.generate_responses = [
+        {"cards": [_strong_card("Only one strong card")], "done": True, "parse_error": "", "warnings": []}
+    ]
+    ai_provider.reflect_responses = [
+        {"reflection": "ok", "cards": [], "done": True, "parse_error": "", "warnings": []}
+    ]
+
+    runner = make_start_runner(
+        pdf_extractor=_StubPdfExtractor(
+            SimpleNamespace(page_count=1, text_chars=600, image_count=0)
+        ),
+        ai_provider=ai_provider,
+    )
+
+    events = await _collect_events(runner(_start_request()))
+    summary = _session_completed_summary(events)
+
+    assert summary["requested_card_target"] == 8
+    assert summary["cards_generated"] == 1
+    assert summary["target_shortfall"] == 7
+    assert summary["termination_reason_code"] == "coverage_sufficient_model_done"
+    assert isinstance(summary["termination_reason_text"], str)
+    assert summary["termination_reason_text"].strip()
+    assert isinstance(summary["run_summary_text"], str)
+    assert "Generated 1 of requested 8 cards" in summary["run_summary_text"]

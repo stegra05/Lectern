@@ -30,3 +30,17 @@ export function useSaveConfigMutation() {
     },
   });
 }
+
+/**
+ * Hook for clearing non-essential local logs.
+ */
+export function useClearLogsMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.clearLogs(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.logs });
+    },
+  });
+}

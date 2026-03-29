@@ -25,6 +25,7 @@ def test_critical_endpoints_have_typed_response_schemas():
         ("/anki/status", "get"),
         ("/config", "get"),
         ("/config", "post"),
+        ("/logs", "delete"),
         ("/history", "get"),
         ("/decks", "get"),
         ("/decks", "post"),

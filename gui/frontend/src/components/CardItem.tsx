@@ -137,6 +137,24 @@ export const CardItem = memo(function CardItem({
                                 <Layers className="w-3 h-3 opacity-50" />
                                 SLIDE {slideNumber ?? '?'}
                             </span>
+                            {typeof card.quality_score === 'number' && (
+                                <>
+                                    <span className="text-text-muted/30">•</span>
+                                    <span
+                                        className={clsx(
+                                            "text-[10px] font-semibold",
+                                            card.quality_score >= 75
+                                                ? "text-emerald-300"
+                                                : card.quality_score >= 60
+                                                    ? "text-amber-300"
+                                                    : "text-red-300"
+                                        )}
+                                        title="Card quality score"
+                                    >
+                                        Q {card.quality_score.toFixed(1)}
+                                    </span>
+                                </>
+                            )}
                             {card.slide_topic && (
                                 <>
                                     <span className="text-text-muted/30">•</span>

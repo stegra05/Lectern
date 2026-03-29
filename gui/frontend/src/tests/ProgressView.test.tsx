@@ -100,6 +100,14 @@ const { defaultState, storeState } = vi.hoisted(() => {
             total_cards: number;
             threshold: number;
         } | null,
+        completionOutcome: null as {
+            requested_card_target?: number | null;
+            cards_generated?: number | null;
+            target_shortfall?: number | null;
+            termination_reason_code?: string | null;
+            termination_reason_text?: string | null;
+            run_summary_text?: string | null;
+        } | null,
         copied: false,
         sessionId: null as string | null,
     };
@@ -146,6 +154,7 @@ vi.mock('../hooks/useProgressViewModel', () => {
                         totalPages: storeState.totalPages,
                         coverageData: storeState.coverageData,
                         rubricSummary: (storeState as typeof storeState & { rubricSummary?: unknown }).rubricSummary ?? null,
+                        completionOutcome: (storeState as typeof storeState & { completionOutcome?: unknown }).completionOutcome ?? null,
                         isError: storeState.isError,
                     },
                     logs: {
@@ -276,7 +285,7 @@ describe('ProgressView', () => {
             progress: { current: 10, total: 10 },
         });
         render(<ProgressView />);
-        expect(screen.getByText(/^Insights$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Quality & Trust$/i)).toBeInTheDocument();
         expect(screen.getByText(/Start New Session/i)).toBeInTheDocument();
     });
 
@@ -293,8 +302,90 @@ describe('ProgressView', () => {
             },
         });
         render(<ProgressView />);
-        expect(screen.getByText(/Rubric Quality/i)).toBeInTheDocument();
+        expect(screen.getByText(/Card Quality/i)).toBeInTheDocument();
         expect(screen.getByText(/55.2/)).toBeInTheDocument();
+    });
+
+    it('renders under-target completion explanation card when provided', () => {
+        Object.assign(storeState, {
+            step: 'done' as const,
+            completionOutcome: {
+                requested_card_target: 120,
+                cards_generated: 68,
+                target_shortfall: 52,
+                termination_reason_text:
+                    'Nice work. You already covered the key topics and concepts in good detail.',
+                run_summary_text:
+                    'Generated 68 of requested 120 cards. Nice work. You already covered the key topics and concepts in good detail.',
+            },
+        });
+
+        render(<ProgressView />);
+        expect(screen.getByText(/Generated 68 of requested 120\./i)).toBeInTheDocument();
+        expect(screen.getAllByText(/covered the key topics and concepts in good detail/i).length).toBeGreaterThan(0);
+    });
+
+    it('renders balanced trust headline metrics and one-line gaps summary', () => {
+        Object.assign(storeState, {
+            step: 'done' as const,
+            coverageData: {
+                total_pages: 10,
+                covered_page_count: 8,
+                page_coverage_pct: 80,
+                concept_coverage_pct: 60,
+                high_priority_total: 5,
+                high_priority_covered: 3,
+                uncovered_pages: [2, 7],
+                missing_high_priority: [
+                    { id: 'hp-1', name: 'Key concept A', importance: 'high' },
+                    { id: 'hp-2', name: 'Key concept B', importance: 'high' },
+                ],
+            },
+            rubricSummary: {
+                avg_quality: 72.3,
+                min_quality: 41.0,
+                max_quality: 91.0,
+                below_threshold_count: 4,
+                total_cards: 18,
+                threshold: 60,
+            },
+        });
+
+        render(<ProgressView />);
+
+        expect(screen.getAllByText(/^Page coverage$/i).length).toBeGreaterThan(0);
+        expect(screen.getByText(/Concept coverage/i)).toBeInTheDocument();
+        expect(screen.getByText(/^High-priority concepts$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Cards below threshold$/i)).toBeInTheDocument();
+        expect(screen.getByText(/80%/)).toBeInTheDocument();
+        expect(screen.getByText(/60%/)).toBeInTheDocument();
+        expect(screen.getByText(/3\/5/)).toBeInTheDocument();
+        expect(screen.getByText(/^4$/)).toBeInTheDocument();
+        expect(screen.getByText(/Gaps remain in 2 high-priority concepts and 2 pages\./i)).toBeInTheDocument();
+    });
+
+    it('shows run reliability summary in trust section', () => {
+        Object.assign(storeState, {
+            step: 'done' as const,
+            logs: [
+                { type: 'warning', message: 'warn', timestamp: Date.now() },
+                { type: 'error', message: 'recoverable', timestamp: Date.now(), data: { recoverable: true } },
+                { type: 'error', message: 'fatal', timestamp: Date.now(), data: { recoverable: false } },
+            ],
+            completionOutcome: {
+                termination_reason_text: 'You already covered the key concepts.',
+                target_shortfall: 3,
+                cards_generated: 17,
+                requested_card_target: 20,
+            },
+        });
+
+        render(<ProgressView />);
+
+        expect(screen.getByText(/Run Reliability/i)).toBeInTheDocument();
+        expect(screen.getByText(/Warnings: 1/i)).toBeInTheDocument();
+        expect(screen.getByText(/Recoverable errors: 1/i)).toBeInTheDocument();
+        expect(screen.getByText(/Fatal errors: 1/i)).toBeInTheDocument();
     });
 
     it('filters cards based on search query', () => {
@@ -414,6 +505,7 @@ describe('ProgressView', () => {
             Back: '...',
             slide_number: 42,
             slide_topic: 'Deep Learning',
+            quality_score: 58.2,
             _uid: '123'
         }];
 
@@ -426,6 +518,7 @@ describe('ProgressView', () => {
         expect(screen.getByText(/SLIDE 42/i)).toBeInTheDocument();
         // Use getAllByText and check length or specific one if needed, or refine query
         expect(screen.getAllByText('Deep Learning').length).toBeGreaterThan(0);
+        expect(screen.getByText(/Q 58\.2/i)).toBeInTheDocument();
     });
 
     it('handles card actions: edit, archive, delete', () => {

@@ -30,19 +30,19 @@ FIXED_NOW_MS = 1710000000123
         (
             SessionStarted(session_id="domain-session-1", mode="start"),
             "session_started",
-            "",
+            "Session started",
             {"mode": "start"},
         ),
         (
             PhaseStarted(phase="generation"),
             "phase_started",
-            "",
+            "Phase started: generation",
             {"phase": "generation"},
         ),
         (
             ProgressUpdated(phase="generation", current=2, total=5),
             "progress_updated",
-            "",
+            "Progress update: generation 2/5",
             {"phase": "generation", "current": 2, "total": 5},
         ),
         (
@@ -52,7 +52,7 @@ FIXED_NOW_MS = 1710000000123
                 card_payload={"front": "Front", "back": "Back"},
             ),
             "card_emitted",
-            "",
+            "Card emitted (batch 3)",
             {"card": {"front": "Front", "back": "Back"}, "batch_index": 3},
         ),
         (
@@ -62,7 +62,7 @@ FIXED_NOW_MS = 1710000000123
                 coverage_data={"covered_pages": [1], "total_pages": 2},
             ),
             "cards_replaced",
-            "",
+            "Cards replaced (batch 4)",
             {
                 "cards": [{"front": "Updated", "back": "Card"}],
                 "coverage_data": {"covered_pages": [1], "total_pages": 2},
@@ -100,19 +100,19 @@ FIXED_NOW_MS = 1710000000123
                 summary={"cards_refined": 7},
             ),
             "phase_completed",
-            "",
+            "Phase completed: reflection",
             {"phase": "reflection", "duration_ms": 1234, "summary": {"cards_refined": 7}},
         ),
         (
             SessionCompleted(summary={"cards_exported": 42}),
             "session_completed",
-            "",
+            "Session completed",
             {"summary": {"cards_exported": 42}},
         ),
         (
             SessionCancelled(stage="reflection", reason="cancel requested"),
             "session_cancelled",
-            "",
+            "Session cancelled: cancel requested",
             {"stage": "reflection", "reason": "cancel requested"},
         ),
     ],

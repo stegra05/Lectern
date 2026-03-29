@@ -45,7 +45,7 @@ export function applyControlSnapshot(
         coverageData: snapshot.coverage_data as CoverageData | null,
         isError: snapshot.is_error,
         lastSnapshotTimestamp: snapshot.timestamp,
-        // DESIGN(Fix 4): Snapshots are the "Checkpoints of Truth". Individual 'progress_update' 
+        // DESIGN: Snapshots are the "Checkpoints of Truth". Individual 'progress_update' 
         // events provide real-time granularity (trickle), but snapshots reset the bar to 
         // the authoritative backend state. This race is acceptable as the view model 
         // handles smooth transitions.

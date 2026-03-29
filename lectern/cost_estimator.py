@@ -125,7 +125,7 @@ def compute_suggested_card_count(
     mode = detect_content_mode(chars_per_page=chars_per_page)
     if mode == "script":
         return max(1, round((text_chars / 1000) * config.SCRIPT_SUGGESTED_CARDS_PER_1K))
-    return max(1, round(page_count * 1.0))
+    return max(1, round(page_count * float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.2))))
 
 
 def _estimate_card_count_from_metadata(

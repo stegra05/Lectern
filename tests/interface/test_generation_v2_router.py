@@ -139,6 +139,37 @@ def test_generate_v2_pre_stream_error_maps_to_http() -> None:
     assert detail["details"] == {"field": "deck_name"}
 
 
+def test_generate_v2_pre_stream_unexpected_error_maps_to_http_500() -> None:
+    service = AsyncMock()
+
+    async def run_generation_stream(
+        _req: StartGenerationRequest,
+    ) -> AsyncIterator[ApiEventV2]:
+        raise RuntimeError("429 RESOURCE_EXHAUSTED. spending cap exceeded")
+        if False:
+            yield  # pragma: no cover
+
+    service.run_generation_stream = run_generation_stream
+    service.run_resume_stream = AsyncMock()
+    service.cancel = AsyncMock()
+    service.replay_stream = AsyncMock()
+
+    app.dependency_overrides[get_generation_app_service_v2] = lambda: service
+    try:
+        response = client.post(
+            "/generate-v2",
+            files={"pdf_file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+            data={"deck_name": "Deck A"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert detail["code"] == "internal_unexpected"
+    assert "spending cap" in detail["message"].lower()
+
+
 def test_generate_v2_post_stream_error_emits_terminal_error_event() -> None:
     service = AsyncMock()
 

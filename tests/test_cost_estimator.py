@@ -6,9 +6,9 @@ from lectern.cost_estimator import (
 
 
 def test_compute_suggested_card_count_slides():
-    # 10 pages, slides mode -> 1 card per slide = 10 cards
+    # 10 pages, slides mode -> default 1.2 cards per slide = 12 cards
     count = compute_suggested_card_count(page_count=10, text_chars=2000)
-    assert count == 10
+    assert count == 12
 
 
 def test_compute_suggested_card_count_script():

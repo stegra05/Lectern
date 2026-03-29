@@ -146,6 +146,7 @@ export type HistoryClearResponse = components['schemas']['HistoryClearResponse']
 export type HistoryDeleteResponse = components['schemas']['HistoryDeleteResponse'];
 export type HistoryBatchDeleteResponse =
   components['schemas']['HistoryBatchDeleteResponse'];
+export type LogsClearResponse = components['schemas']['LogsClearResponse'];
 
 export type AnkiNoteResponse =
   | components['schemas']['AnkiDeleteResponse']

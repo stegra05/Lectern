@@ -50,6 +50,7 @@ export function ProgressView() {
         totalPages,
         coverageData,
         rubricSummary,
+        completionOutcome,
     } = session;
     const { logs: logEntries, copied } = logs;
     const { progress: progressData, conceptProgress, progressPct } = progress;
@@ -69,6 +70,74 @@ export function ProgressView() {
     const [isFocusMode, setIsFocusMode] = useState(false);
     const [syncPreview, setSyncPreview] = useState<SyncPreview | null>(null);
     const [isPreviewingSync, setIsPreviewingSync] = useState(false);
+
+    const toNumber = (value: unknown): number | null => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const qualityScores = useMemo(() => {
+        return allCards
+            .map((card) => toNumber((card as Record<string, unknown>).quality_score))
+            .filter((score): score is number => score !== null);
+    }, [allCards]);
+
+    const pageCoveragePct = useMemo(() => {
+        const direct = toNumber(coverageData?.page_coverage_pct);
+        if (direct !== null) return Math.round(direct);
+        const covered = toNumber(coverageData?.covered_page_count);
+        const total = toNumber(coverageData?.total_pages) ?? totalPages;
+        if (covered !== null && total && total > 0) {
+            return Math.round((covered / total) * 100);
+        }
+        return 0;
+    }, [coverageData, totalPages]);
+
+    const conceptCoveragePct = useMemo(() => {
+        const direct = toNumber(coverageData?.concept_coverage_pct);
+        if (direct !== null) return Math.round(direct);
+        const covered = toNumber(coverageData?.covered_concept_count);
+        const total = toNumber(coverageData?.total_concepts);
+        if (covered !== null && total && total > 0) {
+            return Math.round((covered / total) * 100);
+        }
+        return 0;
+    }, [coverageData]);
+
+    const highPriorityCovered = toNumber(coverageData?.high_priority_covered) ?? 0;
+    const highPriorityTotal = toNumber(coverageData?.high_priority_total) ?? 0;
+    const belowThresholdCount =
+        rubricSummary?.below_threshold_count ??
+        qualityScores.filter((score) => score < 60).length;
+    const missingHighPriorityCount =
+        (coverageData?.missing_high_priority ?? []).length ||
+        Math.max(highPriorityTotal - highPriorityCovered, 0);
+    const uncoveredPageCount =
+        (coverageData?.uncovered_pages ?? []).length ||
+        Math.max((toNumber(coverageData?.total_pages) ?? totalPages) - (toNumber(coverageData?.covered_page_count) ?? 0), 0);
+
+    const warningCount = useMemo(
+        () => logEntries.filter((log) => log.type === 'warning').length,
+        [logEntries]
+    );
+    const recoverableErrorCount = useMemo(
+        () =>
+            logEntries.filter((log) => {
+                if (log.type !== 'error') return false;
+                const data = log.data as Record<string, unknown> | undefined;
+                return data?.recoverable === true;
+            }).length,
+        [logEntries]
+    );
+    const fatalErrorCount = useMemo(
+        () =>
+            logEntries.filter((log) => {
+                if (log.type !== 'error') return false;
+                const data = log.data as Record<string, unknown> | undefined;
+                return data?.recoverable !== true;
+            }).length,
+        [logEntries]
+    );
 
     // Reset filters when step changes - using render-time reset pattern to avoid cascading effects
     const [prevStep, setPrevStep] = useState(step);
@@ -191,47 +260,91 @@ export function ProgressView() {
         <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-border">
                 {/* Generation Insights */}
-                <SidebarPane title="Insights" icon={Layers} defaultOpen={true}>
-                    <div className="flex items-center justify-between px-2 py-1">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cards</span>
-                            <span className="text-xl font-bold text-text-main">{allCards.length}</span>
+                <SidebarPane title="Quality & Trust" icon={Layers} defaultOpen={true}>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
+                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">Page coverage</p>
+                            <p className="text-lg font-semibold text-text-main">{pageCoveragePct}%</p>
                         </div>
-                        <div className="w-px h-8 bg-border/50 mx-2"></div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Basic</span>
-                            <span className="text-xl font-bold text-text-main">{typeCounts.basic}</span>
+                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
+                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">Concept coverage</p>
+                            <p className="text-lg font-semibold text-text-main">{conceptCoveragePct}%</p>
                         </div>
-                        <div className="w-px h-8 bg-border/50 mx-2"></div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cloze</span>
-                            <span className="text-xl font-bold text-blue-400">{typeCounts.cloze}</span>
+                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
+                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">High-priority concepts</p>
+                            <p className="text-lg font-semibold text-text-main">{highPriorityCovered}/{highPriorityTotal}</p>
+                        </div>
+                        <div className="rounded-lg border border-border/60 bg-surface/30 p-2">
+                            <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">Cards below threshold</p>
+                            <p className="text-lg font-semibold text-text-main">{belowThresholdCount}</p>
                         </div>
                     </div>
-                    {rubricSummary && (
-                        <div className="mt-3 rounded-lg border border-border/60 bg-surface/30 p-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                                Rubric Quality
-                            </p>
-                            <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                                <div>
-                                    <p className="text-text-muted">Avg</p>
-                                    <p className="font-semibold text-text-main">{rubricSummary.avg_quality.toFixed(1)}</p>
+                    <p className="mt-3 text-xs text-text-muted">
+                        Gaps remain in {missingHighPriorityCount} high-priority concepts and {uncoveredPageCount} pages.
+                    </p>
+
+                    <details className="mt-3 rounded-lg border border-border/60 bg-surface/20 p-3" open>
+                        <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                            Card Quality
+                        </summary>
+                        {rubricSummary ? (
+                            <div className="mt-2 space-y-2">
+                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                    <div>
+                                        <p className="text-text-muted">Avg</p>
+                                        <p className="font-semibold text-text-main">{rubricSummary.avg_quality.toFixed(1)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-text-muted">Min</p>
+                                        <p className="font-semibold text-text-main">{rubricSummary.min_quality.toFixed(1)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-text-muted">Max</p>
+                                        <p className="font-semibold text-text-main">{rubricSummary.max_quality.toFixed(1)}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-text-muted">Min</p>
-                                    <p className="font-semibold text-text-main">{rubricSummary.min_quality.toFixed(1)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-text-muted">Max</p>
-                                    <p className="font-semibold text-text-main">{rubricSummary.max_quality.toFixed(1)}</p>
-                                </div>
+                                <p className="text-[11px] text-text-muted">
+                                    {rubricSummary.below_threshold_count} of {rubricSummary.total_cards} cards below threshold {rubricSummary.threshold.toFixed(1)}.
+                                </p>
                             </div>
-                            <p className="mt-2 text-[11px] text-text-muted">
-                                {rubricSummary.below_threshold_count} of {rubricSummary.total_cards} cards below threshold {rubricSummary.threshold.toFixed(1)}.
-                            </p>
+                        ) : (
+                            <p className="mt-2 text-[11px] text-text-muted">No rubric data available for this run.</p>
+                        )}
+                    </details>
+
+                    <details className="mt-2 rounded-lg border border-border/60 bg-surface/20 p-3">
+                        <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                            Run Reliability
+                        </summary>
+                        <div className="mt-2 space-y-1 text-xs text-text-main">
+                            <p>Warnings: {warningCount}</p>
+                            <p>Recoverable errors: {recoverableErrorCount}</p>
+                            <p>Fatal errors: {fatalErrorCount}</p>
+                            {completionOutcome?.target_shortfall && completionOutcome.target_shortfall > 0 && (
+                                <p className="text-text-muted">
+                                    Generated {completionOutcome.cards_generated ?? allCards.length} of requested {completionOutcome.requested_card_target}.
+                                </p>
+                            )}
+                            {completionOutcome?.termination_reason_text && (
+                                <p className="text-text-muted">{completionOutcome.termination_reason_text}</p>
+                            )}
                         </div>
-                    )}
+                    </details>
+
+                    <div className="mt-3 flex items-center justify-between px-2 py-1 rounded-lg border border-border/60 bg-surface/20">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cards</span>
+                            <span className="text-sm font-semibold text-text-main">{allCards.length}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Basic</span>
+                            <span className="text-sm font-semibold text-text-main">{typeCounts.basic}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Cloze</span>
+                            <span className="text-sm font-semibold text-blue-400">{typeCounts.cloze}</span>
+                        </div>
+                    </div>
                 </SidebarPane>
 
                 {/* Page Coverage */}

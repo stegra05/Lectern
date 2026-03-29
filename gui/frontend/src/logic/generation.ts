@@ -19,6 +19,17 @@ const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
 };
 
+const mapV2PhaseToUiPhase = (phase: unknown): Phase | null => {
+    if (typeof phase !== 'string') return null;
+    if (phase === 'generation') return 'generating';
+    if (phase === 'reflection') return 'reflecting';
+    if (phase === 'concept') return 'concept';
+    if (phase === 'exporting') return 'exporting';
+    if (phase === 'complete') return 'complete';
+    if (phase === 'idle') return 'idle';
+    return null;
+};
+
 export const getReplayCursorFromV2Event = (event: ProgressEventV2): number => event.sequence_no;
 
 export const mapV2EventToLegacyEvent = (event: ProgressEventV2): ProgressEvent => {
@@ -46,7 +57,7 @@ export const mapV2EventToLegacyEvent = (event: ProgressEventV2): ProgressEvent =
         data = { card: raw.card };
     } else if (event.type === "phase_started" && event.data && typeof event.data === "object") {
         const raw = event.data as Record<string, unknown>;
-        data = { phase: raw.phase };
+        data = { phase: mapV2PhaseToUiPhase(raw.phase) ?? raw.phase };
     } else if (event.type === "warning_emitted" && event.data && typeof event.data === "object") {
         const raw = event.data as Record<string, unknown>;
         const details = (raw.details ?? {}) as Record<string, unknown>;
@@ -69,6 +80,12 @@ export const mapV2EventToLegacyEvent = (event: ProgressEventV2): ProgressEvent =
             total_pages: summary.total_pages,
             coverage_data: summary.coverage_data,
             rubric_summary: summary.rubric_summary,
+            requested_card_target: summary.requested_card_target,
+            cards_generated: summary.cards_generated,
+            target_shortfall: summary.target_shortfall,
+            termination_reason_code: summary.termination_reason_code,
+            termination_reason_text: summary.termination_reason_text,
+            run_summary_text: summary.run_summary_text,
         };
     }
 
@@ -89,6 +106,17 @@ export const processGenerationEventV2 = (
         sessionId: event.session_id,
         replayCursor: state.replayCursor === null ? cursor : Math.max(state.replayCursor, cursor),
     }));
+
+    if (event.type === 'phase_started' || event.type === 'progress_updated') {
+        const raw = event.data && typeof event.data === 'object' ? (event.data as Record<string, unknown>) : null;
+        const nextPhase = mapV2PhaseToUiPhase(raw?.phase);
+        if (nextPhase) {
+            set(() => ({ currentPhase: nextPhase }));
+        }
+    } else if (event.type === 'session_completed') {
+        set(() => ({ currentPhase: 'complete' }));
+    }
+
     processGenerationEvent(mapV2EventToLegacyEvent(event), set);
 };
 
@@ -125,6 +153,28 @@ const normalizeRubricSummary = (value: unknown): RubricSummary | null => {
         below_threshold_count: belowThresholdCount,
         total_cards: totalCards,
         threshold,
+    };
+};
+
+const normalizeCompletionOutcome = (value: unknown) => {
+    if (!value || typeof value !== 'object') return null;
+    const raw = value as Record<string, unknown>;
+    const numeric = (key: string): number | null => {
+        const parsed = Number(raw[key]);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+    const stringOrNull = (key: string): string | null => {
+        const v = raw[key];
+        return typeof v === 'string' ? v : null;
+    };
+
+    return {
+        requested_card_target: numeric('requested_card_target'),
+        cards_generated: numeric('cards_generated'),
+        target_shortfall: numeric('target_shortfall'),
+        termination_reason_code: stringOrNull('termination_reason_code'),
+        termination_reason_text: stringOrNull('termination_reason_text'),
+        run_summary_text: stringOrNull('run_summary_text'),
     };
 };
 
@@ -255,11 +305,13 @@ export const processGenerationEvent = (
         );
         set((prev) => ({
             step: 'done',
+            currentPhase: 'complete',
             sessionId: null,
             isCancelling: false,
             totalPages: doneData?.total_pages ?? prev.totalPages,
             coverageData: (doneData?.coverage_data as unknown as CoverageData | undefined) ?? prev.coverageData,
             rubricSummary,
+            completionOutcome: normalizeCompletionOutcome(doneData),
         }));
         return;
     }
@@ -342,6 +394,7 @@ export const handleGenerate = async (
         setupStepsCompleted: 0,
         coverageData: null,
         rubricSummary: null,
+        completionOutcome: null,
         lastSnapshotTimestamp: null,
     });
     try {
@@ -426,6 +479,7 @@ export const handleResume = async (
         currentPhase: 'idle',
         setupStepsCompleted: 0,
         rubricSummary: null,
+        completionOutcome: null,
         lastSnapshotTimestamp: null,
     });
     try {
@@ -498,6 +552,7 @@ export const loadSession = async (
             replayCursor: null,
             isHistorical: true,
             rubricSummary: null,
+            completionOutcome: null,
             step: 'done',
             currentPhase: 'complete',
         });
@@ -528,6 +583,7 @@ export const recoverSessionOnRefresh = async (
             coverageData: snapshot.coverage_data || null,
             deckName: snapshot.deck_name || snapshot.deck || '',
             rubricSummary: null,
+            completionOutcome: null,
             step: 'done',
             currentPhase: 'complete',
             isHistorical: true,

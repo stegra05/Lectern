@@ -33,6 +33,7 @@ export function useProgressViewModel() {
         totalPages: s.totalPages,
         coverageData: s.coverageData,
         rubricSummary: s.rubricSummary,
+        completionOutcome: s.completionOutcome,
         isError: s.isError,
         logs: s.logs,
         copied: s.copied,
@@ -73,6 +74,7 @@ export function useProgressViewModel() {
                 totalPages: stateSlice.totalPages,
                 coverageData: stateSlice.coverageData,
                 rubricSummary: stateSlice.rubricSummary,
+                completionOutcome: stateSlice.completionOutcome,
                 isError: stateSlice.isError,
             },
             logs: {

@@ -31,6 +31,15 @@ export interface RubricSummary {
     threshold: number;
 }
 
+export interface CompletionOutcome {
+    requested_card_target?: number | null;
+    cards_generated?: number | null;
+    target_shortfall?: number | null;
+    termination_reason_code?: string | null;
+    termination_reason_text?: string | null;
+    run_summary_text?: string | null;
+}
+
 export type FeedbackVote = 'up' | 'down';
 
 export type Step = 'dashboard' | 'config' | 'generating' | 'done';
@@ -65,6 +74,7 @@ export type StoreState = {
     totalPages: number;
     coverageData: CoverageData | null;
     rubricSummary: RubricSummary | null;
+    completionOutcome: CompletionOutcome | null;
 
     // Review / Sync
     isHistorical: boolean;

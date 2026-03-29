@@ -74,12 +74,36 @@ export function CoverageGrid({ totalPages, cards, coverageData, activePage, onPa
 
         const highPriority = concepts.filter(concept => concept.importance === 'high');
         const highPriorityCovered = highPriority.filter(concept => coveredConceptIds.has(concept.id)).length;
+        const coveredConceptNames = concepts
+            .filter((concept) => coveredConceptIds.has(concept.id))
+            .map((concept) => concept.name || concept.id)
+            .filter((value) => Boolean(value));
+        const missingHighPriorityNames = (coverageData?.missing_high_priority || [])
+            .map((concept) => concept.name || concept.id)
+            .filter((value) => Boolean(value));
+        const uncoveredConceptNames = (coverageData?.uncovered_concepts || [])
+            .map((concept) => concept.name || concept.id)
+            .filter((value) => Boolean(value));
+        const uncoveredRelationNames = (coverageData?.uncovered_relations || [])
+            .map((relation) => {
+                const source = typeof relation.source === 'string' ? relation.source : '';
+                const relType = typeof relation.type === 'string' ? relation.type : '';
+                const target = typeof relation.target === 'string' ? relation.target : '';
+                if (source && relType && target) return `${source} ${relType} ${target}`;
+                return typeof relation.key === 'string' ? relation.key : '';
+            })
+            .filter((value) => Boolean(value));
+
         return {
             total: concepts.length,
             covered: coveredConceptIds.size,
             pct: Math.round((coveredConceptIds.size / concepts.length) * 100),
             highPriorityTotal: highPriority.length,
             highPriorityCovered,
+            coveredConceptNames,
+            missingHighPriorityNames,
+            uncoveredConceptNames,
+            uncoveredRelationNames,
         };
     }, [cards, coverageData]);
 
@@ -123,6 +147,48 @@ export function CoverageGrid({ totalPages, cards, coverageData, activePage, onPa
                         High Priority {conceptSummary.highPriorityCovered}/{conceptSummary.highPriorityTotal}
                     </span>
                 </div>
+            )}
+
+            {conceptSummary && (
+                <details className="rounded border border-border bg-surface/50 px-2 py-2 text-[11px] text-text-muted">
+                    <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider">
+                        Coverage Details
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Covered concepts</p>
+                            <p className="text-text-main">
+                                {conceptSummary.coveredConceptNames.length > 0
+                                    ? conceptSummary.coveredConceptNames.join(', ')
+                                    : 'None'}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Missing high-priority</p>
+                            <p className="text-text-main">
+                                {conceptSummary.missingHighPriorityNames.length > 0
+                                    ? conceptSummary.missingHighPriorityNames.join(', ')
+                                    : 'None'}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Uncovered concepts</p>
+                            <p className="text-text-main">
+                                {conceptSummary.uncoveredConceptNames.length > 0
+                                    ? conceptSummary.uncoveredConceptNames.join(', ')
+                                    : 'None'}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Uncovered relations</p>
+                            <p className="text-text-main">
+                                {conceptSummary.uncoveredRelationNames.length > 0
+                                    ? conceptSummary.uncoveredRelationNames.join(', ')
+                                    : 'None'}
+                            </p>
+                        </div>
+                    </div>
+                </details>
             )}
 
             <div className="grid grid-cols-10 gap-1">
