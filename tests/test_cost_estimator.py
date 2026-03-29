@@ -6,15 +6,15 @@ from lectern.cost_estimator import (
 
 
 def test_compute_suggested_card_count_slides():
-    # 10 pages, slides mode -> default 1.2 cards per slide = 12 cards
+    # 10 pages, slides mode -> default 0.6 cards per slide = 6 cards
     count = compute_suggested_card_count(page_count=10, text_chars=2000)
-    assert count == 12
+    assert count == 6
 
 
 def test_compute_suggested_card_count_script():
-    # 5000 chars, script mode -> (5000/1000) * 3.0 = 15 cards
+    # 5000 chars, script mode -> (5000/1000) * 1.5 = 8 cards
     count = compute_suggested_card_count(page_count=2, text_chars=5000)
-    assert count == 15
+    assert count == 8
 
 
 def test_derive_effective_target_slides():
@@ -54,7 +54,7 @@ def test_estimate_card_cap_respects_target():
 
 
 def test_estimate_card_cap_fallback():
-    # 10 pages, no target -> fallback to config default (usually 1.5)
+    # 10 pages, no target -> fallback to config default
     cap, _ = estimate_card_cap(
         page_count=10,
         estimated_text_chars=2000,
@@ -62,8 +62,8 @@ def test_estimate_card_cap_fallback():
         density_target=None,
         target_card_count=None,
     )
-    # Default 1.2 * 10 = 12
-    assert cap == 12
+    # Default 0.6 * 10 = 6
+    assert cap == 6
 
 
 def test_cost_scales_with_card_count():
@@ -86,3 +86,4 @@ def test_cost_scales_with_card_count():
         result_50["cost"] > result_10["cost"]
     ), f"Cost for 50 cards (${result_50['cost']:.4f}) should be > cost for 10 cards (${result_10['cost']:.4f})"
     assert result_50["output_tokens"] > result_10["output_tokens"]
+

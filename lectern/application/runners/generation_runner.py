@@ -1062,7 +1062,7 @@ def make_resume_runner(
         )
         effective_target = _safe_float(
             (runner_payload or {}).get("effective_target") if isinstance(runner_payload, dict) else None,
-            float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.2)),
+            float(getattr(config, "CARDS_PER_SLIDE_TARGET", 0.6)),
         )
 
         state = _load_runner_state(

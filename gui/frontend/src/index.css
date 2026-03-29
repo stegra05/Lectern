@@ -76,3 +76,37 @@ body {
   border-radius: 3px;
   font-weight: 600;
 }
+
+/* Global Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--border));
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--text-muted));
+}
+
+/* Utilities used in existing components */
+.scrollbar-thin::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thumb-border::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--border));
+  border-radius: 3px;
+  border: none;
+}

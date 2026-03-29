@@ -78,7 +78,7 @@ def estimate_card_cap(
     effective_target = (
         density_target
         if density_target is not None
-        else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+        else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 0.6))
     )
     if is_script_mode:
         text_cards = estimated_text_chars / script_base_chars * effective_target
@@ -111,7 +111,7 @@ def derive_effective_target(
     effective_target = (
         density_target
         if density_target is not None
-        else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.5))
+        else float(getattr(config, "CARDS_PER_SLIDE_TARGET", 0.6))
     )
     return float(effective_target), is_script_mode
 
@@ -125,7 +125,7 @@ def compute_suggested_card_count(
     mode = detect_content_mode(chars_per_page=chars_per_page)
     if mode == "script":
         return max(1, round((text_chars / 1000) * config.SCRIPT_SUGGESTED_CARDS_PER_1K))
-    return max(1, round(page_count * float(getattr(config, "CARDS_PER_SLIDE_TARGET", 1.2))))
+    return max(1, round(page_count * float(getattr(config, "CARDS_PER_SLIDE_TARGET", 0.6))))
 
 
 def _estimate_card_count_from_metadata(

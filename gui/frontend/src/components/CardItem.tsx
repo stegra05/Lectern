@@ -84,11 +84,10 @@ export const CardItem = memo(function CardItem({
                 isEditing
                     ? "border-2 border-primary/50 bg-primary/5"
                     : clsx(
-                        "border hover:border-border/80 hover:shadow-md",
+                        "border hover:border-primary/30 hover:shadow-md transition-all duration-200",
                         isSelected
                             ? "border-primary/50 ring-2 ring-primary/20"
-                            : "border-border",
-                        cloze ? "border-l-4 border-l-blue-500/50" : "border-l-4 border-l-primary/50"
+                            : "border-border/60"
                     )
             )}
         >
@@ -233,6 +232,7 @@ export const CardItem = memo(function CardItem({
         prevProps.isEditing === nextProps.isEditing &&
         prevProps.isSelected === nextProps.isSelected &&
         prevProps.isMultiSelectMode === nextProps.isMultiSelectMode &&
+        prevProps.isCompactMode === nextProps.isCompactMode &&
         prevProps.step === nextProps.step &&
         prevProps.editForm === nextProps.editForm
     );

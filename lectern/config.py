@@ -230,7 +230,7 @@ ENABLE_DEFAULT_TAG: bool = os.getenv("ENABLE_DEFAULT_TAG", "true").lower() not i
 
 # Batch generation settings (env-only)
 MIN_CARDS_PER_SLIDE: float = float(os.getenv("MIN_CARDS_PER_SLIDE", "0.8"))
-CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "1.2"))
+CARDS_PER_SLIDE_TARGET: float = float(os.getenv("CARDS_PER_SLIDE_TARGET", "0.6"))
 CHARS_PER_CARD_TARGET: int = int(os.getenv("CHARS_PER_CARD_TARGET", "200"))
 GROUNDING_GATE_MIN_QUALITY: float = float(
     os.getenv("GROUNDING_GATE_MIN_QUALITY", "60.0")
@@ -249,7 +249,7 @@ NORMAL_THRESHOLD_CHARS_PER_PAGE: int = int(
 )
 SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
 SCRIPT_SUGGESTED_CARDS_PER_1K: float = float(
-    os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "3.0")
+    os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "1.5")
 )
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 MIN_NOTES_PER_BATCH: int = int(os.getenv("MIN_NOTES_PER_BATCH", "20"))

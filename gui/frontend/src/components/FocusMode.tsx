@@ -160,7 +160,7 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                 </div>
                 <button
                     onClick={onClose}
-                    className="p-3 bg-[#1A1A1A] hover:bg-surface rounded-full border border-border/50 transition-all text-text-muted hover:text-text-main"
+                    className="p-3 bg-surface hover:bg-surface/80 rounded-full border border-border transition-all text-text-muted hover:text-text-main"
                 >
                     <X className="w-5 h-5" />
                 </button>
@@ -188,7 +188,7 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                         className="w-full max-w-4xl cursor-grab active:cursor-grabbing bg-transparent flex flex-col justify-center min-h-[40vh] py-12"
                     >
                         {/* Organic Card Content */}
-                        <div className="flex flex-col gap-12">
+                        <div className="bg-surface/60 backdrop-blur-xl border border-border/40 rounded-[2.5rem] p-12 md:p-16 shadow-2xl shadow-black/5 flex flex-col gap-12">
                             {/* Slide Context */}
                             <div className="flex items-center gap-4">
                                 <span className="px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-xs font-bold text-primary uppercase tracking-widest shadow-sm">
@@ -202,7 +202,7 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                             </div>
 
                             {/* Render Fields */}
-                            <div className="space-y-16">
+                            <div className="space-y-12">
                                 {Object.entries(currentCard.fields || {}).map(([key, value], idx) => {
                                     const isFront = idx === 0;
 
@@ -216,10 +216,10 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                                     }
 
                                     return (
-                                        <div key={key} className="flex flex-col gap-4">
+                                        <div key={key} className="flex flex-col gap-3">
                                             <div className="text-[10px] font-bold text-text-muted/40 uppercase tracking-[0.2em]">{key}</div>
                                             <div
-                                                className={`${isFront ? 'text-4xl md:text-5xl font-bold tracking-tight text-white' : 'text-xl md:text-2xl font-medium text-text-muted/90'} leading-relaxed prose prose-invert max-w-none`}
+                                                className={`${isFront ? 'text-4xl md:text-5xl font-extrabold tracking-tight text-text-main' : 'text-xl md:text-2xl font-medium text-text-muted/95'} leading-tight md:leading-relaxed prose prose-invert max-w-none transition-all duration-300`}
                                                 dangerouslySetInnerHTML={{ __html: htmlContent }}
                                             />
                                         </div>
@@ -234,27 +234,27 @@ export const FocusMode: React.FC<FocusModeProps> = ({
             {/* Floating Operations Dock */}
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center z-50">
                 {/* Single Pill Control Center */}
-                <div className="flex items-center p-1.5 bg-[#1A1A1A]/90 backdrop-blur-md border border-white/10 rounded-full shadow-2xl shadow-black/80 pointer-events-auto transition-all">
+                <div className="flex items-center p-1.5 bg-surface/90 backdrop-blur-md border border-border rounded-full shadow-2xl pointer-events-auto transition-all">
                     
                     <button
                         onClick={handleDelete}
-                        className="group flex items-center justify-center w-12 h-12 rounded-full hover:bg-white/5 text-text-muted transition-colors"
+                        className="group flex items-center justify-center w-12 h-12 rounded-full hover:bg-background/80 text-text-muted transition-colors"
                         title="Discard (Del)"
                     >
                         <Trash2 className="w-4 h-4 group-hover:text-text-main transition-colors" />
                     </button>
 
-                    <div className="w-px h-6 bg-white/10 mx-1" />
+                    <div className="w-px h-6 bg-border mx-1" />
 
                     <button
                         onClick={() => onEdit(currentIndex)}
-                        className="group flex items-center justify-center w-12 h-12 rounded-full hover:bg-white/5 text-text-muted transition-colors"
+                        className="group flex items-center justify-center w-12 h-12 rounded-full hover:bg-background/80 text-text-muted transition-colors"
                         title="Edit (E)"
                     >
                         <Edit2 className="w-4 h-4 group-hover:text-text-main transition-colors" />
                     </button>
 
-                    <div className="w-px h-6 bg-white/10 mx-1" />
+                    <div className="w-px h-6 bg-border mx-1" />
 
                     <button
                         onClick={handleNext}
@@ -267,10 +267,10 @@ export const FocusMode: React.FC<FocusModeProps> = ({
 
                     {currentIndex === cards.length - 1 && (
                         <>
-                            <div className="w-px h-6 bg-white/10 mx-1" />
+                            <div className="w-px h-6 bg-border mx-1" />
                             <button
                                 onClick={onSync}
-                                className="group flex items-center gap-2 px-6 h-12 rounded-full bg-primary hover:bg-primary/90 text-background transition-all shadow-[0_0_20px_rgba(132,204,22,0.15)] hover:shadow-[0_0_30px_rgba(132,204,22,0.3)]"
+                                className="group flex items-center gap-2 px-6 h-12 rounded-full bg-primary hover:bg-primary/90 text-background transition-all shadow-lg shadow-primary/20"
                                 title="Sync All (Cmd+Enter)"
                             >
                                 <Sparkles className="w-3.5 h-3.5 fill-background" />

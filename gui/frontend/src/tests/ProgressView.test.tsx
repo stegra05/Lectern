@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProgressView } from '../views/ProgressView';
 import type { Phase } from '../components/PhaseIndicator';
@@ -231,18 +231,26 @@ describe('ProgressView', () => {
 
     it('renders sorting pills', () => {
         render(<ProgressView />);
-        expect(screen.getByText('creation')).toBeInTheDocument();
-        expect(screen.getByText('topic')).toBeInTheDocument();
-        expect(screen.getByText('slide')).toBeInTheDocument();
-        expect(screen.getByText('type')).toBeInTheDocument();
+        expect(screen.getByText('Creation')).toBeInTheDocument();
+        expect(screen.getByText('Filter')).toBeInTheDocument();
     });
 
-    it('calls setSortBy when a pill is clicked', () => {
+    it('calls setSortBy when a pill is clicked', async () => {
         Object.assign(storeState, { setSortBy: vi.fn() });
 
         render(<ProgressView />);
+        const filterBtn = screen.getByText('Filter');
+        
+        await act(async () => {
+            fireEvent.click(filterBtn);
+        });
+        
         const topicPill = screen.getByText('topic');
-        topicPill.click();
+        
+        await act(async () => {
+            fireEvent.click(topicPill);
+        });
+        
         expect(storeState.setSortBy).toHaveBeenCalledWith('topic');
     });
 
