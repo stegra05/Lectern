@@ -19,7 +19,6 @@ from lectern.application.errors import GenerationApplicationError, GenerationErr
 from lectern.application.generation_app_service import GenerationAppServiceImpl
 from lectern.domain.generation.events import (
     DomainEvent,
-    ErrorEmitted,
     PhaseStarted,
     SessionCompleted,
     SessionStarted,

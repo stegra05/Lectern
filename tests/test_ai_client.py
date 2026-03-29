@@ -1,10 +1,7 @@
 import pytest
-import os
-import tempfile
 from typing import Any
 from unittest.mock import patch, MagicMock, AsyncMock
-from lectern.ai_client import LecternAIClient, UploadedDocument, DocumentUploadError
-from lectern.ai_schemas import CardGenerationResponse, card_generation_schema
+from lectern.ai_client import LecternAIClient
 
 
 @pytest.fixture

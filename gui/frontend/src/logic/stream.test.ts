@@ -48,6 +48,7 @@ function createMockState(overrides: Partial<StoreState> = {}): StoreState {
     copied: false,
     toasts: [],
     setupStepsCompleted: 0,
+    isCompactMode: false,
     conceptProgress: { current: 0, total: 0 },
     deletedCards: [],
     batchDeletedCards: [],
