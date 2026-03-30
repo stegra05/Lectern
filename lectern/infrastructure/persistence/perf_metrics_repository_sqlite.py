@@ -81,7 +81,7 @@ class PerfMetricsRepositorySqlite:
         for entry in entries:
             complexity = entry.get("complexity")
             complexity_obj = complexity if isinstance(complexity, dict) else complexity.model_dump()
-            payload_json = json.dumps(entry, separators=(",", ":"))
+            payload_json = json.dumps(entry, separators=(",", ":"), allow_nan=False)
             rows.append(
                 (
                     recorded_at_ms,

@@ -173,3 +173,42 @@ def test_post_client_metrics_rejects_invalid_payloads(mutator) -> None:
     response = client.post("/metrics/client", json=payload)
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("token", ["Infinity", "-Infinity", "NaN"])
+def test_post_client_metrics_rejects_non_finite_duration(token: str) -> None:
+    response = client.post(
+        "/metrics/client",
+        content=(
+            "{"
+            '"client_ts_ms":1710001234567,'
+            '"session_id":"session-telemetry-1",'
+            '"entries":[{"metric_name":"upload_pdf_ms","duration_ms":'
+            f"{token}"
+            ',"complexity":{}}]'
+            "}"
+        ),
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "complexity_field",
+    [
+        "card_count",
+        "total_pages",
+        "text_chars",
+        "chars_per_page",
+        "image_count",
+        "target_card_count",
+    ],
+)
+def test_post_client_metrics_rejects_negative_complexity_values(complexity_field: str) -> None:
+    payload = _valid_payload()
+    payload["entries"][0]["complexity"][complexity_field] = -1
+
+    response = client.post("/metrics/client", json=payload)
+
+    assert response.status_code == 422
