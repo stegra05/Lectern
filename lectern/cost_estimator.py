@@ -53,7 +53,7 @@ def detect_content_mode(*, chars_per_page: float, force_mode: str | None = None)
         normalized = force_mode.lower()
         if normalized in ["script", "slides"]:
             return normalized
-    if chars_per_page > config.DENSE_THRESHOLD_CHARS_PER_PAGE:
+    if chars_per_page >= config.DENSE_THRESHOLD_CHARS_PER_PAGE:
         return "script"
     return "slides"
 

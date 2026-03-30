@@ -1,5 +1,6 @@
 import pytest
 
+from lectern import config
 from lectern.cost_estimator import (
     derive_effective_target,
     estimate_card_cap,
@@ -17,6 +18,13 @@ def test_compute_suggested_card_count_script():
     # 5000 chars, script mode -> (5000/1000) * 3.0 = 15 cards
     count = compute_suggested_card_count(page_count=2, text_chars=5000)
     assert count == 15
+
+
+def test_compute_suggested_card_count_threshold_boundary_is_script():
+    # Boundary: 1500 chars/page should be treated as script to avoid under-targeting dense docs.
+    text_chars = 15000
+    count = compute_suggested_card_count(page_count=10, text_chars=text_chars)
+    assert count == round((text_chars / 1000) * config.SCRIPT_SUGGESTED_CARDS_PER_1K)
 
 def test_compute_suggested_card_count_script_respects_env_override(monkeypatch):
     import importlib
