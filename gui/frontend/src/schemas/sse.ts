@@ -37,7 +37,7 @@ export const CardDataSchema = z.object({
   anki_note_id: z.number().optional(),
   fields: z.record(z.string(), z.string()).optional(),
   model_name: z.string().optional(),
-  slide_number: z.number().optional(),
+  slide_number: z.number().nullable().optional(),
   source_pages: z.array(z.number()).optional(),
   concept_ids: z.array(z.string()).optional(),
   relation_keys: z.array(z.string()).optional(),

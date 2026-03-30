@@ -173,6 +173,39 @@ describe('generation logic', () => {
             expect((result as { cards: unknown[] }).cards).toHaveLength(1);
             expect((result as { totalPages: number }).totalPages).toBe(10);
         });
+
+        it('accepts cards_replaced entries with null slide_number', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'cards_replaced',
+                    message: 'Applied reflection batch',
+                    data: {
+                        cards: [
+                            {
+                                uid: 'card-1',
+                                model_name: 'Basic',
+                                fields: { Front: 'Q', Back: 'A' },
+                                source_pages: [2],
+                                slide_number: null,
+                            },
+                        ],
+                    },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const prevState = {
+                cards: [],
+                totalPages: 0,
+                coverageData: null,
+                progress: { current: 0, total: 1 },
+            };
+            const result = update(prevState);
+            expect((result as { cards: unknown[] }).cards).toHaveLength(1);
+        });
     });
 
     describe('processGenerationEventV2', () => {
@@ -456,6 +489,37 @@ describe('generation logic', () => {
     });
 
     describe('processGenerationEvent validation', () => {
+        it('accepts card payload with null slide_number', () => {
+            const setFn = vi.fn();
+            processGenerationEvent(
+                {
+                    type: 'card',
+                    message: 'Card event',
+                    data: {
+                        card: {
+                            uid: 'card-1',
+                            model_name: 'Basic',
+                            fields: { Front: 'Q', Back: 'A' },
+                            source_pages: [3],
+                            slide_number: null,
+                        },
+                    },
+                    timestamp: Date.now(),
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const prevState = {
+                cards: [],
+                totalPages: 0,
+                progress: { current: 0, total: 1 },
+            };
+
+            const result = update(prevState);
+            expect((result as { cards: unknown[] }).cards).toHaveLength(1);
+        });
+
         it('ignores malformed card payloads (does not mutate cards)', () => {
             const setFn = vi.fn();
             processGenerationEvent(

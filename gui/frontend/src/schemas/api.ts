@@ -45,7 +45,7 @@ export interface Card {
   feedback_vote?: 'up' | 'down';
   feedback_reason?: string;
   feedback_updated_at?: number;
-  slide_number?: number;
+  slide_number?: number | null;
   source_pages?: number[];
   concept_ids?: string[];
   relation_keys?: string[];
