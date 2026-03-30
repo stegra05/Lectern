@@ -194,6 +194,22 @@ def test_post_client_metrics_rejects_non_finite_duration(token: str) -> None:
     assert response.status_code == 422
 
 
+def test_post_client_metrics_rejects_duration_overflow() -> None:
+    response = client.post(
+        "/metrics/client",
+        content=(
+            "{"
+            '"client_ts_ms":1710001234567,'
+            '"session_id":"session-telemetry-1",'
+            '"entries":[{"metric_name":"upload_pdf_ms","duration_ms":1e10000,"complexity":{}}]'
+            "}"
+        ),
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize(
     "complexity_field",
     [

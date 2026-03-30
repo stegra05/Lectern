@@ -71,7 +71,17 @@ async def ingest_client_metrics(
     repo: PerfMetricsRepositorySqlite = Depends(get_perf_metrics_repository),
 ) -> dict[str, int | str]:
     for index, entry in enumerate(payload.entries):
-        duration_ms = float(entry.duration_ms)
+        try:
+            duration_ms = float(entry.duration_ms)
+        except (OverflowError, TypeError, ValueError):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_input",
+                    "field": f"entries[{index}].duration_ms",
+                    "reason": "must_be_finite_non_negative",
+                },
+            ) from None
         if not math.isfinite(duration_ms) or duration_ms < 0:
             raise HTTPException(
                 status_code=422,
