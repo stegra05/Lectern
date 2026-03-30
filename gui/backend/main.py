@@ -21,7 +21,7 @@ from lectern import config  # noqa: E402
 from lectern.utils.path_utils import get_app_data_dir, ensure_app_dirs  # noqa: E402
 from lectern.utils.history import HistoryManager  # noqa: E402
 from session import session_manager  # noqa: E402
-from gui.backend.routers import system, anki, history  # noqa: E402
+from gui.backend.routers import system, anki, history, telemetry  # noqa: E402
 from gui.backend.interface_v2.routers import generation_v2, history_v2  # noqa: E402
 
 ensure_app_dirs()
@@ -90,6 +90,7 @@ app.add_middleware(
 app.include_router(system.router, tags=["system"])
 app.include_router(anki.router, tags=["anki"])
 app.include_router(history.router, tags=["history"])
+app.include_router(telemetry.router, tags=["telemetry"])
 app.include_router(generation_v2.router, tags=["generation-v2"])
 app.include_router(history_v2.router, tags=["history-v2"])
 

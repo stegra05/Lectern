@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from contextlib import closing
+
+from fastapi.testclient import TestClient
+
+from gui.backend.dependencies import get_perf_metrics_repository
+from gui.backend.main import app
+from lectern.infrastructure.persistence.perf_metrics_repository_sqlite import (
+    PerfMetricsRepositorySqlite,
+)
+
+client = TestClient(app)
+
+
+def test_post_client_metrics_persists_all_entries(tmp_path) -> None:
+    db_path = tmp_path / "client_metrics.sqlite3"
+    repo = PerfMetricsRepositorySqlite(db_path=db_path)
+    payload = {
+        "client_ts_ms": 1710001234567,
+        "session_id": "session-telemetry-1",
+        "entries": [
+            {
+                "metric_name": "upload_pdf_ms",
+                "duration_ms": 223.5,
+                "complexity": {
+                    "card_count": 12,
+                    "total_pages": 20,
+                    "text_chars": 4200,
+                    "chars_per_page": 210.0,
+                    "model": "gemini-2.5-flash",
+                    "build_version": "1.2.3",
+                    "build_channel": "stable",
+                    "document_type": "slides",
+                    "image_count": 3,
+                    "target_card_count": 15,
+                },
+            },
+            {
+                "metric_name": "generate_cards_ms",
+                "duration_ms": 1820,
+                "complexity": {
+                    "card_count": 12,
+                    "total_pages": 20,
+                    "text_chars": 4200,
+                    "chars_per_page": 210.0,
+                    "model": "gemini-2.5-flash",
+                    "build_version": "1.2.3",
+                    "build_channel": "stable",
+                    "document_type": "slides",
+                    "image_count": 3,
+                    "target_card_count": 15,
+                },
+            },
+        ],
+    }
+
+    app.dependency_overrides[get_perf_metrics_repository] = lambda: repo
+    try:
+        response = client.post("/metrics/client", json=payload)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "ingested_count": 2}
+
+    with closing(sqlite3.connect(db_path)) as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                recorded_at_ms,
+                client_ts_ms,
+                session_id,
+                metric_name,
+                duration_ms,
+                card_count,
+                total_pages,
+                text_chars,
+                chars_per_page,
+                model,
+                build_version,
+                build_channel,
+                document_type,
+                image_count,
+                target_card_count,
+                payload_json
+            FROM client_perf_metrics
+            ORDER BY id
+            """
+        ).fetchall()
+
+    assert len(rows) == 2
+    first = rows[0]
+    assert first[0] > 0
+    assert first[1] == payload["client_ts_ms"]
+    assert first[2] == payload["session_id"]
+    assert first[3] == "upload_pdf_ms"
+    assert first[4] == 223.5
+    assert first[5] == 12
+    assert first[6] == 20
+    assert first[7] == 4200
+    assert first[8] == 210.0
+    assert first[9] == "gemini-2.5-flash"
+    assert first[10] == "1.2.3"
+    assert first[11] == "stable"
+    assert first[12] == "slides"
+    assert first[13] == 3
+    assert first[14] == 15
+    assert json.loads(first[15]) == payload
+
+    second = rows[1]
+    assert second[3] == "generate_cards_ms"
+    assert second[4] == 1820
+
+
+def test_post_client_metrics_initializes_required_indexes(tmp_path) -> None:
+    db_path = tmp_path / "client_metrics.sqlite3"
+    repo = PerfMetricsRepositorySqlite(db_path=db_path)
+
+    app.dependency_overrides[get_perf_metrics_repository] = lambda: repo
+    try:
+        response = client.post(
+            "/metrics/client",
+            json={
+                "client_ts_ms": 1710001234567,
+                "session_id": "session-telemetry-2",
+                "entries": [
+                    {
+                        "metric_name": "estimate_ms",
+                        "duration_ms": 120,
+                        "complexity": {
+                            "model": "gemini-2.5-flash",
+                            "build_version": "1.2.3",
+                        },
+                    }
+                ],
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+    with closing(sqlite3.connect(db_path)) as conn:
+        indexes = conn.execute("PRAGMA index_list('client_perf_metrics')").fetchall()
+        index_names = {row[1] for row in indexes}
+
+    assert "idx_client_perf_metrics_metric_recorded_at" in index_names
+    assert "idx_client_perf_metrics_model_recorded_at" in index_names
+    assert "idx_client_perf_metrics_build_version_recorded_at" in index_names

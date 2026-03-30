@@ -6,6 +6,9 @@ from lectern.application.translators.event_translator import EventTranslator
 from lectern.infrastructure.extractors.pdf_extractor import PdfExtractorAdapter
 from lectern.infrastructure.gateways.anki_gateway import AnkiGateway
 from lectern.infrastructure.persistence.history_repository_sqlite import HistoryRepositorySqlite
+from lectern.infrastructure.persistence.perf_metrics_repository_sqlite import (
+    PerfMetricsRepositorySqlite,
+)
 from lectern.infrastructure.providers.gemini_adapter import GeminiAdapter
 from lectern.infrastructure.runtime.session_runtime_store import SessionRuntimeStore
 from lectern.utils.history import HistoryManager
@@ -28,6 +31,13 @@ def get_history_repository_v2() -> HistoryRepositorySqlite:
     """Build and cache the V2 history repository."""
     db_path = get_app_data_dir() / "state" / "history_v2.sqlite3"
     return HistoryRepositorySqlite(db_path=db_path)
+
+
+@lru_cache(maxsize=1)
+def get_perf_metrics_repository() -> PerfMetricsRepositorySqlite:
+    """Build and cache the client telemetry repository."""
+    db_path = get_app_data_dir() / "state" / "telemetry.sqlite3"
+    return PerfMetricsRepositorySqlite(db_path=db_path)
 
 
 @lru_cache(maxsize=1)
