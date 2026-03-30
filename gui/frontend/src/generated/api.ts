@@ -220,6 +220,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metrics/client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Client Metrics */
+        post: operations["ingest_client_metrics_metrics_client_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metrics/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Metrics Patterns */
+        get: operations["get_metrics_patterns_metrics_patterns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metrics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Metrics Summary */
+        get: operations["get_metrics_summary_metrics_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/save-file": {
         parameters: {
             query?: never;
@@ -469,6 +520,53 @@ export interface components {
             tags: string;
             /** Target Card Count */
             target_card_count?: number | null;
+        };
+        /** ClientMetricComplexityPayload */
+        ClientMetricComplexityPayload: {
+            /** Build Channel */
+            build_channel?: string | null;
+            /** Build Version */
+            build_version?: string | null;
+            /** Card Count */
+            card_count?: number | null;
+            /** Chars Per Page */
+            chars_per_page?: (number) | null;
+            /** Document Type */
+            document_type?: string | null;
+            /** Image Count */
+            image_count?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Target Card Count */
+            target_card_count?: number | null;
+            /** Text Chars */
+            text_chars?: number | null;
+            /** Total Pages */
+            total_pages?: number | null;
+        };
+        /** ClientMetricEntryPayload */
+        ClientMetricEntryPayload: {
+            complexity: components["schemas"]["ClientMetricComplexityPayload"];
+            /** Duration Ms */
+            duration_ms: number;
+            /** Metric Name */
+            metric_name: string;
+        };
+        /** ClientMetricsIngestRequest */
+        ClientMetricsIngestRequest: {
+            /** Client Ts Ms */
+            client_ts_ms: number;
+            /** Entries */
+            entries: components["schemas"]["ClientMetricEntryPayload"][];
+            /** Session Id */
+            session_id: string;
+        };
+        /** ClientMetricsIngestResponse */
+        ClientMetricsIngestResponse: {
+            /** Ingested Count */
+            ingested_count: number;
+            /** Status */
+            status: string;
         };
         /** ConfigNoChangeResponse */
         ConfigNoChangeResponse: {
@@ -1273,6 +1371,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogsClearResponse"];
+                };
+            };
+        };
+    };
+    ingest_client_metrics_metrics_client_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientMetricsIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientMetricsIngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metrics_patterns_metrics_patterns_get: {
+        parameters: {
+            query: {
+                /** @description Lookback window in hours */
+                window_hours?: number;
+                /** @description Maximum number of segments to return */
+                limit?: number;
+                /** @description Metric to analyze */
+                metric_name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metrics_summary_metrics_summary_get: {
+        parameters: {
+            query: {
+                /** @description Lookback window in hours */
+                window_hours?: number;
+                /** @description Metric to summarize */
+                metric_name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
