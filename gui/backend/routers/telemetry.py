@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing import Annotated
 
@@ -63,6 +63,39 @@ class ClientMetricsIngestResponse(BaseModel):
 
     status: str
     ingested_count: int
+
+
+@router.get("/metrics/summary")
+async def get_metrics_summary(
+    metric_name: Annotated[
+        str, Query(min_length=1, max_length=128, description="Metric to summarize")
+    ],
+    window_hours: Annotated[
+        int, Query(ge=1, le=24 * 365, description="Lookback window in hours")
+    ] = 24 * 7,
+    repo: PerfMetricsRepositorySqlite = Depends(get_perf_metrics_repository),
+) -> dict[str, object]:
+    return await repo.get_metrics_summary(
+        metric_name=metric_name, window_hours=window_hours
+    )
+
+
+@router.get("/metrics/patterns")
+async def get_metrics_patterns(
+    metric_name: Annotated[
+        str, Query(min_length=1, max_length=128, description="Metric to analyze")
+    ],
+    window_hours: Annotated[
+        int, Query(ge=1, le=24 * 365, description="Lookback window in hours")
+    ] = 24 * 7,
+    limit: Annotated[
+        int, Query(ge=1, le=50, description="Maximum number of segments to return")
+    ] = 10,
+    repo: PerfMetricsRepositorySqlite = Depends(get_perf_metrics_repository),
+) -> dict[str, object]:
+    return await repo.get_metrics_patterns(
+        metric_name=metric_name, window_hours=window_hours, limit=limit
+    )
 
 
 @router.post("/metrics/client", response_model=ClientMetricsIngestResponse)

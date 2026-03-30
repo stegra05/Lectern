@@ -295,3 +295,112 @@ def test_post_client_metrics_rejects_implausible_client_timestamp(timestamp: int
     response = client.post("/metrics/client", json=payload)
 
     assert response.status_code == 422
+
+
+def _summary_seed_payload() -> dict:
+    return {
+        "client_ts_ms": 1710001234567,
+        "session_id": "summary-session",
+        "entries": [
+            {
+                "metric_name": "generation_total_duration",
+                "duration_ms": 1400,
+                "complexity": {
+                    "card_count": 40,
+                    "total_pages": 12,
+                    "text_chars": 4200,
+                    "chars_per_page": 350,
+                    "model": "gemini-2.5-flash",
+                    "build_version": "1.3.0",
+                    "build_channel": "stable",
+                },
+            },
+            {
+                "metric_name": "generation_total_duration",
+                "duration_ms": 3400,
+                "complexity": {
+                    "card_count": 120,
+                    "total_pages": 70,
+                    "text_chars": 56000,
+                    "chars_per_page": 800,
+                    "model": "gemini-2.5-pro",
+                    "build_version": "1.3.0",
+                    "build_channel": "stable",
+                },
+            },
+            {
+                "metric_name": "generation_total_duration",
+                "duration_ms": 2800,
+                "complexity": {
+                    "card_count": 230,
+                    "total_pages": 110,
+                    "text_chars": 165000,
+                    "chars_per_page": 1500,
+                    "model": "gemini-2.5-pro",
+                    "build_version": "1.4.0",
+                    "build_channel": "beta",
+                },
+            },
+        ],
+    }
+
+
+def test_get_metrics_summary_groups_by_model_and_complexity_bucket(tmp_path) -> None:
+    db_path = tmp_path / "client_metrics.sqlite3"
+    repo = PerfMetricsRepositorySqlite(db_path=db_path)
+    app.dependency_overrides[get_perf_metrics_repository] = lambda: repo
+    try:
+        ingest = client.post("/metrics/client", json=_summary_seed_payload())
+        assert ingest.status_code == 200
+
+        response = client.get(
+            "/metrics/summary",
+            params={"metric_name": "generation_total_duration", "window_hours": 168},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["metric_name"] == "generation_total_duration"
+    assert body["overall"]["count"] == 3
+
+    by_model = body["groups"]["by_model"]
+    assert any(group["model"] == "gemini-2.5-pro" for group in by_model)
+    assert any(group["model"] == "gemini-2.5-flash" for group in by_model)
+
+    by_card_bucket = body["groups"]["by_card_count_bucket"]
+    assert any(group["bucket"] == "0-50" for group in by_card_bucket)
+    assert any(group["bucket"] == "101-200" for group in by_card_bucket)
+    assert any(group["bucket"] == "200+" for group in by_card_bucket)
+
+
+def test_get_metrics_patterns_returns_worst_segments(tmp_path) -> None:
+    db_path = tmp_path / "client_metrics.sqlite3"
+    repo = PerfMetricsRepositorySqlite(db_path=db_path)
+    app.dependency_overrides[get_perf_metrics_repository] = lambda: repo
+    try:
+        ingest = client.post("/metrics/client", json=_summary_seed_payload())
+        assert ingest.status_code == 200
+
+        response = client.get(
+            "/metrics/patterns",
+            params={"metric_name": "generation_total_duration", "window_hours": 168},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["metric_name"] == "generation_total_duration"
+    assert body["overall"]["count"] == 3
+    assert len(body["worst_segments"]) > 0
+    top = body["worst_segments"][0]
+    assert top["dimension"] in {
+        "model",
+        "build",
+        "card_count_bucket",
+        "pages_bucket",
+        "chars_per_page_bucket",
+    }
+    assert top["p95"] >= top["p50"]
