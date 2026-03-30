@@ -475,7 +475,8 @@ export const handleGenerate = async (
         completionOutcome: null,
         lastSnapshotTimestamp: null,
     });
-    markPerf('generation_start:generation');
+    const fallbackGenerationMark = `generation_start:generation:${Date.now()}`;
+    markPerf(fallbackGenerationMark);
     try {
         await api.generateV2(
             {
@@ -490,11 +491,11 @@ export const handleGenerate = async (
         const error = e as Error;
         console.error("Network error or disconnect:", error);
         const store = get();
-        measurePerf('generation_total_duration', 'generation_start:generation');
+        measurePerf('generation_total_duration', fallbackGenerationMark);
         void flushPerfTelemetry({
             sessionId: store.sessionId ?? 'generation',
             metricNames: ['generation_total_duration'],
-            clearMarks: ['generation_start:generation'],
+            clearMarks: [fallbackGenerationMark],
             complexity: {
                 card_count: store.cards.length,
                 target_card_count: store.targetDeckSize,
