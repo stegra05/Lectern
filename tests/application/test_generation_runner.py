@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
@@ -11,6 +12,7 @@ from lectern.domain.generation.events import (
     CardEmitted,
     DomainEventRecord,
     PhaseStarted,
+    SessionStarted,
     SessionCompleted,
     WarningEmitted,
 )
@@ -373,3 +375,75 @@ async def test_start_runner_emits_user_facing_under_target_completion_summary() 
     assert summary["termination_reason_text"].strip()
     assert isinstance(summary["run_summary_text"], str)
     assert "Generated 1 of requested 8 cards" in summary["run_summary_text"]
+    perf = summary["performance_metrics"]
+    assert isinstance(perf["latency_to_first_event_ms"], int)
+    assert perf["latency_to_first_event_ms"] >= 0
+    assert perf["latency_total_ms"] >= perf["latency_to_first_event_ms"]
+
+
+@pytest.mark.asyncio
+async def test_start_runner_emits_session_started_immediately_before_heavy_steps() -> None:
+    from lectern.application.runners.generation_runner import make_start_runner
+
+    class _SlowPdfExtractor(_StubPdfExtractor):
+        async def extract_metadata(self, pdf_path: str) -> Any:
+            await asyncio.sleep(0.05)
+            return await super().extract_metadata(pdf_path)
+
+    class _SlowAIProvider(_StubAIProvider):
+        async def upload_document(self, pdf_path: str) -> Any:
+            await asyncio.sleep(0.05)
+            return await super().upload_document(pdf_path)
+
+    ai_provider = _SlowAIProvider()
+    ai_provider.generate_responses = [
+        {"cards": [], "done": True, "parse_error": "", "warnings": []}
+    ]
+    ai_provider.reflect_responses = [
+        {"reflection": "ok", "cards": [], "done": True, "parse_error": "", "warnings": []}
+    ]
+    runner = make_start_runner(
+        pdf_extractor=_SlowPdfExtractor(
+            SimpleNamespace(page_count=1, text_chars=600, image_count=0)
+        ),
+        ai_provider=ai_provider,
+    )
+
+    events = await _collect_events(runner(_start_request()))
+    assert isinstance(events[0], SessionStarted)
+    assert events[0].mode == "start"
+
+
+@pytest.mark.asyncio
+async def test_start_runner_uses_cached_upload_when_available() -> None:
+    from lectern.application.runners.generation_runner import make_start_runner
+
+    ai_provider = _StubAIProvider()
+    ai_provider.generate_responses = [
+        {"cards": [], "done": True, "parse_error": "", "warnings": []}
+    ]
+    ai_provider.reflect_responses = [
+        {"reflection": "ok", "cards": [], "done": True, "parse_error": "", "warnings": []}
+    ]
+    runner = make_start_runner(
+        pdf_extractor=_StubPdfExtractor(
+            SimpleNamespace(page_count=1, text_chars=600, image_count=0)
+        ),
+        ai_provider=ai_provider,
+    )
+
+    req = StartGenerationRequest(
+        pdf_path="/tmp/deck.pdf",
+        deck_name="Deck",
+        model_name="gemini-2.5-flash",
+        tags=[],
+        target_card_count=4,
+        cached_uploaded_uri="gs://cached-upload.pdf",
+        cached_uploaded_mime_type="application/pdf",
+    )
+    events = await _collect_events(runner(req))
+
+    assert events
+    assert ai_provider.upload_calls == []
+    assert ai_provider.concept_map_calls
+    assert ai_provider.concept_map_calls[0]["file_uri"] == "gs://cached-upload.pdf"

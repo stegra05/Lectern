@@ -1,3 +1,5 @@
+import pytest
+
 from lectern.cost_estimator import (
     derive_effective_target,
     estimate_card_cap,
@@ -87,3 +89,44 @@ def test_cost_scales_with_card_count():
     ), f"Cost for 50 cards (${result_50['cost']:.4f}) should be > cost for 10 cards (${result_10['cost']:.4f})"
     assert result_50["output_tokens"] > result_10["output_tokens"]
 
+
+@pytest.mark.asyncio
+async def test_estimate_cost_with_base_returns_upload_metadata_for_cache() -> None:
+    from dataclasses import dataclass
+    from unittest.mock import patch
+    from lectern import cost_estimator as mod
+
+    @dataclass(frozen=True)
+    class _Uploaded:
+        uri: str
+        mime_type: str
+
+    class _FakeAI:
+        def __init__(self, model_name=None):
+            self.model_name = model_name
+
+        async def upload_document(self, pdf_path: str):
+            del pdf_path
+            return _Uploaded(uri="gs://upload-cache.pdf", mime_type="application/pdf")
+
+        async def count_tokens_for_pdf(self, *, file_uri: str, mime_type: str, prompt: str):
+            assert file_uri == "gs://upload-cache.pdf"
+            assert mime_type == "application/pdf"
+            assert prompt
+            return 321
+
+    async def _fake_to_thread(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+    with patch.object(mod, "extract_pdf_metadata", return_value={"page_count": 2, "text_chars": 1200, "image_count": 1}), \
+            patch.object(mod, "LecternAIClient", _FakeAI), \
+            patch.object(mod.asyncio, "to_thread", side_effect=_fake_to_thread):
+        _result, base = await mod.estimate_cost_with_base(
+            pdf_path="/tmp/test.pdf",
+            model_name="gemini-2.5-flash",
+            target_card_count=5,
+        )
+
+    assert base["uploaded_uri"] == "gs://upload-cache.pdf"
+    assert base["uploaded_mime_type"] == "application/pdf"
+    assert base["token_count"] == 321

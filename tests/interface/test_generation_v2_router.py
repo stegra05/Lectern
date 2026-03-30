@@ -408,6 +408,85 @@ def test_estimate_v2_returns_estimation_payload() -> None:
     assert payload["model"] == "gemini-2.5-flash"
 
 
+def test_generate_v2_uses_cached_upload_from_estimate() -> None:
+    captured_req: StartGenerationRequest | None = None
+    service = AsyncMock()
+
+    async def run_generation_stream(req: StartGenerationRequest) -> AsyncIterator[ApiEventV2]:
+        nonlocal captured_req
+        captured_req = req
+        yield ApiEventV2(
+            session_id="session-cache",
+            sequence_no=1,
+            type="session_completed",
+            message="",
+            timestamp=1,
+            data={"summary": {}},
+        )
+
+    async def fake_estimate_cost_with_base(
+        _pdf_path: str,
+        model_name: str | None = None,
+        target_card_count: int | None = None,
+    ):
+        del target_card_count
+        return (
+            {
+                "tokens": 120,
+                "input_tokens": 150,
+                "output_tokens": 200,
+                "input_cost": 0.01,
+                "output_cost": 0.02,
+                "cost": 0.03,
+                "pages": 3,
+                "text_chars": 900,
+                "model": model_name or "gemini-2.5-flash",
+                "suggested_card_count": 3,
+                "estimated_card_count": 4,
+                "image_count": 0,
+                "document_type": "slides",
+            },
+            {
+                "token_count": 120,
+                "page_count": 3,
+                "text_chars": 900,
+                "image_count": 0,
+                "model": model_name or "gemini-2.5-flash",
+                "uploaded_uri": "gs://cached-estimate.pdf",
+                "uploaded_mime_type": "application/pdf",
+            },
+        )
+
+    service.run_generation_stream = run_generation_stream
+    service.run_resume_stream = AsyncMock()
+    service.cancel = AsyncMock()
+    service.replay_stream = AsyncMock()
+
+    original_impl = generation_v2.estimate_cost_with_base_impl
+    generation_v2.estimate_cost_with_base_impl = fake_estimate_cost_with_base
+    app.dependency_overrides[get_generation_app_service_v2] = lambda: service
+    try:
+        estimate_response = client.post(
+            "/estimate-v2",
+            files={"pdf_file": ("test.pdf", b"%PDF-1.4 cache", "application/pdf")},
+            data={"model_name": "gemini-2.5-flash", "target_card_count": "4"},
+        )
+        assert estimate_response.status_code == 200
+        generate_response = client.post(
+            "/generate-v2",
+            files={"pdf_file": ("test.pdf", b"%PDF-1.4 cache", "application/pdf")},
+            data={"deck_name": "Deck A", "model_name": "gemini-2.5-flash", "target_card_count": "4"},
+        )
+    finally:
+        generation_v2.estimate_cost_with_base_impl = original_impl
+        app.dependency_overrides.clear()
+
+    assert generate_response.status_code == 200
+    assert captured_req is not None
+    assert captured_req.cached_uploaded_uri == "gs://cached-estimate.pdf"
+    assert captured_req.cached_uploaded_mime_type == "application/pdf"
+
+
 def test_stop_v2_calls_cancel_with_session_id() -> None:
     service = AsyncMock()
     service.run_generation_stream = AsyncMock()

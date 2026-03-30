@@ -197,6 +197,13 @@ describe('generation logic', () => {
                 sessionId: 's1',
                 replayCursor: 1,
             });
+            const phaseUpdate = setFn.mock.calls
+                .map((call) => call[0])
+                .find((update) => {
+                    const result = update({ currentPhase: 'idle', logs: [] } as unknown as StoreState) as Record<string, unknown>;
+                    return typeof result === 'object' && result !== null && result.currentPhase === 'starting';
+                });
+            expect(phaseUpdate).toBeDefined();
         });
 
         it('extracts replay cursor from v2 sequence_no', () => {

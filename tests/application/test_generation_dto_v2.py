@@ -21,6 +21,8 @@ def test_start_generation_request_defaults_stream_version() -> None:
     )
 
     assert req.stream_version == 2
+    assert req.cached_uploaded_uri is None
+    assert req.cached_uploaded_mime_type is None
 
 
 def test_resume_generation_request_defaults_stream_version() -> None:
@@ -32,6 +34,8 @@ def test_resume_generation_request_defaults_stream_version() -> None:
     )
 
     assert req.stream_version == 2
+    assert req.cached_uploaded_uri is None
+    assert req.cached_uploaded_mime_type is None
 
 
 def test_replay_stream_request_defaults_stream_version() -> None:

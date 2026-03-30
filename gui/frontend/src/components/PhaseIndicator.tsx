@@ -1,13 +1,25 @@
 import { BrainCircuit, Sparkles, FileSearch, Loader2, UploadCloud } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export type Phase = 'concept' | 'generating' | 'reflecting' | 'exporting' | 'complete' | 'idle';
+export type Phase =
+    | 'starting'
+    | 'concept'
+    | 'generating'
+    | 'reflecting'
+    | 'exporting'
+    | 'complete'
+    | 'idle';
 
 interface PhaseIndicatorProps {
     currentPhase: Phase;
 }
 
 const phaseConfig = {
+    starting: {
+        label: 'Starting',
+        description: 'Preparing generation session',
+        icon: Loader2,
+    },
     concept: {
         label: 'Analyzing Slides',
         description: 'Building concept map from your PDF',
