@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import {
     loadSession,
     recoverSessionOnRefresh,
@@ -12,6 +13,8 @@ import type { Step } from '../store-types';
 import type { Phase } from '../components/PhaseIndicator';
 import type { LecternStore, StoreState } from '../store-types';
 import { createBatchActions } from '../slices/reviewSlice';
+import { CardList } from '../components/CardList';
+import type { Card } from '../api';
 
 const storeSpies = vi.hoisted(() => ({
     incrementSetupStep: vi.fn(),
@@ -32,6 +35,10 @@ vi.mock('../store', () => ({
     useLecternStore: {
         getState: vi.fn(() => storeSpies),
     },
+}));
+
+vi.mock('../components/CardItem', () => ({
+    CardItem: ({ card }: { card: Card }) => <div data-testid="card-row">{card._uid}</div>,
 }));
 
 vi.mock('../utils/uid', () => ({
@@ -61,6 +68,10 @@ describe('generation logic', () => {
         storeSpies.incrementSetupStep.mockClear();
         storeSpies.addToast.mockClear();
         localStorage.clear();
+    });
+
+    afterEach(() => {
+        cleanup();
     });
 
     describe('loadSession', () => {
@@ -827,6 +838,97 @@ describe('generation logic', () => {
             actions.selectAllCards(['uid-a', 'uid-c']);
 
             expect(state.selectedCards).toEqual(new Set(['uid-a', 'uid-c']));
+        });
+    });
+
+    describe('CardList virtualization', () => {
+        const baseProps = {
+            cards: [] as Card[],
+            sortedCards: [] as Card[],
+            uidToIndex: new Map<string, number>(),
+            editingIndex: null as number | null,
+            editForm: null as Card | null,
+            isMultiSelectMode: false,
+            selectedCards: new Set<string>(),
+            step: 'done' as const,
+            isGenerating: false,
+            isCompactMode: false,
+            onStartEdit: vi.fn(),
+            onCancelEdit: vi.fn(),
+            onSaveEdit: vi.fn(),
+            onFieldChange: vi.fn(),
+            onFeedbackChange: vi.fn(),
+            onSetConfirmModal: vi.fn(),
+            onToggleSelection: vi.fn(),
+            onSelectRange: vi.fn(),
+            onSelectAll: vi.fn(),
+            onClearSelection: vi.fn(),
+        };
+
+        beforeEach(() => {
+            Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+                configurable: true,
+                value: vi.fn(() => ({
+                    width: 800,
+                    height: 720,
+                    top: 0,
+                    left: 0,
+                    right: 800,
+                    bottom: 720,
+                    x: 0,
+                    y: 0,
+                    toJSON: () => {},
+                })),
+            });
+
+            Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+                configurable: true,
+                get: () => 720,
+            });
+
+            Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+                configurable: true,
+                get: () => 7200,
+            });
+
+            Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+                configurable: true,
+                get: () => 0,
+                set: () => {},
+            });
+
+            class MockResizeObserver {
+                observe() {}
+                unobserve() {}
+                disconnect() {}
+            }
+
+            vi.stubGlobal('ResizeObserver', MockResizeObserver);
+        });
+
+        it('renders a virtualized subset when ENABLE_CARDLIST_VIRTUALIZATION is enabled', () => {
+            localStorage.setItem(
+                'lectern_feature_flags',
+                JSON.stringify({ ENABLE_CARDLIST_VIRTUALIZATION: true })
+            );
+
+            const cards = Array.from({ length: 300 }, (_, index) => ({
+                _uid: `card-${index + 1}`,
+                model_name: 'Basic',
+                fields: { Front: `Front ${index + 1}`, Back: `Back ${index + 1}` },
+            })) as Card[];
+
+            render(
+                <CardList
+                    {...baseProps}
+                    cards={cards}
+                    sortedCards={cards}
+                    uidToIndex={new Map(cards.map((card, index) => [card._uid as string, index]))}
+                />
+            );
+
+            expect(screen.getAllByTestId('card-row').length).toBeLessThan(300);
+            expect(screen.getAllByTestId('card-row').length).toBeGreaterThan(0);
         });
     });
 });
