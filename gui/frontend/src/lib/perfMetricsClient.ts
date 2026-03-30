@@ -1,6 +1,7 @@
 import { api } from '../api';
 import {
   buildClientMetricsPayload,
+  getPayloadMeasureNames,
   type ClientMetricComplexityPayload,
 } from './perfTelemetry';
 
@@ -24,7 +25,9 @@ export const flushPerfTelemetry = async ({
   try {
     await api.postClientMetrics(payload);
     if (clearMeasures && typeof performance.clearMeasures === 'function') {
-      performance.clearMeasures();
+      for (const metricName of getPayloadMeasureNames(payload)) {
+        performance.clearMeasures(metricName);
+      }
     }
   } catch (error) {
     console.warn('[Telemetry] Failed to export client metrics', error);

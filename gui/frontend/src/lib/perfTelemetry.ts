@@ -29,6 +29,8 @@ interface BuildClientMetricsPayloadOptions {
   clientTsMs?: number;
 }
 
+const OWNED_MEASURE_PREFIXES = ['generation_', 'estimate_'] as const;
+
 type RuntimeWindow = Window &
   typeof globalThis & {
     __LECTERN_VERSION__?: string;
@@ -51,6 +53,50 @@ const normalizeString = (value: unknown): string | undefined => {
 const normalizeMetric = (value: unknown): number | undefined => {
   if (!isFiniteNonNegative(value)) return undefined;
   return value;
+};
+
+const hasOwnedMeasurePrefix = (name: string): boolean =>
+  OWNED_MEASURE_PREFIXES.some((prefix) => name.startsWith(prefix));
+
+const hasMark = (markName: string): boolean => {
+  if (
+    typeof performance === 'undefined' ||
+    typeof performance.getEntriesByName !== 'function'
+  ) {
+    return false;
+  }
+  return performance.getEntriesByName(markName, 'mark').length > 0;
+};
+
+export const markPerf = (name: string): void => {
+  const markName = normalizeString(name);
+  if (!markName) return;
+  if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
+    return;
+  }
+  performance.mark(markName);
+};
+
+export const measurePerf = (
+  name: string,
+  startMark: string,
+  endMark?: string
+): boolean => {
+  const metricName = normalizeString(name);
+  const start = normalizeString(startMark);
+  const end = normalizeString(endMark);
+  if (!metricName || !start) return false;
+  if (
+    typeof performance === 'undefined' ||
+    typeof performance.measure !== 'function'
+  ) {
+    return false;
+  }
+  if (!hasMark(start) || (end && !hasMark(end))) {
+    return false;
+  }
+  performance.measure(metricName, start, end);
+  return true;
 };
 
 const normalizeChannelFromVersion = (version: string | undefined): string | undefined => {
@@ -135,15 +181,22 @@ export const buildClientMetricsPayload = ({
   const measures = performance.getEntriesByType('measure');
   const normalizedComplexity = normalizeComplexity(complexity);
   const entries = measures
-    .filter((entry) => {
+    .map((entry) => {
       const metricName = normalizeString(entry.name);
-      return Boolean(metricName) && isFiniteNonNegative(entry.duration);
+      if (
+        !metricName ||
+        !hasOwnedMeasurePrefix(metricName) ||
+        !isFiniteNonNegative(entry.duration)
+      ) {
+        return null;
+      }
+      return {
+        metric_name: metricName,
+        duration_ms: entry.duration,
+        complexity: normalizedComplexity,
+      };
     })
-    .map((entry) => ({
-      metric_name: entry.name,
-      duration_ms: entry.duration,
-      complexity: normalizedComplexity,
-    }));
+    .filter((entry): entry is ClientMetricEntryPayload => entry !== null);
 
   if (entries.length === 0) return null;
 
@@ -153,3 +206,12 @@ export const buildClientMetricsPayload = ({
     entries,
   };
 };
+
+export const getPayloadMeasureNames = (payload: ClientMetricsPayload): string[] =>
+  Array.from(
+    new Set(
+      payload.entries
+        .map((entry) => normalizeString(entry.metric_name))
+        .filter((name): name is string => Boolean(name))
+    )
+  );

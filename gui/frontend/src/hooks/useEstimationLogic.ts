@@ -4,6 +4,7 @@ import { useEstimationQuery } from '../queries';
 import { extractBase, recomputeCost, type EstimationBase } from '../utils/recompute';
 import type { HealthStatus } from '../hooks/useAppState';
 import { flushPerfTelemetry } from '../lib/perfMetricsClient';
+import { markPerf, measurePerf } from '../lib/perfTelemetry';
 
 export function useEstimationLogic(health: HealthStatus | null) {
     const pdfFile = useLecternStore(s => s.pdfFile);
@@ -18,6 +19,7 @@ export function useEstimationLogic(health: HealthStatus | null) {
     const estimationBaseRef = useRef<EstimationBase | null>(null);
     const previousEstimateContextRef = useRef<string | null>(null);
     const lastTelemetryStateRef = useRef<string | null>(null);
+    const activeEstimateMarkKeyRef = useRef<string | null>(null);
 
     const estimateQuery = useEstimationQuery({
         file: pdfFile,
@@ -29,14 +31,22 @@ export function useEstimationLogic(health: HealthStatus | null) {
         if (!pdfFile) {
             estimationBaseRef.current = null;
             lastTelemetryStateRef.current = null;
+            activeEstimateMarkKeyRef.current = null;
             setEstimation(null);
             setEstimationError(null);
             setIsEstimating(false);
             return;
         }
         const pdfContextKey = `${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}`;
+        const estimateStartMarkName = `estimate_start:${pdfContextKey}`;
 
         setIsEstimating(estimateQuery.isLoading || estimateQuery.isFetching);
+        if (estimateQuery.isLoading || estimateQuery.isFetching) {
+            if (activeEstimateMarkKeyRef.current !== estimateStartMarkName) {
+                markPerf(estimateStartMarkName);
+                activeEstimateMarkKeyRef.current = estimateStartMarkName;
+            }
+        }
 
         if (estimateQuery.error) {
             const msg = (estimateQuery.error as Error).message || 'Estimation failed';
@@ -49,6 +59,7 @@ export function useEstimationLogic(health: HealthStatus | null) {
             const telemetryKey = `error:${pdfContextKey}:${msg}:${targetDeckSize}:${health?.gemini_model ?? ''}`;
             if (lastTelemetryStateRef.current !== telemetryKey) {
                 lastTelemetryStateRef.current = telemetryKey;
+                measurePerf('estimate_total_duration', estimateStartMarkName);
                 void flushPerfTelemetry({
                     sessionId: 'estimation',
                     complexity: {
@@ -72,6 +83,7 @@ export function useEstimationLogic(health: HealthStatus | null) {
             const telemetryKey = `done:${pdfContextKey}:${estimateQuery.data.model}:${estimateQuery.data.pages}:${estimateQuery.data.text_chars ?? 0}:${targetDeckSize}`;
             if (lastTelemetryStateRef.current !== telemetryKey) {
                 lastTelemetryStateRef.current = telemetryKey;
+                measurePerf('estimate_total_duration', estimateStartMarkName);
                 void flushPerfTelemetry({
                     sessionId: 'estimation',
                     complexity: {

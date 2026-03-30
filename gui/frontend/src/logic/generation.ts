@@ -15,6 +15,7 @@ import {
     validateStepEndData,
 } from '../schemas/sse';
 import { flushPerfTelemetry } from '../lib/perfMetricsClient';
+import { markPerf, measurePerf } from '../lib/perfTelemetry';
 
 const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
@@ -204,6 +205,9 @@ export const processGenerationEvent = (
                 ? (event.data as { session_id: string }).session_id
                 : null;
         set(() => ({ sessionId: sid }));
+        if (sid) {
+            markPerf(`generation_start:${sid}`);
+        }
         return;
     }
 
@@ -303,8 +307,13 @@ export const processGenerationEvent = (
         const store = useLecternStore.getState();
         const doneData = validateGenerationDoneData(event.data);
         const cardCount = store.cards.length;
+        const generationSessionId = store.sessionId ?? 'generation';
+        measurePerf(
+            'generation_total_duration',
+            `generation_start:${generationSessionId}`
+        );
         void flushPerfTelemetry({
-            sessionId: store.sessionId ?? 'generation',
+            sessionId: generationSessionId,
             complexity: {
                 card_count: cardCount,
                 target_card_count: store.targetDeckSize,
@@ -341,8 +350,13 @@ export const processGenerationEvent = (
 
     if (event.type === 'cancelled') {
         const store = useLecternStore.getState();
+        const generationSessionId = store.sessionId ?? 'generation';
+        measurePerf(
+            'generation_total_duration',
+            `generation_start:${generationSessionId}`
+        );
         void flushPerfTelemetry({
-            sessionId: store.sessionId ?? 'generation',
+            sessionId: generationSessionId,
             complexity: {
                 card_count: store.cards.length,
                 target_card_count: store.targetDeckSize,
@@ -366,8 +380,13 @@ export const processGenerationEvent = (
 
         if (!isRecoverable) {
             const store = useLecternStore.getState();
+            const generationSessionId = store.sessionId ?? 'generation';
+            measurePerf(
+                'generation_total_duration',
+                `generation_start:${generationSessionId}`
+            );
             void flushPerfTelemetry({
-                sessionId: store.sessionId ?? 'generation',
+                sessionId: generationSessionId,
                 complexity: {
                     card_count: store.cards.length,
                     target_card_count: store.targetDeckSize,
@@ -450,6 +469,7 @@ export const handleGenerate = async (
         completionOutcome: null,
         lastSnapshotTimestamp: null,
     });
+    markPerf('generation_start:generation');
     try {
         await api.generateV2(
             {
@@ -464,6 +484,7 @@ export const handleGenerate = async (
         const error = e as Error;
         console.error("Network error or disconnect:", error);
         const store = get();
+        measurePerf('generation_total_duration', 'generation_start:generation');
         void flushPerfTelemetry({
             sessionId: store.sessionId ?? 'generation',
             complexity: {
@@ -548,6 +569,7 @@ export const handleResume = async (
         completionOutcome: null,
         lastSnapshotTimestamp: null,
     });
+    markPerf(`generation_start:${sessionId}`);
     try {
         await api.generateV2(
             {
@@ -564,6 +586,10 @@ export const handleResume = async (
         const error = e as Error;
         console.error("Network error or disconnect during resume:", error);
         const store = get();
+        measurePerf(
+            'generation_total_duration',
+            `generation_start:${store.sessionId ?? sessionId}`
+        );
         void flushPerfTelemetry({
             sessionId: store.sessionId ?? sessionId,
             complexity: {
