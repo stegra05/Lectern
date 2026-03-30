@@ -14,10 +14,26 @@ def test_compute_suggested_card_count_slides():
 
 
 def test_compute_suggested_card_count_script():
-    # 5000 chars, script mode -> (5000/1000) * 1.5 = 8 cards
+    # 5000 chars, script mode -> (5000/1000) * 3.0 = 15 cards
     count = compute_suggested_card_count(page_count=2, text_chars=5000)
-    assert count == 8
+    assert count == 15
 
+def test_compute_suggested_card_count_script_respects_env_override(monkeypatch):
+    import importlib
+    import lectern.config as config_module
+    import lectern.cost_estimator as estimator
+
+    monkeypatch.setenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "2.0")
+    importlib.reload(config_module)
+    importlib.reload(estimator)
+    try:
+        # 5000/1000 * 2.0 = 10
+        count = estimator.compute_suggested_card_count(page_count=2, text_chars=5000)
+        assert count == 10
+    finally:
+        monkeypatch.delenv("SCRIPT_SUGGESTED_CARDS_PER_1K", raising=False)
+        importlib.reload(config_module)
+        importlib.reload(estimator)
 
 def test_derive_effective_target_slides():
     # 10 pages, target 20 -> density 2.0
