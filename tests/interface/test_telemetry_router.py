@@ -208,6 +208,11 @@ def test_post_client_metrics_rejects_duration_overflow() -> None:
     )
 
     assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "invalid_input",
+        "field": "entries[0].duration_ms",
+        "reason": "must_be_finite_non_negative",
+    }
 
 
 @pytest.mark.parametrize(
