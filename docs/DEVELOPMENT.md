@@ -56,6 +56,71 @@ pytest tests/
 cd gui/frontend && npm test
 ```
 
+## Telemetry Measurement Workflow
+
+Use persisted client telemetry (`state/telemetry.sqlite3`) to compare user-visible latency across releases and task complexity.
+
+### Are metrics always recorded while the app is running?
+
+No. Metrics are recorded automatically only when Lectern emits measured events and flushes them to backend:
+- estimation lifecycle (`estimate_total_duration`)
+- generation lifecycle (`generation_total_duration`)
+- any additional metric names that are explicitly measured and flushed
+
+Persistence path is the app-data SQLite DB:
+- `get_app_data_dir()/state/telemetry.sqlite3`
+
+If metric export to `/metrics/client` fails (for example backend unavailable), entries are not persisted for that flush.
+
+### Collect telemetry
+
+Run regular app workflows (estimate + generation). Telemetry is sent to backend and persisted automatically:
+- metric names include `estimate_total_duration` and `generation_total_duration`
+- each entry includes complexity context (`card_count`, `total_pages`, `chars_per_page`, `model`, `build_version`, `build_channel`)
+
+### Query summary APIs
+
+```bash
+curl "http://localhost:4173/metrics/summary?metric_name=generation_total_duration&window_hours=168"
+curl "http://localhost:4173/metrics/patterns?metric_name=generation_total_duration&window_hours=168"
+```
+
+Use these endpoints to identify worst p95 segments by model, build, and complexity buckets.
+
+### How to use latency numbers correctly
+
+Focus on both reliability and spread:
+- `p50`: typical user experience
+- `p95`: tail latency / “slow session” user experience
+- `count`: sample size reliability (avoid decisions on tiny samples)
+
+When comparing versions/channels:
+1. Compare the same metric and same `window_hours`.
+2. Compare like-for-like complexity segments (same model, card bucket, pages bucket).
+3. Prioritize fixes where `p95` worsens and sample count is meaningful.
+
+### Generate local report
+
+```bash
+python scripts/perf_report.py --window-hours 168
+```
+
+Optional custom DB path:
+
+```bash
+python scripts/perf_report.py --db-path "/path/to/telemetry.sqlite3" --window-hours 168
+```
+
+### Compare release builds
+
+1. Capture telemetry for each build channel/version under comparable user flows.
+2. Run `scripts/perf_report.py` for the same `window-hours`.
+3. Compare p95 rows for:
+   - `estimate_total_duration`
+   - `generation_total_duration`
+   - `generation_time_to_first_card`
+4. Check complexity buckets (`card_count_bucket`) to validate whether regressions are tied to specific workload profiles.
+
 ## Code Style
 
 ### Python

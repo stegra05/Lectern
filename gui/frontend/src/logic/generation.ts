@@ -14,6 +14,8 @@ import {
     validateGenerationStoppedDetails,
     validateStepEndData,
 } from '../schemas/sse';
+import { flushPerfTelemetry } from '../lib/perfMetricsClient';
+import { markPerf, measurePerf } from '../lib/perfTelemetry';
 
 const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
@@ -188,6 +190,11 @@ const normalizeCompletionOutcome = (value: unknown) => {
     };
 };
 
+export const resolveGenerationMeasurementStartMark = (
+    fallbackMark: string,
+    sessionId: string | null | undefined
+): string => (sessionId ? `generation_start:${sessionId}` : fallbackMark);
+
 export const processGenerationEvent = (
     event: ProgressEvent,
     set: (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void
@@ -203,6 +210,9 @@ export const processGenerationEvent = (
                 ? (event.data as { session_id: string }).session_id
                 : null;
         set(() => ({ sessionId: sid }));
+        if (sid) {
+            markPerf(`generation_start:${sid}`);
+        }
         return;
     }
 
@@ -300,7 +310,27 @@ export const processGenerationEvent = (
 
     if (event.type === 'done') {
         const store = useLecternStore.getState();
+        const doneData = validateGenerationDoneData(event.data);
         const cardCount = store.cards.length;
+        const generationSessionId = store.sessionId ?? 'generation';
+        measurePerf(
+            'generation_total_duration',
+            `generation_start:${generationSessionId}`
+        );
+        void flushPerfTelemetry({
+            sessionId: generationSessionId,
+            metricNames: ['generation_total_duration'],
+            clearMarks: [`generation_start:${generationSessionId}`],
+            complexity: {
+                card_count: cardCount,
+                target_card_count: store.targetDeckSize,
+                total_pages: doneData?.total_pages ?? store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
 
         // Add the estimated cost to session spend if available
         const estimation = store.estimation;
@@ -309,7 +339,6 @@ export const processGenerationEvent = (
         }
 
         store.addToast('success', `Generation complete — ${cardCount} cards`);
-        const doneData = validateGenerationDoneData(event.data);
         const rubricSummary = normalizeRubricSummary(
             (doneData as Record<string, unknown> | null)?.rubric_summary
         );
@@ -327,7 +356,27 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'cancelled') {
-        useLecternStore.getState().addToast('warning', 'Generation cancelled');
+        const store = useLecternStore.getState();
+        const generationSessionId = store.sessionId ?? 'generation';
+        measurePerf(
+            'generation_total_duration',
+            `generation_start:${generationSessionId}`
+        );
+        void flushPerfTelemetry({
+            sessionId: generationSessionId,
+            metricNames: ['generation_total_duration'],
+            clearMarks: [`generation_start:${generationSessionId}`],
+            complexity: {
+                card_count: store.cards.length,
+                target_card_count: store.targetDeckSize,
+                total_pages: store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
+        store.addToast('warning', 'Generation cancelled');
         set(() => ({ isCancelling: false, sessionId: null }));
         return;
     }
@@ -339,6 +388,26 @@ export const processGenerationEvent = (
         useLecternStore.getState().addToast('error', msg, 8000);
 
         if (!isRecoverable) {
+            const store = useLecternStore.getState();
+            const generationSessionId = store.sessionId ?? 'generation';
+            measurePerf(
+                'generation_total_duration',
+                `generation_start:${generationSessionId}`
+            );
+            void flushPerfTelemetry({
+                sessionId: generationSessionId,
+                metricNames: ['generation_total_duration'],
+                clearMarks: [`generation_start:${generationSessionId}`],
+                complexity: {
+                    card_count: store.cards.length,
+                    target_card_count: store.targetDeckSize,
+                    total_pages: store.totalPages,
+                    text_chars: store.estimation?.text_chars,
+                    model: store.estimation?.model,
+                    document_type: store.estimation?.document_type,
+                    image_count: store.estimation?.image_count,
+                },
+            });
             // Fatal error: show full-screen overlay
             set(() => ({ isError: true, sessionId: null }));
         }
@@ -411,6 +480,8 @@ export const handleGenerate = async (
         completionOutcome: null,
         lastSnapshotTimestamp: null,
     });
+    const fallbackGenerationMark = `generation_start:generation:${Date.now()}`;
+    markPerf(fallbackGenerationMark);
     try {
         await api.generateV2(
             {
@@ -424,6 +495,26 @@ export const handleGenerate = async (
     } catch (e: unknown) {
         const error = e as Error;
         console.error("Network error or disconnect:", error);
+        const store = get();
+        const measurementStartMark = resolveGenerationMeasurementStartMark(
+            fallbackGenerationMark,
+            store.sessionId
+        );
+        measurePerf('generation_total_duration', measurementStartMark);
+        void flushPerfTelemetry({
+            sessionId: store.sessionId ?? 'generation',
+            metricNames: ['generation_total_duration'],
+            clearMarks: [measurementStartMark],
+            complexity: {
+                card_count: store.cards.length,
+                target_card_count: store.targetDeckSize,
+                total_pages: store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
         const { sessionId, currentPhase, deckName } = get();
 
         // Control Plane Self-Healing: If we disconnected mid-flight, the backend is authoritative.
@@ -496,6 +587,7 @@ export const handleResume = async (
         completionOutcome: null,
         lastSnapshotTimestamp: null,
     });
+    markPerf(`generation_start:${sessionId}`);
     try {
         await api.generateV2(
             {
@@ -511,6 +603,25 @@ export const handleResume = async (
     } catch (e: unknown) {
         const error = e as Error;
         console.error("Network error or disconnect during resume:", error);
+        const store = get();
+        measurePerf(
+            'generation_total_duration',
+            `generation_start:${store.sessionId ?? sessionId}`
+        );
+        void flushPerfTelemetry({
+            sessionId: store.sessionId ?? sessionId,
+            metricNames: ['generation_total_duration'],
+            clearMarks: [`generation_start:${store.sessionId ?? sessionId}`],
+            complexity: {
+                card_count: store.cards.length,
+                target_card_count: store.targetDeckSize,
+                total_pages: store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
 
         const errorMessage = (e as { message?: string })?.message || 'Network error';
         set((prev) => ({

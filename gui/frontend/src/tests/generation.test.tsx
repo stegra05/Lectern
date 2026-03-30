@@ -841,7 +841,7 @@ describe('generation logic', () => {
         });
     });
 
-    describe('CardList virtualization', () => {
+    describe('CardList rendering', () => {
         const baseProps = {
             cards: [] as Card[],
             sortedCards: [] as Card[],
@@ -906,7 +906,7 @@ describe('generation logic', () => {
             vi.stubGlobal('ResizeObserver', MockResizeObserver);
         });
 
-        it('renders a virtualized subset when ENABLE_CARDLIST_VIRTUALIZATION is enabled', () => {
+        it('renders the full list even when ENABLE_CARDLIST_VIRTUALIZATION is enabled', () => {
             localStorage.setItem(
                 'lectern_feature_flags',
                 JSON.stringify({ ENABLE_CARDLIST_VIRTUALIZATION: true })
@@ -927,8 +927,7 @@ describe('generation logic', () => {
                 />
             );
 
-            expect(screen.getAllByTestId('card-row').length).toBeLessThan(300);
-            expect(screen.getAllByTestId('card-row').length).toBeGreaterThan(0);
+            expect(screen.getAllByTestId('card-row')).toHaveLength(300);
         });
     });
 });
