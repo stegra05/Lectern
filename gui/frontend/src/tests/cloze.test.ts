@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderClozeFront, renderClozeBack, highlightCloze } from '../utils/cloze';
+import { renderClozeFront, renderClozeBack, highlightCloze, highlightClozeFocus } from '../utils/cloze';
 
 describe('Cloze Utils', () => {
     describe('renderClozeFront', () => {
@@ -34,6 +34,12 @@ describe('Cloze Utils', () => {
             const result = renderClozeBack(input);
             expect(result).toBe('This is a <span class="cloze-answer">test</span> sentence.');
         });
+
+        it('keeps plain answer when cloze is inside math delimiters', () => {
+            const input = 'Formula: \\( {{c1::x^2}} + y^2 \\)';
+            const result = renderClozeBack(input);
+            expect(result).toBe('Formula: \\( x^2 + y^2 \\)');
+        });
     });
 
     describe('highlightCloze', () => {
@@ -41,6 +47,20 @@ describe('Cloze Utils', () => {
             const input = '{{c1::test::hint}}';
             const result = highlightCloze(input);
             expect(result).toBe('<span class="cloze-hl" data-cloze="1">test (hint)</span>');
+        });
+
+        it('does not inject html spans for cloze inside math delimiters', () => {
+            const input = '\\( {{c1::L(x)}} \\)';
+            const result = highlightCloze(input);
+            expect(result).toBe('\\( L(x) \\)');
+        });
+    });
+
+    describe('highlightClozeFocus', () => {
+        it('does not inject focus cloze span inside math delimiters', () => {
+            const input = '\\( {{c1::a+b}} \\)';
+            const result = highlightClozeFocus(input);
+            expect(result).toBe('\\( a+b \\)');
         });
     });
 });

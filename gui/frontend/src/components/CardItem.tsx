@@ -2,9 +2,9 @@ import { memo, useState } from 'react';
 import { Layers, Edit2, Archive, Trash2, CheckSquare, Square } from 'lucide-react';
 import { clsx } from 'clsx';
 import { CardEditor } from './CardEditor';
-import { highlightCloze } from '../utils/cloze';
 import { getCardSlideNumber } from '../utils/cardMetadata';
 import type { Card } from '../api';
+import { MathContent } from './MathContent';
 
 interface CardItemProps {
     card: Card;
@@ -211,12 +211,13 @@ export const CardItem = memo(function CardItem({
                                     "text-[10px] font-bold text-text-muted uppercase tracking-widest",
                                     isCompactMode && !isExpanded ? "mb-0.5" : "mb-1.5"
                                 )}>{key}</div>
-                                <div 
+                                <MathContent
+                                    html={String(value)}
+                                    clozeMode="list"
                                     className={clsx(
                                         "text-text-main prose prose-invert max-w-none leading-relaxed",
                                         isCompactMode && !isExpanded ? "text-xs truncate whitespace-nowrap" : "text-sm"
-                                    )} 
-                                    dangerouslySetInnerHTML={{ __html: highlightCloze(String(value)) }} 
+                                    )}
                                 />
                             </div>
                         ))}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Trash2, Edit2, X, ChevronRight, Sparkles } from 'lucide-react';
 import type { Card } from '../api';
+import { MathContent } from './MathContent';
 
 interface FocusModeProps {
     cards: Card[];
@@ -206,21 +207,13 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                                 {Object.entries(currentCard.fields || {}).map(([key, value], idx) => {
                                     const isFront = idx === 0;
 
-                                    // Make cloze deletions glow softly
-                                    let htmlContent = String(value);
-                                    if (currentCard.model_name?.toLowerCase().includes('cloze')) {
-                                        htmlContent = htmlContent.replace(
-                                            /{{c\d+::(.*?)}}/g,
-                                            '<span class="bg-primary/20 text-primary px-1.5 py-0.5 rounded font-semibold">$1</span>'
-                                        );
-                                    }
-
                                     return (
                                         <div key={key} className="flex flex-col gap-3">
                                             <div className="text-[10px] font-bold text-text-muted/40 uppercase tracking-[0.2em]">{key}</div>
-                                            <div
+                                            <MathContent
+                                                html={String(value)}
+                                                clozeMode={currentCard.model_name?.toLowerCase().includes('cloze') ? 'focus' : 'none'}
                                                 className={`${isFront ? 'text-4xl md:text-5xl font-extrabold tracking-tight text-text-main' : 'text-xl md:text-2xl font-medium text-text-muted/95'} leading-tight md:leading-relaxed prose prose-invert max-w-none transition-all duration-300`}
-                                                dangerouslySetInnerHTML={{ __html: htmlContent }}
                                             />
                                         </div>
                                     );

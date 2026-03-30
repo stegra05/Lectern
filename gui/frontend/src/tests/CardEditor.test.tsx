@@ -59,6 +59,15 @@ describe('CardEditor', () => {
         _uid: '456'
     };
 
+    const latexCard: Card = {
+        model_name: 'Basic',
+        fields: {
+            Front: 'What is the normalized value?',
+            Back: 'Use \\(x_{norm} = \\frac{x - \\min x}{\\max x - \\min x}\\)'
+        },
+        _uid: '789'
+    };
+
     it('renders edit mode by default', () => {
         render(
             <CardEditor
@@ -117,6 +126,50 @@ describe('CardEditor', () => {
         const backElements = screen.getAllByText(/This is a/i);
         expect(backElements[1].textContent).toContain('cloze');
         expect(backElements[1].innerHTML).toContain('cloze-answer');
+    });
+
+    it('renders latex markup in basic preview', () => {
+        render(
+            <CardEditor
+                card={latexCard}
+                onSave={vi.fn()}
+                onCancel={vi.fn()}
+                onChange={vi.fn()}
+            />
+        );
+
+        fireEvent.click(screen.getByText(/Preview/i));
+        fireEvent.click(screen.getByText('What is the normalized value?'));
+
+        const answerElement = screen.getByText((content) => content.includes('Use'));
+        expect(answerElement.innerHTML).toContain('katex');
+    });
+
+    it('renders latex inside cloze answers in preview back side', () => {
+        const clozeMathCard: Card = {
+            model_name: 'Cloze',
+            fields: {
+                Text: 'Identity: {{c1::\\(a^2 + b^2 = c^2\\)}}'
+            },
+            _uid: '999'
+        };
+
+        render(
+            <CardEditor
+                card={clozeMathCard}
+                onSave={vi.fn()}
+                onCancel={vi.fn()}
+                onChange={vi.fn()}
+            />
+        );
+
+        fireEvent.click(screen.getByText(/Preview/i));
+        const frontElements = screen.getAllByText(/Identity:/i);
+        fireEvent.click(frontElements[0]);
+
+        const backElements = screen.getAllByText(/Identity:/i);
+        expect(backElements[1].innerHTML).toContain('cloze-answer');
+        expect(backElements[1].innerHTML).toContain('katex');
     });
 
     it('captures thumbs-down feedback with an optional reason', () => {

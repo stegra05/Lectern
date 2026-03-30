@@ -2,10 +2,10 @@ import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Save, X, RotateCcw, Tag, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { clsx } from 'clsx';
-import DOMPurify from 'dompurify';
 import type { Card } from '../api';
 import { renderClozeFront, renderClozeBack } from '../utils/cloze';
 import { RichTextEditor } from './RichTextEditor';
+import { MathContent } from './MathContent';
 
 interface CardEditorProps {
     card: Card;
@@ -52,9 +52,9 @@ const CardPreview: React.FC<{
                     <div className="text-[10px] font-bold text-primary/50 uppercase tracking-widest mb-3">
                         Question
                     </div>
-                    <div
+                    <MathContent
+                        html={front}
                         className="text-lg text-text-main leading-relaxed prose prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(front) }}
                     />
                     <div className="mt-4 text-[10px] text-text-muted/50">
                         Click to reveal answer
@@ -73,9 +73,9 @@ const CardPreview: React.FC<{
                     <div className="text-[10px] font-bold text-blue-400/50 uppercase tracking-widest mb-3">
                         Answer
                     </div>
-                    <div
+                    <MathContent
+                        html={back}
                         className="text-base text-text-main leading-relaxed prose prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(back) }}
                     />
                 </div>
             </motion.div>

@@ -77,6 +77,13 @@ body {
   font-weight: 600;
 }
 
+.math-content .katex-display,
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.1rem 0;
+}
+
 /* Global Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
