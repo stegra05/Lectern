@@ -25,6 +25,7 @@ import type {
   StopResponse,
   Version,
 } from './schemas/api';
+import type { ClientMetricsPayload } from './lib/perfTelemetry';
 
 // Re-export types for backward compatibility
 export type {
@@ -442,6 +443,20 @@ export const api = {
         }
         const data = (await response.json()) as Record<string, unknown>;
         return normalizeEstimation(data);
+    },
+
+    postClientMetrics: async (
+        payload: ClientMetricsPayload
+    ): Promise<{ status: string; ingested_count: number }> => {
+        const response = await fetch(`${API_URL}/metrics/client`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            throw new Error('Failed to post client metrics');
+        }
+        return (await response.json()) as { status: string; ingested_count: number };
     },
 
     generateV2: async (req: GenerateRequest, onEvent: (event: ProgressEventV2) => void) => {

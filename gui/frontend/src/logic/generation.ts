@@ -14,6 +14,7 @@ import {
     validateGenerationStoppedDetails,
     validateStepEndData,
 } from '../schemas/sse';
+import { flushPerfTelemetry } from '../lib/perfMetricsClient';
 
 const deriveTotalPages = (cards: Card[], fallback?: number | null): number => {
     return Math.max(fallback ?? 0, deriveMaxSlideNumber(cards));
@@ -300,7 +301,20 @@ export const processGenerationEvent = (
 
     if (event.type === 'done') {
         const store = useLecternStore.getState();
+        const doneData = validateGenerationDoneData(event.data);
         const cardCount = store.cards.length;
+        void flushPerfTelemetry({
+            sessionId: store.sessionId ?? 'generation',
+            complexity: {
+                card_count: cardCount,
+                target_card_count: store.targetDeckSize,
+                total_pages: doneData?.total_pages ?? store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
 
         // Add the estimated cost to session spend if available
         const estimation = store.estimation;
@@ -309,7 +323,6 @@ export const processGenerationEvent = (
         }
 
         store.addToast('success', `Generation complete — ${cardCount} cards`);
-        const doneData = validateGenerationDoneData(event.data);
         const rubricSummary = normalizeRubricSummary(
             (doneData as Record<string, unknown> | null)?.rubric_summary
         );
@@ -327,7 +340,20 @@ export const processGenerationEvent = (
     }
 
     if (event.type === 'cancelled') {
-        useLecternStore.getState().addToast('warning', 'Generation cancelled');
+        const store = useLecternStore.getState();
+        void flushPerfTelemetry({
+            sessionId: store.sessionId ?? 'generation',
+            complexity: {
+                card_count: store.cards.length,
+                target_card_count: store.targetDeckSize,
+                total_pages: store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
+        store.addToast('warning', 'Generation cancelled');
         set(() => ({ isCancelling: false, sessionId: null }));
         return;
     }
@@ -339,6 +365,19 @@ export const processGenerationEvent = (
         useLecternStore.getState().addToast('error', msg, 8000);
 
         if (!isRecoverable) {
+            const store = useLecternStore.getState();
+            void flushPerfTelemetry({
+                sessionId: store.sessionId ?? 'generation',
+                complexity: {
+                    card_count: store.cards.length,
+                    target_card_count: store.targetDeckSize,
+                    total_pages: store.totalPages,
+                    text_chars: store.estimation?.text_chars,
+                    model: store.estimation?.model,
+                    document_type: store.estimation?.document_type,
+                    image_count: store.estimation?.image_count,
+                },
+            });
             // Fatal error: show full-screen overlay
             set(() => ({ isError: true, sessionId: null }));
         }
@@ -424,6 +463,19 @@ export const handleGenerate = async (
     } catch (e: unknown) {
         const error = e as Error;
         console.error("Network error or disconnect:", error);
+        const store = get();
+        void flushPerfTelemetry({
+            sessionId: store.sessionId ?? 'generation',
+            complexity: {
+                card_count: store.cards.length,
+                target_card_count: store.targetDeckSize,
+                total_pages: store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
         const { sessionId, currentPhase, deckName } = get();
 
         // Control Plane Self-Healing: If we disconnected mid-flight, the backend is authoritative.
@@ -511,6 +563,19 @@ export const handleResume = async (
     } catch (e: unknown) {
         const error = e as Error;
         console.error("Network error or disconnect during resume:", error);
+        const store = get();
+        void flushPerfTelemetry({
+            sessionId: store.sessionId ?? sessionId,
+            complexity: {
+                card_count: store.cards.length,
+                target_card_count: store.targetDeckSize,
+                total_pages: store.totalPages,
+                text_chars: store.estimation?.text_chars,
+                model: store.estimation?.model,
+                document_type: store.estimation?.document_type,
+                image_count: store.estimation?.image_count,
+            },
+        });
 
         const errorMessage = (e as { message?: string })?.message || 'Network error';
         set((prev) => ({

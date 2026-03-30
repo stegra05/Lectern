@@ -95,4 +95,42 @@ describe('api v2 endpoint usage', () => {
             })
         );
     });
+
+    it('posts client metrics to /metrics/client', async () => {
+        fetchMock.mockResolvedValue({
+            ok: true,
+            json: vi.fn().mockResolvedValue({ status: 'ok', ingested_count: 1 }),
+        });
+
+        await api.postClientMetrics({
+            client_ts_ms: 1710000000000,
+            session_id: 'session-123',
+            entries: [
+                {
+                    metric_name: 'estimate_v2_total_ms',
+                    duration_ms: 123,
+                    complexity: {
+                        card_count: 8,
+                        target_card_count: 12,
+                        total_pages: 20,
+                        text_chars: 4000,
+                        chars_per_page: 200,
+                        model: 'gemini-2.5-flash',
+                        build_version: '1.2.3',
+                        build_channel: 'stable',
+                        document_type: 'slides',
+                        image_count: 2,
+                    },
+                },
+            ],
+        });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining('/metrics/client'),
+            expect.objectContaining({
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            })
+        );
+    });
 });
