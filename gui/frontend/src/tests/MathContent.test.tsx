@@ -1,4 +1,3 @@
-import React from 'react';
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MathContent } from '../components/MathContent';
