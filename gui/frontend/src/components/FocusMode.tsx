@@ -191,7 +191,7 @@ export const FocusMode: React.FC<FocusModeProps> = ({
 
             {/* The Void: Interactive Stage */}
             <div className="flex-1 flex items-center justify-center relative px-8 pb-32 pt-24 overflow-hidden">
-                <AnimatePresence initial={false} custom={direction} mode="sync">
+                <AnimatePresence initial={false} custom={direction} mode="wait">
                     <motion.div
                         key={currentCard?._uid || currentIndex}
                         custom={direction}
