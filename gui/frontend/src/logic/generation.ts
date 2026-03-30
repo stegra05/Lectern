@@ -190,6 +190,11 @@ const normalizeCompletionOutcome = (value: unknown) => {
     };
 };
 
+export const resolveGenerationMeasurementStartMark = (
+    fallbackMark: string,
+    sessionId: string | null | undefined
+): string => (sessionId ? `generation_start:${sessionId}` : fallbackMark);
+
 export const processGenerationEvent = (
     event: ProgressEvent,
     set: (fn: (state: StoreState) => Partial<StoreState> | StoreState) => void
@@ -491,11 +496,15 @@ export const handleGenerate = async (
         const error = e as Error;
         console.error("Network error or disconnect:", error);
         const store = get();
-        measurePerf('generation_total_duration', fallbackGenerationMark);
+        const measurementStartMark = resolveGenerationMeasurementStartMark(
+            fallbackGenerationMark,
+            store.sessionId
+        );
+        measurePerf('generation_total_duration', measurementStartMark);
         void flushPerfTelemetry({
             sessionId: store.sessionId ?? 'generation',
             metricNames: ['generation_total_duration'],
-            clearMarks: [fallbackGenerationMark],
+            clearMarks: [measurementStartMark],
             complexity: {
                 card_count: store.cards.length,
                 target_card_count: store.targetDeckSize,

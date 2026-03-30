@@ -75,8 +75,8 @@ export const markPerf = (name: string): void => {
   if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
     return;
   }
-  if (hasMark(markName)) {
-    return;
+  if (typeof performance.clearMarks === 'function') {
+    performance.clearMarks(markName);
   }
   performance.mark(markName);
 };

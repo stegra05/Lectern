@@ -164,6 +164,7 @@ describe('perf telemetry exporter', () => {
   it('marks and measures when marks exist', () => {
     const markSpy = vi.spyOn(performance, 'mark');
     const measureSpy = vi.spyOn(performance, 'measure');
+    const clearMarksSpy = vi.spyOn(performance, 'clearMarks');
     const clearMeasuresSpy = vi.spyOn(performance, 'clearMeasures');
     markPerf('generation_start:session-1');
     markPerf('generation_end:session-1');
@@ -174,6 +175,7 @@ describe('perf telemetry exporter', () => {
     );
 
     expect(markSpy).toHaveBeenCalledWith('generation_start:session-1');
+    expect(clearMarksSpy).toHaveBeenCalledWith('generation_start:session-1');
     expect(measured).toBe(true);
     expect(measureSpy).toHaveBeenCalledWith(
       'generation_total_duration',

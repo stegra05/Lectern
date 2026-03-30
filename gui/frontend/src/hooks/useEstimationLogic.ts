@@ -19,7 +19,6 @@ export function useEstimationLogic(health: HealthStatus | null) {
     const estimationBaseRef = useRef<EstimationBase | null>(null);
     const previousEstimateContextRef = useRef<string | null>(null);
     const lastTelemetryStateRef = useRef<string | null>(null);
-    const activeEstimateMarkKeyRef = useRef<string | null>(null);
 
     const estimateQuery = useEstimationQuery({
         file: pdfFile,
@@ -31,7 +30,6 @@ export function useEstimationLogic(health: HealthStatus | null) {
         if (!pdfFile) {
             estimationBaseRef.current = null;
             lastTelemetryStateRef.current = null;
-            activeEstimateMarkKeyRef.current = null;
             setEstimation(null);
             setEstimationError(null);
             setIsEstimating(false);
@@ -42,10 +40,7 @@ export function useEstimationLogic(health: HealthStatus | null) {
 
         setIsEstimating(estimateQuery.isLoading || estimateQuery.isFetching);
         if (estimateQuery.isLoading || estimateQuery.isFetching) {
-            if (activeEstimateMarkKeyRef.current !== estimateStartMarkName) {
-                markPerf(estimateStartMarkName);
-                activeEstimateMarkKeyRef.current = estimateStartMarkName;
-            }
+            markPerf(estimateStartMarkName);
         }
 
         if (estimateQuery.error) {
