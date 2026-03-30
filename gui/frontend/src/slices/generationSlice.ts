@@ -66,7 +66,7 @@ export const createGenerationActions = (
       const pageCount = state.estimation.pages || 1;
       const textChars = state.estimation.text_chars || 0;
       const avgChars = textChars / pageCount;
-      const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
+      const isScript = avgChars >= 400; // Keep frontend density-mode logic aligned with backend threshold.
 
       if (isScript && textChars > 0) {
         const per1k = (target * 1000) / textChars;
@@ -90,7 +90,7 @@ export const createGenerationActions = (
     const pageCount = est.pages || 1;
     const textChars = est.text_chars || 0;
     const avgChars = textChars / pageCount;
-    const isScript = avgChars > 1500; // SCRIPT_THRESHOLD
+    const isScript = avgChars >= 400; // Keep frontend density-mode logic aligned with backend threshold.
 
     let preferredTarget: number | null = null;
     const prefs = get().densityPreferences;

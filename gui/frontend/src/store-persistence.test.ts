@@ -15,10 +15,10 @@ describe('Store Persistence', () => {
         });
     });
     it('should persist card per slide preference in slides mode', () => {
-        // Setup slides mode estimation (10 pages, 500 chars/page)
+        // Setup slides mode estimation (10 pages, 300 chars/page)
         const estimation = {
             pages: 10,
-            text_chars: 5000,
+            text_chars: 3000,
             tokens: 100,
             input_tokens: 100,
             output_tokens: 100,
@@ -60,6 +60,27 @@ describe('Store Persistence', () => {
         expect(useLecternStore.getState().densityPreferences.per1k).toBeCloseTo(3.0, 2);
     });
 
+    it('should not persist per-slide preference when threshold classifies as script', () => {
+        const estimation = {
+            pages: 10,
+            text_chars: 5000, // 500 chars/page (>= 400 threshold, script mode)
+            tokens: 100,
+            input_tokens: 100,
+            output_tokens: 100,
+            input_cost: 0,
+            output_cost: 0,
+            cost: 0,
+            model: 'gemini',
+        };
+
+        act(() => {
+            useLecternStore.getState().setEstimation(estimation);
+            useLecternStore.getState().setTargetDeckSize(20);
+        });
+
+        expect(useLecternStore.getState().densityPreferences.perSlide).toBeNull();
+    });
+
     it('should apply persisted preference for slides mode', () => {
         act(() => {
             useLecternStore.setState({ densityPreferences: { per1k: null, perSlide: 2.5 } });
@@ -67,7 +88,7 @@ describe('Store Persistence', () => {
 
         const estimation = {
             pages: 20,
-            text_chars: 10000, // 500 chars/page (< 1500, so slides mode)
+            text_chars: 6000, // 300 chars/page (< 400, so slides mode)
             tokens: 100,
             input_tokens: 100,
             output_tokens: 100,
@@ -94,7 +115,7 @@ describe('Store Persistence', () => {
 
         const estimation = {
             pages: 10,
-            text_chars: 20000, // 2000 chars/page (> 1500, so script mode)
+            text_chars: 20000, // 2000 chars/page (>= 400, so script mode)
             tokens: 100,
             input_tokens: 100,
             output_tokens: 100,
