@@ -71,28 +71,24 @@ class PerfMetricsRepositorySqlite:
         return await asyncio.to_thread(self._ingest_client_metrics_sync, payload)
 
     def _ingest_client_metrics_sync(self, payload: dict[str, object]) -> int:
-        entries = payload.get("entries")
-        if not isinstance(entries, list) or len(entries) == 0:
-            return 0
+        client_ts_ms = payload["client_ts_ms"]
+        session_id = payload["session_id"]
+        entries = payload["entries"]
 
         recorded_at_ms = int(time.time() * 1000)
-        payload_json = json.dumps(payload, separators=(",", ":"))
-        client_ts_ms = int(payload.get("client_ts_ms") or 0)
-        session_id = str(payload.get("session_id") or "")
 
         rows: list[tuple[object, ...]] = []
         for entry in entries:
-            if not isinstance(entry, dict):
-                continue
             complexity = entry.get("complexity")
-            complexity_obj = complexity if isinstance(complexity, dict) else {}
+            complexity_obj = complexity if isinstance(complexity, dict) else complexity.model_dump()
+            payload_json = json.dumps(entry, separators=(",", ":"))
             rows.append(
                 (
                     recorded_at_ms,
-                    client_ts_ms,
-                    session_id,
-                    str(entry.get("metric_name") or ""),
-                    float(entry.get("duration_ms") or 0.0),
+                    int(client_ts_ms),
+                    str(session_id),
+                    entry["metric_name"],
+                    entry["duration_ms"],
                     complexity_obj.get("card_count"),
                     complexity_obj.get("total_pages"),
                     complexity_obj.get("text_chars"),
@@ -106,9 +102,6 @@ class PerfMetricsRepositorySqlite:
                     payload_json,
                 )
             )
-
-        if not rows:
-            return 0
 
         with closing(self._connect()) as conn:
             with conn:

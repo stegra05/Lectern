@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import closing
 
 from fastapi.testclient import TestClient
+import pytest
 
 from gui.backend.dependencies import get_perf_metrics_repository
 from gui.backend.main import app
@@ -15,10 +16,8 @@ from lectern.infrastructure.persistence.perf_metrics_repository_sqlite import (
 client = TestClient(app)
 
 
-def test_post_client_metrics_persists_all_entries(tmp_path) -> None:
-    db_path = tmp_path / "client_metrics.sqlite3"
-    repo = PerfMetricsRepositorySqlite(db_path=db_path)
-    payload = {
+def _valid_payload() -> dict:
+    return {
         "client_ts_ms": 1710001234567,
         "session_id": "session-telemetry-1",
         "entries": [
@@ -56,6 +55,12 @@ def test_post_client_metrics_persists_all_entries(tmp_path) -> None:
             },
         ],
     }
+
+
+def test_post_client_metrics_persists_all_entries(tmp_path) -> None:
+    db_path = tmp_path / "client_metrics.sqlite3"
+    repo = PerfMetricsRepositorySqlite(db_path=db_path)
+    payload = _valid_payload()
 
     app.dependency_overrides[get_perf_metrics_repository] = lambda: repo
     try:
@@ -108,11 +113,12 @@ def test_post_client_metrics_persists_all_entries(tmp_path) -> None:
     assert first[12] == "slides"
     assert first[13] == 3
     assert first[14] == 15
-    assert json.loads(first[15]) == payload
+    assert json.loads(first[15]) == payload["entries"][0]
 
     second = rows[1]
     assert second[3] == "generate_cards_ms"
     assert second[4] == 1820
+    assert json.loads(second[15]) == payload["entries"][1]
 
 
 def test_post_client_metrics_initializes_required_indexes(tmp_path) -> None:
@@ -150,3 +156,20 @@ def test_post_client_metrics_initializes_required_indexes(tmp_path) -> None:
     assert "idx_client_perf_metrics_metric_recorded_at" in index_names
     assert "idx_client_perf_metrics_model_recorded_at" in index_names
     assert "idx_client_perf_metrics_build_version_recorded_at" in index_names
+
+
+@pytest.mark.parametrize(
+    ("mutator",),
+    [
+        (lambda payload: payload["entries"].__setitem__(0, {**payload["entries"][0], "duration_ms": -1}),),
+        (lambda payload: payload["entries"].__setitem__(0, {**payload["entries"][0], "metric_name": ""}),),
+        (lambda payload: payload.__setitem__("entries", []),),
+    ],
+)
+def test_post_client_metrics_rejects_invalid_payloads(mutator) -> None:
+    payload = _valid_payload()
+    mutator(payload)
+
+    response = client.post("/metrics/client", json=payload)
+
+    assert response.status_code == 422

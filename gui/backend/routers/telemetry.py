@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
+from typing import Annotated
 
 from gui.backend.dependencies import get_perf_metrics_repository
 from lectern.infrastructure.persistence.perf_metrics_repository_sqlite import (
@@ -25,15 +26,15 @@ class ClientMetricComplexityPayload(BaseModel):
 
 
 class ClientMetricEntryPayload(BaseModel):
-    metric_name: str
-    duration_ms: float
+    metric_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    duration_ms: Annotated[float, Field(ge=0)]
     complexity: ClientMetricComplexityPayload
 
 
 class ClientMetricsIngestRequest(BaseModel):
-    client_ts_ms: int
-    session_id: str
-    entries: list[ClientMetricEntryPayload]
+    client_ts_ms: Annotated[int, Field(ge=0)]
+    session_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    entries: Annotated[list[ClientMetricEntryPayload], Field(min_length=1, max_length=500)]
 
 
 class ClientMetricsIngestResponse(BaseModel):
