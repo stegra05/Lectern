@@ -212,3 +212,65 @@ def test_post_client_metrics_rejects_negative_complexity_values(complexity_field
     response = client.post("/metrics/client", json=payload)
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda payload: payload.__setitem__("unexpected", "x"),
+        lambda payload: payload["entries"][0].__setitem__("unexpected", "x"),
+        lambda payload: payload["entries"][0]["complexity"].__setitem__("unexpected", "x"),
+    ],
+)
+def test_post_client_metrics_rejects_unknown_fields(mutator) -> None:
+    payload = _valid_payload()
+    mutator(payload)
+
+    response = client.post("/metrics/client", json=payload)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda payload: payload.__setitem__("client_ts_ms", "1710001234567"),
+        lambda payload: payload["entries"][0].__setitem__("duration_ms", "223.5"),
+        lambda payload: payload["entries"][0]["complexity"].__setitem__("card_count", "12"),
+    ],
+)
+def test_post_client_metrics_rejects_type_coercion(mutator) -> None:
+    payload = _valid_payload()
+    mutator(payload)
+
+    response = client.post("/metrics/client", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_post_client_metrics_rejects_oversized_session_id() -> None:
+    payload = _valid_payload()
+    payload["session_id"] = "s" * 129
+
+    response = client.post("/metrics/client", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_post_client_metrics_rejects_oversized_metric_name() -> None:
+    payload = _valid_payload()
+    payload["entries"][0]["metric_name"] = "m" * 129
+
+    response = client.post("/metrics/client", json=payload)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("timestamp", [946684799999, 4102444800001])
+def test_post_client_metrics_rejects_implausible_client_timestamp(timestamp: int) -> None:
+    payload = _valid_payload()
+    payload["client_ts_ms"] = timestamp
+
+    response = client.post("/metrics/client", json=payload)
+
+    assert response.status_code == 422
