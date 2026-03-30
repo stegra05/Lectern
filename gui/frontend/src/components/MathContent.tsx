@@ -17,15 +17,34 @@ function applyCloze(html: string, mode: ClozeMode): string {
     return html;
 }
 
+const renderedCache = new Map<string, string>();
+const MAX_RENDERED_CACHE_SIZE = 200;
+
 export const MathContent: React.FC<MathContentProps> = ({
     html,
     className,
     clozeMode = 'none',
 }) => {
     const rendered = useMemo(() => {
+        const cacheKey = `${clozeMode}::${html}`;
+        const cached = renderedCache.get(cacheKey);
+        if (cached !== undefined) {
+            return cached;
+        }
+
         const sanitized = DOMPurify.sanitize(html);
         const withCloze = applyCloze(sanitized, clozeMode);
-        return renderMathInHtml(withCloze);
+        const output = renderMathInHtml(withCloze);
+
+        renderedCache.set(cacheKey, output);
+        if (renderedCache.size > MAX_RENDERED_CACHE_SIZE) {
+            const oldestKey = renderedCache.keys().next().value;
+            if (typeof oldestKey === 'string') {
+                renderedCache.delete(oldestKey);
+            }
+        }
+
+        return output;
     }, [html, clozeMode]);
 
     return (

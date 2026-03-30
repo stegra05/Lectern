@@ -248,7 +248,7 @@ NORMAL_THRESHOLD_CHARS_PER_PAGE: int = int(
 )
 SCRIPT_CHARS_PER_CARD: int = int(os.getenv("SCRIPT_CHARS_PER_CARD", "500"))
 SCRIPT_SUGGESTED_CARDS_PER_1K: float = float(
-    os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "1.5")
+    os.getenv("SCRIPT_SUGGESTED_CARDS_PER_1K", "3.0")
 )
 MAX_TOTAL_NOTES: int = int(os.getenv("MAX_TOTAL_NOTES", "0"))
 MIN_NOTES_PER_BATCH: int = int(os.getenv("MIN_NOTES_PER_BATCH", "20"))

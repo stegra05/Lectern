@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Trash2, Edit2, X, ChevronRight, Sparkles } from 'lucide-react';
 import type { Card } from '../api';
@@ -21,29 +21,51 @@ export const FocusMode: React.FC<FocusModeProps> = ({
 }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [direction, setDirection] = useState(0);
+    const currentIndexRef = useRef(0);
+    const cardsLengthRef = useRef(cards.length);
+    const onEditRef = useRef(onEdit);
+    const onCloseRef = useRef(onClose);
+    const onSyncRef = useRef(onSync);
+    const onDeleteRef = useRef(onDelete);
 
     const currentCard = cards[currentIndex];
 
+    useEffect(() => {
+        currentIndexRef.current = currentIndex;
+    }, [currentIndex]);
+
+    useEffect(() => {
+        cardsLengthRef.current = cards.length;
+    }, [cards.length]);
+
+    useEffect(() => {
+        onEditRef.current = onEdit;
+        onCloseRef.current = onClose;
+        onSyncRef.current = onSync;
+        onDeleteRef.current = onDelete;
+    }, [onEdit, onClose, onSync, onDelete]);
+
     const handleNext = useCallback(() => {
-        if (currentIndex < cards.length - 1) {
+        if (currentIndexRef.current < cardsLengthRef.current - 1) {
             setDirection(1);
             setCurrentIndex(prev => prev + 1);
         }
-    }, [currentIndex, cards.length]);
+    }, []);
 
     const handlePrev = useCallback(() => {
-        if (currentIndex > 0) {
+        if (currentIndexRef.current > 0) {
             setDirection(-1);
             setCurrentIndex(prev => prev - 1);
         }
-    }, [currentIndex]);
+    }, []);
 
     const handleDelete = useCallback(() => {
-        onDelete(currentIndex);
-        if (currentIndex >= cards.length - 1 && currentIndex > 0) {
+        const index = currentIndexRef.current;
+        onDeleteRef.current(index);
+        if (index >= cardsLengthRef.current - 1 && index > 0) {
             setCurrentIndex(prev => prev - 1);
         }
-    }, [currentIndex, onDelete, cards.length]);
+    }, []);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -62,19 +84,19 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                 handleDelete();
             } else if (e.key === 'e' || e.key === 'E') {
                 e.preventDefault();
-                onEdit(currentIndex);
+                onEditRef.current(currentIndexRef.current);
             } else if (e.key === 'Escape') {
                 e.preventDefault();
-                onClose();
+                onCloseRef.current();
             } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                onSync();
+                onSyncRef.current();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleNext, handlePrev, handleDelete, onEdit, onClose, onSync, currentIndex]);
+    }, [handleNext, handlePrev, handleDelete]);
 
     const x = useMotionValue(0);
     const rotate = useTransform(x, [-300, 300], [-10, 10]);
@@ -169,7 +191,7 @@ export const FocusMode: React.FC<FocusModeProps> = ({
 
             {/* The Void: Interactive Stage */}
             <div className="flex-1 flex items-center justify-center relative px-8 pb-32 pt-24 overflow-hidden">
-                <AnimatePresence initial={false} custom={direction} mode="wait">
+                <AnimatePresence initial={false} custom={direction} mode="sync">
                     <motion.div
                         key={currentCard?._uid || currentIndex}
                         custom={direction}
@@ -178,8 +200,8 @@ export const FocusMode: React.FC<FocusModeProps> = ({
                         animate="center"
                         exit="exit"
                         transition={{
-                            x: { type: "spring", stiffness: 400, damping: 40, mass: 0.8 },
-                            opacity: { duration: 0.15 },
+                            x: { type: "spring", stiffness: 620, damping: 42, mass: 0.58 },
+                            opacity: { duration: 0.1 },
                         }}
                         drag="x"
                         dragConstraints={{ left: 0, right: 0 }}

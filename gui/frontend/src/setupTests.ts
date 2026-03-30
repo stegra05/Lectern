@@ -8,7 +8,20 @@ interface MockProps {
 }
 
 const filterMotionProps = (props: Record<string, unknown>) => {
-    const forbidden = ['initial', 'animate', 'exit', 'variants', 'transition', 'layout', 'layoutId'];
+    const forbidden = [
+        'initial',
+        'animate',
+        'exit',
+        'variants',
+        'transition',
+        'layout',
+        'layoutId',
+        'drag',
+        'dragConstraints',
+        'dragElastic',
+        'onDragEnd',
+        'custom',
+    ];
     return Object.fromEntries(
         Object.entries(props).filter(([key]) => !forbidden.includes(key))
     );
@@ -33,4 +46,6 @@ vi.mock('framer-motion', () => ({
         },
     },
     AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+    useMotionValue: (initial: number) => initial,
+    useTransform: (value: unknown) => value,
 }));
