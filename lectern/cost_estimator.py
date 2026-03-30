@@ -252,6 +252,8 @@ async def estimate_cost_with_base(
         "text_chars": text_chars,
         "image_count": image_count,
         "model": model,
+        "uploaded_uri": uploaded_doc.uri,
+        "uploaded_mime_type": uploaded_doc.mime_type,
     }
     return result, base_data
 

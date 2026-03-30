@@ -115,7 +115,9 @@ export const processGenerationEventV2 = (
         replayCursor: state.replayCursor === null ? cursor : Math.max(state.replayCursor, cursor),
     }));
 
-    if (event.type === 'phase_started' || event.type === 'progress_updated') {
+    if (event.type === 'session_started') {
+        set(() => ({ currentPhase: 'starting' }));
+    } else if (event.type === 'phase_started' || event.type === 'progress_updated') {
         const raw = event.data && typeof event.data === 'object' ? (event.data as Record<string, unknown>) : null;
         const nextPhase = mapV2PhaseToUiPhase(raw?.phase);
         if (nextPhase) {
@@ -402,7 +404,7 @@ export const handleGenerate = async (
         isCancelling: false,
         isResuming: false,
         isHistorical: false,
-        currentPhase: 'idle',
+        currentPhase: 'starting',
         setupStepsCompleted: 0,
         coverageData: null,
         rubricSummary: null,
@@ -488,7 +490,7 @@ export const handleResume = async (
         isCancelling: false,
         isResuming: true,
         isHistorical: false,
-        currentPhase: 'idle',
+        currentPhase: 'starting',
         setupStepsCompleted: 0,
         rubricSummary: null,
         completionOutcome: null,

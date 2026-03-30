@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
 import time
+from dataclasses import dataclass
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -27,6 +29,24 @@ from lectern.application.generation_app_service import GenerationAppServiceImpl
 from lectern.cost_estimator import estimate_cost_with_base as estimate_cost_with_base_impl
 
 router = APIRouter()
+
+_ESTIMATION_UPLOAD_CACHE_TTL_SECONDS = 300
+
+
+@dataclass(frozen=True)
+class _EstimationUploadCacheEntry:
+    file_hash: str
+    uploaded_uri: str
+    uploaded_mime_type: str
+    token_count: int
+    page_count: int
+    text_chars: int
+    image_count: int
+    model: str
+    created_at_ms: int
+
+
+_ESTIMATION_UPLOAD_CACHE: dict[str, _EstimationUploadCacheEntry] = {}
 
 
 class EstimateV2Response(BaseModel):
@@ -108,6 +128,52 @@ def _save_upload(pdf_file: UploadFile) -> str:
         return tmp.name
 
 
+def _sha256_file(path: str) -> str:
+    hasher = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _cache_key(*, file_hash: str, model_name: str | None, target_card_count: int | None) -> str:
+    model = model_name or str(config.DEFAULT_GEMINI_MODEL)
+    target = "" if target_card_count is None else str(int(target_card_count))
+    return f"{file_hash}:{model}:{target}"
+
+
+def _prune_estimation_cache(now_ms: int) -> None:
+    cutoff = now_ms - int(_ESTIMATION_UPLOAD_CACHE_TTL_SECONDS * 1000)
+    stale_keys = [
+        key for key, entry in _ESTIMATION_UPLOAD_CACHE.items() if entry.created_at_ms < cutoff
+    ]
+    for key in stale_keys:
+        _ESTIMATION_UPLOAD_CACHE.pop(key, None)
+
+
+def _store_estimation_cache(
+    *,
+    key: str,
+    file_hash: str,
+    base_data: dict[str, object],
+    now_ms: int,
+) -> None:
+    uploaded_uri = str(base_data.get("uploaded_uri") or "").strip()
+    if not uploaded_uri:
+        return
+    _ESTIMATION_UPLOAD_CACHE[key] = _EstimationUploadCacheEntry(
+        file_hash=file_hash,
+        uploaded_uri=uploaded_uri,
+        uploaded_mime_type=str(base_data.get("uploaded_mime_type") or "application/pdf"),
+        token_count=int(base_data.get("token_count") or 0),
+        page_count=int(base_data.get("page_count") or 0),
+        text_chars=int(base_data.get("text_chars") or 0),
+        image_count=int(base_data.get("image_count") or 0),
+        model=str(base_data.get("model") or str(config.DEFAULT_GEMINI_MODEL)),
+        created_at_ms=now_ms,
+    )
+
+
 @router.post("/estimate-v2", response_model=EstimateV2Response)
 async def estimate_v2(
     pdf_file: UploadFile = File(...),
@@ -116,10 +182,24 @@ async def estimate_v2(
 ) -> dict[str, object]:
     tmp_path = await run_in_threadpool(_save_upload, pdf_file)
     try:
+        file_hash = await run_in_threadpool(_sha256_file, tmp_path)
+        now_ms = int(time.time() * 1000)
+        _prune_estimation_cache(now_ms)
         estimate, _base = await estimate_cost_with_base_impl(
             tmp_path,
             model_name=model_name,
             target_card_count=target_card_count,
+        )
+        cache_key = _cache_key(
+            file_hash=file_hash,
+            model_name=model_name,
+            target_card_count=target_card_count,
+        )
+        _store_estimation_cache(
+            key=cache_key,
+            file_hash=file_hash,
+            base_data=_base,
+            now_ms=now_ms,
         )
         return estimate
     except (RuntimeError, OSError, ValueError, TypeError) as exc:
@@ -213,6 +293,20 @@ async def generate_v2(
         raise _to_http_error(exc) from exc
 
     resolved_model_name = model_name or str(config.DEFAULT_GEMINI_MODEL)
+    cache_key: str | None = None
+    cached_upload: _EstimationUploadCacheEntry | None = None
+    try:
+        file_hash = await run_in_threadpool(_sha256_file, tmp_path)
+        _prune_estimation_cache(int(time.time() * 1000))
+        cache_key = _cache_key(
+            file_hash=file_hash,
+            model_name=resolved_model_name,
+            target_card_count=target_card_count,
+        )
+        cached_upload = _ESTIMATION_UPLOAD_CACHE.get(cache_key)
+    except OSError:
+        cache_key = None
+        cached_upload = None
     stage = "resume" if session_id else "generation"
     if session_id:
         req = ResumeGenerationRequest(
@@ -221,6 +315,10 @@ async def generate_v2(
             deck_name=deck_name,
             model_name=resolved_model_name,
             stream_version=2,
+            cached_uploaded_uri=cached_upload.uploaded_uri if cached_upload else None,
+            cached_uploaded_mime_type=(
+                cached_upload.uploaded_mime_type if cached_upload else None
+            ),
         )
         resume_stream = app_service.run_resume_stream(req)
         if after_sequence_no is not None:
@@ -250,6 +348,10 @@ async def generate_v2(
             focus_prompt=focus_prompt or None,
             target_card_count=target_card_count,
             stream_version=2,
+            cached_uploaded_uri=cached_upload.uploaded_uri if cached_upload else None,
+            cached_uploaded_mime_type=(
+                cached_upload.uploaded_mime_type if cached_upload else None
+            ),
         )
         stream = app_service.run_generation_stream(req)
 
@@ -302,6 +404,8 @@ async def generate_v2(
             )
             yield serialize_api_event_v2(terminal) + "\n"
         finally:
+            if cache_key is not None and cached_upload is not None:
+                _ESTIMATION_UPLOAD_CACHE.pop(cache_key, None)
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 

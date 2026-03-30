@@ -215,9 +215,42 @@ const parseNDJSONStreamV2 = async (
     const decoder = new TextDecoder();
     let buffer = "";
 
+    const pending: ProgressEventV2[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushPending = () => {
+        if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+        }
+        if (pending.length === 0) return;
+        const batch = pending.splice(0, pending.length);
+        for (const event of batch) {
+            onEvent(event);
+        }
+    };
+
     const emitValidated = (raw: unknown) => {
         const event = validateOrThrow(ApiEventV2Schema, raw);
-        onEvent(event as ProgressEventV2);
+        const typed = event as ProgressEventV2;
+        if (
+            typed.type === "error_emitted" ||
+            typed.type === "session_completed" ||
+            typed.type === "session_cancelled"
+        ) {
+            flushPending();
+            onEvent(typed);
+            return;
+        }
+        pending.push(typed);
+        if (pending.length >= 25) {
+            flushPending();
+            return;
+        }
+        if (!flushTimer) {
+            flushTimer = setTimeout(() => {
+                flushPending();
+            }, 16);
+        }
     };
 
     while (true) {
@@ -250,6 +283,7 @@ const parseNDJSONStreamV2 = async (
             throw e;
         }
     }
+    flushPending();
 };
 
 export interface SessionStatus {

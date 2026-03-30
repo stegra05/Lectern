@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import math
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -54,6 +56,7 @@ class _RunnerState:
     total_cards_cap: int
     actual_batch_size: int
     last_coverage_data: CoverageData
+    first_card_at_ms: int | None = None
     generation_termination_reason_code: str | None = None
 
 
@@ -77,6 +80,79 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _compute_hybrid_batch_size(
+    *,
+    total_cards_cap: int,
+    page_count: int,
+    dynamic_ratio: float | None = None,
+    dynamic_min: int | None = None,
+    dynamic_max: int | None = None,
+    guardrail_min_ratio: float | None = None,
+    guardrail_max_ratio: float | None = None,
+    guardrail_floor: int | None = None,
+) -> int:
+    ratio = (
+        dynamic_ratio
+        if dynamic_ratio is not None
+        else float(config.DYNAMIC_BATCH_TARGET_RATIO)
+    )
+    if not math.isfinite(ratio) or ratio <= 0:
+        ratio = 0.15
+
+    dmin = (
+        dynamic_min
+        if dynamic_min is not None
+        else int(config.DYNAMIC_MIN_NOTES_PER_BATCH)
+    )
+    dmax = (
+        dynamic_max
+        if dynamic_max is not None
+        else int(config.DYNAMIC_MAX_NOTES_PER_BATCH)
+    )
+    if dmin < 1:
+        dmin = 10
+    if dmax < 1:
+        dmax = 25
+    if dmin > dmax:
+        dmin, dmax = dmax, dmin
+
+    gmin_r = (
+        guardrail_min_ratio
+        if guardrail_min_ratio is not None
+        else float(config.PAGE_GUARDRAIL_MIN_RATIO)
+    )
+    gmax_r = (
+        guardrail_max_ratio
+        if guardrail_max_ratio is not None
+        else float(config.PAGE_GUARDRAIL_MAX_RATIO)
+    )
+    if not math.isfinite(gmin_r) or gmin_r < 0:
+        gmin_r = 0.7
+    if not math.isfinite(gmax_r) or gmax_r < 0:
+        gmax_r = 1.3
+    if gmin_r > gmax_r:
+        gmin_r, gmax_r = gmax_r, gmin_r
+
+    gfloor = (
+        guardrail_floor
+        if guardrail_floor is not None
+        else int(config.PAGE_GUARDRAIL_MIN_FLOOR)
+    )
+    if gfloor < 0:
+        gfloor = 8
+
+    page_center = max(0, int(page_count) // 2)
+    target_batch = round(int(total_cards_cap) * float(ratio))
+    if int(total_cards_cap) <= 0:
+        target_batch = page_center
+
+    guardrail_min = max(int(gfloor), round(page_center * float(gmin_r)))
+    guardrail_max = max(guardrail_min, round(page_center * float(gmax_r)))
+
+    hybrid_batch = max(guardrail_min, min(target_batch, guardrail_max))
+    return max(1, min(int(dmax), max(int(dmin), int(hybrid_batch))))
 
 
 def _safe_card_list(value: Any) -> list[CardData]:
@@ -107,6 +183,7 @@ def _build_runner_state_payload(state: _RunnerState) -> dict[str, Any]:
         "total_cards_cap": state.total_cards_cap,
         "actual_batch_size": state.actual_batch_size,
         "last_coverage_data": state.last_coverage_data,
+        "first_card_at_ms": state.first_card_at_ms,
     }
 
 
@@ -183,6 +260,10 @@ def _build_completion_summary(
     duration_ms: int,
     requested_card_target: int | None,
     termination_reason_code: str,
+    started_at_ms: int | None = None,
+    first_event_at_ms: int | None = None,
+    first_card_at_ms: int | None = None,
+    completed_at_ms: int | None = None,
 ) -> dict[str, Any]:
     target_shortfall = (
         max(int(requested_card_target) - cards_generated, 0)
@@ -204,6 +285,27 @@ def _build_completion_summary(
         "termination_reason_code": termination_reason_code,
         "termination_reason_text": reason_text,
         "run_summary_text": run_summary,
+        "performance_metrics": {
+            "started_at_ms": started_at_ms,
+            "first_event_at_ms": first_event_at_ms,
+            "first_card_at_ms": first_card_at_ms,
+            "completed_at_ms": completed_at_ms,
+            "latency_to_first_event_ms": (
+                first_event_at_ms - started_at_ms
+                if started_at_ms is not None and first_event_at_ms is not None
+                else None
+            ),
+            "latency_to_first_card_ms": (
+                first_card_at_ms - started_at_ms
+                if started_at_ms is not None and first_card_at_ms is not None
+                else None
+            ),
+            "latency_total_ms": (
+                completed_at_ms - started_at_ms
+                if started_at_ms is not None and completed_at_ms is not None
+                else None
+            ),
+        },
     }
 
 
@@ -309,6 +411,7 @@ async def _rebuild_state_from_history(
         total_cards_cap=total_cards_cap,
         actual_batch_size=actual_batch_size,
         last_coverage_data=coverage,
+        first_card_at_ms=None,
     )
 
 
@@ -347,6 +450,11 @@ def _load_runner_state(
         total_cards_cap=_safe_int(payload.get("total_cards_cap"), total_cards_cap),
         actual_batch_size=_safe_int(payload.get("actual_batch_size"), actual_batch_size),
         last_coverage_data=coverage,
+        first_card_at_ms=(
+            _safe_int(payload.get("first_card_at_ms"), 0) or None
+            if isinstance(payload.get("first_card_at_ms"), (int, float, str))
+            else None
+        ),
     )
 
 
@@ -591,6 +699,8 @@ async def _run_generation_phase(
             state.all_cards.append(promotable)
             state.seen_keys.add(key)
             grounding_promoted_count += 1
+            if state.first_card_at_ms is None:
+                state.first_card_at_ms = _now_ms()
             async for event in _emit_with_runner_state(
                 history,
                 session_id,
@@ -897,13 +1007,28 @@ def make_start_runner(
         session_id = f"runner-{uuid.uuid4().hex}"
         cursor_ref = {"value": 0}
         run_started_at = time.perf_counter()
+        run_started_at_ms = _now_ms()
 
-        metadata = await pdf_extractor.extract_metadata(req.pdf_path)
-        uploaded = await ai_provider.upload_document(req.pdf_path)
-        uploaded_uri = str(getattr(uploaded, "uri", "") or "")
-        uploaded_mime_type = str(
-            getattr(uploaded, "mime_type", "") or "application/pdf"
-        )
+        # Emit an immediate first event so UI progress becomes visible without waiting
+        # for upload/analysis.
+        yield SessionStarted(session_id=session_id, mode="start")
+
+        metadata_task = asyncio.create_task(pdf_extractor.extract_metadata(req.pdf_path))
+        if req.cached_uploaded_uri:
+            upload_task = None
+        else:
+            upload_task = asyncio.create_task(ai_provider.upload_document(req.pdf_path))
+
+        if upload_task is None:
+            metadata = await metadata_task
+            uploaded_uri = str(req.cached_uploaded_uri or "")
+            uploaded_mime_type = str(req.cached_uploaded_mime_type or "application/pdf")
+        else:
+            metadata, uploaded = await asyncio.gather(metadata_task, upload_task)
+            uploaded_uri = str(getattr(uploaded, "uri", "") or "")
+            uploaded_mime_type = str(
+                getattr(uploaded, "mime_type", "") or "application/pdf"
+            )
         concept_map_raw = await ai_provider.build_concept_map(uploaded_uri, uploaded_mime_type)
         concept_map: ConceptMapData = (
             dict(concept_map_raw) if isinstance(concept_map_raw, dict) else {}
@@ -938,9 +1063,9 @@ def make_start_runner(
             script_base_chars=config.SCRIPT_BASE_CHARS,
             force_mode=document_type,
         )
-        actual_batch_size = max(
-            1,
-            min(config.MAX_NOTES_PER_BATCH, max(config.MIN_NOTES_PER_BATCH, total_cards_cap)),
+        actual_batch_size = _compute_hybrid_batch_size(
+            total_cards_cap=total_cards_cap,
+            page_count=total_pages,
         )
         initial_coverage = compute_coverage_data(
             cards=[],
@@ -958,16 +1083,8 @@ def make_start_runner(
             total_cards_cap=int(total_cards_cap),
             actual_batch_size=actual_batch_size,
             last_coverage_data=initial_coverage,
+            first_card_at_ms=None,
         )
-
-        async for event in _emit_with_runner_state(
-            history,
-            session_id,
-            cursor_ref,
-            state,
-            SessionStarted(session_id=session_id, mode="start"),
-        ):
-            yield event
 
         async for event in _run_generation_phase(
             session_id=session_id,
@@ -995,6 +1112,7 @@ def make_start_runner(
             yield event
 
         total_duration = int((time.perf_counter() - run_started_at) * 1000)
+        completed_at_ms = _now_ms()
         async for event in _emit_with_runner_state(
             history,
             session_id,
@@ -1009,6 +1127,10 @@ def make_start_runner(
                         state.generation_termination_reason_code
                         or "generation_completed"
                     ),
+                    started_at_ms=run_started_at_ms,
+                    first_event_at_ms=run_started_at_ms,
+                    first_card_at_ms=state.first_card_at_ms,
+                    completed_at_ms=completed_at_ms,
                 )
             ),
         ):
@@ -1032,6 +1154,7 @@ def make_resume_runner(
         session_id = req.session_id
         cursor_ref = {"value": _safe_int(session.get("cursor"), 0)}
         run_started_at = time.perf_counter()
+        run_started_at_ms = _now_ms()
 
         runner_payload = session.get("runner_state")
         concept_map: ConceptMapData = {}
@@ -1058,7 +1181,7 @@ def make_resume_runner(
         )
         actual_batch_size = _safe_int(
             (runner_payload or {}).get("actual_batch_size") if isinstance(runner_payload, dict) else None,
-            max(1, min(config.MAX_NOTES_PER_BATCH, total_cards_cap)),
+            _compute_hybrid_batch_size(total_cards_cap=total_cards_cap, page_count=total_pages),
         )
         effective_target = _safe_float(
             (runner_payload or {}).get("effective_target") if isinstance(runner_payload, dict) else None,
@@ -1112,6 +1235,7 @@ def make_resume_runner(
             yield event
 
         total_duration = int((time.perf_counter() - run_started_at) * 1000)
+        completed_at_ms = _now_ms()
         async for event in _emit_with_runner_state(
             history,
             session_id,
@@ -1126,6 +1250,10 @@ def make_resume_runner(
                         state.generation_termination_reason_code
                         or "generation_completed"
                     ),
+                    started_at_ms=run_started_at_ms,
+                    first_event_at_ms=None,
+                    first_card_at_ms=state.first_card_at_ms,
+                    completed_at_ms=completed_at_ms,
                 )
             ),
         ):

@@ -26,6 +26,8 @@ class StartGenerationRequest:
     tags: list[str]
     focus_prompt: str | None = None
     target_card_count: int | None = None
+    cached_uploaded_uri: str | None = None
+    cached_uploaded_mime_type: str | None = None
     stream_version: int = 2
 
 
@@ -35,6 +37,8 @@ class ResumeGenerationRequest:
     pdf_path: str
     deck_name: str
     model_name: str
+    cached_uploaded_uri: str | None = None
+    cached_uploaded_mime_type: str | None = None
     stream_version: int = 2
 
 
