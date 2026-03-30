@@ -62,6 +62,8 @@ export function useEstimationLogic(health: HealthStatus | null) {
                 measurePerf('estimate_total_duration', estimateStartMarkName);
                 void flushPerfTelemetry({
                     sessionId: 'estimation',
+                    metricNames: ['estimate_total_duration'],
+                    clearMarks: [estimateStartMarkName],
                     complexity: {
                         card_count: estimation?.estimated_card_count,
                         target_card_count: targetDeckSize,
@@ -80,12 +82,14 @@ export function useEstimationLogic(health: HealthStatus | null) {
             estimationBaseRef.current = extractBase(estimateQuery.data);
             setEstimationError(null);
             setEstimation(estimateQuery.data);
-            const telemetryKey = `done:${pdfContextKey}:${estimateQuery.data.model}:${estimateQuery.data.pages}:${estimateQuery.data.text_chars ?? 0}:${targetDeckSize}`;
+            const telemetryKey = `done:${pdfContextKey}:${estimateQuery.data.model}:${estimateQuery.data.pages}:${estimateQuery.data.text_chars ?? 0}:${estimateQuery.dataUpdatedAt}`;
             if (lastTelemetryStateRef.current !== telemetryKey) {
                 lastTelemetryStateRef.current = telemetryKey;
                 measurePerf('estimate_total_duration', estimateStartMarkName);
                 void flushPerfTelemetry({
                     sessionId: 'estimation',
+                    metricNames: ['estimate_total_duration'],
+                    clearMarks: [estimateStartMarkName],
                     complexity: {
                         card_count: estimateQuery.data.estimated_card_count,
                         target_card_count: targetDeckSize,
@@ -104,6 +108,7 @@ export function useEstimationLogic(health: HealthStatus | null) {
         estimateQuery.error,
         estimateQuery.isFetching,
         estimateQuery.isLoading,
+        estimateQuery.dataUpdatedAt,
         health?.gemini_model,
         pdfFile,
         setEstimation,

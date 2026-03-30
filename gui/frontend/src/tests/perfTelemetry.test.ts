@@ -115,6 +115,7 @@ describe('perf telemetry exporter', () => {
       sessionId: 'session-123',
       complexity: {},
       clientTsMs: 1710000000000,
+      metricNames: ['generation_total_duration'],
     });
 
     expect(payload).toBeNull();
@@ -163,6 +164,7 @@ describe('perf telemetry exporter', () => {
   it('marks and measures when marks exist', () => {
     const markSpy = vi.spyOn(performance, 'mark');
     const measureSpy = vi.spyOn(performance, 'measure');
+    const clearMeasuresSpy = vi.spyOn(performance, 'clearMeasures');
     markPerf('generation_start:session-1');
     markPerf('generation_end:session-1');
     const measured = measurePerf(
@@ -178,5 +180,6 @@ describe('perf telemetry exporter', () => {
       'generation_start:session-1',
       'generation_end:session-1'
     );
+    expect(clearMeasuresSpy).toHaveBeenCalledWith('generation_total_duration');
   });
 });

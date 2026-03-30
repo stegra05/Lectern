@@ -314,6 +314,8 @@ export const processGenerationEvent = (
         );
         void flushPerfTelemetry({
             sessionId: generationSessionId,
+            metricNames: ['generation_total_duration'],
+            clearMarks: [`generation_start:${generationSessionId}`],
             complexity: {
                 card_count: cardCount,
                 target_card_count: store.targetDeckSize,
@@ -357,6 +359,8 @@ export const processGenerationEvent = (
         );
         void flushPerfTelemetry({
             sessionId: generationSessionId,
+            metricNames: ['generation_total_duration'],
+            clearMarks: [`generation_start:${generationSessionId}`],
             complexity: {
                 card_count: store.cards.length,
                 target_card_count: store.targetDeckSize,
@@ -387,6 +391,8 @@ export const processGenerationEvent = (
             );
             void flushPerfTelemetry({
                 sessionId: generationSessionId,
+                metricNames: ['generation_total_duration'],
+                clearMarks: [`generation_start:${generationSessionId}`],
                 complexity: {
                     card_count: store.cards.length,
                     target_card_count: store.targetDeckSize,
@@ -487,6 +493,8 @@ export const handleGenerate = async (
         measurePerf('generation_total_duration', 'generation_start:generation');
         void flushPerfTelemetry({
             sessionId: store.sessionId ?? 'generation',
+            metricNames: ['generation_total_duration'],
+            clearMarks: ['generation_start:generation'],
             complexity: {
                 card_count: store.cards.length,
                 target_card_count: store.targetDeckSize,
@@ -592,6 +600,8 @@ export const handleResume = async (
         );
         void flushPerfTelemetry({
             sessionId: store.sessionId ?? sessionId,
+            metricNames: ['generation_total_duration'],
+            clearMarks: [`generation_start:${store.sessionId ?? sessionId}`],
             complexity: {
                 card_count: store.cards.length,
                 target_card_count: store.targetDeckSize,

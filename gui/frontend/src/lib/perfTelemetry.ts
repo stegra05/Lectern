@@ -27,6 +27,7 @@ interface BuildClientMetricsPayloadOptions {
   sessionId: string;
   complexity: ClientMetricComplexityPayload;
   clientTsMs?: number;
+  metricNames?: readonly string[];
 }
 
 const OWNED_MEASURE_PREFIXES = ['generation_', 'estimate_'] as const;
@@ -74,6 +75,9 @@ export const markPerf = (name: string): void => {
   if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
     return;
   }
+  if (hasMark(markName)) {
+    return;
+  }
   performance.mark(markName);
 };
 
@@ -94,6 +98,9 @@ export const measurePerf = (
   }
   if (!hasMark(start) || (end && !hasMark(end))) {
     return false;
+  }
+  if (typeof performance.clearMeasures === 'function') {
+    performance.clearMeasures(metricName);
   }
   performance.measure(metricName, start, end);
   return true;
@@ -168,6 +175,7 @@ export const buildClientMetricsPayload = ({
   sessionId,
   complexity,
   clientTsMs = Date.now(),
+  metricNames,
 }: BuildClientMetricsPayloadOptions): ClientMetricsPayload | null => {
   const normalizedSessionId = sessionId.trim();
   if (!normalizedSessionId) return null;
@@ -179,6 +187,13 @@ export const buildClientMetricsPayload = ({
   }
 
   const measures = performance.getEntriesByType('measure');
+  const allowedMetricNames = metricNames
+    ? new Set(
+        metricNames
+          .map((name) => normalizeString(name))
+          .filter((name): name is string => Boolean(name))
+      )
+    : null;
   const normalizedComplexity = normalizeComplexity(complexity);
   const entries = measures
     .map((entry) => {
@@ -186,6 +201,7 @@ export const buildClientMetricsPayload = ({
       if (
         !metricName ||
         !hasOwnedMeasurePrefix(metricName) ||
+        (allowedMetricNames !== null && !allowedMetricNames.has(metricName)) ||
         !isFiniteNonNegative(entry.duration)
       ) {
         return null;
