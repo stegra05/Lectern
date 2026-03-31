@@ -422,6 +422,41 @@ describe('generation logic', () => {
             });
         });
 
+        it('returns to dashboard on session_cancelled', () => {
+            const setFn = vi.fn();
+
+            processGenerationEventV2(
+                {
+                    event_version: 2,
+                    session_id: 's1',
+                    sequence_no: 12,
+                    type: 'session_cancelled',
+                    message: 'Cancelled by user',
+                    timestamp: Date.now(),
+                    data: {},
+                },
+                setFn
+            );
+
+            const update = setFn.mock.calls[setFn.mock.calls.length - 1][0];
+            const result = update({
+                logs: [],
+                step: 'generating' as Step,
+                currentPhase: 'generating' as Phase,
+                totalPages: 0,
+                coverageData: null,
+                isCancelling: true,
+                sessionId: 's1',
+            } as unknown as StoreState);
+
+            expect(result).toMatchObject({
+                step: 'dashboard',
+                currentPhase: 'idle',
+                isCancelling: false,
+                sessionId: null,
+            });
+        });
+
         it('maps session_completed summary completion outcome fields to legacy done payload', () => {
             const setFn = vi.fn();
             processGenerationEventV2(

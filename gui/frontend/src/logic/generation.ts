@@ -377,7 +377,12 @@ export const processGenerationEvent = (
             },
         });
         store.addToast('warning', 'Generation cancelled');
-        set(() => ({ isCancelling: false, sessionId: null }));
+        set(() => ({
+            isCancelling: false,
+            sessionId: null,
+            step: 'dashboard',
+            currentPhase: 'idle',
+        }));
         return;
     }
 
@@ -385,6 +390,7 @@ export const processGenerationEvent = (
         const msg = event.message || 'An error occurred';
         const isRecoverable = (event.data as Record<string, unknown>)?.recoverable === true;
 
+        set((state) => ({ logs: [...state.logs, event] }));
         useLecternStore.getState().addToast('error', msg, 8000);
 
         if (!isRecoverable) {
@@ -411,7 +417,7 @@ export const processGenerationEvent = (
             // Fatal error: show full-screen overlay
             set(() => ({ isError: true, sessionId: null }));
         }
-        // Recoverable errors just show toast, generation continues
+        return;
     }
 
     if (event.type === 'warning') {
@@ -421,6 +427,8 @@ export const processGenerationEvent = (
                 : undefined;
         const reason = typeof data?.reason === 'string' ? data.reason : '';
         const details = data ? validateGenerationStoppedDetails(data) : null;
+
+        set((state) => ({ logs: [...state.logs, event] }));
 
         if (reason === 'grounding_non_progress_duplicates') {
             const duplicateDrops = details?.last_batch_duplicate_drop_count ?? 0;
