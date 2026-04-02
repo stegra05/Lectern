@@ -1,0 +1,139 @@
+name: build-release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build-${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            artifact_name: Lectern-macos
+          - os: windows-latest
+            platform: windows
+            artifact_name: Lectern-windows
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: Lectern-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gui/frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Build macOS
+        if: matrix.platform == 'macos'
+        run: |
+          ./scripts/build_app.sh
+          ./scripts/create_dmg.sh
+
+      - name: Build Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          .\scripts\build_windows.ps1
+          Compress-Archive -Path dist\Lectern -DestinationPath dist\Lectern-windows.zip
+
+      - name: Build Linux
+        if: matrix.platform == 'linux'
+        run: |
+          ./scripts/build_linux.sh
+          tar -czvf dist/Lectern-linux.tar.gz -C dist Lectern
+
+      - name: Generate checksums (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: |
+          mkdir -p dist/checksums
+          for file in dist/*.dmg dist/*.zip dist/*.tar.gz; do
+            if [ -f "$file" ]; then
+              shasum -a 256 "$file" > "dist/checksums/$(basename "$file").sha256"
+            fi
+          done
+
+      - name: Generate checksums (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist/checksums -Force | Out-Null
+          Get-ChildItem dist -Filter *.zip | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -FilePath "dist/checksums/$($_.Name).sha256" -Encoding ascii
+          }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.tar.gz
+            dist/checksums/*.sha256
+
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.tar.gz
+
+  release:
+    name: publish-release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: artifacts
+          output-file: artifacts/sbom-release.spdx.json
+          format: spdx-json
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/Lectern-macos/*.dmg
+            artifacts/Lectern-macos/*.sha256
+            artifacts/Lectern-windows/*.zip
+            artifacts/Lectern-windows/*.sha256
+            artifacts/Lectern-linux/*.tar.gz
+            artifacts/Lectern-linux/*.sha256
+            artifacts/sbom-release.spdx.json
+          generate_release_notes: true
+          draft: false
+          prerelease: false
