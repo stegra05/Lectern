@@ -9,6 +9,8 @@ from lectern import config
 from lectern.ai_client import LecternAIClient
 from lectern.ai_common import _compose_multimodal_content
 
+_ALLOWED_CONTENT_MODES = {"script", "slides"}
+
 
 def _estimate_page_count_from_pdf_bytes(pdf_bytes: bytes) -> int:
     """Fallback: regex page count when pypdf fails."""
@@ -51,7 +53,7 @@ def extract_pdf_metadata(pdf_path: str) -> Dict[str, int]:
 def detect_content_mode(*, chars_per_page: float, force_mode: str | None = None) -> str:
     if force_mode:
         normalized = force_mode.lower()
-        if normalized in ["script", "slides"]:
+        if normalized in _ALLOWED_CONTENT_MODES:
             return normalized
     if chars_per_page >= config.DENSE_THRESHOLD_CHARS_PER_PAGE:
         return "script"
