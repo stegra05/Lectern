@@ -150,26 +150,34 @@ class HistoryRepositorySqlite(HistoryRepositoryPort):
         await asyncio.to_thread(self._append_events_sync, session_id, events)
 
     def _append_events_sync(self, session_id: str, events: list[DomainEventRecord]) -> None:
+        if not events:
+            return
+
+        parameters = []
+        for record in events:
+            event_payload = {
+                "event_class": type(record.event).__name__,
+                "data": self._dataclass_to_dict(record.event),
+            }
+            parameters.append(
+                (
+                    session_id,
+                    int(record.sequence_no),
+                    type(record.event).__name__,
+                    json.dumps(event_payload),
+                )
+            )
+
         with closing(self._connect()) as conn:
             with conn:
-                for record in events:
-                    event_payload = {
-                        "event_class": type(record.event).__name__,
-                        "data": self._dataclass_to_dict(record.event),
-                    }
-                    conn.execute(
-                        """
-                        INSERT INTO session_events
-                        (session_id, sequence_no, event_class, event_payload)
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (
-                            session_id,
-                            int(record.sequence_no),
-                            type(record.event).__name__,
-                            json.dumps(event_payload),
-                        ),
-                    )
+                conn.executemany(
+                    """
+                    INSERT INTO session_events
+                    (session_id, sequence_no, event_class, event_payload)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    parameters,
+                )
 
     async def sync_state(self, snapshot: Any) -> None:
         await asyncio.to_thread(self._sync_state_sync, snapshot)
