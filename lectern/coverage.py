@@ -180,14 +180,14 @@ def compute_coverage_data(
     for concept in concept_catalog:
         concept_id = str(concept.get("id") or "").strip()
         if concept_id:
-            for page in normalize_page_references(concept.get("page_references")):
+            for page in concept.get("page_references") or []:
                 concepts_by_page[page].add(concept_id)
 
     relations_by_page = defaultdict(set)
     for relation in relation_catalog:
         relation_key = str(relation.get("key") or "").strip()
         if relation_key:
-            for page in normalize_page_references(relation.get("page_references")):
+            for page in relation.get("page_references") or []:
                 relations_by_page[page].add(relation_key)
 
     for card in cards:
@@ -197,10 +197,12 @@ def compute_coverage_data(
         covered_pages.update(page_refs)
         for page in page_refs:
             cards_per_page[page] += 1
-            if page in concepts_by_page:
-                covered_concepts_by_page.update(concepts_by_page[page])
-            if page in relations_by_page:
-                covered_relations_by_page.update(relations_by_page[page])
+            page_concepts = concepts_by_page.get(page)
+            if page_concepts:
+                covered_concepts_by_page.update(page_concepts)
+            page_relations = relations_by_page.get(page)
+            if page_relations:
+                covered_relations_by_page.update(page_relations)
 
         explicit_concept_ids.update(get_card_concept_ids(card))
         explicit_relation_keys.update(get_card_relation_keys(card))
