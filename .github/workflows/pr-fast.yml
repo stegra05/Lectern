@@ -54,7 +54,7 @@ jobs:
 
       - name: Setup Node.js
         if: needs.detect-changes.outputs.frontend == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
@@ -123,7 +123,7 @@ jobs:
 
       - name: Setup Node.js
         if: needs.detect-changes.outputs.openapi == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
