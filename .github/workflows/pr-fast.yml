@@ -21,7 +21,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       openapi: ${{ steps.filter.outputs.openapi }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - id: filter
         uses: dorny/paths-filter@v3
@@ -49,12 +49,12 @@ jobs:
     needs: detect-changes
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: needs.detect-changes.outputs.frontend == 'true'
 
       - name: Setup Node.js
         if: needs.detect-changes.outputs.frontend == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
@@ -90,12 +90,12 @@ jobs:
     needs: detect-changes
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: needs.detect-changes.outputs.backend == 'true'
 
       - name: Setup Python
         if: needs.detect-changes.outputs.backend == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -118,12 +118,12 @@ jobs:
     needs: detect-changes
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: needs.detect-changes.outputs.openapi == 'true'
 
       - name: Setup Node.js
         if: needs.detect-changes.outputs.openapi == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
@@ -131,7 +131,7 @@ jobs:
 
       - name: Setup Python
         if: needs.detect-changes.outputs.openapi == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
