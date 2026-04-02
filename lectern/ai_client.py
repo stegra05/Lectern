@@ -105,6 +105,15 @@ _HISTORY_PRUNE_TAIL = 6
 _ROLLING_SUMMARY_MAX_FRONTS = 200
 _ROLLING_SUMMARY_FRONT_TRUNC = 120
 
+_RETRY_AFTER_RE = re.compile(
+    r'retry_after["\'\s:=]+(\d+(?:\.\d+)?)',
+    re.IGNORECASE,
+)
+_RETRY_IN_RE = re.compile(
+    r"retry\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*s",
+    re.IGNORECASE,
+)
+
 
 class LecternAIClient:
     def __init__(
@@ -423,15 +432,11 @@ class LecternAIClient:
         """Extract Retry-After value from exception if available."""
         err_text = str(exc)
         # Try to find retry_after in the error message
-        match = re.search(
-            r'retry_after["\'\s:=]+(\d+(?:\.\d+)?)', err_text, re.IGNORECASE
-        )
+        match = _RETRY_AFTER_RE.search(err_text)
         if match:
             return float(match.group(1))
         # Try to find "retry in X seconds" pattern
-        match = re.search(
-            r"retry\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*s", err_text, re.IGNORECASE
-        )
+        match = _RETRY_IN_RE.search(err_text)
         if match:
             return float(match.group(1))
         return None
