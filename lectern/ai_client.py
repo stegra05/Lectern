@@ -74,6 +74,10 @@ _THINKING_PROFILES = {
     "reflection": "high",
 }
 
+# Pre-compiled regex patterns for rate limit retry parsing
+_RETRY_AFTER_PATTERN = re.compile(r'retry_after["\'\s:=]+(\d+(?:\.\d+)?)', re.IGNORECASE)
+_RETRY_IN_PATTERN = re.compile(r"retry\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*s", re.IGNORECASE)
+
 # Models known NOT to support thinking budgets.
 _THINKING_BLOCKED_PATTERNS = (
     "gemini-1.5",
@@ -423,15 +427,11 @@ class LecternAIClient:
         """Extract Retry-After value from exception if available."""
         err_text = str(exc)
         # Try to find retry_after in the error message
-        match = re.search(
-            r'retry_after["\'\s:=]+(\d+(?:\.\d+)?)', err_text, re.IGNORECASE
-        )
+        match = _RETRY_AFTER_PATTERN.search(err_text)
         if match:
             return float(match.group(1))
         # Try to find "retry in X seconds" pattern
-        match = re.search(
-            r"retry\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*s", err_text, re.IGNORECASE
-        )
+        match = _RETRY_IN_PATTERN.search(err_text)
         if match:
             return float(match.group(1))
         return None
