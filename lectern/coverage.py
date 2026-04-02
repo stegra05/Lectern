@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any, Dict, List, Set
 
 
@@ -176,6 +176,20 @@ def compute_coverage_data(
     covered_relations_by_page: Set[str] = set()
     cards_per_page: Counter[int] = Counter()
 
+    concepts_by_page = defaultdict(set)
+    for concept in concept_catalog:
+        concept_id = str(concept.get("id") or "").strip()
+        if concept_id:
+            for page in normalize_page_references(concept.get("page_references")):
+                concepts_by_page[page].add(concept_id)
+
+    relations_by_page = defaultdict(set)
+    for relation in relation_catalog:
+        relation_key = str(relation.get("key") or "").strip()
+        if relation_key:
+            for page in normalize_page_references(relation.get("page_references")):
+                relations_by_page[page].add(relation_key)
+
     for card in cards:
         if not isinstance(card, dict):
             continue
@@ -183,33 +197,13 @@ def compute_coverage_data(
         covered_pages.update(page_refs)
         for page in page_refs:
             cards_per_page[page] += 1
+            if page in concepts_by_page:
+                covered_concepts_by_page.update(concepts_by_page[page])
+            if page in relations_by_page:
+                covered_relations_by_page.update(relations_by_page[page])
+
         explicit_concept_ids.update(get_card_concept_ids(card))
         explicit_relation_keys.update(get_card_relation_keys(card))
-
-        if page_refs and concept_catalog:
-            page_ref_set = set(page_refs)
-            for concept in concept_catalog:
-                concept_id = str(concept.get("id") or "").strip()
-                concept_pages = set(
-                    normalize_page_references(concept.get("page_references"))
-                )
-                if (
-                    concept_id
-                    and concept_pages
-                    and page_ref_set.intersection(concept_pages)
-                ):
-                    covered_concepts_by_page.add(concept_id)
-            for relation in relation_catalog:
-                relation_key = str(relation.get("key") or "").strip()
-                relation_pages = set(
-                    normalize_page_references(relation.get("page_references"))
-                )
-                if (
-                    relation_key
-                    and relation_pages
-                    and page_ref_set.intersection(relation_pages)
-                ):
-                    covered_relations_by_page.add(relation_key)
 
     covered_concept_ids_set = explicit_concept_ids.union(covered_concepts_by_page)
     covered_concept_ids = sorted(covered_concept_ids_set)
