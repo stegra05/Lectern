@@ -137,6 +137,28 @@ python scripts/perf_report.py --db-path "/path/to/telemetry.sqlite3" --window-ho
 
 Everything is automated via scripts and GitHub Actions.
 
+## CI/CD Overview
+
+CI/CD is split into focused workflows (see `docs/CI_CD.md` for details):
+
+- `pr-fast.yml` for fast blocking PR checks.
+- `pr-integration.yml` for blocking E2E and integrated smoke checks.
+- `security.yml` for dependency review, secret scanning, and CodeQL.
+- `build-release.yml` for tag-based cross-platform release builds.
+- `nightly-quality.yml` for scheduled deep non-blocking checks.
+
+### Required PR checks on `main`
+
+- `frontend-quality`
+- `backend-quality`
+- `openapi-sync`
+- `critical-e2e`
+- `integrated-smoke`
+- `dependency-review`
+- `secret-scan`
+
+CodeQL (`codeql`) starts as advisory and can be promoted to required once stable.
+
 ### Building Locally
 ```bash
 ./scripts/build_app.sh            # macOS .app
