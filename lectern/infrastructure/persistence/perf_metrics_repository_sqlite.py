@@ -91,17 +91,21 @@ class PerfMetricsRepositorySqlite:
         entries = payload["entries"]
 
         recorded_at_ms = int(time.time() * 1000)
+        client_ts_ms_int = int(client_ts_ms)
+        session_id_str = str(session_id)
+
+        encode_json = json.JSONEncoder(separators=(",", ":"), allow_nan=False).encode
 
         rows: list[tuple[object, ...]] = []
         for entry in entries:
             complexity = entry.get("complexity")
             complexity_obj = complexity if isinstance(complexity, dict) else complexity.model_dump()
-            payload_json = json.dumps(entry, separators=(",", ":"), allow_nan=False)
+            payload_json = encode_json(entry)
             rows.append(
                 (
                     recorded_at_ms,
-                    int(client_ts_ms),
-                    str(session_id),
+                    client_ts_ms_int,
+                    session_id_str,
                     entry["metric_name"],
                     entry["duration_ms"],
                     complexity_obj.get("card_count"),
