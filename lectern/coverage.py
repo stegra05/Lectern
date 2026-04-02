@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any, Dict, List, Set
 
 
@@ -176,21 +176,32 @@ def compute_coverage_data(
     covered_relations_by_page: Set[str] = set()
     cards_per_page: Counter[int] = Counter()
 
-    from collections import defaultdict
     concepts_by_page = defaultdict(set)
     for concept in concept_catalog:
         concept_id = str(concept.get("id") or "").strip()
         if concept_id:
-            # We must normalize the references when indexing
-            for page in normalize_page_references(concept.get("page_references")):
+            # Catalog entries are already normalized; only normalize as a fallback.
+            page_references = concept.get("page_references")
+            pages = (
+                page_references
+                if isinstance(page_references, list)
+                else normalize_page_references(page_references)
+            )
+            for page in pages:
                 concepts_by_page[page].add(concept_id)
 
     relations_by_page = defaultdict(set)
     for relation in relation_catalog:
         relation_key = str(relation.get("key") or "").strip()
         if relation_key:
-            # We must normalize the references when indexing
-            for page in normalize_page_references(relation.get("page_references")):
+            # Catalog entries are already normalized; only normalize as a fallback.
+            page_references = relation.get("page_references")
+            pages = (
+                page_references
+                if isinstance(page_references, list)
+                else normalize_page_references(page_references)
+            )
+            for page in pages:
                 relations_by_page[page].add(relation_key)
 
     for card in cards:
