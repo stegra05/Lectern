@@ -485,10 +485,7 @@ export interface components {
         Body_estimate_v2_estimate_v2_post: {
             /** Model Name */
             model_name?: null | string;
-            /**
-             * Pdf File
-             * Format: binary
-             */
+            /** Pdf File */
             pdf_file: string;
             /** Target Card Count */
             target_card_count?: number | null;
@@ -506,10 +503,7 @@ export interface components {
             focus_prompt: string;
             /** Model Name */
             model_name?: null | string;
-            /**
-             * Pdf File
-             * Format: binary
-             */
+            /** Pdf File */
             pdf_file: string;
             /** Session Id */
             session_id?: null | string;
@@ -944,6 +938,10 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (number | string)[];
             /** Message */
