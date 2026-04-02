@@ -1,0 +1,175 @@
+name: pr-integration
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            frontend:
+              - 'gui/frontend/**'
+            backend:
+              - 'lectern/**'
+              - 'gui/backend/**'
+              - 'tests/**'
+              - 'requirements.txt'
+              - 'pytest.ini'
+
+  critical-e2e:
+    name: critical-e2e
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        if: needs.detect-changes.outputs.frontend == 'true'
+
+      - name: Setup Node.js
+        if: needs.detect-changes.outputs.frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gui/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        if: needs.detect-changes.outputs.frontend == 'true'
+        working-directory: gui/frontend
+        run: npm ci
+
+      - name: Install Playwright browser
+        if: needs.detect-changes.outputs.frontend == 'true'
+        working-directory: gui/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run critical E2E tests
+        if: needs.detect-changes.outputs.frontend == 'true'
+        working-directory: gui/frontend
+        env:
+          CI: true
+        run: npm run test:e2e:critical
+
+      - name: Upload critical E2E artifacts
+        if: failure() && needs.detect-changes.outputs.frontend == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-critical-e2e-report
+          path: |
+            gui/frontend/playwright-report/
+            gui/frontend/test-results/
+          retention-days: 7
+
+      - name: Frontend unchanged
+        if: needs.detect-changes.outputs.frontend != 'true'
+        run: echo "Frontend unchanged; skipping critical-e2e."
+
+  integrated-smoke:
+    name: integrated-smoke
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+
+      - name: Setup Node.js
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gui/frontend/package-lock.json
+
+      - name: Setup Python
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        run: python -m pip install -r requirements.txt
+
+      - name: Install frontend dependencies
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        working-directory: gui/frontend
+        run: npm ci
+
+      - name: Install Playwright browser
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        working-directory: gui/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start backend
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        run: |
+          uvicorn gui.backend.main:app --port 8000 --host 127.0.0.1 > backend.log 2>&1 &
+          python - <<'PY'
+          import time
+          import urllib.request
+          url = 'http://127.0.0.1:8000/health'
+          last_err = None
+          for _ in range(80):
+              try:
+                  with urllib.request.urlopen(url, timeout=1) as response:
+                      if response.status == 200:
+                          raise SystemExit(0)
+              except Exception as exc:
+                  last_err = exc
+                  time.sleep(0.25)
+          raise SystemExit(f'backend not ready: {last_err}')
+          PY
+
+      - name: Start frontend
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        working-directory: gui/frontend
+        env:
+          VITE_API_URL: http://127.0.0.1:8000
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 > ../frontend.log 2>&1 &
+          node -e "const http=require('http'); const start=Date.now(); const timeoutMs=20000; const tick=()=>{http.get('http://127.0.0.1:5173',()=>process.exit(0)).on('error',()=>{if(Date.now()-start>timeoutMs){console.error('frontend not ready');process.exit(1);}setTimeout(tick,300);});}; tick();"
+
+      - name: Run integrated smoke tests
+        if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+        working-directory: gui/frontend
+        env:
+          CI: true
+        run: npm run test:e2e:integrated
+
+      - name: Upload integrated smoke artifacts
+        if: failure() && (needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true')
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-integrated-smoke-report
+          path: |
+            gui/frontend/playwright-report/
+            gui/frontend/test-results/
+            backend.log
+            gui/frontend.log
+          retention-days: 7
+
+      - name: No integration-relevant changes
+        if: needs.detect-changes.outputs.frontend != 'true' && needs.detect-changes.outputs.backend != 'true'
+        run: echo "No frontend/backend changes; skipping integrated-smoke checks."
