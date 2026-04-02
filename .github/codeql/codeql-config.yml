@@ -1,0 +1,16 @@
+name: lectern-codeql-config
+
+disable-default-queries: false
+
+paths:
+  - lectern
+  - gui/backend
+  - gui/frontend/src
+  - tests
+
+paths-ignore:
+  - gui/frontend/src/generated
+  - gui/frontend/e2e
+  - docs
+  - dist
+  - build

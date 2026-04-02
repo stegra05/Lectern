@@ -1,0 +1,9 @@
+title = "Lectern gitleaks config"
+
+[allowlist]
+description = "Allow false positives from docs and fixtures"
+paths = [
+  '''docs/.*''',
+  '''tests/.*''',
+  '''gui/frontend/e2e/.*''',
+]
