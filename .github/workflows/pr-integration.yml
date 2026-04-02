@@ -20,7 +20,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       backend: ${{ steps.filter.outputs.backend }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - id: filter
         uses: dorny/paths-filter@v3
@@ -42,7 +42,7 @@ jobs:
     needs: detect-changes
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: needs.detect-changes.outputs.frontend == 'true'
 
       - name: Setup Node.js
@@ -90,7 +90,7 @@ jobs:
     needs: detect-changes
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
 
       - name: Setup Node.js
