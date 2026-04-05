@@ -120,6 +120,16 @@ def test_windows_build_script_verifies_runtime_artifacts():
     assert "Microsoft.Web.WebView2.Core.dll" in build_script_source
 
 
+def test_windows_build_script_command_succeeds_handles_native_failures():
+    """Guard helper behavior when native commands return non-zero under strict mode."""
+    build_script_source = _read_project_file("scripts/build_windows.ps1")
+
+    assert "function Command-Succeeds" in build_script_source
+    assert "try {" in build_script_source
+    assert "catch" in build_script_source
+    assert "return $false" in build_script_source
+
+
 def test_build_release_windows_runs_packaged_launch_smoke_test():
     """Guard CI launch verification for built Windows binary."""
     workflow_source = _read_project_file(".github/workflows/build-release.yml")

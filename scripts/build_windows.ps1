@@ -9,8 +9,12 @@ function Command-Succeeds {
         [scriptblock]$Command
     )
 
-    & $Command *> $null
-    return $LASTEXITCODE -eq 0
+    try {
+        & $Command *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
 }
 
 function Write-Header($msg) {
