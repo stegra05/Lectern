@@ -4,6 +4,15 @@
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
 
+function Command-Succeeds {
+    param(
+        [scriptblock]$Command
+    )
+
+    & $Command *> $null
+    return $LASTEXITCODE -eq 0
+}
+
 function Write-Header($msg) {
     Write-Host "`n=== $msg ===`n" -ForegroundColor Cyan -Style Bold
 }
@@ -88,7 +97,7 @@ Set-Location ..\..
 Write-Header "Backend"
 Write-Host "Installing Python dependencies..."
 python -m pip install -r requirements.txt
-if (-not (python -m pip show pyinstaller)) {
+if (-not (Command-Succeeds { python -m pip show pyinstaller })) {
     python -m pip install pyinstaller
 }
 
