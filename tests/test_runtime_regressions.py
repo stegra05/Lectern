@@ -103,6 +103,18 @@ def test_windows_launcher_runs_startup_preflight_before_webview_start():
     assert "webview.start(gui=gui_backend)" in launcher_source
 
 
+def test_windows_startup_preflight_mentions_dotnet_and_webview2_remediation():
+    """Guard actionable startup guidance for cleaned Windows systems."""
+    startup_source = _read_project_file(
+        "lectern/infrastructure/runtime/windows_startup.py"
+    )
+
+    assert "_has_system_dotnet_desktop_runtime" in startup_source
+    assert "dotnet_desktop_runtime=not_found" in startup_source
+    assert "Install .NET Desktop Runtime (x64)." in startup_source
+    assert "Install Microsoft Edge WebView2 Runtime (x64)." in startup_source
+
+
 def test_windows_spec_mentions_webview2_runtime_bundle_path():
     """Guard Windows spec support for optional bundled WebView2 runtime."""
     windows_spec_source = _read_project_file("specs/Lectern.windows.spec")
@@ -138,6 +150,15 @@ def test_build_release_windows_runs_packaged_launch_smoke_test():
     assert "$env:LECTERN_SMOKE_MODE = '1'" in workflow_source
     assert "http://127.0.0.1:4173/health" in workflow_source
     assert "dist\\Lectern\\Lectern.exe" in workflow_source
+
+
+def test_build_release_windows_asserts_startup_diagnostics_markers():
+    """Guard CI check for startup diagnostics keys in Windows smoke logs."""
+    workflow_source = _read_project_file(".github/workflows/build-release.yml")
+
+    assert "dotnet_desktop_runtime=" in workflow_source
+    assert "system_webview2_runtime=" in workflow_source
+    assert "pythonnet_" in workflow_source
 
 
 def test_vite_manual_chunks_uses_function_form_for_vite8_compat():

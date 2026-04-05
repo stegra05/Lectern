@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import platform
+import subprocess
 import sys
 import traceback
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ _WEBVIEW2_CLIENT_KEYS = (
     "{65C35B14-6C1D-4122-AC46-7148CC9D6497}",  # Canary
 )
 _MIN_WEBVIEW2_VERSION = (86, 0, 622, 0)
+_DOTNET_DESKTOP_RUNTIME_NAME = "Microsoft.WindowsDesktop.App"
 
 
 @dataclass(frozen=True)
@@ -45,9 +47,17 @@ def prepare_windows_startup(
     ]
     errors: list[str] = []
 
-    pythonnet_error = _probe_pythonnet(diagnostics)
-    if pythonnet_error:
-        errors.append(pythonnet_error)
+    dotnet_runtime_ok = _has_system_dotnet_desktop_runtime(diagnostics)
+    if not dotnet_runtime_ok:
+        errors.append(
+            ".NET Desktop Runtime (x64) is not available. "
+            "Install it before launching Lectern."
+        )
+        diagnostics.append("pythonnet_probe=skipped:dotnet_desktop_runtime_missing")
+    else:
+        pythonnet_error = _probe_pythonnet(diagnostics)
+        if pythonnet_error:
+            errors.append(pythonnet_error)
 
     bundled_runtime_path = _resolve_bundled_webview2_runtime(diagnostics)
     system_runtime_ok = _has_system_webview2_runtime(diagnostics)
@@ -115,9 +125,110 @@ def _probe_pythonnet(diagnostics: list[str]) -> str | None:
         diagnostics.append(f"pythonnet_load=error:{type(exc).__name__}:{exc}")
         diagnostics.extend(_format_traceback(exc))
         return (
-            "Python .NET runtime failed to initialize. "
-            "This usually means a broken or incompatible Windows bundle."
+            "Python .NET bridge failed to initialize. "
+            "This usually means the Windows runtime dependencies are missing "
+            "or the app bundle is incompatible."
         )
+
+
+def _has_system_dotnet_desktop_runtime(diagnostics: list[str]) -> bool:
+    cli_versions = _dotnet_desktop_runtime_versions_from_cli(diagnostics)
+    if cli_versions:
+        diagnostics.append(f"dotnet_desktop_runtime=found_cli:{','.join(cli_versions)}")
+        return True
+
+    registry_versions = _dotnet_desktop_runtime_versions_from_registry(diagnostics)
+    if registry_versions:
+        diagnostics.append(
+            f"dotnet_desktop_runtime=found_registry:{','.join(registry_versions)}"
+        )
+        return True
+
+    diagnostics.append("dotnet_desktop_runtime=not_found")
+    return False
+
+
+def _dotnet_desktop_runtime_versions_from_cli(diagnostics: list[str]) -> list[str]:
+    try:
+        process = subprocess.run(
+            ["dotnet", "--list-runtimes"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except FileNotFoundError:
+        diagnostics.append("dotnet_cli=not_found")
+        return []
+    except Exception as exc:
+        diagnostics.append(f"dotnet_cli=error:{type(exc).__name__}:{exc}")
+        return []
+
+    if process.returncode != 0:
+        diagnostics.append(f"dotnet_cli=exit_code:{process.returncode}")
+        stderr = (process.stderr or "").strip()
+        if stderr:
+            diagnostics.append(f"dotnet_cli_stderr={stderr[:200]}")
+        return []
+
+    versions: list[str] = []
+    for line in (process.stdout or "").splitlines():
+        if not line.startswith(f"{_DOTNET_DESKTOP_RUNTIME_NAME} "):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            versions.append(parts[1])
+
+    return sorted(set(versions))
+
+
+def _dotnet_desktop_runtime_versions_from_registry(
+    diagnostics: list[str],
+) -> list[str]:
+    try:
+        import winreg
+    except Exception:
+        diagnostics.append("dotnet_registry=unavailable:winreg_import_failed")
+        return []
+
+    registry_paths = [
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            rf"SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\{_DOTNET_DESKTOP_RUNTIME_NAME}",
+        ),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            rf"SOFTWARE\WOW6432Node\dotnet\Setup\InstalledVersions\x64\sharedfx\{_DOTNET_DESKTOP_RUNTIME_NAME}",
+        ),
+        (
+            winreg.HKEY_CURRENT_USER,
+            rf"SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\{_DOTNET_DESKTOP_RUNTIME_NAME}",
+        ),
+    ]
+
+    versions: set[str] = set()
+
+    for hive, path in registry_paths:
+        try:
+            with winreg.OpenKey(hive, path) as registry_key:
+                index = 0
+                while True:
+                    try:
+                        name, _, _ = winreg.EnumValue(registry_key, index)
+                    except OSError:
+                        break
+
+                    if isinstance(name, str) and name:
+                        versions.add(name)
+                    index += 1
+        except FileNotFoundError:
+            continue
+        except Exception as exc:
+            diagnostics.append(
+                f"dotnet_registry=error:{type(exc).__name__}:{exc}@{path}"
+            )
+
+    return sorted(versions)
 
 
 def _resolve_bundled_webview2_runtime(diagnostics: list[str]) -> Path | None:
@@ -210,6 +321,7 @@ def _version_at_least(version_text: str, minimum: tuple[int, int, int, int]) -> 
 def _write_diagnostics_log(
     path: Path, diagnostics: list[str], errors: list[str]
 ) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines = ["[startup]"] + diagnostics
     if errors:
         lines.append("[errors]")
@@ -228,9 +340,10 @@ def _format_startup_error(errors: list[str], log_path: Path) -> str:
         "Detected issue(s):\n"
         f"- {summary}\n\n"
         "Try this:\n"
-        "1) Re-download the latest Windows release.\n"
-        "2) Install Microsoft Edge WebView2 Runtime.\n"
-        "3) Start Lectern again.\n\n"
+        "1) Install .NET Desktop Runtime (x64).\n"
+        "2) Install Microsoft Edge WebView2 Runtime (x64).\n"
+        "3) Re-download the latest Windows release and fully extract the zip.\n"
+        "4) Start Lectern again.\n\n"
         "Python does not need to be installed on your PC.\n"
         f"Diagnostics log: {log_path}"
     )

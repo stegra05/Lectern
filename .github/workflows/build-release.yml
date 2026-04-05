@@ -69,6 +69,10 @@ jobs:
           $exePath = Resolve-Path 'dist\Lectern\Lectern.exe'
           $stdoutLog = 'dist\windows-smoke-stdout.log'
           $stderrLog = 'dist\windows-smoke-stderr.log'
+          $startupLog = Join-Path $env:APPDATA 'Lectern\logs\windows-startup.log'
+          if (Test-Path $startupLog) {
+            Remove-Item $startupLog -Force
+          }
           $env:LECTERN_SMOKE_MODE = '1'
           $process = Start-Process -FilePath $exePath -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
           try {
@@ -92,6 +96,26 @@ jobs:
               if (Test-Path $stderrLog) { Get-Content $stderrLog -ErrorAction SilentlyContinue }
               throw 'Packaged Windows app did not become healthy within timeout.'
             }
+
+            if (-not (Test-Path $startupLog)) {
+              throw "Windows startup diagnostics log not found: $startupLog"
+            }
+
+            $requiredMarkers = @(
+              'dotnet_desktop_runtime=',
+              'system_webview2_runtime=',
+              'pythonnet_'
+            )
+
+            foreach ($marker in $requiredMarkers) {
+              if (-not (Select-String -Path $startupLog -SimpleMatch -Pattern $marker -Quiet)) {
+                Write-Host '==== windows startup diagnostics ===='
+                Get-Content $startupLog -ErrorAction SilentlyContinue
+                throw "Startup diagnostics missing marker: $marker"
+              }
+            }
+
+            Copy-Item -Path $startupLog -Destination 'dist\windows-startup.log' -Force
           } finally {
             if ($null -ne $process -and -not $process.HasExited) {
               Stop-Process -Id $process.Id -Force
@@ -139,7 +163,7 @@ jobs:
             dist/*.zip
             dist/*.tar.gz
             dist/checksums/*.sha256
-            dist/windows-smoke-*.log
+            dist/windows-*.log
 
       - name: Generate build provenance attestation
         uses: actions/attest-build-provenance@v4

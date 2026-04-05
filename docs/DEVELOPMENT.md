@@ -170,8 +170,12 @@ powershell scripts/build_windows.ps1  # Windows .exe
 ### Windows Runtime Notes
 
 - End users do not need Python installed. The packaged `Lectern.exe` includes its own Python runtime.
+- Windows release artifacts are intentionally slim. Lectern requires system-installed runtime dependencies:
+  - .NET Desktop Runtime (x64)
+  - Microsoft Edge WebView2 Runtime (x64)
 - Lectern prefers system-installed WebView2 runtime on Windows and can use an optional bundled runtime from `resources/webview2-runtime` when present.
 - On startup failures, diagnostics are written to `%APPDATA%/Lectern/logs/windows-startup.log`.
+- Startup preflight now records explicit dependency probe markers (`dotnet_desktop_runtime=*`, `system_webview2_runtime=*`, `pythonnet_*`) in the diagnostics log for support triage.
 - `scripts/build_windows.ps1` now validates required runtime artifacts (`Python.Runtime.dll` and WebView2 interop DLLs) after PyInstaller completes.
 
 ### Releasing a New Version
