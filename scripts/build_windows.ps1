@@ -16,6 +16,51 @@ function Write-Error-Custom($msg) {
     exit 1
 }
 
+function Verify-WindowsBundle {
+    param(
+        [string]$BundleRoot
+    )
+
+    Write-Header "Bundle Verification"
+
+    $required = @("Lectern.exe")
+
+    $internalDir = $null
+    foreach ($candidate in @("_internal", "Lectern_internal")) {
+        $candidatePath = Join-Path $BundleRoot $candidate
+        if (Test-Path $candidatePath) {
+            $internalDir = $candidate
+            break
+        }
+    }
+
+    if (-not $internalDir) {
+        Write-Error-Custom "Missing internal runtime folder (_internal or Lectern_internal)"
+    }
+
+    $required += @(
+        "$internalDir\pythonnet\runtime\Python.Runtime.dll",
+        "$internalDir\webview\lib\Microsoft.Web.WebView2.Core.dll",
+        "$internalDir\webview\lib\Microsoft.Web.WebView2.WinForms.dll"
+    )
+
+    foreach ($relativePath in $required) {
+        $fullPath = Join-Path $BundleRoot $relativePath
+        if (-not (Test-Path $fullPath)) {
+            Write-Error-Custom "Missing runtime artifact: $relativePath"
+        }
+    }
+
+    $webview2RuntimePath = Join-Path $BundleRoot "webview2-runtime"
+    if (Test-Path $webview2RuntimePath) {
+        Write-Success "Optional bundled WebView2 runtime detected"
+    } else {
+        Write-Host "ℹ Optional bundled WebView2 runtime not found (system runtime required)" -ForegroundColor Yellow
+    }
+
+    Write-Success "Windows bundle runtime artifacts verified"
+}
+
 # Pre-flight checks
 Write-Header "Pre-flight Checks"
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Error-Custom "node not found" }
@@ -53,6 +98,7 @@ python -m PyInstaller specs/Lectern.windows.spec --noconfirm
 
 # Verify Artifact
 if (Test-Path dist\Lectern\Lectern.exe) {
+    Verify-WindowsBundle -BundleRoot "dist\Lectern"
     Write-Header "✨ Build Complete! ✨"
     Write-Host "📂 Artifact: dist\Lectern\Lectern.exe" -ForegroundColor Green
 } else {

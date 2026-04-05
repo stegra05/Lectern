@@ -60,6 +60,43 @@ jobs:
         shell: pwsh
         run: |
           .\scripts\build_windows.ps1
+
+      - name: Run Windows launch smoke test
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exePath = Resolve-Path 'dist\Lectern\Lectern.exe'
+          $stdoutLog = 'dist\windows-smoke-stdout.log'
+          $stderrLog = 'dist\windows-smoke-stderr.log'
+          $process = Start-Process -FilePath $exePath -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+          try {
+            $deadline = (Get-Date).AddSeconds(45)
+            $ready = $false
+            while ((Get-Date) -lt $deadline) {
+              try {
+                $response = Invoke-WebRequest -Uri 'http://127.0.0.1:4173/health' -UseBasicParsing -TimeoutSec 2
+                if ($response.StatusCode -eq 200) {
+                  $ready = $true
+                  break
+                }
+              } catch {
+                Start-Sleep -Milliseconds 500
+              }
+            }
+            if (-not $ready) {
+              throw 'Packaged Windows app did not become healthy within timeout.'
+            }
+          } finally {
+            if ($null -ne $process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+      - name: Package Windows artifact
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
           Compress-Archive -Path dist\Lectern -DestinationPath dist\Lectern-windows.zip
 
       - name: Build Linux
@@ -97,6 +134,7 @@ jobs:
             dist/*.zip
             dist/*.tar.gz
             dist/checksums/*.sha256
+            dist/windows-smoke-*.log
 
       - name: Generate build provenance attestation
         uses: actions/attest-build-provenance@v4

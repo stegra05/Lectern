@@ -167,6 +167,13 @@ CodeQL (`codeql`) starts as advisory and can be promoted to required once stable
 powershell scripts/build_windows.ps1  # Windows .exe
 ```
 
+### Windows Runtime Notes
+
+- End users do not need Python installed. The packaged `Lectern.exe` includes its own Python runtime.
+- Lectern prefers system-installed WebView2 runtime on Windows and can use an optional bundled runtime from `resources/webview2-runtime` when present.
+- On startup failures, diagnostics are written to `%APPDATA%/Lectern/logs/windows-startup.log`.
+- `scripts/build_windows.ps1` now validates required runtime artifacts (`Python.Runtime.dll` and WebView2 interop DLLs) after PyInstaller completes.
+
 ### Releasing a New Version
 1. Ensure your working directory is clean and tests pass.
 2. Run the release orchestrator:

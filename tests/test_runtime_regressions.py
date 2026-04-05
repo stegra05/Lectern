@@ -29,7 +29,9 @@ def test_stream_to_logger_implements_isatty():
 
 def test_service_delegates_generation_to_generation_phase():
     """Guard V2 router contract for generation/start-resume streaming."""
-    router_source = _read_project_file("gui/backend/interface_v2/routers/generation_v2.py")
+    router_source = _read_project_file(
+        "gui/backend/interface_v2/routers/generation_v2.py"
+    )
 
     assert "/generate-v2" in router_source
     assert "run_generation_stream(req)" in router_source
@@ -41,7 +43,9 @@ def test_service_delegates_generation_to_generation_phase():
 
 def test_service_delegates_export_to_export_phase():
     """Guard V2 app service stream-version and translation invariants."""
-    app_service_source = _read_project_file("lectern/application/generation_app_service.py")
+    app_service_source = _read_project_file(
+        "lectern/application/generation_app_service.py"
+    )
 
     assert "stream_version" in app_service_source
     assert "stored_stream_version != req.stream_version" in app_service_source
@@ -86,3 +90,37 @@ def test_service_event_message_defaults_to_empty_string():
     event = ServiceEvent(type="info")
 
     assert event.message == ""
+
+
+def test_windows_launcher_runs_startup_preflight_before_webview_start():
+    """Guard Windows startup preflight before pywebview boot."""
+    launcher_source = _read_project_file("gui/launcher.py")
+
+    assert "prepare_windows_startup" in launcher_source
+    assert "show_windows_startup_error" in launcher_source
+    assert "webview.start(gui=gui_backend)" in launcher_source
+
+
+def test_windows_spec_mentions_webview2_runtime_bundle_path():
+    """Guard Windows spec support for optional bundled WebView2 runtime."""
+    windows_spec_source = _read_project_file("specs/Lectern.windows.spec")
+
+    assert "webview2-runtime" in windows_spec_source
+
+
+def test_windows_build_script_verifies_runtime_artifacts():
+    """Guard post-build validation for critical Windows runtime files."""
+    build_script_source = _read_project_file("scripts/build_windows.ps1")
+
+    assert "Verify-WindowsBundle" in build_script_source
+    assert "Python.Runtime.dll" in build_script_source
+    assert "Microsoft.Web.WebView2.Core.dll" in build_script_source
+
+
+def test_build_release_windows_runs_packaged_launch_smoke_test():
+    """Guard CI launch verification for built Windows binary."""
+    workflow_source = _read_project_file(".github/workflows/build-release.yml")
+
+    assert "Run Windows launch smoke test" in workflow_source
+    assert "http://127.0.0.1:4173/health" in workflow_source
+    assert "dist\\Lectern\\Lectern.exe" in workflow_source

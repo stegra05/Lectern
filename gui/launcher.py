@@ -1,7 +1,12 @@
 import threading
+import os
 import uvicorn
 import webview
 from backend.main import app
+from lectern.infrastructure.runtime.windows_startup import (
+    prepare_windows_startup,
+    show_windows_startup_error,
+)
 
 
 def start_server():
@@ -10,6 +15,15 @@ def start_server():
 
 
 def main():
+    startup_prep = prepare_windows_startup()
+    if startup_prep.error_message:
+        show_windows_startup_error(startup_prep.error_message)
+        return
+
+    if startup_prep.webview2_runtime_path:
+        webview.settings["WEBVIEW2_RUNTIME_PATH"] = startup_prep.webview2_runtime_path
+        os.environ["LECTERN_WEBVIEW2_RUNTIME_PATH"] = startup_prep.webview2_runtime_path
+
     # Start server in a separate thread
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()

@@ -53,6 +53,11 @@ A clean, minimal interface for editing cards before finalizing them in your coll
 3. Open Settings and enter your [Gemini API Key](https://aistudio.google.com/apikey).
 4. Drop a PDF into Lectern and start generating.
 
+Windows notes:
+- You do not need Python installed on your PC to run Lectern.
+- Lectern prefers system WebView2 Runtime; some builds may include a bundled fallback runtime.
+- If startup fails, check `%APPDATA%/Lectern/logs/windows-startup.log` for diagnostics.
+
 For full user documentation, troubleshooting, and guides, visit the [Lectern Landing Page](https://lectern.steffengrabert.com).
 
 ---

@@ -13,6 +13,11 @@ for pkg in ['multipart', 'python_multipart', 'google.genai']:
 import os
 PROJECT_ROOT = os.path.abspath(os.getcwd())
 
+optional_datas: list[tuple[str, str]] = []
+webview2_runtime_dir = os.path.join(PROJECT_ROOT, 'resources', 'webview2-runtime')
+if os.path.isdir(webview2_runtime_dir):
+    optional_datas.append((webview2_runtime_dir, 'webview2-runtime'))
+
 a = Analysis(
     [os.path.join(PROJECT_ROOT, 'gui', 'launcher.py')],
     pathex=[PROJECT_ROOT, os.path.join(PROJECT_ROOT, 'gui', 'backend')],
@@ -21,7 +26,7 @@ a = Analysis(
         (os.path.join(PROJECT_ROOT, 'gui', 'frontend', 'dist'), 'frontend/dist'),
         (os.path.join(PROJECT_ROOT, 'gui', 'backend'), 'backend'),
         (os.path.join(PROJECT_ROOT, 'lectern'), 'lectern'),
-    ] + datas,
+    ] + optional_datas + datas,
     hiddenimports=[
         'webview', 'uvicorn', 'PIL', 'PIL.Image',
         'pypdf', 'httpx',
