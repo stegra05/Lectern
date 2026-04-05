@@ -1,5 +1,6 @@
 import threading
 import os
+import time
 import uvicorn
 import webview
 from backend.main import app
@@ -15,7 +16,8 @@ def start_server():
 
 
 def main():
-    startup_prep = prepare_windows_startup()
+    smoke_mode = os.environ.get("LECTERN_SMOKE_MODE") == "1"
+    startup_prep = prepare_windows_startup(require_webview2=not smoke_mode)
     if startup_prep.error_message:
         show_windows_startup_error(startup_prep.error_message)
         return
@@ -27,6 +29,15 @@ def main():
     # Start server in a separate thread
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
+
+    if smoke_mode:
+        print("LECTERN_SMOKE_MODE active: backend-only startup")
+        while True:
+            if not server_thread.is_alive():
+                raise RuntimeError(
+                    "Backend server thread exited unexpectedly in smoke mode"
+                )
+            time.sleep(0.25)
 
     # Create a native window.
     # NOTE(Windows): Force edgechromium (WebView2) backend explicitly.

@@ -2,6 +2,7 @@
 # Requires: Node.js, Python 3.10+, PowerShell 5.1+
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
 function Write-Header($msg) {
     Write-Host "`n=== $msg ===`n" -ForegroundColor Cyan -Style Bold

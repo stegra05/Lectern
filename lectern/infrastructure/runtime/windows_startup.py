@@ -26,7 +26,9 @@ class WindowsStartupPreparation:
     diagnostics_log_path: Path | None
 
 
-def prepare_windows_startup() -> WindowsStartupPreparation:
+def prepare_windows_startup(
+    *, require_webview2: bool = True
+) -> WindowsStartupPreparation:
     if platform.system() != "Windows":
         return WindowsStartupPreparation(
             error_message=None,
@@ -50,10 +52,13 @@ def prepare_windows_startup() -> WindowsStartupPreparation:
     bundled_runtime_path = _resolve_bundled_webview2_runtime(diagnostics)
     system_runtime_ok = _has_system_webview2_runtime(diagnostics)
     if bundled_runtime_path is None and not system_runtime_ok:
-        errors.append(
-            "Microsoft Edge WebView2 Runtime is not available. "
-            "Install WebView2 Runtime or use a Lectern build with bundled runtime."
-        )
+        if require_webview2:
+            errors.append(
+                "Microsoft Edge WebView2 Runtime is not available. "
+                "Install WebView2 Runtime or use a Lectern build with bundled runtime."
+            )
+        else:
+            diagnostics.append("webview2_requirement=skipped")
 
     _write_diagnostics_log(diagnostics_log_path, diagnostics, errors)
 

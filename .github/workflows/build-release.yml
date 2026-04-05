@@ -69,6 +69,7 @@ jobs:
           $exePath = Resolve-Path 'dist\Lectern\Lectern.exe'
           $stdoutLog = 'dist\windows-smoke-stdout.log'
           $stderrLog = 'dist\windows-smoke-stderr.log'
+          $env:LECTERN_SMOKE_MODE = '1'
           $process = Start-Process -FilePath $exePath -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
           try {
             $deadline = (Get-Date).AddSeconds(45)
@@ -85,6 +86,10 @@ jobs:
               }
             }
             if (-not $ready) {
+              Write-Host '==== windows smoke stdout ===='
+              if (Test-Path $stdoutLog) { Get-Content $stdoutLog -ErrorAction SilentlyContinue }
+              Write-Host '==== windows smoke stderr ===='
+              if (Test-Path $stderrLog) { Get-Content $stderrLog -ErrorAction SilentlyContinue }
               throw 'Packaged Windows app did not become healthy within timeout.'
             }
           } finally {

@@ -18,10 +18,15 @@ export default defineConfig({
     // Optimize chunk splitting for faster rebuilds
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'ui-vendor': ['framer-motion', 'lucide-react']
-        }
+        manualChunks: (id) => {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'react-vendor'
+          }
+          if (id.includes('node_modules/framer-motion') || id.includes('node_modules/lucide-react')) {
+            return 'ui-vendor'
+          }
+          return undefined
+        },
       }
     },
 

@@ -97,7 +97,9 @@ def test_windows_launcher_runs_startup_preflight_before_webview_start():
     launcher_source = _read_project_file("gui/launcher.py")
 
     assert "prepare_windows_startup" in launcher_source
+    assert "require_webview2=not smoke_mode" in launcher_source
     assert "show_windows_startup_error" in launcher_source
+    assert "LECTERN_SMOKE_MODE" in launcher_source
     assert "webview.start(gui=gui_backend)" in launcher_source
 
 
@@ -113,6 +115,7 @@ def test_windows_build_script_verifies_runtime_artifacts():
     build_script_source = _read_project_file("scripts/build_windows.ps1")
 
     assert "Verify-WindowsBundle" in build_script_source
+    assert "$PSNativeCommandUseErrorActionPreference" in build_script_source
     assert "Python.Runtime.dll" in build_script_source
     assert "Microsoft.Web.WebView2.Core.dll" in build_script_source
 
@@ -122,5 +125,13 @@ def test_build_release_windows_runs_packaged_launch_smoke_test():
     workflow_source = _read_project_file(".github/workflows/build-release.yml")
 
     assert "Run Windows launch smoke test" in workflow_source
+    assert "$env:LECTERN_SMOKE_MODE = '1'" in workflow_source
     assert "http://127.0.0.1:4173/health" in workflow_source
     assert "dist\\Lectern\\Lectern.exe" in workflow_source
+
+
+def test_vite_manual_chunks_uses_function_form_for_vite8_compat():
+    """Guard against object-form manualChunks breaking Vite 8 rolldown builds."""
+    vite_config_source = _read_project_file("gui/frontend/vite.config.ts")
+
+    assert "manualChunks: (id" in vite_config_source
