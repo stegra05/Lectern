@@ -151,13 +151,13 @@ jobs:
     if: always()
     steps:
       - name: Download Python audit artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-audit-report
           path: security-reports
 
       - name: Download npm audit artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: npm-audit-report
           path: security-reports
