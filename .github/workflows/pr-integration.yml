@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload critical E2E artifacts
         if: failure() && needs.detect-changes.outputs.frontend == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-critical-e2e-report
           path: |
@@ -160,7 +160,7 @@ jobs:
 
       - name: Upload integrated smoke artifacts
         if: failure() && (needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-integrated-smoke-report
           path: |
