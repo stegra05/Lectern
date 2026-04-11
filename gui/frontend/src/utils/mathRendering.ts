@@ -28,22 +28,22 @@ function findNextDelimiter(input: string, fromIndex: number): (Delimiter & { ind
 export function renderMathInHtml(input: string): string {
     if (!input) return '';
 
-    let output = '';
+    const output: string[] = [];
     let cursor = 0;
 
     while (cursor < input.length) {
         const next = findNextDelimiter(input, cursor);
         if (!next) {
-            output += input.slice(cursor);
+            output.push(input.slice(cursor));
             break;
         }
 
-        output += input.slice(cursor, next.index);
+        output.push(input.slice(cursor, next.index));
         const expressionStart = next.index + next.left.length;
         const expressionEnd = input.indexOf(next.right, expressionStart);
 
         if (expressionEnd === -1) {
-            output += input.slice(next.index);
+            output.push(input.slice(next.index));
             break;
         }
 
@@ -51,19 +51,19 @@ export function renderMathInHtml(input: string): string {
         const wrapped = `${next.left}${expression}${next.right}`;
 
         try {
-            output += katex.renderToString(expression, {
+            output.push(katex.renderToString(expression, {
                 displayMode: next.displayMode,
                 throwOnError: true,
                 strict: 'warn',
                 output: 'htmlAndMathml',
                 trust: false,
-            });
+            }));
         } catch {
-            output += wrapped;
+            output.push(wrapped);
         }
 
         cursor = expressionEnd + next.right.length;
     }
 
-    return output;
+    return output.join('');
 }
