@@ -164,11 +164,13 @@ def _select_best_reflection_cards(
     per_page_counts: dict[int, int] = {}
 
     remaining = list(candidates)
+    # Precompute card keys to avoid redundant processing in the loop
+    card_keys = [get_card_key(card) for card in remaining]
+
     while remaining and len(selected) < limit:
         best_idx = -1
         best_priority = float("-inf")
-        for idx, card in enumerate(remaining):
-            card_key = get_card_key(card)
+        for idx, (card, card_key) in enumerate(zip(remaining, card_keys)):
             if not card_key or card_key in selected_keys:
                 continue
             priority = scorer.score(
@@ -185,8 +187,9 @@ def _select_best_reflection_cards(
         if best_idx < 0:
             break
         chosen = remaining.pop(best_idx)
+        chosen_key = card_keys.pop(best_idx)
         selected.append(chosen)
-        selected_keys.add(get_card_key(chosen))
+        selected_keys.add(chosen_key)
         pages = get_card_page_references(chosen)
         selected_pages.update(pages)
         selected_concepts.update(get_card_concept_ids(chosen))
