@@ -141,7 +141,7 @@ if os.path.exists(frontend_dist):
     )
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_react_app(full_path: str):
+    def serve_react_app(full_path: str):
         api_roots = {
             getattr(r, "path", "").lstrip("/").split("/")[0]
             for r in app.routes

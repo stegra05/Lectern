@@ -470,7 +470,7 @@ async def clear_logs() -> dict:
     }
 
 @router.post("/save-file", response_model=SaveFileResponse)
-async def save_file(request: SaveFileRequest):
+def save_file(request: SaveFileRequest):
     import webview
     import logging
     logger = logging.getLogger(__name__)
