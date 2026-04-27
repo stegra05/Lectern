@@ -30,7 +30,7 @@ pythonnet==3.0.3; platform_system=="Windows"
 python-dotenv>=1.0.1
 
 # Security
-keyring>=24.0.0
+keyring>=25.7.0
 
 # Testing (dev only, excluded from bundle)
 pytest>=8.0.0
