@@ -15,7 +15,7 @@ httpx>=0.27.0
 fastapi==0.135.3
 pydantic==2.12.5
 uvicorn>=0.27.0
-python-multipart>=0.0.9
+python-multipart>=0.0.26
 
 # GUI
 # Pin pywebview to reduce Windows packaging/runtime drift across environments.
