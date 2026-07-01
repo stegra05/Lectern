@@ -1,0 +1,124 @@
+@import '@fontsource-variable/schibsted-grotesk';
+@import '@fontsource-variable/source-serif-4';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import 'katex/dist/katex.min.css';
+@import 'tailwindcss';
+
+/*
+ * Lectern — "the evening lecture hall"
+ * Chrome is a dark wooden desk; content is paper under a brass reading lamp.
+ * Three faces, three roles: sans = controls, serif = study content, mono = provenance.
+ */
+
+@theme {
+  --color-desk: #1c1917;
+  --color-desk-raised: #292524;
+  --color-desk-edge: #3b362f;
+  --color-paper: #faf9f5;
+  --color-paper-shade: #f1efe9;
+  --color-ink: #211e1a;
+  --color-ink-soft: #57534e;
+  --color-chalk: #d6d3cc;
+  --color-chalk-dim: #8a857c;
+  --color-lamp: #e8a33d;
+  --color-lamp-deep: #b97a1e;
+  --color-sage: #7ba05b;
+  --color-brick: #c4554d;
+
+  --font-ui: 'Schibsted Grotesk Variable', system-ui, sans-serif;
+  --font-card: 'Source Serif 4 Variable', Georgia, serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  @apply bg-desk font-ui text-chalk antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+/* Study content is selectable; chrome is not. */
+.card-content,
+input,
+textarea {
+  user-select: text;
+  cursor: auto;
+}
+
+/* Metadata eyebrow — the "apparatus" register used across the whole app. */
+.eyebrow {
+  @apply font-data text-[11px] uppercase tracking-[0.14em] text-chalk-dim;
+}
+
+/* Paper card content typography (rendered model HTML). */
+.card-content {
+  @apply font-card text-[15px] leading-relaxed text-ink;
+}
+.card-content b,
+.card-content strong {
+  @apply font-semibold;
+}
+.card-content .cloze-hl {
+  @apply rounded-sm bg-lamp/25 px-0.5 font-medium text-lamp-deep;
+}
+.card-content .katex {
+  font-size: 1.02em;
+}
+
+/* Focus visibility on the dark desk. */
+:focus-visible {
+  outline: 2px solid var(--color-lamp);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Thin scrollbars that match the desk. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-desk-edge) transparent;
+}
+
+@keyframes card-settle {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(0.6deg) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+.card-settle {
+  animation: card-settle 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes lamp-flare {
+  0% {
+    box-shadow: 0 0 0 0 rgb(232 163 61 / 0.55);
+  }
+  100% {
+    box-shadow: 0 0 14px 3px rgb(232 163 61 / 0);
+  }
+}
+.lamp-flare {
+  animation: lamp-flare 900ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-settle {
+    animation: none;
+  }
+  .lamp-flare {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
