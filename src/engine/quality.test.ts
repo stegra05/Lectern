@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { GROUNDING_GATE_MIN_QUALITY } from './config'
-import {
-  cardKey,
-  evaluateGroundingGate,
-  normalizeCardPayload,
-  scoreCard,
-} from './quality'
-import type { Card, CoverageCatalog } from './types'
+import { cardKey, evaluateCard, normalizeCardPayload } from './quality'
+import type { Card } from './types'
 
 const makeCard = (overrides: Partial<Card> = {}): Card => ({
   uid: 'test-uid',
@@ -36,39 +30,24 @@ const groundedCard = (overrides: Partial<Card> = {}): Card =>
     ...overrides,
   })
 
-const makeCatalog = (highPriorityIds: string[]): CoverageCatalog => ({
-  conceptIds: new Set(highPriorityIds),
-  highPriorityIds: new Set(highPriorityIds),
-  relationKeys: new Set<string>(),
-  conceptsByPage: new Map(),
-  pagesByConcept: new Map(),
-  conceptNames: new Map(),
-  pageCount: 10,
-})
-
-describe('scoreCard', () => {
-  it('scores a fully grounded card with every bonus (98) and no issues', () => {
-    // 30 base + 12 prompt + 10 answer + 12 pages + 12 concepts + 6 relations
-    // + 7 rationale + 6 excerpt + 3 slide number = 98
-    const { score, issues } = scoreCard(groundedCard())
-    expect(score).toBe(98)
-    expect(issues).toEqual([])
+describe('evaluateCard', () => {
+  it('passes a fully grounded card at score 100 with no issues', () => {
+    const verdict = evaluateCard(groundedCard())
+    expect(verdict).toEqual({ pass: true, score: 100, failures: [], issues: [] })
   })
 
-  it('adds the high-priority bonus from the catalog and clamps at 100', () => {
-    const catalog = makeCatalog(['c-photosynthesis'])
-    const { score } = scoreCard(groundedCard(), catalog)
-    expect(score).toBe(100) // 98 + 5, clamped
-
-    const other = makeCatalog(['c-unrelated'])
-    expect(scoreCard(groundedCard(), other).score).toBe(98)
-  })
-
-  it('floors a bare card at 0 with all missing-* issues, sorted', () => {
-    // 30 - 20 - 15 - 10 - 8 - 4 - 4 = -31 → clamped to 0
-    const { score, issues } = scoreCard(makeCard())
-    expect(score).toBe(0)
-    expect(issues).toEqual([
+  it('rejects a bare card with every hard failure, issues sorted', () => {
+    const verdict = evaluateCard(makeCard())
+    expect(verdict.pass).toBe(false)
+    expect(verdict.score).toBe(0)
+    expect(verdict.failures).toEqual([
+      'missing_prompt_text',
+      'missing_answer_text',
+      'missing_source_pages',
+      'missing_rationale',
+      'missing_source_excerpt',
+    ])
+    expect(verdict.issues).toEqual([
       'missing_answer_text',
       'missing_concept_ids',
       'missing_prompt_text',
@@ -78,106 +57,71 @@ describe('scoreCard', () => {
     ])
   })
 
-  it('penalizes an over-long front (-8, long_front)', () => {
-    const card = groundedCard({
-      fields: {
-        Front: `${'why '.repeat(50)}?`, // 201 chars > 180 threshold
-        Back: 'Short answer.',
-      },
-    })
-    const { score, issues } = scoreCard(card)
-    expect(issues).toContain('long_front')
-    expect(score).toBe(90)
+  it('rejects a card without answer text', () => {
+    const verdict = evaluateCard(groundedCard({ fields: { Front: 'Q?' } }))
+    expect(verdict.pass).toBe(false)
+    expect(verdict.failures).toEqual(['missing_answer_text'])
   })
 
-  it('penalizes an over-long answer (-8, long_answer)', () => {
-    const card = groundedCard({
-      fields: {
-        Front: 'Short question?',
-        Back: 'a'.repeat(421),
-      },
-    })
-    const { score, issues } = scoreCard(card)
-    expect(issues).toContain('long_answer')
-    expect(score).toBe(90)
+  it('rejects when rationale or source excerpt are missing', () => {
+    const verdict = evaluateCard(groundedCard({ rationale: undefined, sourceExcerpt: '  ' }))
+    expect(verdict.pass).toBe(false)
+    expect(verdict.failures).toEqual(['missing_rationale', 'missing_source_excerpt'])
   })
 
-  it('penalizes broad grounding across more than 3 pages (-3)', () => {
-    const { score, issues } = scoreCard(groundedCard({ sourcePages: [1, 2, 3, 4] }))
-    expect(issues).toContain('broad_grounding')
-    expect(score).toBe(95)
+  it('rejects a Cloze card without a cloze deletion', () => {
+    const verdict = evaluateCard(
+      groundedCard({ modelName: 'Cloze', fields: { Text: 'No deletion here.' } }),
+    )
+    expect(verdict.pass).toBe(false)
+    expect(verdict.failures).toEqual(['cloze_without_deletion'])
+  })
+
+  it('accepts a Cloze card with a deletion', () => {
+    const verdict = evaluateCard(
+      groundedCard({
+        modelName: 'Cloze',
+        fields: { Text: 'The powerhouse is the {{c1::mitochondrion}}.' },
+      }),
+    )
+    expect(verdict.pass).toBe(true)
+  })
+
+  it('rejects a Basic card containing cloze markup', () => {
+    const verdict = evaluateCard(
+      groundedCard({ fields: { Front: 'What is {{c1::X}}?', Back: 'X.' } }),
+    )
+    expect(verdict.pass).toBe(false)
+    expect(verdict.failures).toEqual(['cloze_markup_in_basic'])
+  })
+
+  it('flags soft issues without rejecting: long front/answer, broad grounding, no concepts', () => {
+    const verdict = evaluateCard(
+      groundedCard({
+        fields: { Front: `${'why '.repeat(50)}?`, Back: 'a'.repeat(421) },
+        sourcePages: [1, 2, 3, 4],
+        conceptIds: [],
+      }),
+    )
+    expect(verdict.pass).toBe(true)
+    expect(verdict.failures).toEqual([])
+    expect(verdict.issues).toEqual([
+      'broad_grounding',
+      'long_answer',
+      'long_front',
+      'missing_concept_ids',
+    ])
+    expect(verdict.score).toBe(60) // 100 - 4 soft issues × 10
   })
 
   it('falls back to the slide number when sourcePages is empty', () => {
-    const card = makeCard({
-      fields: { Front: 'Q?', Back: 'A.' },
-      sourcePages: [],
-      slideNumber: 7,
-    })
-    const { issues } = scoreCard(card)
-    expect(issues).not.toContain('missing_source_pages')
+    const verdict = evaluateCard(groundedCard({ sourcePages: [], slideNumber: 7 }))
+    expect(verdict.failures).not.toContain('missing_source_pages')
   })
 
   it('treats markup-only fields as missing prompt text', () => {
-    const card = makeCard({ fields: { Front: '<i>&nbsp;</i>' } })
-    expect(scoreCard(card).issues).toContain('missing_prompt_text')
-  })
-
-  it('uses the Text field as prompt and answer for cloze cards', () => {
-    const card = makeCard({
-      modelName: 'Cloze',
-      fields: { Text: 'The powerhouse is the {{c1::mitochondrion}}.' },
-    })
-    const { issues } = scoreCard(card)
-    expect(issues).not.toContain('missing_prompt_text')
-    expect(issues).not.toContain('missing_answer_text')
-  })
-})
-
-describe('evaluateGroundingGate', () => {
-  it('passes a fully grounded card', () => {
-    const verdict = evaluateGroundingGate(groundedCard())
-    expect(verdict).toEqual({ pass: true, score: 98, failures: [] })
-    expect(verdict.score).toBeGreaterThanOrEqual(GROUNDING_GATE_MIN_QUALITY)
-  })
-
-  it('fails with ordered slugs when excerpt and rationale are missing', () => {
-    // 30 + 12 + 10 + 12 + 12 - 4 - 4 = 68 → above threshold, still gated
-    const card = makeCard({
-      fields: { Front: 'Q?', Back: 'A.' },
-      sourcePages: [1],
-      conceptIds: ['c-1'],
-    })
-    const verdict = evaluateGroundingGate(card)
-    expect(verdict.pass).toBe(false)
-    expect(verdict.score).toBe(68)
-    expect(verdict.failures).toEqual(['missing_source_excerpt', 'missing_rationale'])
-  })
-
-  it('fails a bare card on all grounding slugs plus the quality threshold', () => {
-    const verdict = evaluateGroundingGate(makeCard())
-    expect(verdict.pass).toBe(false)
-    expect(verdict.score).toBe(0)
-    expect(verdict.failures).toEqual([
-      'missing_source_excerpt',
-      'missing_rationale',
-      'missing_source_pages',
-      'below_quality_threshold',
-    ])
-  })
-
-  it('fails on below_quality_threshold alone when grounding is present', () => {
-    // Grounded but no prompt/answer: 30 - 20 - 15 + 12 + 12 + 7 + 6 = 32 < 60
-    const card = makeCard({
-      fields: {},
-      sourcePages: [2],
-      conceptIds: ['c-1'],
-      rationale: 'Why this matters.',
-      sourceExcerpt: 'From the slide.',
-    })
-    const verdict = evaluateGroundingGate(card)
-    expect(verdict.pass).toBe(false)
-    expect(verdict.failures).toEqual(['below_quality_threshold'])
+    const verdict = evaluateCard(makeCard({ fields: { Front: '<i>&nbsp;</i>' } }))
+    expect(verdict.failures).toContain('missing_prompt_text')
   })
 })
 

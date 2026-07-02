@@ -1,46 +1,17 @@
 /**
- * Card quality rubric, grounding gate, model-payload normalization and the
- * dedupe key — faithful port of the battle-tested Python logic in:
- *   - LecternApp/lectern/card_quality.py        (rubric weights + rules)
- *   - LecternApp/lectern/generation_utils.py    (evaluate_grounding_gate, get_card_key)
- *   - LecternApp/lectern/ai_client.py           (_normalize_card_payload)
- *   - LecternApp/lectern/ai_schemas.py          (AnkiCard coercion validators)
- *   - LecternApp/lectern/coverage.py            (normalize_* helpers)
+ * Card evaluation (grounding gate + advisory flags), model-payload
+ * normalization and the dedupe key.
+ *
+ * The gate is a plain checklist: a card is accepted iff every hard
+ * requirement is present (prompt, answer, source pages, rationale, source
+ * excerpt, valid cloze markup). Soft issues (length, breadth, missing concept
+ * ids) are flagged but do not reject. The score shown in the UI derives
+ * directly from the issue count — there is no tunable weights table.
  *
  * All functions are pure.
  */
 
-import { GROUNDING_GATE_MIN_QUALITY } from './config'
-import type { Card, CoverageCatalog, GateVerdict, NoteKind } from './types'
-
-// ---------------------------------------------------------------------------
-// Rubric weights (CardQualityWeights in card_quality.py — identical values)
-// ---------------------------------------------------------------------------
-
-export const CARD_QUALITY_WEIGHTS = {
-  baseScore: 30,
-  promptPresentBonus: 12,
-  promptMissingPenalty: 20,
-  answerPresentBonus: 10,
-  answerMissingPenalty: 15,
-  sourcePagesPresentBonus: 12,
-  sourcePagesMissingPenalty: 10,
-  conceptIdsPresentBonus: 12,
-  conceptIdsMissingPenalty: 8,
-  relationKeysPresentBonus: 6,
-  rationalePresentBonus: 7,
-  rationaleMissingPenalty: 4,
-  sourceExcerptPresentBonus: 6,
-  sourceExcerptMissingPenalty: 4,
-  slideNumberBonus: 3,
-  longFrontPenalty: 8,
-  longAnswerPenalty: 8,
-  broadGroundingPenalty: 3,
-  highPriorityConceptBonus: 5,
-  longFrontThreshold: 180,
-  longAnswerThreshold: 420,
-  broadGroundingThreshold: 3,
-} as const
+import type { Card, GateVerdict, NoteKind } from './types'
 
 // ---------------------------------------------------------------------------
 // Markup stripping (_strip_markup)
@@ -148,8 +119,8 @@ const normalizeStringList = (value: unknown): string[] => {
 }
 
 /** normalize_relation_key: "source|type|target", all three parts non-empty.
- *  Extra '|' characters stay inside the target part (Python split("|", 2)). */
-const normalizeRelationKey = (value: unknown): string => {
+ *  Extra '|' characters stay inside the target part. */
+export const normalizeRelationKey = (value: unknown): string => {
   if (typeof value !== 'string') return ''
   const first = value.indexOf('|')
   const second = first < 0 ? -1 : value.indexOf('|', first + 1)
@@ -172,160 +143,63 @@ const getCardPageReferences = (card: Card): number[] => {
 }
 
 // ---------------------------------------------------------------------------
-// Rubric scoring (CardQualityEvaluator.evaluate)
+// Card evaluation — the grounding gate as a checklist
 // ---------------------------------------------------------------------------
 
-interface QualityContext {
-  front: string
-  answerText: string
-  sourcePages: number[]
-  conceptIds: string[]
-  relationKeys: string[]
-  rationale: string
-  sourceExcerpt: string
-  hasSlideNumber: boolean
-  hasPromptText: boolean
-}
+export const LONG_FRONT_THRESHOLD = 180
+export const LONG_ANSWER_THRESHOLD = 420
+export const BROAD_GROUNDING_THRESHOLD = 3
 
-const buildQualityContext = (card: Card): QualityContext => {
+const HARD_FAILURE_PENALTY = 25
+const SOFT_ISSUE_PENALTY = 10
+
+const CLOZE_DELETION_RE = /\{\{c\d+::/
+
+/**
+ * Evaluate a card in one pass. `failures` are hard requirements — any one of
+ * them rejects the card. `issues` (failures + soft flags) annotate the card
+ * for the UI. The score is display-only: 100 minus a fixed penalty per issue.
+ */
+export function evaluateCard(card: Card): GateVerdict {
   const fields = card.fields ?? {}
-  // _get_card_front: front || fields.Front || text || fields.Text (raw
-  // truthiness picks the field, markup is stripped afterwards).
   const front = stripMarkup(fields['Front'] || fields['Text'] || '')
-  const back = stripMarkup(fields['Back'] || '')
   const text = stripMarkup(fields['Text'] || '')
-  return {
-    front,
-    answerText: text || back,
-    sourcePages: getCardPageReferences(card),
-    conceptIds: normalizeStringList(card.conceptIds),
-    relationKeys: normalizeStringList(card.relationKeys)
-      .map(normalizeRelationKey)
-      .filter((key) => key !== ''),
-    rationale: stripMarkup(card.rationale ?? ''),
-    sourceExcerpt: stripMarkup(card.sourceExcerpt ?? ''),
-    hasSlideNumber: Boolean(card.slideNumber),
-    hasPromptText: Boolean(front || text),
-  }
-}
+  const answerText = text || stripMarkup(fields['Back'] || '')
+  const sourcePages = getCardPageReferences(card)
+  const clozeBasis = `${fields['Text'] ?? ''}${fields['Front'] ?? ''}`
 
-/**
- * Weighted rule-based quality rubric. Same rules, weights and flag slugs as
- * card_quality.DEFAULT_CARD_QUALITY_RULES; score clamped to [0, 100] and
- * rounded to one decimal, issues deduped + sorted.
- */
-export function scoreCard(
-  card: Card,
-  catalog?: CoverageCatalog,
-): { score: number; issues: string[] } {
-  const W = CARD_QUALITY_WEIGHTS
-  const ctx = buildQualityContext(card)
-  let score = W.baseScore
-  const issues: string[] = []
-
-  if (ctx.hasPromptText) {
-    score += W.promptPresentBonus
-  } else {
-    issues.push('missing_prompt_text')
-    score -= W.promptMissingPenalty
-  }
-
-  if (ctx.answerText) {
-    score += W.answerPresentBonus
-  } else {
-    issues.push('missing_answer_text')
-    score -= W.answerMissingPenalty
-  }
-
-  if (ctx.sourcePages.length > 0) {
-    score += W.sourcePagesPresentBonus
-  } else {
-    issues.push('missing_source_pages')
-    score -= W.sourcePagesMissingPenalty
-  }
-
-  if (ctx.conceptIds.length > 0) {
-    score += W.conceptIdsPresentBonus
-  } else {
-    issues.push('missing_concept_ids')
-    score -= W.conceptIdsMissingPenalty
-  }
-
-  if (ctx.relationKeys.length > 0) score += W.relationKeysPresentBonus
-
-  if (ctx.rationale) {
-    score += W.rationalePresentBonus
-  } else {
-    issues.push('missing_rationale')
-    score -= W.rationaleMissingPenalty
-  }
-
-  if (ctx.sourceExcerpt) {
-    score += W.sourceExcerptPresentBonus
-  } else {
-    issues.push('missing_source_excerpt')
-    score -= W.sourceExcerptMissingPenalty
-  }
-
-  if (ctx.hasSlideNumber) score += W.slideNumberBonus
-
-  if (ctx.front.length > W.longFrontThreshold) {
-    issues.push('long_front')
-    score -= W.longFrontPenalty
-  }
-
-  if (ctx.answerText.length > W.longAnswerThreshold) {
-    issues.push('long_answer')
-    score -= W.longAnswerPenalty
-  }
-
-  if (ctx.sourcePages.length > W.broadGroundingThreshold) {
-    issues.push('broad_grounding')
-    score -= W.broadGroundingPenalty
-  }
-
-  if (
-    catalog !== undefined &&
-    ctx.conceptIds.some((id) => catalog.highPriorityIds.has(id))
-  ) {
-    score += W.highPriorityConceptBonus
-  }
-
-  const clamped = Math.max(0, Math.min(100, score))
-  return {
-    score: Math.round(clamped * 10) / 10,
-    issues: [...new Set(issues)].sort(),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Grounding gate (generation_utils.evaluate_grounding_gate)
-// ---------------------------------------------------------------------------
-
-const GATE_FLAG_ORDER = [
-  'missing_source_excerpt',
-  'missing_rationale',
-  'missing_source_pages',
-] as const
-
-/**
- * Hard gate for accepting a generated card. Recomputes the rubric (the Python
- * pipeline annotates first, then gates on the stored score/flags — same net
- * result) and fails on missing grounding metadata or a score below
- * GROUNDING_GATE_MIN_QUALITY. Failure slugs are stable and ordered.
- */
-export function evaluateGroundingGate(
-  card: Card,
-  catalog?: CoverageCatalog,
-): GateVerdict {
-  const { score, issues } = scoreCard(card, catalog)
-  const flagged = new Set(issues)
   const failures: string[] = []
-  for (const key of GATE_FLAG_ORDER) {
-    if (flagged.has(key)) failures.push(key)
+  if (!front && !text) failures.push('missing_prompt_text')
+  if (!answerText) failures.push('missing_answer_text')
+  if (sourcePages.length === 0) failures.push('missing_source_pages')
+  if (!stripMarkup(card.rationale ?? '')) failures.push('missing_rationale')
+  if (!stripMarkup(card.sourceExcerpt ?? '')) failures.push('missing_source_excerpt')
+  // A Cloze note without a {{cN::…}} deletion is rejected by Anki itself;
+  // cloze markup on a Basic note renders as literal braces. Catch both here
+  // so the model gets an actionable failure instead of a broken sync later.
+  if (card.modelName === 'Cloze' && !CLOZE_DELETION_RE.test(clozeBasis)) {
+    failures.push('cloze_without_deletion')
   }
-  if (score < GROUNDING_GATE_MIN_QUALITY) failures.push('below_quality_threshold')
-  return { pass: failures.length === 0, score, failures }
+  if (card.modelName === 'Basic' && CLOZE_DELETION_RE.test(`${fields['Front'] ?? ''}${fields['Back'] ?? ''}`)) {
+    failures.push('cloze_markup_in_basic')
+  }
+
+  const soft: string[] = []
+  if (normalizeStringList(card.conceptIds).length === 0) soft.push('missing_concept_ids')
+  if (front.length > LONG_FRONT_THRESHOLD) soft.push('long_front')
+  if (answerText.length > LONG_ANSWER_THRESHOLD) soft.push('long_answer')
+  if (sourcePages.length > BROAD_GROUNDING_THRESHOLD) soft.push('broad_grounding')
+
+  const score = Math.max(
+    0,
+    100 - failures.length * HARD_FAILURE_PENALTY - soft.length * SOFT_ISSUE_PENALTY,
+  )
+  return {
+    pass: failures.length === 0,
+    score,
+    failures,
+    issues: [...failures, ...soft].sort(),
+  }
 }
 
 // ---------------------------------------------------------------------------

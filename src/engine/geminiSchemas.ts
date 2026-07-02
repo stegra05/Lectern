@@ -127,15 +127,68 @@ export const CONCEPT_MAP_RESPONSE_SCHEMA = {
   ],
 } as const
 
-export const REFLECTION_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    reflection: { type: 'string' },
-    cards: { type: 'array', items: CARD_JSON_SCHEMA },
-    done: { type: 'boolean' },
+// --- Review-phase tools (agentic edit loop over the generated deck) ---------
+
+export const UPDATE_CARD_TOOL = {
+  type: 'function' as const,
+  name: 'update_card',
+  description:
+    'Replace the content of one existing card, identified by its card_id from the deck listing. The replacement passes the same quality gate as new cards.',
+  parameters: {
+    type: 'object',
+    properties: {
+      card_id: { type: 'string' },
+      card: CARD_JSON_SCHEMA,
+    },
+    required: ['card_id', 'card'],
   },
-  required: ['reflection', 'cards', 'done'],
-} as const
+}
+
+export const ADD_CARDS_TOOL = {
+  type: 'function' as const,
+  name: 'add_cards',
+  description:
+    'Add new cards to the deck, e.g. to close coverage gaps or replace a merged pair. Same schema and quality gate as generation.',
+  parameters: {
+    type: 'object',
+    properties: {
+      cards: { type: 'array', items: CARD_JSON_SCHEMA },
+    },
+    required: ['cards'],
+  },
+}
+
+export const REMOVE_CARDS_TOOL = {
+  type: 'function' as const,
+  name: 'remove_cards',
+  description:
+    'Delete cards from the deck by card_id — for redundant, ungrounded, or low-value cards.',
+  parameters: {
+    type: 'object',
+    properties: {
+      card_ids: { type: 'array', items: { type: 'string' } },
+      reason: { type: 'string' },
+    },
+    required: ['card_ids', 'reason'],
+  },
+}
+
+export const FINISH_REVIEW_TOOL = {
+  type: 'function' as const,
+  name: 'finish_review',
+  description:
+    'Declare the quality review complete. Call once the deck is sound: no redundant, vague, or ungrounded cards remain and coverage gaps are closed or explicitly accepted.',
+  parameters: {
+    type: 'object',
+    properties: {
+      summary: {
+        type: 'string',
+        description: 'One-paragraph assessment of the final deck quality.',
+      },
+    },
+    required: ['summary'],
+  },
+}
 
 // ---------------------------------------------------------------------------
 // Tolerant zod parsers for model output
@@ -204,17 +257,26 @@ export function parseSubmitCardsArgs(raw: unknown): unknown[] {
   return result.success ? result.data.cards : []
 }
 
-const reflectionZ = z.object({
-  reflection: z.string().catch(''),
-  cards: z.array(z.unknown()).catch([]),
-  done: z.boolean().catch(true),
+const updateCardArgsZ = z.object({
+  card_id: z.string().catch(''),
+  card: z.unknown(),
 })
 
-export function parseReflection(raw: unknown): {
-  reflection: string
-  cards: unknown[]
-  done: boolean
-} {
-  const result = reflectionZ.safeParse(raw)
-  return result.success ? result.data : { reflection: '', cards: [], done: true }
+/** Extract {cardId, card} from update_card tool-call arguments. */
+export function parseUpdateCardArgs(raw: unknown): { cardId: string; card: unknown } {
+  const result = updateCardArgsZ.safeParse(raw)
+  return result.success
+    ? { cardId: result.data.card_id, card: result.data.card }
+    : { cardId: '', card: undefined }
+}
+
+const removeCardsArgsZ = z.object({
+  card_ids: z.array(z.string()).catch([]),
+  reason: z.string().catch(''),
+})
+
+/** Extract {cardIds, reason} from remove_cards tool-call arguments. */
+export function parseRemoveCardsArgs(raw: unknown): { cardIds: string[]; reason: string } {
+  const result = removeCardsArgsZ.safeParse(raw)
+  return result.success ? { cardIds: result.data.card_ids, reason: result.data.reason } : { cardIds: [], reason: '' }
 }

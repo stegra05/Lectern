@@ -1,11 +1,8 @@
 /**
- * Coverage ledger — faithful port of LecternApp/lectern/coverage.py plus the
- * reflection card selector from lectern/generation_utils.py.
- *
- * Tracks which pages / concepts / relations of the concept map are already
- * covered by generated cards, renders gap text that steers the model toward
- * uncovered material, decides when coverage is sufficient to stop, and greedily
- * picks the best card set after a reflection round.
+ * Coverage ledger — tracks which pages / concepts / relations of the concept
+ * map are already covered by generated cards, renders gap text that steers
+ * the model toward uncovered material, and decides when coverage is
+ * sufficient to stop.
  */
 
 import {
@@ -14,6 +11,7 @@ import {
   COVERAGE_MIN_RELATION_PERCENT,
   SATURATION_CARDS_PER_PAGE,
 } from './config'
+import { normalizeRelationKey } from './quality'
 import type { Card, ConceptMap, CoverageCatalog, CoverageData } from './types'
 import { relationKeyOf } from './types'
 
@@ -67,25 +65,6 @@ const cardPageRefs = (card: Card): number[] => {
 
 const cardConceptIds = (card: Card): string[] =>
   card.conceptIds.map((id) => id.trim()).filter((id) => id !== '')
-
-/**
- * Port of normalize_relation_key: split into exactly three segments on the
- * first two "|" (extra pipes stay in the target), trim each, require all
- * non-empty.
- */
-const normalizeRelationKey = (value: string): string => {
-  const first = value.indexOf('|')
-  if (first < 0) return ''
-  const second = value.indexOf('|', first + 1)
-  if (second < 0) return ''
-  const parts = [
-    value.slice(0, first).trim(),
-    value.slice(first + 1, second).trim(),
-    value.slice(second + 1).trim(),
-  ]
-  if (parts.some((part) => part === '')) return ''
-  return parts.join('|')
-}
 
 const cardRelationKeys = (card: Card): string[] =>
   card.relationKeys.map((key) => normalizeRelationKey(key)).filter((key) => key !== '')
@@ -373,163 +352,3 @@ export function isCoverageSufficient(coverage: CoverageData): boolean {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Reflection card selection
-// (ports of generation_utils.CardPriorityScorer / _select_best_reflection_cards)
-// ---------------------------------------------------------------------------
-
-export interface ReflectionScoringWeights {
-  highPriorityConcept: number
-  newConcept: number
-  newRelation: number
-  newPage: number
-  saturationPenalty: number
-}
-
-/** Defaults from generation_utils.ReflectionScoringWeights (not in config.ts). */
-export const DEFAULT_REFLECTION_WEIGHTS: ReflectionScoringWeights = {
-  highPriorityConcept: 8.0,
-  newConcept: 4.0,
-  newRelation: 3.0,
-  newPage: 1.5,
-  saturationPenalty: 6.0,
-}
-
-export interface ScoringContext {
-  selectedPages: ReadonlySet<number>
-  selectedConcepts: ReadonlySet<string>
-  selectedRelations: ReadonlySet<string>
-  perPageCounts: ReadonlyMap<number, number>
-  highPriorityIds: ReadonlySet<string>
-}
-
-export class CardPriorityScorer {
-  private readonly weights: ReflectionScoringWeights
-
-  constructor(weights: ReflectionScoringWeights = DEFAULT_REFLECTION_WEIGHTS) {
-    this.weights = weights
-  }
-
-  score(card: Card, context: ScoringContext): number {
-    const baseScore = Number.isFinite(card.qualityScore) ? card.qualityScore : 0
-    const pages = new Set(cardPageRefs(card))
-    const concepts = new Set(cardConceptIds(card))
-    const relations = new Set(cardRelationKeys(card))
-
-    const newPages = [...pages].filter((page) => !context.selectedPages.has(page))
-    const newConcepts = [...concepts].filter((id) => !context.selectedConcepts.has(id))
-    const newRelations = [...relations].filter((key) => !context.selectedRelations.has(key))
-    const newHighPriority = newConcepts.filter((id) => context.highPriorityIds.has(id))
-
-    let saturation = 0
-    for (const page of pages) {
-      saturation += Math.max(
-        (context.perPageCounts.get(page) ?? 0) + 1 - SATURATION_CARDS_PER_PAGE,
-        0,
-      )
-    }
-
-    return (
-      baseScore +
-      newHighPriority.length * this.weights.highPriorityConcept +
-      newConcepts.length * this.weights.newConcept +
-      newRelations.length * this.weights.newRelation +
-      newPages.length * this.weights.newPage -
-      saturation * this.weights.saturationPenalty
-    )
-  }
-}
-
-// --- Card dedupe key (port of generation_utils.get_card_key) ----------------
-
-const HTML_RE = /<[^>]+>/g
-const WHITESPACE_RE = /\s+/g
-const CLOZE_RE = /\{\{c\d+::(.*?)(?:::[^}]*)?\}\}/g
-const NON_WORD_RE = /[^\w\s]/g
-
-/** Minimal HTML entity unescape (Python uses html.unescape). */
-const unescapeEntities = (value: string): string =>
-  value
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-
-const stripMarkup = (value: string): string =>
-  unescapeEntities(value).replace(HTML_RE, ' ').replace(WHITESPACE_RE, ' ').trim()
-
-const cardKey = (card: Card): string => {
-  const raw = card.fields['Text'] ?? card.fields['Front'] ?? ''
-  const stripped = stripMarkup(raw)
-    .replace(CLOZE_RE, '$1')
-    .replace(NON_WORD_RE, ' ')
-  return stripped.toLowerCase().split(/\s+/).filter((token) => token !== '').join(' ')
-}
-
-/**
- * Greedy marginal-gain selection: repeatedly pick the candidate whose quality
- * plus coverage gain (new high-priority concepts, concepts, relations, pages)
- * minus page-saturation penalty is highest, until `cap` cards are chosen.
- * Falls back to the first `cap` original cards if nothing was selectable.
- */
-export function selectBestReflectionCards(
-  original: Card[],
-  proposed: Card[],
-  catalog: CoverageCatalog,
-  cap: number,
-): Card[] {
-  const scorer = new CardPriorityScorer()
-  // With zero cards, every high-priority concept is missing — the baseline
-  // coverage pass in Python reduces to the catalog's high-priority set.
-  const highPriorityIds = catalog.highPriorityIds
-
-  const candidates = [...original, ...proposed].filter((card) => cardKey(card) !== '')
-
-  const selected: Card[] = []
-  const selectedKeys = new Set<string>()
-  const selectedPages = new Set<number>()
-  const selectedConcepts = new Set<string>()
-  const selectedRelations = new Set<string>()
-  const perPageCounts = new Map<number, number>()
-
-  const remaining = [...candidates]
-  while (remaining.length > 0 && selected.length < cap) {
-    let bestIdx = -1
-    let bestPriority = Number.NEGATIVE_INFINITY
-    for (let idx = 0; idx < remaining.length; idx += 1) {
-      const card = remaining[idx]
-      const key = cardKey(card)
-      if (key === '' || selectedKeys.has(key)) continue
-      const priority = scorer.score(card, {
-        selectedPages,
-        selectedConcepts,
-        selectedRelations,
-        perPageCounts,
-        highPriorityIds,
-      })
-      if (priority > bestPriority) {
-        bestPriority = priority
-        bestIdx = idx
-      }
-    }
-    if (bestIdx < 0) break
-
-    const [chosen] = remaining.splice(bestIdx, 1)
-    selected.push(chosen)
-    selectedKeys.add(cardKey(chosen))
-    const pages = cardPageRefs(chosen)
-    for (const page of pages) {
-      selectedPages.add(page)
-      perPageCounts.set(page, (perPageCounts.get(page) ?? 0) + 1)
-    }
-    for (const conceptId of cardConceptIds(chosen)) selectedConcepts.add(conceptId)
-    for (const relationKey of cardRelationKeys(chosen)) selectedRelations.add(relationKey)
-  }
-
-  if (selected.length === 0) {
-    return original.slice(0, Math.max(cap, 0))
-  }
-  return selected
-}

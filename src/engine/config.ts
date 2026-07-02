@@ -15,20 +15,16 @@ export const IMAGE_CARD_WEIGHT = 0.5
 /** Documents above this chars/page are treated as script, below as slides. */
 export const DENSE_THRESHOLD_CHARS_PER_PAGE = 1500
 
-/** Suggested submit-round size = cap * ratio, clamped by page guardrails. */
+/** Suggested submit-round size = cap * ratio, clamped to [min, max]. */
 export const DYNAMIC_BATCH_TARGET_RATIO = 0.15
 export const DYNAMIC_MIN_NOTES_PER_BATCH = 10
 export const DYNAMIC_MAX_NOTES_PER_BATCH = 25
-export const PAGE_GUARDRAIL_MIN_RATIO = 0.7
-export const PAGE_GUARDRAIL_MAX_RATIO = 1.3
-export const PAGE_GUARDRAIL_MIN_FLOOR = 8
 
 /** Minimum sensible deck size. */
 export const MIN_TOTAL_CARDS = 3
 
-// --- Grounding gate --------------------------------------------------------
+// --- Generation loop -------------------------------------------------------
 
-export const GROUNDING_GATE_MIN_QUALITY = 60
 /** Rounds in a row with zero accepted cards before the loop aborts. */
 export const NON_PROGRESS_MAX_ROUNDS = 2
 /** Absolute ceiling on agentic rounds, as a runaway backstop. */
@@ -43,11 +39,14 @@ export const COVERAGE_MIN_RELATION_PERCENT = 50
 export const COVERAGE_MIN_CONCEPT_PERCENT = 60
 export const COVERAGE_MIN_PAGE_PERCENT = 75
 
-// --- Reflection ------------------------------------------------------------
+// --- Reflection (agentic review loop over the generated deck) ---------------
+// The deck stays within the sizing cap throughout review: add_cards only
+// fills free slots, and remove_cards frees them.
 
-export const REFLECTION_HARD_CAP_MULTIPLIER = 1.2
-export const REFLECTION_HARD_CAP_PADDING = 5
-export const MAX_REFLECTION_ROUNDS = 3
+/** Absolute ceiling on review rounds, as a runaway backstop. */
+export const MAX_REFLECTION_ROUNDS = 10
+/** Review may delete at most this fraction of the pre-review deck. */
+export const REFLECTION_MAX_REMOVAL_RATIO = 0.5
 
 // --- Gemini ----------------------------------------------------------------
 
@@ -57,16 +56,20 @@ export const MODEL_CHOICES = [
   { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro — deepest reasoning, slower' },
 ] as const
 
-export type ThinkingLevel = 'low' | 'medium' | 'high'
-/** Thinking effort per phase. Flash 3.5 defaults to medium; we push the
- *  one-shot analysis phases higher and keep the card loop snappy. */
+export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high'
+/** Thinking effort per phase. `low` is retuned in 3.5 Flash for agentic
+ *  loops (few steps per decision); the one-shot document analysis gets
+ *  `high`, and review edits sit in between. */
 export const THINKING_BY_PHASE = {
   mapping: 'high',
-  generating: 'medium',
-  reflecting: 'high',
+  generating: 'low',
+  reflecting: 'medium',
 } as const satisfies Record<string, ThinkingLevel>
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
+/** Pins the May-2026 Interactions API schema (`steps` timeline) — required
+ *  when not going through an official SDK. */
+export const GEMINI_API_REVISION = '2026-05-20'
 
 // --- Retry -----------------------------------------------------------------
 

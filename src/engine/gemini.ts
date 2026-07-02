@@ -10,6 +10,7 @@
 
 import {
   FILE_ACTIVE_TIMEOUT_MS,
+  GEMINI_API_REVISION,
   GEMINI_BASE_URL,
   RATE_LIMIT_MAX_RETRIES,
   RETRY_BASE_DELAY_MS,
@@ -250,6 +251,7 @@ export class GeminiClient {
         headers: {
           'x-goog-api-key': this.apiKey,
           'Content-Type': 'application/json',
+          'Api-Revision': GEMINI_API_REVISION,
         },
         body: JSON.stringify(body),
       })

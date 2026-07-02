@@ -4,10 +4,8 @@ import {
   buildCoverageCatalog,
   buildGenerationGapText,
   buildReflectionGapText,
-  CardPriorityScorer,
   computeCoverageData,
   isCoverageSufficient,
-  selectBestReflectionCards,
 } from './coverage'
 import type { Card, ConceptMap, CoverageData } from './types'
 
@@ -360,131 +358,5 @@ describe('buildReflectionGapText', () => {
     expect(text).not.toContain('Uncovered pages')
     expect(text).not.toContain('Missing high-priority concepts')
     expect(text).not.toContain('Missing relations')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// selectBestReflectionCards + CardPriorityScorer
-// ---------------------------------------------------------------------------
-
-describe('CardPriorityScorer', () => {
-  it('rewards new high-priority concepts, relations and pages on top of quality', () => {
-    const scorer = new CardPriorityScorer()
-    const card = makeCard({
-      uid: 'a',
-      sourcePages: [3],
-      conceptIds: ['c2'],
-      relationKeys: ['c1|uses|c2'],
-      qualityScore: 60,
-    })
-    const score = scorer.score(card, {
-      selectedPages: new Set<number>(),
-      selectedConcepts: new Set<string>(),
-      selectedRelations: new Set<string>(),
-      perPageCounts: new Map<number, number>(),
-      highPriorityIds: new Set(['c1', 'c2']),
-    })
-    // 60 + 8 (high) + 4 (concept) + 3 (relation) + 1.5 (page)
-    expect(score).toBe(76.5)
-  })
-
-  it('penalizes cards that pile onto saturated pages', () => {
-    const scorer = new CardPriorityScorer()
-    const card = makeCard({ uid: 'a', sourcePages: [1], qualityScore: 80 })
-    const score = scorer.score(card, {
-      selectedPages: new Set([1]),
-      selectedConcepts: new Set<string>(),
-      selectedRelations: new Set<string>(),
-      perPageCounts: new Map([[1, 2]]),
-      highPriorityIds: new Set<string>(),
-    })
-    // 80 - max(2 + 1 - 2, 0) * 6 = 74; no novelty bonuses.
-    expect(score).toBe(74)
-  })
-})
-
-describe('selectBestReflectionCards', () => {
-  const catalog = buildCoverageCatalog(makeConceptMap())
-
-  it('prefers gap-filling cards over redundant higher-quality ones', () => {
-    const original = [
-      makeCard({
-        uid: 'a',
-        fields: { Front: 'What is a neural network?', Back: 'x' },
-        sourcePages: [1],
-        conceptIds: ['c1'],
-        qualityScore: 70,
-      }),
-    ]
-    const proposed = [
-      makeCard({
-        uid: 'b',
-        fields: { Front: 'Explain backpropagation.', Back: 'x' },
-        sourcePages: [3],
-        conceptIds: ['c2'],
-        qualityScore: 60,
-      }),
-      makeCard({
-        uid: 'c',
-        fields: { Front: 'Define neural network layers.', Back: 'x' },
-        sourcePages: [1],
-        conceptIds: ['c1'],
-        qualityScore: 90,
-      }),
-    ]
-
-    const selected = selectBestReflectionCards(original, proposed, catalog, 2)
-    const uids = selected.map((card) => card.uid)
-
-    // Best duplicate of c1 first (highest quality + novelty), then the c2
-    // gap-filler beats the redundant original despite lower base quality.
-    expect(uids).toEqual(['c', 'b'])
-  })
-
-  it('deduplicates cards by normalized front text', () => {
-    const original = [
-      makeCard({
-        uid: 'x',
-        fields: { Front: 'Same question?', Back: 'x' },
-        sourcePages: [1],
-        qualityScore: 50,
-      }),
-    ]
-    const proposed = [
-      makeCard({
-        uid: 'y',
-        fields: { Front: '<b>Same&nbsp;question?</b>', Back: 'x' },
-        sourcePages: [2],
-        qualityScore: 95,
-      }),
-      makeCard({
-        uid: 'z',
-        fields: { Front: 'A different question?', Back: 'x' },
-        sourcePages: [3],
-        qualityScore: 70,
-      }),
-    ]
-
-    const selected = selectBestReflectionCards(original, proposed, catalog, 5)
-    const uids = selected.map((card) => card.uid)
-
-    expect(uids).toHaveLength(2)
-    expect(uids).toContain('y') // higher-quality variant of the duplicate wins
-    expect(uids).toContain('z')
-  })
-
-  it('respects the cap', () => {
-    const original = [1, 2, 3, 4].map((n) =>
-      makeCard({ uid: `u${n}`, fields: { Front: `Q${n}?`, Back: 'x' }, sourcePages: [n] }),
-    )
-    expect(selectBestReflectionCards(original, [], catalog, 2)).toHaveLength(2)
-  })
-
-  it('falls back to the first original cards when nothing is selectable', () => {
-    const blank = (uid: string): Card =>
-      makeCard({ uid, fields: { Front: '   ', Back: 'x' }, sourcePages: [1] })
-    const original = [blank('a'), blank('b')]
-    const selected = selectBestReflectionCards(original, [blank('c')], catalog, 1)
-    expect(selected.map((card) => card.uid)).toEqual(['a'])
   })
 })

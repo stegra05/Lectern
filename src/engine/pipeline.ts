@@ -6,9 +6,11 @@
  *   2. generating  — agentic tool loop: the model calls submit_cards, every
  *                    batch is quality-gated and deduped, and the tool result
  *                    feeds back verdicts + a fresh coverage ledger so the
- *                    model plans the next batch itself (thinking: medium)
- *   3. reflecting  — QA pass rewrites weak cards, gated + greedily selected
- *                    for maximum coverage gain (thinking: high)
+ *                    model plans the next batch itself (thinking: low, the
+ *                    3.5-Flash agentic mode)
+ *   3. reflecting  — agentic review loop: the model edits the deck through
+ *                    update_card / add_cards / remove_cards, each edit gated
+ *                    like generation, until finish_review (thinking: medium)
  *
  * No transport layer: progress is emitted as PipelineEvents via a plain
  * callback, which the UI store consumes directly.
@@ -16,12 +18,10 @@
 
 import {
   GEMINI_PRICING,
-  GROUNDING_GATE_MIN_QUALITY,
   MAX_GENERATION_ROUNDS,
   MAX_REFLECTION_ROUNDS,
   NON_PROGRESS_MAX_ROUNDS,
-  REFLECTION_HARD_CAP_MULTIPLIER,
-  REFLECTION_HARD_CAP_PADDING,
+  REFLECTION_MAX_REMOVAL_RATIO,
   THINKING_BY_PHASE,
 } from './config'
 import {
@@ -30,32 +30,44 @@ import {
   buildReflectionGapText,
   computeCoverageData,
   isCoverageSufficient,
-  selectBestReflectionCards,
 } from './coverage'
 import { GeminiClient, parseJsonPayload, type FunctionCallStep, type GeminiUsage, type InputPart } from './gemini'
 import {
+  ADD_CARDS_TOOL,
   CONCEPT_MAP_RESPONSE_SCHEMA,
   FINISH_GENERATION_TOOL,
-  REFLECTION_RESPONSE_SCHEMA,
+  FINISH_REVIEW_TOOL,
+  REMOVE_CARDS_TOOL,
   SUBMIT_CARDS_TOOL,
+  UPDATE_CARD_TOOL,
   parseConceptMap,
-  parseReflection,
+  parseRemoveCardsArgs,
   parseSubmitCardsArgs,
+  parseUpdateCardArgs,
 } from './geminiSchemas'
-import { buildPacingHint, computeSizingPlan } from './pacing'
+import { computeSizingPlan } from './pacing'
 import {
+  buildReviewFeedback,
   buildSubmitFeedback,
   conceptMapPrompt,
   generationMissionPrompt,
-  reflectionPrompt,
+  reviewMissionPrompt,
   systemInstructions,
   type PromptContext,
 } from './prompts'
-import { cardKey, evaluateGroundingGate, normalizeCardPayload, scoreCard } from './quality'
+import {
+  cardKey,
+  evaluateCard,
+  normalizeCardPayload,
+  normalizeRelationKey,
+  type NormalizedCardPayload,
+} from './quality'
 import type {
   Card,
   ConceptMap,
+  CoverageCatalog,
   CoverageData,
+  GateVerdict,
   PdfInfo,
   PipelineSink,
   SizingPlan,
@@ -141,6 +153,9 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   let terminationReason = 'max_rounds_reached'
   let nonProgressRounds = 0
   let finished = false
+  /** Tool results built but not yet sent when the loop exits — the review
+   *  phase leads with them so no function call is left unanswered. */
+  let pendingResults: InputPart[] = []
 
   const tools = [SUBMIT_CARDS_TOOL, FINISH_GENERATION_TOOL]
   let response = await client.interact({
@@ -154,7 +169,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           totalCardCap: sizing.totalCardCap,
           batchSize: sizing.batchSize,
           gapText: buildGenerationGapText(catalog, coverage),
-          pacingHint: buildPacingHint(coverage, sizing, 0),
         }),
       },
     ],
@@ -215,6 +229,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       const rawCards = parseSubmitCardsArgs(call.arguments)
       const rejected: Array<{ front: string; reasons: string[] }> = []
       let duplicates = 0
+      let unknownMetadataDropped = 0
 
       for (const raw of rawCards) {
         const normalized = normalizeCardPayload(raw)
@@ -222,32 +237,16 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: '(unparseable card)', reasons: ['invalid_structure'] })
           continue
         }
-        const card: Card = {
-          uid: crypto.randomUUID(),
-          modelName: normalized.modelName,
-          fields: normalized.fields,
-          slideTopic: normalized.slideTopic,
-          slideNumber: normalized.slideNumber,
-          sourcePages: normalized.sourcePages ?? [],
-          conceptIds: normalized.conceptIds ?? [],
-          relationKeys: normalized.relationKeys ?? [],
-          rationale: normalized.rationale,
-          sourceExcerpt: normalized.sourceExcerpt,
-          qualityScore: 0,
-          qualityIssues: [],
-        }
-        const { score, issues } = scoreCard(card, catalog)
-        card.qualityScore = score
-        card.qualityIssues = issues
+        const { card, verdict, unknownMetadata } = buildCard(normalized, catalog)
+        unknownMetadataDropped += unknownMetadata
 
         const key = cardKey(card)
         if (seenKeys.has(key)) {
           duplicates++
           continue
         }
-        const gate = evaluateGroundingGate(card)
-        if (!gate.pass) {
-          rejected.push({ front: firstField(card), reasons: gate.failures })
+        if (!verdict.pass) {
+          rejected.push({ front: firstField(card), reasons: verdict.failures })
           continue
         }
         if (cards.length >= sizing.totalCardCap) {
@@ -274,15 +273,16 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
             acceptedCount: acceptedThisRound,
             rejected,
             duplicates,
+            unknownMetadataDropped,
             cardsRemaining: capacityLeft,
             gapText: buildGenerationGapText(catalog, coverage),
-            pacingHint: buildPacingHint(coverage, sizing, cards.length),
             finishAllowed: isCoverageSufficient(coverage) || capacityLeft <= 0,
           }),
         ),
       )
     }
 
+    pendingResults = results
     if (finished) break
 
     if (cards.length >= sizing.totalCardCap) {
@@ -306,77 +306,37 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       thinkingLevel: THINKING_BY_PHASE.generating,
       signal,
     })
+    pendingResults = []
     track(response.usage)
   }
 
-  // --- Phase 3: reflection ----------------------------------------------------
-  let lastInteractionId = response.id
+  // --- Phase 3: agentic review loop over the deck -----------------------------
   if (cards.length > 0) {
+    throwIfAborted(signal)
     emit({ type: 'phase', phase: 'reflecting' })
-    const hardCap = Math.round(sizing.totalCardCap * REFLECTION_HARD_CAP_MULTIPLIER) + REFLECTION_HARD_CAP_PADDING
-    const rounds = Math.max(1, Math.min(MAX_REFLECTION_ROUNDS, cards.length))
-
-    for (let round = 1; round <= rounds; round++) {
-      throwIfAborted(signal)
-      emit({ type: 'log', level: 'info', message: `Quality pass ${round}/${rounds}…` })
-      const reflectResult = await client.interact({
-        model: opts.model,
-        instructions: systemInstructions(ctx),
-        previousInteractionId: lastInteractionId,
-        input: [
-          {
-            type: 'text',
-            text: reflectionPrompt(ctx, {
-              limit: hardCap,
-              cardsJson: JSON.stringify(cards.map(toReflectionShape)),
-              coverageGaps: buildReflectionGapText(catalog, coverage),
-            }),
-          },
-        ],
-        responseSchema: REFLECTION_RESPONSE_SCHEMA as unknown as Record<string, unknown>,
-        thinkingLevel: THINKING_BY_PHASE.reflecting,
-        signal,
-      })
-      track(reflectResult.usage)
-      lastInteractionId = reflectResult.id
-
-      const reflection = parseReflection(parseJsonPayload(reflectResult.outputText))
-      const proposed: Card[] = []
-      for (const raw of reflection.cards) {
-        const normalized = normalizeCardPayload(raw)
-        if (!normalized) continue
-        const card: Card = {
-          uid: crypto.randomUUID(),
-          modelName: normalized.modelName,
-          fields: normalized.fields,
-          slideTopic: normalized.slideTopic,
-          slideNumber: normalized.slideNumber,
-          sourcePages: normalized.sourcePages ?? [],
-          conceptIds: normalized.conceptIds ?? [],
-          relationKeys: normalized.relationKeys ?? [],
-          rationale: normalized.rationale,
-          sourceExcerpt: normalized.sourceExcerpt,
-          qualityScore: 0,
-          qualityIssues: [],
-        }
-        const { score, issues } = scoreCard(card, catalog)
-        card.qualityScore = score
-        card.qualityIssues = issues
-        // Replacements must clear the same bar as originals.
-        if (card.qualityScore >= GROUNDING_GATE_MIN_QUALITY && evaluateGroundingGate(card).pass) {
-          proposed.push(card)
-        }
-      }
-
-      if (proposed.length > 0) {
-        const selected = selectBestReflectionCards(cards, proposed, catalog, hardCap)
-        cards.splice(0, cards.length, ...selected)
-        coverage = computeCoverageData(catalog, cards)
-        emit({ type: 'cards_replaced', cards: [...cards], reflectionNote: reflection.reflection })
-        emit({ type: 'coverage', coverage })
-      }
-      if (reflection.done) break
-    }
+    emit({ type: 'log', level: 'info', message: 'Reviewing the deck for quality and coverage…' })
+    const review = await runReviewLoop({
+      client,
+      model: opts.model,
+      ctx,
+      previousInteractionId: response.id,
+      pendingInput: pendingResults,
+      cards,
+      seenKeys,
+      catalog,
+      cardCap: sizing.totalCardCap,
+      emit,
+      signal,
+      track,
+    })
+    coverage = computeCoverageData(catalog, cards)
+    emit({
+      type: 'log',
+      level: 'info',
+      message: `Review: ${review.updated} updated, ${review.added} added, ${review.removed} removed.`,
+    })
+    emit({ type: 'cards_replaced', cards: [...cards], reflectionNote: review.note })
+    emit({ type: 'coverage', coverage })
   }
 
   // --- Complete ----------------------------------------------------------------
@@ -420,6 +380,45 @@ function handleFinishRequest(
   }
 }
 
+/**
+ * Materialize a normalized model payload into a Card: concept ids and
+ * relation keys are validated against the concept-map catalog (unknown ones
+ * are dropped so the coverage ledger stays truthful), then the card is
+ * annotated with its gate verdict.
+ */
+function buildCard(
+  normalized: NormalizedCardPayload,
+  catalog: CoverageCatalog,
+): { card: Card; verdict: GateVerdict; unknownMetadata: number } {
+  const conceptIds = normalized.conceptIds.filter((id) => catalog.conceptIds.has(id))
+  const relationKeys = normalized.relationKeys
+    .map((key) => normalizeRelationKey(key))
+    .filter((key) => key !== '' && catalog.relationKeys.has(key))
+  const unknownMetadata =
+    normalized.conceptIds.length -
+    conceptIds.length +
+    (normalized.relationKeys.length - relationKeys.length)
+
+  const card: Card = {
+    uid: crypto.randomUUID(),
+    modelName: normalized.modelName,
+    fields: normalized.fields,
+    slideTopic: normalized.slideTopic,
+    slideNumber: normalized.slideNumber,
+    sourcePages: normalized.sourcePages,
+    conceptIds,
+    relationKeys,
+    rationale: normalized.rationale,
+    sourceExcerpt: normalized.sourceExcerpt,
+    qualityScore: 0,
+    qualityIssues: [],
+  }
+  const verdict = evaluateCard(card)
+  card.qualityScore = verdict.score
+  card.qualityIssues = verdict.issues
+  return { card, verdict, unknownMetadata }
+}
+
 function functionResult(call: FunctionCallStep, text: string): InputPart {
   return {
     type: 'function_result',
@@ -434,9 +433,235 @@ function firstField(card: Card): string {
   return first.replace(/<[^>]+>/g, '').slice(0, 120)
 }
 
-/** Compact card shape handed to the reflection prompt. */
-function toReflectionShape(card: Card): Record<string, unknown> {
+// ---------------------------------------------------------------------------
+// Phase 3 — agentic review loop
+// ---------------------------------------------------------------------------
+
+const REVIEW_TOOLS = [UPDATE_CARD_TOOL, ADD_CARDS_TOOL, REMOVE_CARDS_TOOL, FINISH_REVIEW_TOOL]
+
+interface ReviewLoopOptions {
+  client: GeminiClient
+  model: string
+  ctx: PromptContext
+  previousInteractionId: string
+  /** Unanswered function results from the generation loop, sent first. */
+  pendingInput: InputPart[]
+  /** The deck — edited in place. */
+  cards: Card[]
+  /** Dedupe keys of the deck — kept in sync with edits. */
+  seenKeys: Set<string>
+  catalog: CoverageCatalog
+  /** The sizing cap — add_cards only fills slots below it. */
+  cardCap: number
+  emit: PipelineSink
+  signal?: AbortSignal
+  track: (u: GeminiUsage) => void
+}
+
+interface ReviewOutcome {
+  note?: string
+  updated: number
+  added: number
+  removed: number
+}
+
+/**
+ * The model edits the deck through targeted tools; every edit clears the same
+ * gate as generation, is applied immediately, and the tool result carries the
+ * verdict plus a fresh coverage ledger. Cards keep their uid across updates
+ * so downstream identity (UI, Anki sync) is stable.
+ */
+async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
+  const { client, cards, seenKeys, catalog, emit, signal } = opts
+
+  // Short stable handles for the prompt: card_id -> uid.
+  const idToUid = new Map<string, string>()
+  let nextId = 0
+  const assignId = (uid: string): string => {
+    const id = `c${++nextId}`
+    idToUid.set(id, uid)
+    return id
+  }
+  const deckListing = cards
+    .map((card) => JSON.stringify(toReviewShape(assignId(card.uid), card)))
+    .join('\n')
+
+  const removalBudget = Math.floor(cards.length * REFLECTION_MAX_REMOVAL_RATIO)
+  const outcome: ReviewOutcome = { updated: 0, added: 0, removed: 0 }
+  let coverage = computeCoverageData(catalog, cards)
+  let finished = false
+  let idleRounds = 0
+
+  const indexOfId = (cardId: string): number => {
+    const uid = idToUid.get(cardId)
+    return uid === undefined ? -1 : cards.findIndex((c) => c.uid === uid)
+  }
+
+  let response = await client.interact({
+    model: opts.model,
+    instructions: systemInstructions(opts.ctx),
+    previousInteractionId: opts.previousInteractionId,
+    input: [
+      ...opts.pendingInput,
+      {
+        type: 'text',
+        text: reviewMissionPrompt(opts.ctx, {
+          deckListing,
+          coverageGaps: buildReflectionGapText(catalog, coverage),
+          cardCap: opts.cardCap,
+          freeSlots: Math.max(0, opts.cardCap - cards.length),
+        }),
+      },
+    ],
+    tools: REVIEW_TOOLS,
+    toolChoice: 'any',
+    thinkingLevel: THINKING_BY_PHASE.reflecting,
+    signal,
+  })
+  opts.track(response.usage)
+
+  for (let round = 1; round <= MAX_REFLECTION_ROUNDS && !finished; round++) {
+    throwIfAborted(signal)
+    if (response.functionCalls.length === 0) break // prose instead of tools — accept the deck
+
+    const results: InputPart[] = []
+    let editsThisRound = 0
+
+    for (const call of response.functionCalls) {
+      if (call.name === 'finish_review') {
+        finished = true
+        const args = (call.arguments ?? {}) as Record<string, unknown>
+        outcome.note = typeof args.summary === 'string' ? args.summary : undefined
+        results.push(functionResult(call, 'Review complete.'))
+        continue
+      }
+
+      const applied: string[] = []
+      const rejected: Array<{ ref: string; reasons: string[] }> = []
+
+      if (call.name === 'update_card') {
+        const { cardId, card: rawCard } = parseUpdateCardArgs(call.arguments)
+        const index = indexOfId(cardId)
+        const normalized = index === -1 ? null : normalizeCardPayload(rawCard)
+        if (index === -1) {
+          rejected.push({ ref: cardId || 'update_card', reasons: ['unknown_card_id'] })
+        } else if (!normalized) {
+          rejected.push({ ref: cardId, reasons: ['invalid_structure'] })
+        } else {
+          const { card, verdict } = buildCard(normalized, catalog)
+          const oldKey = cardKey(cards[index])
+          const newKey = cardKey(card)
+          if (!verdict.pass) {
+            rejected.push({ ref: cardId, reasons: verdict.failures })
+          } else if (newKey !== oldKey && seenKeys.has(newKey)) {
+            rejected.push({ ref: cardId, reasons: ['duplicate'] })
+          } else {
+            card.uid = cards[index].uid
+            seenKeys.delete(oldKey)
+            seenKeys.add(newKey)
+            cards[index] = card
+            outcome.updated++
+            editsThisRound++
+            applied.push(`updated ${cardId}`)
+          }
+        }
+      } else if (call.name === 'add_cards') {
+        for (const raw of parseSubmitCardsArgs(call.arguments)) {
+          const normalized = normalizeCardPayload(raw)
+          if (!normalized) {
+            rejected.push({ ref: '(new card)', reasons: ['invalid_structure'] })
+            continue
+          }
+          const { card, verdict } = buildCard(normalized, catalog)
+          if (!verdict.pass) {
+            rejected.push({ ref: firstField(card), reasons: verdict.failures })
+            continue
+          }
+          const key = cardKey(card)
+          if (seenKeys.has(key)) {
+            rejected.push({ ref: firstField(card), reasons: ['duplicate'] })
+            continue
+          }
+          if (cards.length >= opts.cardCap) {
+            rejected.push({ ref: firstField(card), reasons: ['budget_exhausted'] })
+            continue
+          }
+          seenKeys.add(key)
+          cards.push(card)
+          outcome.added++
+          editsThisRound++
+          applied.push(`added ${assignId(card.uid)}`)
+        }
+      } else if (call.name === 'remove_cards') {
+        const { cardIds } = parseRemoveCardsArgs(call.arguments)
+        for (const cardId of cardIds) {
+          const index = indexOfId(cardId)
+          if (index === -1) {
+            rejected.push({ ref: cardId, reasons: ['unknown_card_id'] })
+            continue
+          }
+          if (outcome.removed >= removalBudget) {
+            rejected.push({ ref: cardId, reasons: ['removal_budget_exhausted'] })
+            continue
+          }
+          seenKeys.delete(cardKey(cards[index]))
+          cards.splice(index, 1)
+          idToUid.delete(cardId)
+          outcome.removed++
+          editsThisRound++
+          applied.push(`removed ${cardId}`)
+        }
+      } else {
+        results.push(
+          functionResult(
+            call,
+            `Unknown tool ${call.name}. Use update_card, add_cards, remove_cards, or finish_review.`,
+          ),
+        )
+        continue
+      }
+
+      coverage = computeCoverageData(catalog, cards)
+      emit({ type: 'coverage', coverage })
+      results.push(
+        functionResult(
+          call,
+          buildReviewFeedback({
+            applied,
+            rejected,
+            gapText: buildReflectionGapText(catalog, coverage),
+          }),
+        ),
+      )
+    }
+
+    if (finished) break
+    idleRounds = editsThisRound === 0 ? idleRounds + 1 : 0
+    if (idleRounds >= NON_PROGRESS_MAX_ROUNDS) {
+      emit({ type: 'log', level: 'warn', message: 'Review made no progress — accepting the deck.' })
+      break
+    }
+
+    response = await client.interact({
+      model: opts.model,
+      instructions: systemInstructions(opts.ctx),
+      previousInteractionId: response.id,
+      input: results,
+      tools: REVIEW_TOOLS,
+      toolChoice: 'any',
+      thinkingLevel: THINKING_BY_PHASE.reflecting,
+      signal,
+    })
+    opts.track(response.usage)
+  }
+
+  return outcome
+}
+
+/** Compact card shape listed in the review mission prompt. */
+function toReviewShape(cardId: string, card: Card): Record<string, unknown> {
   return {
+    card_id: cardId,
     model_name: card.modelName,
     fields: Object.entries(card.fields).map(([name, value]) => ({ name, value })),
     slide_topic: card.slideTopic,

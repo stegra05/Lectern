@@ -126,8 +126,12 @@ export interface SizingPlan {
 
 export interface GateVerdict {
   pass: boolean
+  /** Display score: 100 minus a fixed penalty per issue. */
   score: number
+  /** Hard requirements not met — any entry rejects the card. */
   failures: string[]
+  /** All flags (failures + soft issues), for card annotation. */
+  issues: string[]
 }
 
 // ---------------------------------------------------------------------------

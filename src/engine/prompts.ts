@@ -1,42 +1,26 @@
 /**
- * The prompt library — Lectern's crown jewels, carried over from the original
- * app's battle-tested prompts (LecternApp/lectern/ai_prompts.py) and adapted
- * for the agentic tool loop on Gemini 3.5 Flash: instead of re-prompting each
- * batch, the model works one continuous conversation and receives coverage
- * feedback through submit_cards tool results.
+ * The prompt library, rewritten for the Gemini 3.5 generation. Official 3.x
+ * guidance: concise direct instructions, goals stated positively, no
+ * chain-of-thought coaching (thinking_level does that), steering through
+ * mission briefs rather than per-round pressure.
+ *
+ * The constraints themselves (MathJax delimiters, HTML-not-Markdown, cloze
+ * limits, self-containment, grounding metadata) describe the Anki renderer
+ * and the deterministic gate — they survive any prompt rewrite.
  */
 
-// --- Formatting rules (verbatim from the original — load-bearing) ----------
+// --- Formatting rules (constraints of the Anki renderer) --------------------
 
-export const FORMATTING_RULES = `- Use LaTeX/MathJax for math: inline \\( ... \\), display \\[ ... \\].
-- Use HTML for non-math emphasis: <b>...</b> or <strong>...</strong>; italics with <i>...</i> or <em>...</em>.
-- For math bold: \\textbf{...} (text), \\mathbf{...} or \\boldsymbol{...} (symbols). Do not use HTML inside math.
-- Never use Markdown (no **bold**, headers, or code fences).
-- Do not include images, <img> tags, or Markdown image syntax in card content.
-- Cards MUST be completely self-contained. NEVER use phrases like 'in the diagram', 'on this slide', or 'as shown'. If a concept relies on a visual, describe the visual's relationship explicitly in text.
-- Cloze constraints: Maximum 2 deletions per card. Never cloze entire phrases or sentences—only single, highly specific terms. Ensure the surrounding context gives a clear, unambiguous clue.`
+export const FORMATTING_RULES = `Formatting — Anki renders HTML and MathJax; Markdown renders as literal characters:
+- Math: inline \\( ... \\), display \\[ ... \\]. Bold math with \\mathbf{...}/\\boldsymbol{...} (symbols) or \\textbf{...} (words); keep HTML outside math.
+- Emphasis: <b> or <strong>, <i> or <em>. Write ** or # as HTML instead.
+- Text only — cards carry no images or <img> tags.
+- Each card stands alone: name the thing itself ("the sigmoid saturates for large inputs"), never point at the source ("as shown in the diagram"). When a concept depends on a visual, describe the visual relationship in words.
+- Cloze: at most 2 deletions per card, each a single specific term whose surrounding context makes the answer unambiguous.`
 
-// --- Few-shot card examples (verbatim content, tool-call arg shape) --------
+// --- Style-teaching examples -------------------------------------------------
 
 const CARD_DATA = [
-  {
-    model_name: 'Basic',
-    fields: [
-      { name: 'Front', value: 'State the quadratic formula.' },
-      {
-        name: 'Back',
-        value: 'Key idea: <b>roots</b>. Formula: \\(x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}\\).',
-      },
-    ],
-    slide_topic: 'Quadratic Equations',
-  },
-  {
-    model_name: 'Cloze',
-    fields: [
-      { name: 'Text', value: 'The derivative of \\(x^n\\) is {{c1::\\(n x^{n-1}\\)}}.' },
-    ],
-    slide_topic: 'Differentiation Rules',
-  },
   {
     model_name: 'Basic',
     fields: [
@@ -54,19 +38,23 @@ const CARD_DATA = [
   {
     model_name: 'Basic',
     fields: [
-      { name: 'Front', value: 'Compare <b>L1</b> and <b>L2</b> regularization effects.' },
+      { name: 'Front', value: 'State the quadratic formula.' },
       {
         name: 'Back',
-        value:
-          '<b>L1</b>: Yields sparse weights (feature selection).\n<b>L2</b>: Shrinks all weights uniformly (prevents overfitting).',
+        value: 'Key idea: <b>roots</b>. Formula: \\(x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}\\).',
       },
     ],
-    slide_topic: 'Regularization',
+    slide_topic: 'Quadratic Equations',
+  },
+  {
+    model_name: 'Cloze',
+    fields: [{ name: 'Text', value: 'The derivative of \\(x^n\\) is {{c1::\\(n x^{n-1}\\)}}.' }],
+    slide_topic: 'Differentiation Rules',
   },
 ]
 
 export const CARD_EXAMPLES =
-  'Examples:\n' +
+  'Style examples:\n' +
   CARD_DATA.map((ex) => `  ${ex.model_name}: ${JSON.stringify(ex)}`).join('\n') +
   '\n'
 
@@ -102,16 +90,14 @@ const focusOf = (ctx: PromptContext): string =>
 /** System instructions for the whole session. */
 export function systemInstructions(ctx: PromptContext): string {
   const focus = focusOf(ctx)
-  const focusContext = focus
-    ? `USER FOCUS: "${focus}"\nInstruction: Prioritize concepts related to this focus. Adjust card styles (e.g. more definitions vs. comparisons) to match the user's intent.\n`
-    : ''
   return (
-    `You are an expert educator creating Anki flashcards.\n` +
-    `Output language: ${ctx.language}\n` +
-    focusContext +
-    `Goal: Create a comprehensive spaced repetition deck.\n` +
-    `Principles: Atomicity, Minimum Information Principle, Variety (Definitions, Comparisons, Applications).\n` +
-    `Formatting:\n${FORMATTING_RULES}\n` +
+    `You are an expert educator turning lecture material into an Anki spaced-repetition deck.\n` +
+    `Write all card content in ${ctx.language}.\n` +
+    (focus
+      ? `The user asked to focus on: "${focus}". Weight concept selection and card style toward it.\n`
+      : '') +
+    `Card principles: one idea per card; vary styles across definitions, comparisons, and applications; test understanding (why, how, apply) over slide recall.\n` +
+    `${FORMATTING_RULES}\n` +
     CARD_EXAMPLES
   )
 }
@@ -119,25 +105,18 @@ export function systemInstructions(ctx: PromptContext): string {
 /** Phase 1 — global concept map over the whole document. */
 export function conceptMapPrompt(ctx: PromptContext): string {
   const focus = focusOf(ctx)
-  const focusContext = focus
-    ? `- Focus: USER REQUESTED "${focus}". Ensure concepts relevant to this focus are prioritized and detailed.\n`
-    : ''
   return (
-    'You are an expert educator and knowledge architect. Analyze the following lecture slides to construct a comprehensive global concept map.\n' +
-    focusContext +
-    '- Objectives: Extract explicit learning goals and implicit competency targets.\n' +
-    '- Concepts: Identify the core entities, theories, and definitions. Prioritize *fundamental* concepts. Assign stable, short, unique IDs.\n' +
-    '- For each concept add:\n' +
-    '    - `importance`: one of `high`, `medium`, `low` based on lecture objectives.\n' +
-    '    - `difficulty`: one of `foundational`, `intermediate`, `advanced` based on cognitive load.\n' +
-    '    - `page_references`: integer slide/page numbers where the concept is taught or illustrated.\n' +
-    '- Relations: Map the *semantic structure* (e.g., `is_a`, `part_of`, `causes`, `contrasts_with`). Note page references using `page_references`.\n' +
-    "- Language: Detect the primary language of the slides (e.g. 'en', 'de', 'fr'). Return the ISO 639-1 code.\n" +
-    "- Slide Set Name: Generate a semantic name for this slide set (e.g., 'Lecture 2 Introduction To Machine Learning'). Use Title Case, max 8 words. Include lecture/week number if present.\n" +
-    '- Metadata: Estimate `page_count` (integer) and `estimated_text_chars` (integer) for pacing calculations.\n' +
-    '- Metadata: Return `document_type` as one of `slides`, `script`, or `mixed`.\n' +
-    '- Formatting: STRICTLY AVOID Markdown in text fields. Use HTML.\n' +
-    'Return ONLY a JSON object with keys: objectives, concepts, relations, language, slide_set_name, page_count, estimated_text_chars, document_type. No prose.'
+    'Analyze the attached lecture document and build its global concept map.\n' +
+    (focus ? `Give extra depth to concepts related to the user focus: "${focus}".\n` : '') +
+    'Return JSON with:\n' +
+    '- objectives: explicit learning goals plus the implicit competency targets.\n' +
+    '- concepts: the core entities, theories, and definitions, fundamentals first. Each carries a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), and page_references (integer pages where it is taught or illustrated).\n' +
+    '- relations: the semantic structure between concepts (is_a, part_of, causes, contrasts_with, ...) with page_references.\n' +
+    "- language: ISO 639-1 code of the document's primary language.\n" +
+    '- slide_set_name: Title Case name for this set, max 8 words, keeping any lecture/week number.\n' +
+    '- page_count and estimated_text_chars: integers, used for deck sizing.\n' +
+    '- document_type: slides, script, or mixed.\n' +
+    'Text fields use HTML, never Markdown.'
   )
 }
 
@@ -148,38 +127,27 @@ export function generationMissionPrompt(
     totalCardCap: number
     batchSize: number
     gapText: string
-    pacingHint: string
   },
 ): string {
   const focus = focusOf(ctx)
-  const focusInstruction = focus
-    ? `- User Focus: "${focus}". Ensure generated cards align with this goal (e.g. if asking for definitions, prefer Cloze/Basic defs).\n`
-    : ''
   return (
-    `Now create the flashcard deck for the document you just analyzed. You are working agentically: submit cards in batches by calling the submit_cards tool, and after every call you will receive a machine-generated review — accepted/rejected verdicts with reasons, plus an updated COVERAGE LEDGER showing which pages, concepts and relations still lack cards. Use that feedback to plan your next batch: fix what was rejected (do not silently drop rejected material), then close the highest-priority gaps.\n` +
-    `\nBudget: at most ${opts.totalCardCap} accepted cards in total. Aim for roughly ${opts.batchSize} cards per submit_cards call.\n` +
-    `Language: Ensure all content is in ${ctx.language}.\n` +
-    '- Principles:\n' +
-    '    - Atomicity: One idea per card.\n' +
-    '    - Variety: Mix Definitions, Comparisons, Applications.\n' +
-    '    - Breadth-first coverage: cover every HIGH importance concept before deepening already-covered clusters.\n' +
-    '    - Anti-clustering: do not spend more than 2 cards on one slide/topic while higher-priority gaps remain elsewhere.\n' +
-    focusInstruction +
-    '- Format:\n' +
-    '    - Prefer Cloze for definitions/lists. Basic for open-ended questions.\n' +
-    '    - STRICTLY AVOID Markdown. Use HTML for formatting.\n' +
-    '- Per-card metadata (required for acceptance):\n' +
-    '    - `slide_topic` (short section/topic label, Title Case, ideally <= 8 words).\n' +
-    '    - `slide_number` when confident (integer page number).\n' +
-    '    - `source_pages`: array of grounded page numbers for the card.\n' +
-    '    - `concept_ids`: array of concept IDs from your concept map that this card covers.\n' +
-    '    - `relation_keys`: array of `<source>|<type>|<target>` relation signatures when the card teaches a relation from the concept map.\n' +
-    '    - `rationale`: concise reason the card matters (max 140 chars).\n' +
-    '    - `source_excerpt`: concise excerpt grounded in the slide wording or diagram content (max 220 chars).\n' +
-    '    - If grounding is weak, emit fewer cards rather than inventing unsupported details.\n' +
-    `\nWhen — and only when — the coverage ledger shows the important concepts and pages are exhausted, or the budget is spent, call finish_generation with a short coverage assessment. Do not finish while HIGH importance concepts remain uncovered and budget remains.\n` +
-    `\n${opts.pacingHint}\n${opts.gapText}\n` +
-    'Begin by calling submit_cards with your first batch.'
+    `Now build the deck for the document you just mapped. Work in batches: call submit_cards, read the review it returns — accepted/rejected verdicts with reasons plus a coverage ledger of pages, concepts, and relations still lacking cards — and let that drive the next batch. Rework rejected material rather than dropping it.\n` +
+    `\nBudget: ${opts.totalCardCap} accepted cards total. Keep each submit_cards call to about ${opts.batchSize} cards; larger payloads risk truncation.\n` +
+    `Coverage order: every high-importance concept first, then breadth across pages. Spend at most 2 cards on one slide while gaps remain elsewhere.\n` +
+    (focus ? `User focus: "${focus}" — align card selection and style with it.\n` : '') +
+    `Quality bar: the front has exactly one defensible answer (open questions, never yes/no); the answer is verifiable against the card's source_excerpt; prefer why/how/compare/apply over restatement. Use Cloze for definitions and lists (with a {{c1::...}} deletion), Basic for open questions.\n` +
+    `Metadata required on every card:\n` +
+    `- slide_topic: short section label, Title Case, up to 8 words.\n` +
+    `- slide_number: integer page, when confident.\n` +
+    `- source_pages: the page numbers grounding the card.\n` +
+    `- concept_ids: ids copied exactly from your concept map — unrecognized ids are dropped and earn no coverage.\n` +
+    `- relation_keys: "<source>|<type>|<target>" signatures when the card teaches a mapped relation.\n` +
+    `- rationale: why the card matters, up to 140 chars.\n` +
+    `- source_excerpt: the grounding slide wording or diagram content, up to 220 chars.\n` +
+    `When grounding is weak, submit fewer cards.\n` +
+    `\nCall finish_generation once the ledger shows the important material is covered or the budget is spent.\n` +
+    `\n${opts.gapText}\n` +
+    'Start with your first submit_cards call.'
   )
 }
 
@@ -188,9 +156,9 @@ export function buildSubmitFeedback(opts: {
   acceptedCount: number
   rejected: Array<{ front: string; reasons: string[] }>
   duplicates: number
+  unknownMetadataDropped: number
   cardsRemaining: number
   gapText: string
-  pacingHint: string
   finishAllowed: boolean
 }): string {
   const lines: string[] = []
@@ -203,8 +171,12 @@ export function buildSubmitFeedback(opts: {
       lines.push(`  - "${r.front.slice(0, 80)}" → ${r.reasons.join(', ')}`)
     }
   }
+  if (opts.unknownMetadataDropped > 0) {
+    lines.push(
+      `${opts.unknownMetadataDropped} concept_id/relation_key value(s) did not match your concept map and were dropped — copy ids exactly from the map.`,
+    )
+  }
   lines.push(`Remaining budget: ${opts.cardsRemaining} card(s).`)
-  lines.push(opts.pacingHint)
   lines.push(opts.gapText)
   lines.push(
     opts.finishAllowed
@@ -214,31 +186,48 @@ export function buildSubmitFeedback(opts: {
   return lines.filter(Boolean).join('\n')
 }
 
-/** Phase 3 — reflection / QA pass. */
-export function reflectionPrompt(
+/** Phase 3 — mission brief for the agentic review loop over the deck. */
+export function reviewMissionPrompt(
   ctx: PromptContext,
-  opts: { limit: number; cardsJson: string; coverageGaps: string },
+  opts: {
+    deckListing: string
+    coverageGaps: string
+    cardCap: number
+    freeSlots: number
+  },
 ): string {
   const focus = focusOf(ctx)
-  const focusContext = focus ? `- Check alignment with user focus: "${focus}"\n` : ''
   return (
-    'You are a Quality Assurance Specialist. Review the provided cards and refine them.\n' +
-    'Critique Criteria:\n' +
-    '    - Redundancy: Duplicate/overlapping? Merge them.\n' +
-    '    - Vagueness: Ambiguous? Clarify them.\n' +
-    '    - Complexity: Too long? Split them.\n' +
-    '    - Distribution: If coverage is clustered, replace low-value cards with missing high-priority coverage.\n' +
-    '    - Grounding: Preserve or improve `source_pages`, `slide_number`, and `concept_ids`.\n' +
-    '    - Provenance: Preserve or improve `rationale`, `source_excerpt`, and `relation_keys`.\n' +
-    focusContext +
-    `${opts.coverageGaps}\n` +
-    'Action:\n' +
-    '    - Write a concise `reflection` on the quality of these cards.\n' +
-    '    - Rewrite the cards applying your critique. Add gap-filling cards if necessary.\n' +
-    '    - Keep strong cards when they already meet the criteria; do not rewrite purely for style.\n' +
-    '    - Return the best refined set of cards for this batch, with improved metadata.\n' +
-    `Language: Ensure all content is in ${ctx.language}.\n` +
-    `\nCards to Refine:\n${opts.cardsJson}\n` +
-    `Return ONLY JSON: {reflection, cards, done}. Limit ${opts.limit} cards.`
+    'The deck is generated. Review it as a quality editor, working through the edit tools:\n' +
+    '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back.\n' +
+    '- remove_cards: delete redundant or low-value cards. When two overlap, keep the stronger one or merge them via update_card.\n' +
+    `- add_cards: close remaining coverage gaps. The deck budget stays ${opts.cardCap} cards (${opts.freeSlots} slot(s) currently free); removing a card frees a slot.\n` +
+    '- finish_review: call when the deck is sound, with a short quality summary.\n' +
+    '\nEvery edit passes the same quality gate as generation and returns a verdict plus an updated coverage ledger. ' +
+    'Leave strong cards untouched — edit only where you can name the defect. ' +
+    `All content stays in ${ctx.language}.\n` +
+    (focus ? `Check alignment with the user focus: "${focus}".\n` : '') +
+    `\n${opts.coverageGaps}\n` +
+    `\nDeck under review (card_id → content):\n${opts.deckListing}`
   )
+}
+
+/** Feedback payload returned to the model after each review-tool round. */
+export function buildReviewFeedback(opts: {
+  applied: string[]
+  rejected: Array<{ ref: string; reasons: string[] }>
+  gapText: string
+}): string {
+  const lines: string[] = []
+  if (opts.applied.length > 0) lines.push(`Applied: ${opts.applied.join('; ')}.`)
+  if (opts.rejected.length > 0) {
+    lines.push('Rejected (card unchanged):')
+    for (const r of opts.rejected.slice(0, 10)) {
+      lines.push(`  - ${r.ref} → ${r.reasons.join(', ')}`)
+    }
+  }
+  if (opts.applied.length === 0 && opts.rejected.length === 0) lines.push('No edits applied.')
+  lines.push(opts.gapText)
+  lines.push('Continue editing where you can name a defect, or call finish_review.')
+  return lines.join('\n')
 }
