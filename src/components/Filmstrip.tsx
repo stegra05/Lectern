@@ -23,7 +23,7 @@ export function Filmstrip({ interactive }: { interactive: boolean }) {
   const counts = coverage?.cardsPerPage ?? {}
 
   return (
-    <div className="shrink-0 border-b border-desk-edge/60">
+    <div className="border-desk-edge/60 shrink-0 border-b">
       <div className="flex gap-2 overflow-x-auto px-4 py-3">
         {Array.from({ length: pdfInfo.pageCount }, (_, i) => i + 1).map((page) => {
           const isCovered = covered.has(page)
@@ -33,19 +33,24 @@ export function Filmstrip({ interactive }: { interactive: boolean }) {
           const count = counts[page] ?? 0
           const thumb = pageThumbs[page]
 
+          // The flare glow sits on the wrapper so the tile's overflow clip
+          // can't swallow it.
+          const wrapperClass = `relative rounded-sm ${isNew ? 'lamp-flare' : ''}`
           const tile = (
             <div
-              className={`relative h-[54px] w-[72px] shrink-0 overflow-hidden rounded-[3px] transition-all duration-500 ${
-                isCovered ? 'opacity-100 ring-1 ring-lamp/70' : 'opacity-35 grayscale ring-1 ring-paper/10'
-              } ${isNew ? 'lamp-flare' : ''} ${isFiltered ? 'ring-2 ring-lamp' : ''}`}
+              className={`relative h-[54px] w-[72px] shrink-0 overflow-hidden rounded-sm transition-[opacity,filter] duration-500 ${
+                isCovered
+                  ? 'opacity-100 ring-lamp/70 ring-1'
+                  : 'ring-paper/10 opacity-35 grayscale ring-1 group-hover:opacity-60'
+              } ${isFiltered ? 'ring-lamp ring-2' : ''}`}
             >
               {thumb ? (
-                <img src={thumb} alt={`Page ${page}`} className="h-full w-full object-cover" />
+                <img src={thumb} alt="" className="h-full w-full object-cover" />
               ) : (
-                <div className="h-full w-full bg-paper/10" />
+                <div className="bg-paper/10 h-full w-full" />
               )}
               {count > 0 && (
-                <span className="absolute right-0.5 bottom-0.5 rounded-sm bg-desk/85 px-1 font-data text-[10px] text-lamp">
+                <span className="bg-desk/85 font-data text-lamp absolute right-0.5 bottom-0.5 rounded-sm px-1 text-2xs">
                   {count}
                 </span>
               )}
@@ -57,16 +62,18 @@ export function Filmstrip({ interactive }: { interactive: boolean }) {
               {interactive ? (
                 <button
                   onClick={() => setPageFilter(isFiltered ? null : page)}
-                  className="rounded-[3px]"
-                  aria-label={`Filter cards from page ${page}`}
+                  className={`group ${wrapperClass}`}
+                  aria-label={`Filter cards from page ${page}${count > 0 ? ` (${count} cards)` : ''}`}
                   aria-pressed={isFiltered}
                 >
                   {tile}
                 </button>
               ) : (
-                tile
+                <div className={wrapperClass}>{tile}</div>
               )}
-              <span className={`font-data text-[10px] ${isCovered ? 'text-lamp' : 'text-chalk-dim/60'}`}>
+              <span
+                className={`font-data text-2xs ${isCovered ? 'text-lamp' : 'text-chalk-dim/60'}`}
+              >
                 {page}
               </span>
             </div>

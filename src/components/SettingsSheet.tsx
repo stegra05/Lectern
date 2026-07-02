@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MODEL_CHOICES } from '../engine/config'
 import type { Settings } from '../engine/types'
 import { deleteApiKey, setApiKey } from '../lib/settings'
@@ -18,6 +18,7 @@ export function SettingsSheet() {
   const [draft, setDraft] = useState<Settings | null>(null)
   const [keyDraft, setKeyDraft] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (open && settings) {
@@ -25,6 +26,37 @@ export function SettingsSheet() {
       setKeyDraft('')
     }
   }, [open, settings])
+
+  // Esc closes; focus returns to the button that opened the sheet.
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        openSettings(false)
+      } else if (e.key === 'Tab') {
+        // Keep focus inside the dialog.
+        const focusables = sheetRef.current?.querySelectorAll<HTMLElement>(
+          'button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        )
+        if (!focusables || focusables.length === 0) return
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.getElementById('settings-trigger')?.focus()
+    }
+  }, [open, openSettings])
 
   if (!open || !draft) return null
 
@@ -43,29 +75,36 @@ export function SettingsSheet() {
     toast('success', 'Settings saved.')
   }
 
-  const field =
-    'mt-1.5 w-full rounded-md bg-desk px-3 py-2 text-[14px] text-chalk placeholder:text-chalk-dim/60'
-
   return (
     <div
-      className="absolute inset-0 z-40 flex items-center justify-center bg-desk/70 backdrop-blur-sm"
+      className="bg-desk/70 fade-in absolute inset-0 z-40 flex items-center justify-center backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && openSettings(false)}
       role="dialog"
       aria-modal="true"
-      aria-label="Settings"
+      aria-labelledby="settings-title"
     >
-      <div className="max-h-[85%] w-[460px] overflow-y-auto rounded-lg bg-desk-raised p-6 shadow-2xl">
-        <h2 className="text-[15px] font-semibold text-chalk">Settings</h2>
+      <div
+        ref={sheetRef}
+        className="bg-desk-raised shadow-sheet sheet-in max-h-[85%] w-[460px] overflow-y-auto rounded-lg p-6"
+      >
+        <h2 id="settings-title" className="text-chalk text-md font-semibold">
+          Settings
+        </h2>
 
         <div className="mt-5 space-y-5">
           <label className="block">
             <span className="eyebrow">Gemini API key</span>
             <input
+              autoFocus
               type="password"
               value={keyDraft}
               onChange={(e) => setKeyDraft(e.target.value)}
-              placeholder={hasApiKey ? 'Saved in the system keychain — paste to replace' : 'Paste your key from aistudio.google.com'}
-              className={field}
+              placeholder={
+                hasApiKey
+                  ? 'Saved in the system keychain — paste to replace'
+                  : 'Paste your key from aistudio.google.com'
+              }
+              className="field bg-desk mt-1.5"
             />
             {hasApiKey && (
               <button
@@ -75,7 +114,7 @@ export function SettingsSheet() {
                     toast('info', 'API key removed from the keychain.')
                   })
                 }}
-                className="mt-1 text-[12px] text-chalk-dim underline-offset-2 hover:text-brick hover:underline"
+                className="text-chalk-dim hover:text-brick-soft mt-1 rounded-sm text-xs underline-offset-2 transition-colors duration-150 hover:underline"
               >
                 Remove saved key
               </button>
@@ -87,7 +126,7 @@ export function SettingsSheet() {
             <select
               value={draft.model}
               onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-              className={field}
+              className="field bg-desk mt-1.5 cursor-pointer"
             >
               {MODEL_CHOICES.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -103,17 +142,22 @@ export function SettingsSheet() {
               <input
                 value={draft.ankiUrl}
                 onChange={(e) => setDraft({ ...draft, ankiUrl: e.target.value })}
-                className={field}
+                className="field bg-desk mt-1.5"
               />
               <button
                 onClick={() => void refreshAnki()}
-                className="mt-1.5 shrink-0 rounded-md border border-desk-edge px-3 py-2 text-[13px] text-chalk hover:border-chalk-dim"
+                disabled={ankiStatus === 'checking'}
+                className="btn-secondary mt-1.5 shrink-0 px-3 py-2"
               >
-                {ankiStatus === 'checking' ? '…' : ankiStatus === 'connected' ? 'Connected' : 'Ping'}
+                {ankiStatus === 'checking'
+                  ? 'Checking…'
+                  : ankiStatus === 'connected'
+                    ? 'Connected'
+                    : 'Ping'}
               </button>
             </div>
             {ankiStatus === 'offline' && (
-              <p className="mt-1 text-[12px] text-chalk-dim">
+              <p className="text-chalk-dim mt-1 text-xs">
                 Open Anki and install the AnkiConnect add-on (code 2055492159).
               </p>
             )}
@@ -121,21 +165,27 @@ export function SettingsSheet() {
 
           <button
             onClick={() => setAdvancedOpen(!advancedOpen)}
-            className="eyebrow hover:text-chalk"
+            className="eyebrow hover:text-chalk flex items-center gap-1 rounded-sm transition-colors duration-150"
             aria-expanded={advancedOpen}
           >
-            Advanced {advancedOpen ? '▾' : '▸'}
+            Advanced
+            <span
+              aria-hidden
+              className={`inline-block transition-transform duration-150 ease-out ${advancedOpen ? 'rotate-90' : ''}`}
+            >
+              ▸
+            </span>
           </button>
 
           {advancedOpen && (
-            <div className="space-y-4">
+            <div className="rise-in space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="eyebrow">Basic note type</span>
                   <input
                     value={draft.basicModelName}
                     onChange={(e) => setDraft({ ...draft, basicModelName: e.target.value })}
-                    className={field}
+                    className="field bg-desk mt-1.5"
                   />
                 </label>
                 <label className="block">
@@ -143,7 +193,7 @@ export function SettingsSheet() {
                   <input
                     value={draft.clozeModelName}
                     onChange={(e) => setDraft({ ...draft, clozeModelName: e.target.value })}
-                    className={field}
+                    className="field bg-desk mt-1.5"
                   />
                 </label>
               </div>
@@ -152,7 +202,7 @@ export function SettingsSheet() {
                 <input
                   value={draft.tagTemplate}
                   onChange={(e) => setDraft({ ...draft, tagTemplate: e.target.value })}
-                  className={`${field} font-data text-[13px]`}
+                  className="field bg-desk font-data mt-1.5 text-sm"
                 />
               </label>
               <label className="flex items-center gap-2">
@@ -162,7 +212,7 @@ export function SettingsSheet() {
                   onChange={(e) => setDraft({ ...draft, enableDefaultTag: e.target.checked })}
                   className="accent-lamp"
                 />
-                <span className="text-[13px] text-chalk">
+                <span className="text-chalk text-sm">
                   Also tag every card with “{draft.defaultTag}”
                 </span>
               </label>
@@ -171,16 +221,10 @@ export function SettingsSheet() {
         </div>
 
         <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={() => openSettings(false)}
-            className="rounded-md px-4 py-2 text-[13px] text-chalk-dim hover:text-chalk"
-          >
+          <button onClick={() => openSettings(false)} className="btn-ghost px-4 py-2">
             Cancel
           </button>
-          <button
-            onClick={() => void save()}
-            className="rounded-md bg-lamp px-4 py-2 text-[13px] font-semibold text-ink hover:bg-lamp-deep"
-          >
+          <button onClick={() => void save()} className="btn-primary px-4 py-2 text-sm">
             Save settings
           </button>
         </div>

@@ -15,17 +15,21 @@ const PHASES: Array<{ id: AppPhase; label: string }> = [
 
 export function SessionView() {
   const phase = useLectern((s) => s.phase)
+  const hasCards = useLectern((s) => s.cards.length > 0)
   const isDone = phase === 'complete'
   const isError = phase === 'error'
+  // After an error, the cards produced so far stay reviewable and syncable.
+  const reviewable = isDone || isError
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Filmstrip interactive={isDone} />
+      <Filmstrip interactive={reviewable} />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <section className="relative flex min-w-0 flex-1 flex-col">
-          {isError ? <ErrorPanel /> : <CardColumn />}
-          {isDone && <SyncBar />}
+          {isError && <ErrorBanner />}
+          <CardColumn />
+          {reviewable && hasCards && <SyncBar />}
         </section>
       </div>
     </div>
@@ -52,7 +56,7 @@ function Sidebar() {
   const phaseIndex = PHASES.findIndex((p) => p.id === phase)
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col gap-5 border-r border-desk-edge/60 p-4">
+    <aside className="border-desk-edge/60 flex w-64 shrink-0 flex-col gap-5 border-r p-4">
       {/* Phase register */}
       <ol className="space-y-1.5">
         {PHASES.map((p, i) => {
@@ -61,12 +65,20 @@ function Sidebar() {
             <li key={p.id} className="flex items-center gap-2.5">
               <span
                 className={`size-1.5 rounded-full ${
-                  state === 'done' ? 'bg-lamp/60' : state === 'now' ? 'bg-lamp animate-pulse' : 'bg-desk-edge'
+                  state === 'done'
+                    ? 'bg-lamp/60'
+                    : state === 'now'
+                      ? 'bg-lamp animate-pulse'
+                      : 'bg-desk-edge'
                 }`}
               />
               <span
-                className={`text-[13px] ${
-                  state === 'now' ? 'font-medium text-chalk' : state === 'done' ? 'text-chalk-dim' : 'text-chalk-dim/50'
+                className={`text-sm ${
+                  state === 'now'
+                    ? 'text-chalk font-medium'
+                    : state === 'done'
+                      ? 'text-chalk-dim'
+                      : 'text-chalk-dim/50'
                 }`}
               >
                 {p.label}
@@ -78,28 +90,36 @@ function Sidebar() {
 
       {/* The ledger, in numbers */}
       {coverage && (
-        <dl className="space-y-1.5 border-t border-desk-edge/60 pt-4">
+        <dl className="border-desk-edge/60 space-y-1.5 border-t pt-4">
           <Stat label="Pages covered" value={`${Math.round(coverage.pageCoveragePercent)}%`} />
           <Stat
             label="Concepts"
             value={`${Math.round(coverage.effectiveConceptCoveragePercent)}%`}
           />
           {conceptMap && coverage.missingHighPriority.length > 0 && (
-            <Stat label="High-priority open" value={String(coverage.missingHighPriority.length)} warn />
+            <Stat
+              label="Key concepts open"
+              value={String(coverage.missingHighPriority.length)}
+              warn
+            />
           )}
           {progress && <Stat label="Cards" value={`${progress.produced} / ${progress.cap}`} />}
         </dl>
       )}
 
       {/* Activity log */}
-      <div className="flex min-h-0 flex-1 flex-col border-t border-desk-edge/60 pt-4">
+      <div className="border-desk-edge/60 flex min-h-0 flex-1 flex-col border-t pt-4">
         <span className="eyebrow mb-2">Activity</span>
         <div ref={logRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
           {logs.map((l, i) => (
             <p
               key={i}
-              className={`font-data text-[11px] leading-snug ${
-                l.level === 'error' ? 'text-brick' : l.level === 'warn' ? 'text-lamp-deep' : 'text-chalk-dim'
+              className={`font-data text-2xs leading-snug ${
+                l.level === 'error'
+                  ? 'text-brick-soft'
+                  : l.level === 'warn'
+                    ? 'text-lamp-deep'
+                    : 'text-chalk-dim'
               }`}
             >
               {l.message}
@@ -109,26 +129,23 @@ function Sidebar() {
       </div>
 
       {/* Session actions */}
-      <div className="border-t border-desk-edge/60 pt-3">
+      <div className="border-desk-edge/60 border-t pt-3">
         {usage && (
-          <p className="mb-2 font-data text-[11px] text-chalk-dim">
+          <p className="font-data text-chalk-dim mb-2 text-2xs">
             {Math.round((usage.inputTokens + usage.outputTokens) / 1000)}k tokens · $
             {usage.costUsd.toFixed(2)}
           </p>
         )}
-        {doneSummary && <p className="mb-2 text-[12px] text-chalk-dim">{doneSummary}</p>}
+        {doneSummary && <p className="text-chalk-dim mb-2 text-xs">{doneSummary}</p>}
         {running ? (
           <button
             onClick={cancelGeneration}
-            className="w-full rounded-md border border-desk-edge px-3 py-2 text-[13px] text-chalk hover:border-brick hover:text-brick"
+            className="btn-secondary hover:border-brick-soft/60 hover:text-brick-soft w-full px-3 py-2"
           >
             Stop generating
           </button>
         ) : (
-          <button
-            onClick={backToHome}
-            className="w-full rounded-md border border-desk-edge px-3 py-2 text-[13px] text-chalk hover:border-chalk-dim"
-          >
+          <button onClick={backToHome} className="btn-secondary w-full px-3 py-2">
             New session
           </button>
         )}
@@ -140,8 +157,39 @@ function Sidebar() {
 function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="flex items-baseline justify-between">
-      <dt className="text-[12px] text-chalk-dim">{label}</dt>
-      <dd className={`font-data text-[12px] ${warn ? 'text-lamp' : 'text-chalk'}`}>{value}</dd>
+      <dt className="text-chalk-dim text-xs">{label}</dt>
+      <dd className={`font-data text-xs ${warn ? 'text-lamp' : 'text-chalk'}`}>{value}</dd>
+    </div>
+  )
+}
+
+function ErrorBanner() {
+  const errorMessage = useLectern((s) => s.errorMessage)
+  const hasCards = useLectern((s) => s.cards.length > 0)
+  const startGeneration = useLectern((s) => s.startGeneration)
+  const backToHome = useLectern((s) => s.backToHome)
+
+  return (
+    <div
+      role="alert"
+      className="border-brick/40 bg-brick/15 rise-in mx-6 mt-4 shrink-0 rounded-md border px-4 py-3"
+    >
+      <p className="text-chalk text-base font-medium">Generation stopped</p>
+      <p className="text-chalk-dim mt-0.5 text-sm">
+        {errorMessage ?? 'Something went wrong.'}
+        {hasCards && ' The cards below are kept — review them or send them to Anki.'}
+      </p>
+      <div className="mt-2.5 flex gap-2">
+        <button
+          onClick={() => void startGeneration()}
+          className="btn-primary px-3.5 py-1.5 text-sm"
+        >
+          Try again
+        </button>
+        <button onClick={backToHome} className="btn-ghost px-3 py-1.5">
+          Back to start
+        </button>
+      </div>
     </div>
   )
 }
@@ -156,15 +204,16 @@ function CardColumn() {
   const rejectedCount = useLectern((s) => s.rejectedCount)
   const listRef = useRef<HTMLDivElement>(null)
   const isDone = phase === 'complete'
+  const isError = phase === 'error'
+  const reviewable = isDone || isError
+  const streaming = phase === 'generating' || phase === 'reflecting'
 
   const visible = useMemo(() => {
     let list = cards
     if (pageFilter !== null) list = list.filter((c) => c.sourcePages.includes(pageFilter))
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      list = list.filter((c) =>
-        Object.values(c.fields).some((v) => v.toLowerCase().includes(q)),
-      )
+      list = list.filter((c) => Object.values(c.fields).some((v) => v.toLowerCase().includes(q)))
     }
     return list
   }, [cards, pageFilter, searchQuery])
@@ -172,31 +221,33 @@ function CardColumn() {
   // Follow the stream while generating, if the user is near the bottom.
   useEffect(() => {
     const el = listRef.current
-    if (!el || isDone) return
+    if (!el || reviewable) return
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 240
     if (nearBottom) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  }, [cards.length, isDone])
+  }, [cards.length, reviewable])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {isDone && (
+      {reviewable && cards.length > 0 && (
         <div className="mx-auto flex w-full max-w-2xl shrink-0 items-center gap-3 px-6 pt-4 pb-1">
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
             placeholder="Search cards"
-            className="w-56 rounded-md bg-desk-raised px-3 py-1.5 text-[13px] text-chalk placeholder:text-chalk-dim/60"
+            className="field w-56 px-3 py-1.5 text-sm"
             aria-label="Search cards"
           />
           {pageFilter !== null && (
             <button
               onClick={() => setPageFilter(null)}
-              className="rounded-full bg-lamp/15 px-2.5 py-1 font-data text-[11px] text-lamp hover:bg-lamp/25"
+              className="bg-lamp/15 font-data text-lamp hover:bg-lamp/25 rounded-full px-2.5 py-1 text-2xs transition-colors duration-150"
+              aria-label={`Stop filtering by page ${pageFilter}`}
             >
               page {pageFilter} ✕
             </button>
           )}
-          <span className="ml-auto font-data text-[12px] text-chalk-dim">
+          <span aria-live="polite" className="font-data text-chalk-dim ml-auto text-xs">
             {visible.length} of {cards.length} cards
             {rejectedCount > 0 && ` · ${rejectedCount} rejected by the quality gate`}
           </span>
@@ -205,17 +256,19 @@ function CardColumn() {
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         {visible.length === 0 ? (
-          <Empty isDone={isDone} filtered={cards.length > 0} />
+          <Empty phase={phase} filtered={cards.length > 0} />
         ) : (
           <div className="mx-auto max-w-2xl space-y-3 pb-24">
             {visible.map((card, i) => (
               <CardTile
                 key={card.uid}
                 card={card}
-                editable={isDone}
-                animate={!isDone && i >= cards.length - 3}
+                editable={reviewable}
+                animate={!reviewable && i >= cards.length - 3}
               />
             ))}
+            {/* The next card, forming. */}
+            {streaming && <div aria-hidden className="bg-paper/8 h-10 animate-pulse rounded-md" />}
           </div>
         )}
       </div>
@@ -223,40 +276,18 @@ function CardColumn() {
   )
 }
 
-function Empty({ isDone, filtered }: { isDone: boolean; filtered: boolean }) {
+function Empty({ phase, filtered }: { phase: AppPhase; filtered: boolean }) {
   return (
     <div className="flex h-full items-center justify-center">
-      <p className="text-[14px] text-chalk-dim">
+      <p className="text-chalk-dim text-base">
         {filtered
           ? 'No cards match — clear the search or page filter.'
-          : isDone
+          : phase === 'complete'
             ? 'No cards made it through. Try a larger deck size or a different focus.'
-            : 'Reading the lecture…'}
+            : phase === 'error'
+              ? 'No cards had been accepted before the stop.'
+              : 'Reading the lecture…'}
       </p>
-    </div>
-  )
-}
-
-function ErrorPanel() {
-  const errorMessage = useLectern((s) => s.errorMessage)
-  const backToHome = useLectern((s) => s.backToHome)
-  const cards = useLectern((s) => s.cards)
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-8">
-      <p className="max-w-md text-center text-[14px] text-chalk">
-        {errorMessage ?? 'Generation failed.'}
-      </p>
-      {cards.length > 0 && (
-        <p className="text-[13px] text-chalk-dim">
-          {cards.length} cards were generated before the error — go back to keep or discard them.
-        </p>
-      )}
-      <button
-        onClick={backToHome}
-        className="rounded-md bg-lamp px-4 py-2 text-[14px] font-semibold text-ink hover:bg-lamp-deep"
-      >
-        Back to start
-      </button>
     </div>
   )
 }

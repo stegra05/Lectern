@@ -18,6 +18,18 @@ export default function App() {
     void init()
   }, [init])
 
+  // ⌘, — the macOS settings convention.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        useLectern.getState().openSettings(true)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // Native drag & drop of PDFs onto the window.
   useEffect(() => {
     if (!IS_TAURI) return
@@ -44,9 +56,9 @@ export default function App() {
       {view === 'home' ? <HomeView /> : <SessionView />}
 
       {dragging && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-desk/80 backdrop-blur-sm">
-          <div className="rounded-lg border-2 border-dashed border-lamp px-10 py-8">
-            <p className="text-[15px] font-medium text-lamp">Drop to read this lecture</p>
+        <div className="bg-desk/80 fade-in pointer-events-none absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm">
+          <div className="border-lamp rounded-lg border-2 border-dashed px-10 py-8">
+            <p className="text-lamp text-md font-medium">Drop to read this lecture</p>
           </div>
         </div>
       )}

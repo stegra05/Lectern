@@ -17,7 +17,12 @@ export function HomeView() {
   const sizing = useLectern((s) => s.sizing)
   const estimate = useLectern((s) => s.estimate)
   const settings = useLectern((s) => s.settings)
+  const hasApiKey = useLectern((s) => s.hasApiKey)
+  const openSettings = useLectern((s) => s.openSettings)
   const startGeneration = useLectern((s) => s.startGeneration)
+
+  const missingDeck = !deckName.trim()
+  const cannotGenerate = !hasApiKey || missingDeck
 
   return (
     <main className="flex flex-1 items-start justify-center overflow-y-auto px-8 py-12">
@@ -30,11 +35,11 @@ export function HomeView() {
               aria-label="Choose a lecture PDF"
             >
               {/* A blank index card waiting on the desk, two more beneath it */}
-              <div className="absolute inset-0 translate-y-2 rotate-[-1.6deg] rounded-lg bg-paper/20 transition-transform duration-300 group-hover:rotate-[-2.4deg]" />
-              <div className="absolute inset-0 translate-y-1 rotate-[1.1deg] rounded-lg bg-paper/45 transition-transform duration-300 group-hover:rotate-[1.8deg]" />
-              <div className="relative flex aspect-[3/2] flex-col items-center justify-center rounded-lg bg-paper shadow-[0_10px_30px_rgb(0_0_0/0.5)] transition-transform duration-300 group-hover:-translate-y-0.5 group-focus-visible:ring-2 group-focus-visible:ring-lamp">
-                <p className="font-card text-[19px] font-medium text-ink">Drop a lecture PDF</p>
-                <p className="mt-1.5 text-[13px] text-ink-soft">or click to browse</p>
+              <div className="bg-paper/20 absolute inset-0 translate-y-2 rotate-[-1.6deg] rounded-lg transition-transform duration-200 ease-out group-hover:rotate-[-2.4deg]" />
+              <div className="bg-paper/45 absolute inset-0 translate-y-1 rotate-[1.1deg] rounded-lg transition-transform duration-200 ease-out group-hover:rotate-[1.8deg]" />
+              <div className="bg-paper shadow-hero group-focus-visible:ring-lamp relative flex aspect-[3/2] flex-col items-center justify-center rounded-lg transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-active:translate-y-0 group-focus-visible:ring-2">
+                <p className="font-card text-ink text-xl font-medium">Drop a lecture PDF</p>
+                <p className="text-ink-soft mt-1.5 text-sm">or click to browse</p>
               </div>
             </button>
             <p className="eyebrow mt-10 text-center">PDF → concept map → flashcards → Anki</p>
@@ -42,24 +47,21 @@ export function HomeView() {
         ) : (
           <div className="space-y-6">
             {/* Source document */}
-            <section className="flex items-center gap-4 rounded-md bg-desk-raised/70 p-3">
-              <div className="h-16 w-[85px] shrink-0 overflow-hidden rounded-sm bg-paper/15">
+            <section className="bg-desk-raised/70 flex items-center gap-4 rounded-md p-3">
+              <div className="bg-paper/15 h-16 w-[85px] shrink-0 overflow-hidden rounded-sm">
                 {pageThumbs[1] && (
                   <img src={pageThumbs[1]} alt="" className="h-full w-full object-cover" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-medium text-chalk">{fileName}</p>
+                <p className="text-chalk truncate text-base font-medium">{fileName}</p>
                 {pdfInfo && (
-                  <p className="mt-0.5 font-data text-[12px] text-chalk-dim">
+                  <p className="font-data text-chalk-dim mt-0.5 text-xs">
                     {pdfInfo.pageCount} pages · {Math.round(pdfInfo.textChars / 1000)}k chars
                   </p>
                 )}
               </div>
-              <button
-                onClick={clearPdf}
-                className="rounded px-2 py-1 text-[13px] text-chalk-dim hover:text-chalk"
-              >
+              <button onClick={clearPdf} className="btn-ghost px-2.5 py-1.5">
                 Replace
               </button>
             </section>
@@ -72,7 +74,7 @@ export function HomeView() {
                 onChange={(e) => setDeckName(e.target.value)}
                 list="anki-decks"
                 placeholder="e.g. Machine Learning::Lecture 2"
-                className="mt-1.5 w-full rounded-md bg-desk-raised px-3 py-2 text-[14px] text-chalk placeholder:text-chalk-dim/60"
+                className="field mt-1.5"
               />
               <datalist id="anki-decks">
                 {ankiDecks.map((d) => (
@@ -85,7 +87,7 @@ export function HomeView() {
             <div>
               <div className="flex items-baseline justify-between">
                 <span className="eyebrow">Deck size</span>
-                <span className="font-data text-[12px] text-chalk-dim">
+                <span className="font-data text-chalk-dim text-xs">
                   {targetCards ?? `auto · ~${sizing?.totalCardCap ?? '—'}`} cards
                 </span>
               </div>
@@ -95,13 +97,13 @@ export function HomeView() {
                 max={Math.max(80, (sizing?.totalCardCap ?? 40) * 2)}
                 value={targetCards ?? sizing?.totalCardCap ?? 30}
                 onChange={(e) => setTargetCards(Number(e.target.value))}
-                className="mt-2 w-full accent-lamp"
+                className="mt-2"
                 aria-label="Target number of cards"
               />
               {targetCards !== null && (
                 <button
                   onClick={() => setTargetCards(null)}
-                  className="mt-1 text-[12px] text-chalk-dim underline-offset-2 hover:text-chalk hover:underline"
+                  className="text-chalk-dim hover:text-chalk mt-1 rounded-sm text-xs underline-offset-2 transition-colors duration-150 hover:underline"
                 >
                   Size from the document instead
                 </button>
@@ -117,13 +119,13 @@ export function HomeView() {
                 rows={2}
                 maxLength={180}
                 placeholder={'e.g. "definitions and formulas for the exam"'}
-                className="mt-1.5 w-full resize-none rounded-md bg-desk-raised px-3 py-2 text-[14px] text-chalk placeholder:text-chalk-dim/60"
+                className="field mt-1.5 resize-none"
               />
             </label>
 
             {/* Generate */}
             <div className="flex items-center justify-between pt-2">
-              <p className="font-data text-[12px] text-chalk-dim">
+              <p className="font-data text-chalk-dim text-xs">
                 {settings?.model &&
                   (MODEL_CHOICES.find((m) => m.id === settings.model)?.label.split(' — ')[0] ??
                     settings.model)}
@@ -131,11 +133,29 @@ export function HomeView() {
               </p>
               <button
                 onClick={() => void startGeneration()}
-                className="rounded-md bg-lamp px-5 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:bg-lamp-deep"
+                disabled={cannotGenerate}
+                className="btn-primary px-5 py-2.5"
               >
                 Generate deck
               </button>
             </div>
+            {!hasApiKey ? (
+              <p className="-mt-3 text-right text-xs">
+                <button
+                  onClick={() => openSettings(true)}
+                  className="text-chalk-dim hover:text-chalk rounded-sm underline underline-offset-2 transition-colors duration-150"
+                >
+                  Add your Gemini API key in Settings
+                </button>{' '}
+                <span className="text-chalk-dim">to generate.</span>
+              </p>
+            ) : (
+              missingDeck && (
+                <p className="text-chalk-dim -mt-3 text-right text-xs">
+                  Name the target deck to generate.
+                </p>
+              )
+            )}
           </div>
         )}
       </div>
