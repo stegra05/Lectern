@@ -343,36 +343,30 @@ export interface ResolvedModelNames {
   cloze: string
 }
 
-/** Cache of resolved model names, keyed by baseUrl + configured names. */
-const modelNameCache = new Map<string, ResolvedModelNames>()
-
-/** Clear the resolution cache (call when Anki note types may have changed). */
-export function clearModelCache(): void {
-  modelNameCache.clear()
-}
-
 /**
  * Port of `detect_builtin_models`: scan every model's fields; Basic signature =
  * has a Front-like and a Back-like field, Cloze signature = has a Text-like
  * field and no Front-like field. A model literally named "Basic"/"Cloze" wins;
- * otherwise the last matching model is kept (same overwrite semantics as Python).
+ * otherwise the last matching model is kept (same overwrite semantics as the
+ * original). The field lookups are independent reads against localhost, so
+ * they go out concurrently; the fold below walks the results in model order,
+ * which keeps the overwrite semantics deterministic.
  */
 async function detectBuiltinModels(
   client: AnkiClient,
   models: string[],
 ): Promise<ResolvedModelNames> {
+  const fieldsPerModel = await Promise.all(
+    // A model whose lookup fails contributes no signature ([] on failure).
+    models.map((name) => client.modelFieldNames(name).catch(() => [] as string[])),
+  )
+
   const detected: ResolvedModelNames = { basic: 'Basic', cloze: 'Cloze' }
   let foundCanonicalBasic = false
   let foundCanonicalCloze = false
 
-  for (const name of models) {
-    let fields: string[] = []
-    try {
-      fields = await client.modelFieldNames(name)
-    } catch {
-      fields = [] // mirror get_model_field_names: [] on failure
-    }
-    const fieldSet = new Set(fields.map((f) => f.trim().toLowerCase()))
+  for (const [index, name] of models.entries()) {
+    const fieldSet = new Set(fieldsPerModel[index].map((f) => f.trim().toLowerCase()))
     const hasFront = [...fieldSet].some((f) => FRONT_FIELD_NAMES.has(f))
     const hasBack = [...fieldSet].some((f) => BACK_FIELD_NAMES.has(f))
     const hasText = [...fieldSet].some((f) => TEXT_FIELD_NAMES.has(f))
@@ -405,9 +399,14 @@ async function detectBuiltinModels(
  * in the collection; otherwise fall back to the detected localized built-ins;
  * otherwise the literal 'Basic'/'Cloze'.
  *
+ * Resolution runs fresh on every call. The original backend cached results
+ * because it re-resolved on every request of a long-running server over slow
+ * sequential lookups; here it only runs on explicit preview/sync actions and
+ * the lookups are concurrent, so caching would only risk staleness when the
+ * user edits note types while the app is open.
+ *
  * When Anki is unreachable the configured names are passed through unchanged
- * (export will fail anyway) and — unlike the Python original — the failure is
- * NOT cached, so the next call retries detection.
+ * (export will fail anyway).
  */
 export async function resolveModelNames(
   client: AnkiClient,
@@ -415,10 +414,6 @@ export async function resolveModelNames(
 ): Promise<ResolvedModelNames> {
   const configuredBasic = settings.basicModelName.trim() || 'Basic'
   const configuredCloze = settings.clozeModelName.trim() || 'Cloze'
-  const cacheKey = `${client.baseUrl}::${configuredBasic}::${configuredCloze}`
-
-  const cached = modelNameCache.get(cacheKey)
-  if (cached) return cached
 
   let models: string[] = []
   try {
@@ -442,12 +437,10 @@ export async function resolveModelNames(
     return kind === 'basic' ? 'Basic' : 'Cloze'
   }
 
-  const resolved: ResolvedModelNames = {
+  return {
     basic: await resolveOne(configuredBasic, 'basic'),
     cloze: await resolveOne(configuredCloze, 'cloze'),
   }
-  modelNameCache.set(cacheKey, resolved)
-  return resolved
 }
 
 // --- Card → note conversion -------------------------------------------------------

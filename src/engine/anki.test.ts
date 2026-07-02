@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   AnkiApiError,
@@ -6,7 +6,6 @@ import {
   AnkiTransportError,
   cardToNote,
   checkConnection,
-  clearModelCache,
   previewSync,
   resolveModelNames,
   syncCards,
@@ -108,10 +107,6 @@ const makeCard = (overrides: Partial<Card> = {}): Card => ({
 })
 
 const tagsFor = (): string[] => ['lectern', 'bio']
-
-beforeEach(() => {
-  clearModelCache()
-})
 
 // --- Envelope shape ---------------------------------------------------------------
 
@@ -334,8 +329,8 @@ describe('resolveModelNames', () => {
     })
   })
 
-  it('passes configured names through when Anki is unreachable, without caching', async () => {
-    const { fetchFn, calls } = makeFetch(() => ({ networkError: 'refused' }))
+  it('passes configured names through when Anki is unreachable', async () => {
+    const { fetchFn } = makeFetch(() => ({ networkError: 'refused' }))
     const client = makeClient(fetchFn)
     const settings = makeSettings({ basicModelName: 'Einfach', clozeModelName: 'Lückentext' })
 
@@ -343,26 +338,26 @@ describe('resolveModelNames', () => {
       basic: 'Einfach',
       cloze: 'Lückentext',
     })
-    const callsAfterFirst = calls.length
-
-    // Not cached: a second call probes Anki again.
-    await resolveModelNames(client, settings)
-    expect(calls.length).toBeGreaterThan(callsAfterFirst)
   })
 
-  it('caches successful resolutions per baseUrl until clearModelCache()', async () => {
+  it('resolves fresh on every call, so note-type changes in Anki are picked up', async () => {
+    const modelSets = [['Vocab'], ['Vocab', 'Basic', 'Cloze']]
     const { fetchFn, calls } = makeFetch(
-      routes({ modelNames: () => ({ result: ['Basic', 'Cloze'] }) }),
+      routes({
+        modelNames: (_params, nth) => ({ result: modelSets[Math.min(nth, 1)] }),
+        modelFieldNames: () => ({ result: ['Word', 'Definition'] }),
+      }),
     )
     const client = makeClient(fetchFn)
 
     await resolveModelNames(client, makeSettings())
     const callsAfterFirst = calls.length
-    await resolveModelNames(client, makeSettings())
-    expect(calls.length).toBe(callsAfterFirst)
 
-    clearModelCache()
-    await resolveModelNames(client, makeSettings())
+    // The collection gained real Basic/Cloze models; a second resolution sees them.
+    await expect(resolveModelNames(client, makeSettings())).resolves.toEqual({
+      basic: 'Basic',
+      cloze: 'Cloze',
+    })
     expect(calls.length).toBeGreaterThan(callsAfterFirst)
   })
 })
