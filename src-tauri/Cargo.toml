@@ -1,6 +1,6 @@
 [package]
 name = "lectern-desktop"
-version = "0.1.0"
+version = "2.1.0"
 description = "Lectern — turn lecture PDFs into Anki flashcards"
 authors = ["Steffen Grabert"]
 edition = "2021"
@@ -25,3 +25,8 @@ tauri-plugin-store = "2"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# The updater is desktop-only; process provides the relaunch after install.
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"

@@ -8,6 +8,7 @@ import { SessionView } from './components/SessionView'
 import { SettingsSheet } from './components/SettingsSheet'
 import { TitleBar } from './components/TitleBar'
 import { Toasts } from './components/Toasts'
+import { UpdatePill } from './components/UpdatePill'
 import { useLectern } from './state/store'
 
 export default function App() {
@@ -94,6 +95,7 @@ export default function App() {
 
       <SettingsSheet />
       <Toasts />
+      <UpdatePill />
     </div>
   )
 }

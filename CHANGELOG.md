@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0 (2026-07-08)
+
+### Added
+- **Automatic updates**: Lectern now checks for new versions on launch and offers
+  to install them in place. Update packages are cryptographically signed and
+  verified before anything is replaced. On Linux this applies to the AppImage only.
+
+Installs of 2.0.0 predate the updater, so this last hop is a manual download.
+
 ## 2.0.0 (2026-07-08)
 
 Complete from-scratch rebuild as a Tauri 2 desktop app.

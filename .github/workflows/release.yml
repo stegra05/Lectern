@@ -58,6 +58,10 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater artifact signing (minisign). tauri-action also generates and
+          # uploads latest.json to the release when these are set.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS signing + notarization: once the Apple Developer secrets exist,
           # add these env entries back. Do NOT add them before the secrets exist:
           # a missing secret becomes an empty string, which the bundler treats as

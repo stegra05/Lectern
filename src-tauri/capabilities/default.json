@@ -9,6 +9,8 @@
     "dialog:default",
     "store:default",
     "fs:default",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "fs:allow-read-file",
       "allow": [{ "path": "**" }]
