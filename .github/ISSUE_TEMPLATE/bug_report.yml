@@ -1,0 +1,48 @@
+name: Bug report
+description: Something broke or behaved unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lectern version
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - PDF reading / filmstrip
+        - Card generation (Gemini)
+        - Card quality / grounding
+        - Review & editing
+        - Anki sync (AnkiConnect)
+        - Settings / API key
+        - Other
+  - type: textarea
+    id: document
+    attributes:
+      label: Source document (for generation bugs)
+      description: >
+        Document type (slides or script), page count, language — and the PDF or
+        the specific page, if you can share it.

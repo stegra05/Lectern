@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lectern — lecture PDFs into Anki flashcards you can trust</title>
+<meta name="description" content="Lectern reads your lecture PDF, builds a concept map, and generates grounded Anki flashcards — every card cites its pages and passes a quality gate. Free, open source, your own Gemini key." />
+<meta property="og:title" content="Lectern" />
+<meta property="og:description" content="Turn lecture PDFs into Anki flashcards you can trust." />
+<meta property="og:image" content="https://stegra05.github.io/Lectern/assets/review.png" />
+<link rel="icon" href="assets/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --desk: #1c1917;
+    --desk-raised: #292524;
+    --desk-edge: #3b362f;
+    --paper: #faf9f5;
+    --paper-shade: #f1efe9;
+    --ink: #211e1a;
+    --ink-soft: #57534e;
+    --chalk: #d6d3cc;
+    --chalk-dim: #938e85;
+    --lamp: #e8a33d;
+    --lamp-deep: #b97a1e;
+    --lamp-ink: #8a5a12;
+    --sage: #7ba05b;
+    --brick: #b04a42;
+    --sans: 'Schibsted Grotesk', system-ui, sans-serif;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--desk);
+    color: var(--chalk);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--chalk-dim);
+  }
+
+  /* ---- header ---- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; }
+  .brand span {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.22em;
+    color: var(--chalk);
+  }
+  nav { display: flex; gap: 22px; align-items: center; }
+  nav a {
+    font-size: 14px; color: var(--chalk-dim); text-decoration: none;
+  }
+  nav a:hover { color: var(--chalk); }
+
+  /* ---- hero, lit by the lamp ---- */
+  .hero {
+    position: relative;
+    text-align: center;
+    padding: 72px 0 40px;
+  }
+  .hero::before {
+    /* the reading lamp: one soft pool of light over the hero */
+    content: '';
+    position: absolute; inset: -140px 0 0 0;
+    background: radial-gradient(ellipse 620px 420px at 50% 0%, rgba(232, 163, 61, 0.13), transparent 70%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(34px, 5.4vw, 54px);
+    line-height: 1.15;
+    color: var(--paper);
+    max-width: 21ch;
+    margin: 18px auto 0;
+    text-wrap: balance;
+  }
+  .hero h1 em { font-style: italic; color: var(--lamp); }
+  .hero p.sub {
+    max-width: 58ch;
+    margin: 22px auto 0;
+    color: var(--chalk);
+    font-size: 17px;
+  }
+  .cta-row {
+    display: flex; gap: 14px; justify-content: center; align-items: center;
+    margin-top: 32px; flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-block;
+    font-family: var(--sans); font-weight: 500; font-size: 15px;
+    text-decoration: none;
+    border-radius: 6px;
+    padding: 12px 22px;
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+  .btn-primary {
+    background: var(--lamp); color: var(--ink);
+  }
+  .btn-primary:hover { background: #f0b155; }
+  .btn-secondary {
+    border: 1px solid var(--desk-edge); color: var(--chalk);
+  }
+  .btn-secondary:hover { border-color: var(--chalk-dim); }
+  .cta-note {
+    margin-top: 14px;
+    font-family: var(--mono); font-size: 12px; color: var(--chalk-dim);
+  }
+
+  /* ---- the filmstrip: coverage made visible ---- */
+  .filmstrip {
+    display: flex; gap: 6px; justify-content: center;
+    margin: 52px auto 0;
+    max-width: 720px;
+  }
+  .filmstrip .tile {
+    flex: 1; max-width: 44px; aspect-ratio: 4 / 3;
+    border-radius: 4px;
+    background:
+      linear-gradient(var(--chalk-dim) 1.5px, transparent 1.5px) 20% 45% / 60% 5px no-repeat,
+      linear-gradient(var(--chalk-dim) 1.5px, transparent 1.5px) 20% 65% / 45% 5px no-repeat,
+      var(--paper-shade);
+    opacity: 0.22;
+    filter: grayscale(1);
+    animation: cover 9s infinite;
+  }
+  .filmstrip .tile:nth-child(2)  { animation-delay: 0.6s; }
+  .filmstrip .tile:nth-child(3)  { animation-delay: 1.2s; }
+  .filmstrip .tile:nth-child(4)  { animation-delay: 1.8s; }
+  .filmstrip .tile:nth-child(5)  { animation-delay: 2.4s; }
+  .filmstrip .tile:nth-child(6)  { animation-delay: 3.0s; }
+  .filmstrip .tile:nth-child(7)  { animation-delay: 3.6s; }
+  .filmstrip .tile:nth-child(8)  { animation-delay: 4.2s; }
+  .filmstrip .tile:nth-child(9)  { animation-delay: 4.8s; }
+  .filmstrip .tile:nth-child(10) { animation-delay: 5.4s; }
+  .filmstrip .tile:nth-child(11) { animation-delay: 6.0s; }
+  .filmstrip .tile:nth-child(12) { animation-delay: 6.6s; }
+  @keyframes cover {
+    0%, 8%   { opacity: 0.22; filter: grayscale(1); box-shadow: none; }
+    16%      { opacity: 1; filter: grayscale(0); box-shadow: 0 0 0 2px var(--lamp), 0 0 18px rgba(232, 163, 61, 0.45); }
+    78%      { opacity: 1; filter: grayscale(0); box-shadow: 0 0 0 2px var(--lamp), 0 0 0 rgba(232, 163, 61, 0); }
+    92%, 100%{ opacity: 0.22; filter: grayscale(1); box-shadow: none; }
+  }
+  .filmstrip-caption {
+    margin-top: 14px; text-align: center;
+    font-family: var(--mono); font-size: 12px; color: var(--chalk-dim);
+  }
+  .filmstrip-caption b { color: var(--lamp); font-weight: 500; }
+
+  /* ---- demo ---- */
+  .demo { padding: 46px 0 20px; text-align: center; }
+  .demo img {
+    width: 100%; max-width: 920px;
+    border-radius: 8px;
+    border: 1px solid var(--desk-edge);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ---- a real card, on paper ---- */
+  .specimen { padding: 84px 0 0; }
+  .specimen-grid {
+    display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px;
+    align-items: center;
+  }
+  .specimen h2, .how h2, .install h2 {
+    font-family: var(--serif); font-weight: 600;
+    font-size: clamp(26px, 3.4vw, 34px);
+    color: var(--paper);
+    margin-top: 14px;
+    text-wrap: balance;
+  }
+  .specimen p.body, .how p.body {
+    margin-top: 16px; color: var(--chalk); max-width: 52ch;
+  }
+  .card {
+    background: var(--paper); color: var(--ink);
+    border-radius: 8px;
+    padding: 26px 28px 18px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+    text-align: left;
+  }
+  .card .q {
+    font-family: var(--serif); font-size: 19px; font-weight: 600; line-height: 1.4;
+  }
+  .card .a {
+    font-family: var(--serif); font-size: 16px; line-height: 1.56;
+    margin-top: 14px; padding-top: 14px;
+    border-top: 1px solid var(--paper-shade);
+    color: var(--ink);
+  }
+  .card .a mark {
+    background: rgba(232, 163, 61, 0.28);
+    color: var(--lamp-ink);
+    padding: 0 3px; border-radius: 3px;
+  }
+  .card .meta {
+    display: flex; justify-content: space-between; gap: 12px;
+    margin-top: 18px; padding-top: 12px;
+    border-top: 1px solid var(--paper-shade);
+    font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+  }
+  .checklist { list-style: none; margin-top: 22px; display: grid; gap: 12px; }
+  .checklist li { display: flex; gap: 12px; align-items: baseline; font-size: 15.5px; }
+  .checklist .tick { color: var(--sage); font-family: var(--mono); }
+  .checklist b { color: var(--paper); font-weight: 500; }
+
+  /* ---- how it works ---- */
+  .how { padding: 96px 0 0; }
+  .steps {
+    margin-top: 36px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--desk-edge);
+    border: 1px solid var(--desk-edge); border-radius: 8px;
+    overflow: hidden;
+  }
+  .step { background: var(--desk-raised); padding: 22px 20px 24px; }
+  .step .n {
+    font-family: var(--mono); font-size: 12px; color: var(--lamp);
+  }
+  .step h3 { font-size: 15.5px; font-weight: 500; color: var(--paper); margin-top: 10px; }
+  .step p { font-size: 14px; color: var(--chalk-dim); margin-top: 8px; }
+
+  /* ---- screenshot ---- */
+  .peek { padding: 72px 0 0; text-align: center; }
+  .peek img {
+    width: 100%; max-width: 920px;
+    border-radius: 8px; border: 1px solid var(--desk-edge);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+  .peek figcaption {
+    margin-top: 14px; font-family: var(--mono); font-size: 12px; color: var(--chalk-dim);
+  }
+
+  /* ---- install ---- */
+  .install { padding: 96px 0; text-align: center; }
+  .install p.body { margin: 16px auto 0; color: var(--chalk); max-width: 56ch; }
+  .install .cta-row { margin-top: 30px; }
+  .platforms {
+    margin-top: 18px;
+    font-family: var(--mono); font-size: 12px; color: var(--chalk-dim);
+  }
+
+  footer {
+    border-top: 1px solid var(--desk-edge);
+    padding: 28px 0 40px;
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    font-size: 14px; color: var(--chalk-dim);
+  }
+  footer a { color: var(--chalk-dim); }
+  footer a:hover { color: var(--chalk); }
+
+  @media (max-width: 760px) {
+    .specimen-grid { grid-template-columns: 1fr; gap: 32px; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .filmstrip .tile:nth-child(n + 9) { display: none; }
+  }
+  @media (max-width: 440px) {
+    .steps { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .filmstrip .tile { animation: none; }
+    .filmstrip .tile:nth-child(-n + 5) {
+      opacity: 1; filter: grayscale(0); box-shadow: 0 0 0 2px var(--lamp);
+    }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <a class="brand" href="#"><img src="assets/icon.png" alt="" /><span>LECTERN</span></a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/stegra05/Lectern">GitHub</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <p class="eyebrow">Free &amp; open source · your own Gemini key</p>
+    <h1>Lecture PDFs into Anki flashcards <em>you can trust</em></h1>
+    <p class="sub">
+      Lectern reads the whole lecture, maps its concepts, and generates cards that
+      cite the exact pages they came from. You see what's covered, check any card
+      against its slide, and send the deck straight to Anki.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest">Download Lectern</a>
+      <a class="btn btn-secondary" href="https://github.com/stegra05/Lectern">View on GitHub</a>
+    </div>
+    <p class="cta-note">macOS · Windows · Linux — no account, no subscription</p>
+
+    <div class="filmstrip" aria-hidden="true">
+      <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+      <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+      <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+      <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+    </div>
+    <p class="filmstrip-caption">your slides <b>light up</b> as cards cover them</p>
+  </section>
+
+  <section class="demo">
+    <img src="assets/demo.gif" alt="Lectern generating a deck from a 72-page machine-learning lecture: the filmstrip lights up page by page as grounded cards stream in" loading="lazy" />
+  </section>
+
+  <section class="specimen">
+    <div class="specimen-grid">
+      <div>
+        <p class="eyebrow">Every card can back itself up</p>
+        <h2>Grounded, or it doesn't get in</h2>
+        <p class="body">
+          A chatbot will happily invent plausible flashcards. Lectern gates every
+          card on provenance: which pages it came from, which concept it teaches,
+          and a source excerpt to verify it against. Cards that can't back
+          themselves up are rejected — you see what was cut and why.
+        </p>
+        <ul class="checklist">
+          <li><span class="tick">✓</span><span><b>Page references</b> on every card — click to see the original slide beside it</span></li>
+          <li><span class="tick">✓</span><span><b>Coverage ledger</b> — the model is told which pages and concepts still lack cards, and plans its next batch around the gaps</span></li>
+          <li><span class="tick">✓</span><span><b>Quality pass</b> — a final whole-deck review rewrites weak cards, re-gated</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <p class="q">How does an overfit model differ from an underfit model in terms of training and test error?</p>
+        <p class="a">Overfit: very low <mark>training error</mark>, high <mark>test error</mark> — too much capacity or too little data. Underfit: high error on both — the model is too simple to capture the underlying pattern.</p>
+        <div class="meta"><span>p. 46, 49</span><span>Overfitting</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how" id="how">
+    <p class="eyebrow">One lecture in, one deck out</p>
+    <h2>How it works</h2>
+    <p class="body">
+      The pipeline runs entirely on your machine — no backend, no account. The only
+      things Lectern talks to are the Gemini API (with your key, stored in the OS
+      keychain) and your local Anki.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <p class="n">1 · map</p>
+        <h3>Read the whole lecture</h3>
+        <p>Gemini builds a concept map: objectives, concepts, relations — page by page.</p>
+      </div>
+      <div class="step">
+        <p class="n">2 · generate</p>
+        <h3>Cards, agentically</h3>
+        <p>The model submits batches and steers by the coverage ledger until the gaps are closed.</p>
+      </div>
+      <div class="step">
+        <p class="n">3 · review</p>
+        <h3>You stay in charge</h3>
+        <p>Edit, search, filter by page, and peek at the slide behind any card.</p>
+      </div>
+      <div class="step">
+        <p class="n">4 · send</p>
+        <h3>Straight into Anki</h3>
+        <p>One click via AnkiConnect. Re-running a lecture updates notes instead of duplicating them.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="peek">
+    <figure>
+      <img src="assets/slide-peek.png" alt="Reviewing a finished deck in Lectern: the original lecture slide open next to the card generated from it" loading="lazy" />
+      <figcaption>the slide behind the card, one keystroke away</figcaption>
+    </figure>
+  </section>
+
+  <section class="install" id="install">
+    <p class="eyebrow">A ~10 MB desktop app</p>
+    <h2>Put a lecture on the desk</h2>
+    <p class="body">
+      You need Anki with the AnkiConnect add-on, and a free Gemini API key.
+      A typical 70-page lecture costs a few cents to about a dollar, paid to
+      Google, not to us — there is no us to pay.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest">Download the latest release</a>
+    </div>
+    <p class="platforms">macOS (Apple Silicon &amp; Intel) · Windows · Linux · MIT-licensed</p>
+  </section>
+
+  <footer>
+    <span>© 2026 Steffen Grabert · MIT</span>
+    <span>
+      <a href="https://github.com/stegra05/Lectern">GitHub</a> ·
+      <a href="https://github.com/stegra05/Lectern/issues">Issues</a> ·
+      <a href="https://github.com/stegra05/Lectern/blob/main/docs/history.md">The rebuild story</a>
+    </span>
+  </footer>
+
+</div>
+</body>
+</html>
