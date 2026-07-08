@@ -14,6 +14,7 @@
  *   envelope) raise `AnkiApiError` and fail fast.
  */
 
+import { isLecternModel, LECTERN_BASIC_MODEL, LECTERN_CLOZE_MODEL } from './noteTypes'
 import type { Card, Settings, SyncFailure, SyncPreview, SyncProgress, SyncResult } from './types'
 
 // --- Constants (mirroring anki_connector.py) --------------------------------
@@ -270,6 +271,54 @@ export class AnkiClient {
     }
     return result.map((v) => v === true)
   }
+
+  // --- Note-type management (used by noteTypeSync.ts) -------------------------
+
+  async createModel(params: {
+    modelName: string
+    inOrderFields: string[]
+    css: string
+    isCloze: boolean
+    cardTemplates: Array<{ Name: string; Front: string; Back: string }>
+  }): Promise<void> {
+    await this.invoke('createModel', params)
+  }
+
+  async modelStyling(model: string): Promise<string> {
+    const result = await this.invoke('modelStyling', { modelName: model })
+    if (!isRecord(result) || typeof result.css !== 'string') {
+      throw new AnkiApiError(`Unexpected modelStyling result for ${model}`)
+    }
+    return result.css
+  }
+
+  async updateModelStyling(model: string, css: string): Promise<void> {
+    await this.invoke('updateModelStyling', { model: { name: model, css } })
+  }
+
+  async updateModelTemplates(
+    model: string,
+    templates: Record<string, { Front: string; Back: string }>,
+  ): Promise<void> {
+    await this.invoke('updateModelTemplates', { model: { name: model, templates } })
+  }
+
+  /** Store a file in Anki's media folder (base64 payload). Overwrites. */
+  async storeMediaFile(filename: string, dataBase64: string): Promise<void> {
+    await this.invoke('storeMediaFile', { filename, data: dataBase64 })
+  }
+
+  /** Move a note to another note type, remapping fields. Keeps the note id
+   *  (and with it the card scheduling). `tags` replaces the note's tags, so
+   *  callers must pass the existing ones through. */
+  async updateNoteModel(note: {
+    id: number
+    modelName: string
+    fields: Record<string, string>
+    tags: string[]
+  }): Promise<void> {
+    await this.invoke('updateNoteModel', { note })
+  }
 }
 
 // --- Connection check ----------------------------------------------------------
@@ -301,7 +350,7 @@ export async function checkConnection(
  * matched the literal "Front"/"Back"/"Text"; this port keeps the identical
  * structural logic but compares field names case-insensitively against these sets.
  */
-const FRONT_FIELD_NAMES = new Set([
+export const FRONT_FIELD_NAMES = new Set([
   'front', // en
   'vorderseite', // de
   'recto', // fr
@@ -310,7 +359,7 @@ const FRONT_FIELD_NAMES = new Set([
   'frente', // pt
   'voorkant', // nl
 ])
-const BACK_FIELD_NAMES = new Set([
+export const BACK_FIELD_NAMES = new Set([
   'back', // en
   'rückseite', // de
   'verso', // fr, pt
@@ -318,7 +367,7 @@ const BACK_FIELD_NAMES = new Set([
   'retro', // it
   'achterkant', // nl
 ])
-const TEXT_FIELD_NAMES = new Set([
+export const TEXT_FIELD_NAMES = new Set([
   'text', // en, de
   'texte', // fr
   'texto', // es, pt
@@ -413,6 +462,16 @@ export async function resolveModelNames(
     return { basic: configuredBasic, cloze: configuredCloze }
   }
 
+  // Bundled note types win when enabled and installed (ensureLecternModels
+  // runs before sync; this also picks them up when it partially failed).
+  if (
+    settings.useLecternNoteTypes &&
+    models.includes(LECTERN_BASIC_MODEL) &&
+    models.includes(LECTERN_CLOZE_MODEL)
+  ) {
+    return { basic: LECTERN_BASIC_MODEL, cloze: LECTERN_CLOZE_MODEL }
+  }
+
   let detected: ResolvedModelNames | undefined
   const resolveOne = async (
     configured: string,
@@ -440,10 +499,18 @@ export async function resolveModelNames(
  * cards, like the Python `payload.text` path). Extra fields whose names are
  * not part of the canonical mapping are preserved verbatim so they fill
  * matching model fields.
+ *
+ * `extraFields` (the Lectern note types' Topic/Source/Excerpt) are merged
+ * last; callers only pass them when the target model actually has them.
  */
 export function cardToNote(
   card: Card,
-  opts: { deckName: string; modelName: string; tags: string[] },
+  opts: {
+    deckName: string
+    modelName: string
+    tags: string[]
+    extraFields?: Record<string, string>
+  },
 ): AnkiNote {
   const source = card.fields
   const fields: Record<string, string> = {}
@@ -468,6 +535,8 @@ export function cardToNote(
       fields[name] = value
     }
   }
+
+  Object.assign(fields, opts.extraFields)
 
   return {
     deckName: opts.deckName,
@@ -500,6 +569,7 @@ export async function previewSync(
   deckName: string,
   settings: Settings,
   resolveTags: (card: Card) => string[],
+  noteExtras?: (card: Card) => Record<string, string>,
 ): Promise<SyncPreview> {
   const creates = cards.filter((card) => typeof card.ankiNoteId !== 'number')
   const toUpdate = cards.length - creates.length
@@ -516,13 +586,15 @@ export async function previewSync(
       // keep the requested deck; canAddNotes will surface real transport errors
     }
 
-    const notes = creates.map((card) =>
-      cardToNote(card, {
+    const notes = creates.map((card) => {
+      const modelName = modelNameFor(card, resolved)
+      return cardToNote(card, {
         deckName: probeDeck,
-        modelName: modelNameFor(card, resolved),
+        modelName,
         tags: resolveTags(card),
-      }),
-    )
+        extraFields: isLecternModel(modelName) ? noteExtras?.(card) : undefined,
+      })
+    })
     const canAdd = await client.canAddNotes(notes)
     duplicates = canAdd.filter((ok) => !ok).length
   }
@@ -546,6 +618,7 @@ export async function syncCards(
   settings: Settings,
   resolveTags: (card: Card) => string[],
   onProgress: (p: SyncProgress) => void,
+  noteExtras?: (card: Card) => Record<string, string>,
 ): Promise<SyncResult & { noteIds: Map<string, number> }> {
   const resolved = await resolveModelNames(client, settings)
 
@@ -566,10 +639,12 @@ export async function syncCards(
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i]
     try {
+      const modelName = modelNameFor(card, resolved)
       const note = cardToNote(card, {
         deckName,
-        modelName: modelNameFor(card, resolved),
+        modelName,
         tags: resolveTags(card),
+        extraFields: isLecternModel(modelName) ? noteExtras?.(card) : undefined,
       })
       if (typeof card.ankiNoteId === 'number') {
         await client.updateNoteFields(card.ankiNoteId, note.fields)

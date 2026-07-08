@@ -44,6 +44,11 @@ export const CardTile = memo(function CardTile({
         <CardEditorInline card={card} />
       ) : (
         <>
+          {card.slideTopic && (
+            <div className="font-data text-ink-soft mb-2 text-2xs tracking-wide uppercase">
+              {card.slideTopic}
+            </div>
+          )}
           <CardBody card={card} />
           <footer className="border-ink/8 mt-3 flex items-baseline justify-between gap-3 border-t pt-2">
             <span className="font-data text-ink-soft truncate text-2xs">
@@ -78,10 +83,17 @@ export const CardTile = memo(function CardTile({
               )}
               {card.ankiNoteId ? ' · in Anki' : ''}
             </span>
-            {card.slideTopic && (
-              <span className="font-data text-ink-soft shrink-0 text-2xs">{card.slideTopic}</span>
-            )}
           </footer>
+          {card.sourceExcerpt && (
+            <details className="mt-2" onClick={(e) => e.stopPropagation()}>
+              <summary className="font-data text-ink-soft hover:text-ink cursor-pointer text-2xs transition-colors duration-150">
+                Source excerpt
+              </summary>
+              <blockquote className="font-card text-ink-soft border-lamp-deep bg-paper-shade mt-1.5 rounded-r-sm border-l-2 px-3 py-2 text-sm italic">
+                {card.sourceExcerpt}
+              </blockquote>
+            </details>
+          )}
           {editable && (
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
               <button onClick={() => setEditingUid(card.uid)} className="btn-paper px-2 py-1">
@@ -121,7 +133,7 @@ function CardBody({ card }: { card: Card }) {
         className="card-content font-medium"
         dangerouslySetInnerHTML={{ __html: renderCardHtml(front) }}
       />
-      <div className="bg-ink/8 h-px" />
+      <div className="bg-lamp-deep h-0.5 w-10 rounded-full" />
       <div className="card-content" dangerouslySetInnerHTML={{ __html: renderCardHtml(back) }} />
     </div>
   )

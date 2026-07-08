@@ -163,6 +163,12 @@ export interface Settings {
   /** Gemini model id, e.g. "gemini-3.5-flash" */
   model: string
   ankiUrl: string
+  /** Install and sync to the bundled "Lectern Basic"/"Lectern Cloze" note
+   *  types (with Topic/Source/Excerpt provenance fields). Off = plain
+   *  Basic/Cloze via the configured model names below. */
+  useLecternNoteTypes: boolean
+  /** Colorway of the bundled note types. */
+  noteTypeTheme: 'paper' | 'nord'
   basicModelName: string
   clozeModelName: string
   /** Template like "{{deck}}::{{slide_set}}::{{topic}}" */

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MODEL_CHOICES } from '../engine/config'
+import { NOTE_TYPE_THEMES, type NoteTypeTheme } from '../engine/noteTypes'
 import type { Settings } from '../engine/types'
 import { deleteApiKey, setApiKey } from '../lib/settings'
 import { useLectern } from '../state/store'
@@ -14,6 +15,8 @@ export function SettingsSheet() {
   const ankiStatus = useLectern((s) => s.ankiStatus)
   const refreshAnki = useLectern((s) => s.refreshAnki)
   const toast = useLectern((s) => s.toast)
+  const migrateLegacyCards = useLectern((s) => s.migrateLegacyCards)
+  const migratingCards = useLectern((s) => s.migratingCards)
 
   const [draft, setDraft] = useState<Settings | null>(null)
   const [keyDraft, setKeyDraft] = useState('')
@@ -163,6 +166,54 @@ export function SettingsSheet() {
             )}
           </label>
 
+          <div className="block">
+            <span className="eyebrow">Card design</span>
+            <label className="mt-1.5 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.useLecternNoteTypes}
+                onChange={(e) => setDraft({ ...draft, useLecternNoteTypes: e.target.checked })}
+                className="accent-lamp"
+              />
+              <span className="text-chalk text-sm">Style synced cards with Lectern note types</span>
+            </label>
+            {draft.useLecternNoteTypes ? (
+              <div className="mt-3 space-y-3">
+                <select
+                  value={draft.noteTypeTheme}
+                  onChange={(e) =>
+                    setDraft({ ...draft, noteTypeTheme: e.target.value as NoteTypeTheme })
+                  }
+                  className="field bg-desk cursor-pointer"
+                  aria-label="Card design theme"
+                >
+                  {NOTE_TYPE_THEMES.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <div>
+                  <button
+                    onClick={() => void migrateLegacyCards()}
+                    disabled={migratingCards || ankiStatus !== 'connected'}
+                    className="btn-secondary px-3 py-1.5 text-sm"
+                  >
+                    {migratingCards ? 'Restyling…' : 'Apply design to earlier synced cards'}
+                  </button>
+                  <p className="text-chalk-dim mt-1 text-xs">
+                    Moves cards tagged “{draft.defaultTag}” from plain Basic/Cloze onto the Lectern
+                    note types. Review progress is kept.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-chalk-dim mt-1 text-xs">
+                Cards go to the note types named under Advanced.
+              </p>
+            )}
+          </div>
+
           <button
             onClick={() => setAdvancedOpen(!advancedOpen)}
             className="eyebrow hover:text-chalk flex items-center gap-1 rounded-sm transition-colors duration-150"
@@ -179,6 +230,11 @@ export function SettingsSheet() {
 
           {advancedOpen && (
             <div className="rise-in space-y-4">
+              {draft.useLecternNoteTypes && (
+                <p className="text-chalk-dim text-xs">
+                  The note type names below are used only while the Lectern card design is off.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="eyebrow">Basic note type</span>

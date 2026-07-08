@@ -102,6 +102,8 @@ export const ESTIMATION_BASE_OUTPUT_RATIO = 0.2
 export const DEFAULT_SETTINGS = {
   model: DEFAULT_MODEL,
   ankiUrl: 'http://localhost:8765',
+  useLecternNoteTypes: true,
+  noteTypeTheme: 'paper',
   basicModelName: 'Basic',
   clozeModelName: 'Cloze',
   tagTemplate: '{{deck}}::{{slide_set}}::{{topic}}',

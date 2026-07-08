@@ -1,6 +1,6 @@
 [package]
 name = "lectern-desktop"
-version = "2.1.0"
+version = "2.2.0"
 description = "Lectern — turn lecture PDFs into Anki flashcards"
 authors = ["Steffen Grabert"]
 edition = "2021"

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.2.0 (2026-07-08)
+
+### Added
+- **Lectern card design in Anki**: cards now sync to bundled "Lectern Basic" and
+  "Lectern Cloze" note types that Lectern installs into your collection. Every
+  card shows its topic, where it came from ("ML Foundations · pp. 23-24"), and
+  the exact source excerpt it was graded against, one tap away. Two themes:
+  Evening lecture hall (default) and Nord. Switching themes restyles every
+  synced card at once.
+- **Restyle earlier decks**: a one-click action in Settings moves cards from
+  previous syncs onto the new note types without losing review progress.
+- **Your edits win**: if you change the note type styling inside Anki, Lectern
+  detects it and never overwrites your version.
+- Procedure cards: ordered lists where each step is its own cloze card.
+
+### Changed
+- Card tiles in the review list match the synced card anatomy (topic line,
+  amber answer rule, source excerpt fold).
+
+Prefer the plain Basic/Cloze note types? Turn the design off under
+Settings → Card design.
+
 ## 2.1.0 (2026-07-08)
 
 ### Added

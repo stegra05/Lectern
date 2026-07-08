@@ -86,6 +86,10 @@ const makeClient = (fetchFn: typeof fetch): AnkiClient =>
 const makeSettings = (overrides: Partial<Settings> = {}): Settings => ({
   model: 'gemini-3.5-flash',
   ankiUrl: BASE_URL,
+  // Off by default so the fixtures exercise the classic Basic/Cloze paths;
+  // the bundled-note-type behavior gets dedicated tests.
+  useLecternNoteTypes: false,
+  noteTypeTheme: 'paper',
   basicModelName: 'Basic',
   clozeModelName: 'Cloze',
   tagTemplate: '{{deck}}::{{slide_set}}::{{topic}}',
@@ -329,6 +333,35 @@ describe('resolveModelNames', () => {
     })
   })
 
+  it('prefers the Lectern note types when enabled and installed', async () => {
+    const { fetchFn, calls } = makeFetch(
+      routes({
+        modelNames: () => ({
+          result: ['Basic', 'Cloze', 'Lectern Basic', 'Lectern Cloze'],
+        }),
+      }),
+    )
+    const settings = makeSettings({ useLecternNoteTypes: true })
+
+    await expect(resolveModelNames(makeClient(fetchFn), settings)).resolves.toEqual({
+      basic: 'Lectern Basic',
+      cloze: 'Lectern Cloze',
+    })
+    expect(calls.some((c) => c.action === 'modelFieldNames')).toBe(false)
+  })
+
+  it('falls back to the classic resolution when Lectern note types are absent', async () => {
+    const { fetchFn } = makeFetch(
+      routes({ modelNames: () => ({ result: ['Basic', 'Cloze'] }) }),
+    )
+    const settings = makeSettings({ useLecternNoteTypes: true })
+
+    await expect(resolveModelNames(makeClient(fetchFn), settings)).resolves.toEqual({
+      basic: 'Basic',
+      cloze: 'Cloze',
+    })
+  })
+
   it('passes configured names through when Anki is unreachable', async () => {
     const { fetchFn } = makeFetch(() => ({ networkError: 'refused' }))
     const client = makeClient(fetchFn)
@@ -411,6 +444,25 @@ describe('cardToNote', () => {
     expect(note.fields).toEqual({
       Text: '{{c1::Mitochondria}} produce ATP.',
       'Back Extra': 'Cell biology',
+    })
+  })
+
+  it('merges extraFields (Lectern provenance) after the canonical mapping', () => {
+    const card = makeCard({ fields: { Front: 'Q', Back: 'A' } })
+
+    const note = cardToNote(card, {
+      deckName: 'D',
+      modelName: 'Lectern Basic',
+      tags: [],
+      extraFields: { Topic: 'Optimization', Source: 'ML L04 · p. 3', Excerpt: 'quote' },
+    })
+
+    expect(note.fields).toEqual({
+      Front: 'Q',
+      Back: 'A',
+      Topic: 'Optimization',
+      Source: 'ML L04 · p. 3',
+      Excerpt: 'quote',
     })
   })
 })
@@ -562,6 +614,50 @@ describe('syncCards', () => {
     expect(updateCall?.params).toEqual({
       note: { id: 777, fields: { Front: 'Q3', Back: 'A3 v2' } },
     })
+  })
+
+  it('adds provenance fields only when the card lands on a Lectern note type', async () => {
+    const { fetchFn, calls } = makeFetch(
+      routes({
+        modelNames: () => ({ result: ['Basic', 'Cloze', 'Lectern Basic', 'Lectern Cloze'] }),
+        createDeck: () => ({ result: 1 }),
+        addNote: () => ({ result: 5001 }),
+      }),
+    )
+    const extras = () => ({ Topic: 'Optimization', Source: 'ML · p. 3', Excerpt: 'quote' })
+
+    // Enabled → Lectern Basic gets the extra fields.
+    await syncCards(
+      makeClient(fetchFn),
+      [makeCard()],
+      'Deck',
+      makeSettings({ useLecternNoteTypes: true }),
+      tagsFor,
+      () => {},
+      extras,
+    )
+    const lecternAdd = calls.find((c) => c.action === 'addNote')?.params as {
+      note: { modelName: string; fields: Record<string, string> }
+    }
+    expect(lecternAdd.note.modelName).toBe('Lectern Basic')
+    expect(lecternAdd.note.fields).toMatchObject({ Topic: 'Optimization', Excerpt: 'quote' })
+
+    // Disabled → plain Basic, no extra fields even though the callback is passed.
+    calls.length = 0
+    await syncCards(
+      makeClient(fetchFn),
+      [makeCard()],
+      'Deck',
+      makeSettings(),
+      tagsFor,
+      () => {},
+      extras,
+    )
+    const plainAdd = calls.find((c) => c.action === 'addNote')?.params as {
+      note: { modelName: string; fields: Record<string, string> }
+    }
+    expect(plainAdd.note.modelName).toBe('Basic')
+    expect(plainAdd.note.fields).toEqual({ Front: 'What is X?', Back: 'X is Y.' })
   })
 
   it('continues syncing even when createDeck fails', async () => {

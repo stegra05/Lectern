@@ -16,7 +16,7 @@ export const FORMATTING_RULES = `Formatting — Anki renders HTML and MathJax; M
 - Emphasis: <b> or <strong>, <i> or <em>. Write ** or # as HTML instead.
 - Text only — cards carry no images or <img> tags.
 - Each card stands alone: name the thing itself ("the sigmoid saturates for large inputs"), never point at the source ("as shown in the diagram"). When a concept depends on a visual, describe the visual relationship in words.
-- Cloze: at most 2 deletions per card, each a single specific term whose surrounding context makes the answer unambiguous.`
+- Cloze: at most 2 deletions per card, each a single specific term whose surrounding context makes the answer unambiguous. Exception — ordered procedures: an <ol> with one numbered deletion per step ({{c1::…}}, {{c2::…}}, …), so each step drills as its own card.`
 
 // --- Style-teaching examples -------------------------------------------------
 
@@ -50,6 +50,17 @@ const CARD_DATA = [
     model_name: 'Cloze',
     fields: [{ name: 'Text', value: 'The derivative of \\(x^n\\) is {{c1::\\(n x^{n-1}\\)}}.' }],
     slide_topic: 'Differentiation Rules',
+  },
+  {
+    model_name: 'Cloze',
+    fields: [
+      {
+        name: 'Text',
+        value:
+          'One gradient-descent training iteration, in order:<ol><li>{{c1::Forward pass}}</li><li>{{c2::Compute the loss}}</li><li>{{c3::Backpropagate gradients}}</li><li>{{c4::Update the weights}}</li></ol>',
+      },
+    ],
+    slide_topic: 'Training Neural Networks',
   },
 ]
 
