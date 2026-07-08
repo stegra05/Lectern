@@ -1,0 +1,46 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B2622"/>
+      <stop offset="1" stop-color="#181411"/>
+    </linearGradient>
+    <linearGradient id="brassA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0B45A"/>
+      <stop offset="1" stop-color="#B97A1E"/>
+    </linearGradient>
+    <linearGradient id="coneA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8A33D" stop-opacity="0.50"/>
+      <stop offset="1" stop-color="#E8A33D" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="washA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8A33D" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#E8A33D" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="bulbA">
+      <stop offset="0" stop-color="#FFDFA3" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#FFDFA3" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="sqA"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  </defs>
+  <g clip-path="url(#sqA)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#bgA)"/>
+    <!-- cord -->
+    <rect x="504" y="100" width="16" height="176" fill="#8A5A12"/>
+    <!-- light cone -->
+    <path d="M396 318 L628 318 L784 636 L240 636 Z" fill="url(#coneA)"/>
+    <!-- bulb glow -->
+    <circle cx="512" cy="336" r="150" fill="url(#bulbA)"/>
+    <!-- shade -->
+    <path d="M384 306 A128 128 0 0 1 640 306 L640 322 L384 322 Z" fill="url(#brassA)"/>
+    <ellipse cx="512" cy="334" rx="44" ry="26" fill="#FFE9C4"/>
+    <!-- page -->
+    <g transform="rotate(-2 512 748)">
+      <rect x="272" y="612" width="480" height="276" rx="20" fill="#FAF9F5"/>
+      <rect x="272" y="612" width="480" height="140" rx="20" fill="url(#washA)"/>
+      <rect x="320" y="662" width="384" height="20" rx="10" fill="#B97A1E"/>
+      <rect x="320" y="712" width="336" height="20" rx="10" fill="#B97A1E" opacity="0.75"/>
+      <rect x="320" y="762" width="360" height="20" rx="10" fill="#B0AAA1"/>
+      <rect x="320" y="812" width="288" height="20" rx="10" fill="#B0AAA1"/>
+    </g>
+  </g>
+</svg>
