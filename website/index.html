@@ -261,6 +261,14 @@
     margin-top: 18px;
     font-family: var(--mono); font-size: 12px; color: var(--chalk-dim);
   }
+  .platforms + .platforms { margin-top: 10px; }
+  .platforms code {
+    font-family: var(--mono); color: var(--chalk);
+    background: var(--desk-raised);
+    border: 1px solid var(--desk-edge);
+    border-radius: 4px;
+    padding: 3px 8px;
+  }
 
   footer {
     border-top: 1px solid var(--desk-edge);
@@ -403,6 +411,7 @@
       <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest">Download the latest release</a>
     </div>
     <p class="platforms">macOS (Apple Silicon &amp; Intel) · Windows · Linux · MIT-licensed</p>
+    <p class="platforms">or on macOS: <code>brew install --cask stegra05/tap/lectern</code></p>
   </section>
 
   <footer>

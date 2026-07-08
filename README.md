@@ -48,6 +48,17 @@ every card by hand, so Lectern makes the checking visible instead:
 **[Download the latest release](https://github.com/stegra05/Lectern/releases/latest)**
 for macOS (Apple Silicon and Intel), Windows, or Linux.
 
+On macOS you can also use Homebrew:
+
+```sh
+brew tap stegra05/tap
+brew trust stegra05/tap      # Homebrew 6+ requires trusting third-party taps
+brew install --cask lectern
+```
+
+The macOS builds are not yet notarized with Apple. If macOS reports the app as
+damaged, clear the quarantine flag with `xattr -cr /Applications/Lectern.app`.
+
 Or build from source:
 
 ```sh
