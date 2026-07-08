@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.0 (2026-07-08)
+
+### Changed
+- **Activity log redesigned as session minutes**: every event is stamped with
+  the elapsed session time, and the model's own words (the quality review
+  summary, the front of a rejected card) appear as quoted excerpts you can
+  expand instead of walls of text. Rejection reasons read as plain language.
+- The quality review summary can now use simple formatting (bold, italic,
+  code, bullet lists) and the log renders it.
+
 ## 2.3.0 (2026-07-08)
 
 ### Added
