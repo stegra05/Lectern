@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Concept, ConceptMap, CoverageData } from '../engine/types'
 import type { AppPhase } from '../state/store'
 import { useLectern } from '../state/store'
+import { ActivityLog } from './ActivityLog'
 import { CardTile } from './CardTile'
 import { ConceptMapPreview } from './ConceptGraph'
 import { ConceptSheet } from './ConceptSheet'
@@ -46,17 +47,11 @@ function Sidebar() {
   const progress = useLectern((s) => s.progress)
   const coverage = useLectern((s) => s.coverage)
   const conceptMap = useLectern((s) => s.conceptMap)
-  const logs = useLectern((s) => s.logs)
   const usage = useLectern((s) => s.usage)
   const doneSummary = useLectern((s) => s.doneSummary)
   const cancelGeneration = useLectern((s) => s.cancelGeneration)
   const backToHome = useLectern((s) => s.backToHome)
-  const logRef = useRef<HTMLDivElement>(null)
   const [conceptsOpen, setConceptsOpen] = useState(false)
-
-  useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight })
-  }, [logs.length])
 
   const running = phase !== 'complete' && phase !== 'error' && phase !== 'idle'
   const phaseIndex = PHASES.findIndex((p) => p.id === phase)
@@ -123,25 +118,10 @@ function Sidebar() {
 
       {conceptsOpen && <ConceptSheet onClose={() => setConceptsOpen(false)} />}
 
-      {/* Activity log */}
+      {/* Activity log — the session minutes */}
       <div className="border-desk-edge/60 flex min-h-0 flex-1 flex-col border-t pt-4">
         <span className="eyebrow mb-2">Activity</span>
-        <div ref={logRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-          {logs.map((l, i) => (
-            <p
-              key={i}
-              className={`font-data text-2xs leading-snug ${
-                l.level === 'error'
-                  ? 'text-brick-soft'
-                  : l.level === 'warn'
-                    ? 'text-lamp-deep'
-                    : 'text-chalk-dim'
-              }`}
-            >
-              {l.message}
-            </p>
-          ))}
-        </div>
+        <ActivityLog />
       </div>
 
       {/* Session actions */}

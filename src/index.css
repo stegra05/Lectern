@@ -185,6 +185,46 @@ input[type='range']::-moz-range-thumb {
   @apply bg-lamp size-3.5 rounded-full border-0;
 }
 
+/* Long scrollers fade at both edges instead of clipping lines mid-word. */
+.scroll-fade-y {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 10px,
+    black calc(100% - 10px),
+    transparent
+  );
+}
+
+/* Activity log: the model's own words, quoted in serif. */
+.log-quote {
+  @apply font-card text-xs text-chalk-dim italic;
+}
+.log-quote p + p,
+.log-quote p + ul,
+.log-quote ul + p {
+  margin-top: 0.25rem;
+}
+.log-quote li {
+  position: relative;
+  padding-left: 0.75rem;
+}
+.log-quote li::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+}
+.log-quote strong {
+  @apply text-chalk font-semibold;
+}
+/* Emphasis inside an italic quote flips back to roman. */
+.log-quote em {
+  @apply not-italic;
+}
+.log-quote code {
+  @apply font-data text-2xs not-italic;
+}
+
 /* Thin scrollbars that match the desk. */
 * {
   scrollbar-width: thin;

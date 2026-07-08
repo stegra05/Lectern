@@ -28,6 +28,7 @@ import type {
 } from '../engine/types'
 import { computeSizingPlan } from '../engine/pacing'
 import { confirmDiscard } from '../lib/confirm'
+import { plainCardText } from '../lib/render'
 import { IS_TAURI } from '../lib/platform'
 import { getApiKey, loadSettings, saveSettings } from '../lib/settings'
 import { tauriFetch } from '../lib/tauriFetch'
@@ -45,6 +46,8 @@ const slideRendersInFlight = new Set<number>()
 export interface LogLine {
   level: 'info' | 'warn' | 'error'
   message: string
+  /** Prose from the model or a card, quoted under the message in serif. */
+  quote?: string
   at: number
 }
 
@@ -151,8 +154,8 @@ let abortController: AbortController | null = null
 let toastSeq = 1
 
 export const useLectern = create<LecternState & LecternActions>()((set, get) => {
-  const pushLog = (level: LogLine['level'], message: string) =>
-    set((s) => ({ logs: [...s.logs.slice(-400), { level, message, at: Date.now() }] }))
+  const pushLog = (level: LogLine['level'], message: string, quote?: string) =>
+    set((s) => ({ logs: [...s.logs.slice(-400), { level, message, quote, at: Date.now() }] }))
 
   const handlePipelineEvent = (event: PipelineEvent): void => {
     switch (event.type) {
@@ -170,11 +173,15 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         break
       case 'card_rejected':
         set((s) => ({ rejectedCount: s.rejectedCount + 1 }))
-        pushLog('warn', `Rejected: "${event.front}" (${event.reasons.join(', ')})`)
+        pushLog(
+          'warn',
+          `Rejected: ${event.reasons.map((r) => r.replaceAll('_', ' ')).join(', ')}`,
+          plainCardText(event.front),
+        )
         break
       case 'cards_replaced':
         set({ cards: event.cards })
-        if (event.reflectionNote) pushLog('info', `Quality pass: ${event.reflectionNote}`)
+        if (event.reflectionNote) pushLog('info', 'Quality pass', event.reflectionNote)
         break
       case 'coverage':
         set({ coverage: event.coverage })

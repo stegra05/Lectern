@@ -49,6 +49,50 @@ function renderClozeHidden(text: string): string {
   })
 }
 
+/** Flatten card markup to plain text (cloze answers kept, tags dropped). */
+export function plainCardText(html: string): string {
+  return html
+    .replace(/\{\{c\d+::([\s\S]*?)(?:::[^}]*)?\}\}/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Minimal markdown for activity-log notes: **bold**, *italic*, `code`, and
+ * "- " bullet lists. Everything else is escaped, then sanitized.
+ */
+export function renderNoteMarkdown(text: string): string {
+  const escape = (s: string) =>
+    s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  const inline = (s: string) =>
+    escape(s)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+
+  const blocks: string[] = []
+  let items: string[] = []
+  const flushList = () => {
+    if (items.length > 0) blocks.push(`<ul>${items.map((li) => `<li>${li}</li>`).join('')}</ul>`)
+    items = []
+  }
+  for (const line of text.split('\n')) {
+    const bullet = /^\s*[-*•]\s+(.+)$/.exec(line)
+    if (bullet) {
+      items.push(inline(bullet[1]))
+    } else {
+      flushList()
+      if (line.trim()) blocks.push(`<p>${inline(line.trim())}</p>`)
+    }
+  }
+  flushList()
+  return DOMPurify.sanitize(blocks.join(''), {
+    ALLOWED_TAGS: ['p', 'ul', 'li', 'strong', 'em', 'code'],
+    ALLOWED_ATTR: [],
+  })
+}
+
 export function renderCardHtml(raw: string, opts: { cloze?: 'shown' | 'hidden' } = {}): string {
   let html = raw
   if (opts.cloze === 'shown') html = renderClozeShown(html)

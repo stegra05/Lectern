@@ -184,7 +184,8 @@ export const FINISH_REVIEW_TOOL = {
     properties: {
       summary: {
         type: 'string',
-        description: 'One-paragraph assessment of the final deck quality.',
+        description:
+          'One-paragraph assessment of the final deck quality. Markdown is rendered: **bold**, *italic*, `code`, and "- " bullet lists.',
       },
     },
     required: ['summary'],
