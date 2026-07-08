@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.0 (2026-07-08)
+
+### Added
+- **Concept map graph**: the extracted concepts are now drawn as an interactive
+  map. Concepts are sized by importance, connected by the relations Gemini
+  found in the lecture, and lit amber as cards cover them. Click a concept to
+  see its relations, difficulty, and slides; scroll to zoom, drag to pan.
+  The grouped list is still there as a toggle.
+- **Concept map card in the sidebar**: a live miniature of the map replaces the
+  bare coverage percentage and lights up while cards are generated. Click it to
+  open the full map.
+
 ## 2.2.0 (2026-07-08)
 
 ### Added

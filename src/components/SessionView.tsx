@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Concept, ConceptMap, CoverageData } from '../engine/types'
 import type { AppPhase } from '../state/store'
 import { useLectern } from '../state/store'
 import { CardTile } from './CardTile'
+import { ConceptMapPreview } from './ConceptGraph'
 import { ConceptSheet } from './ConceptSheet'
 import { Filmstrip } from './Filmstrip'
 import { isTypingTarget, SlidePeek } from './SlidePeek'
@@ -92,16 +94,20 @@ function Sidebar() {
         })}
       </ol>
 
-      {/* The ledger, in numbers */}
-      {coverage && (
+      {/* The ledger: the concept constellation, then the numbers */}
+      {(conceptMap || coverage) && (
         <div className="border-desk-edge/60 space-y-1.5 border-t pt-4">
-          <Stat label="Pages covered" value={`${Math.round(coverage.pageCoveragePercent)}%`} />
-          <Stat
-            label="Concepts"
-            value={`${Math.round(coverage.effectiveConceptCoveragePercent)}%`}
-            onClick={conceptMap ? () => setConceptsOpen(true) : undefined}
-          />
-          {conceptMap && coverage.missingHighPriority.length > 0 && (
+          {conceptMap && (
+            <ConceptMapCard
+              conceptMap={conceptMap}
+              coverage={coverage}
+              onOpen={() => setConceptsOpen(true)}
+            />
+          )}
+          {coverage && (
+            <Stat label="Pages covered" value={`${Math.round(coverage.pageCoveragePercent)}%`} />
+          )}
+          {conceptMap && coverage && coverage.missingHighPriority.length > 0 && (
             <Stat
               label="Key concepts open"
               value={String(coverage.missingHighPriority.length)}
@@ -109,7 +115,9 @@ function Sidebar() {
               onClick={() => setConceptsOpen(true)}
             />
           )}
-          {progress && <Stat label="Cards" value={`${progress.produced} / ${progress.cap}`} />}
+          {coverage && progress && (
+            <Stat label="Cards" value={`${progress.produced} / ${progress.cap}`} />
+          )}
         </div>
       )}
 
@@ -159,6 +167,52 @@ function Sidebar() {
         )}
       </div>
     </aside>
+  )
+}
+
+/**
+ * The sidebar's door to the concept map: a live miniature of the graph that
+ * lights up as coverage grows, sitting where the bare "Concepts %" stat was.
+ */
+function ConceptMapCard({
+  conceptMap,
+  coverage,
+  onOpen,
+}: {
+  conceptMap: ConceptMap
+  coverage: CoverageData | null
+  onOpen: () => void
+}) {
+  const covered = new Set(coverage?.coveredConceptIds ?? [])
+  const inferred = new Set(coverage?.inferredConceptIds ?? [])
+  const stateOf = (c: Concept) =>
+    covered.has(c.id)
+      ? ('covered' as const)
+      : inferred.has(c.id)
+        ? ('inferred' as const)
+        : ('open' as const)
+  const openCount = conceptMap.concepts.filter((c) => stateOf(c) === 'open').length
+
+  return (
+    <button
+      onClick={onOpen}
+      className="group border-desk-edge/60 hover:border-lamp/50 -mx-1 mb-2.5 block w-[calc(100%+0.5rem)] rounded-md border p-2 text-left transition-colors duration-150"
+      aria-label="Open the concept map"
+    >
+      <span className="flex items-baseline justify-between">
+        <span className="eyebrow">Concept map</span>
+        {coverage && (
+          <span className="font-data text-lamp text-xs">
+            {Math.round(coverage.effectiveConceptCoveragePercent)}%
+          </span>
+        )}
+      </span>
+      <ConceptMapPreview conceptMap={conceptMap} stateOf={stateOf} className="mt-1.5 h-16 w-full" />
+      <span className="font-data text-chalk-dim group-hover:text-chalk mt-1 block text-2xs transition-colors duration-150">
+        {conceptMap.concepts.length} concepts
+        {coverage && openCount > 0 && ` · ${openCount} without a card`}
+      </span>
+    </button>
   )
 }
 
