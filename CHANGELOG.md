@@ -1,13 +1,13 @@
 # Changelog
 
-## 2.0.0 — unreleased
+## 2.0.0 (2026-07-08)
 
 Complete from-scratch rebuild as a Tauri 2 desktop app.
 
 ### Added
 - **Agentic generation**: Gemini plans its own batches through a tool loop
   (`submit_cards` / `finish_generation`) and receives an updated coverage ledger
-  after every batch — which pages, concepts, and relations still lack cards.
+  after every batch: which pages, concepts, and relations still lack cards.
 - **Grounding gate**: every card must carry provenance (source pages, concepts,
   source excerpt) and pass a quality checklist before it enters the deck.
 - **Illuminated filmstrip**: real page thumbnails light up as coverage arrives.
@@ -17,7 +17,7 @@ Complete from-scratch rebuild as a Tauri 2 desktop app.
 - Card review with inline editing, search, page filter, undoable delete.
 - Anki sync via AnkiConnect with dry-run preview (create/update/duplicate counts).
 - Cost estimation up front and live token/cost usage during generation.
-- Gemini API key stored in the macOS Keychain — never on disk.
+- Gemini API key stored in the OS keychain, never on disk.
 
 ### Changed
 - No backend: the entire pipeline is TypeScript running in-process. The Python/

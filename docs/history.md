@@ -17,12 +17,12 @@ designed around what v1's history taught:
 
 The crown jewels of v1 carried over as ideas, re-implemented clean:
 
-- **Coverage-ledger-steered generation** — after every batch the model is told
+- **Coverage-ledger-steered generation.** After every batch the model is told
   which pages, concepts, and relations still lack cards, and plans its next batch
   accordingly.
-- **The grounding gate** — no card enters the deck without provenance (source
+- **The grounding gate.** No card enters the deck without provenance (source
   pages + concepts + excerpt) and a passing quality checklist.
-- **The prompt library** — rewritten concise for Gemini 3.5's agentic mode, but
+- **The prompt library.** Rewritten concise for Gemini 3.5's agentic mode, but
   the hard-won renderer constraints and few-shot examples survived.
 
 ## What was deliberately dropped

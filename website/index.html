@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Lectern — lecture PDFs into Anki flashcards you can trust</title>
-<meta name="description" content="Lectern reads your lecture PDF, builds a concept map, and generates grounded Anki flashcards — every card cites its pages and passes a quality gate. Free, open source, your own Gemini key." />
+<title>Lectern · lecture PDFs into Anki flashcards you can trust</title>
+<meta name="description" content="Lectern reads your lecture PDF, builds a concept map, and generates grounded Anki flashcards. Every card cites its pages and passes a quality gate. Free, open source, your own Gemini key." />
 <meta property="og:title" content="Lectern" />
 <meta property="og:description" content="Turn lecture PDFs into Anki flashcards you can trust." />
 <meta property="og:image" content="https://stegra05.github.io/Lectern/assets/review.png" />
@@ -312,7 +312,7 @@
       <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest">Download Lectern</a>
       <a class="btn btn-secondary" href="https://github.com/stegra05/Lectern">View on GitHub</a>
     </div>
-    <p class="cta-note">macOS · Windows · Linux — no account, no subscription</p>
+    <p class="cta-note">macOS · Windows · Linux · no account, no subscription</p>
 
     <div class="filmstrip" aria-hidden="true">
       <div class="tile"></div><div class="tile"></div><div class="tile"></div>
@@ -335,18 +335,18 @@
         <p class="body">
           A chatbot will happily invent plausible flashcards. Lectern gates every
           card on provenance: which pages it came from, which concept it teaches,
-          and a source excerpt to verify it against. Cards that can't back
-          themselves up are rejected — you see what was cut and why.
+          and a source excerpt to verify it against. Cards without support are
+          rejected, and the log shows what was cut and why.
         </p>
         <ul class="checklist">
-          <li><span class="tick">✓</span><span><b>Page references</b> on every card — click to see the original slide beside it</span></li>
-          <li><span class="tick">✓</span><span><b>Coverage ledger</b> — the model is told which pages and concepts still lack cards, and plans its next batch around the gaps</span></li>
-          <li><span class="tick">✓</span><span><b>Quality pass</b> — a final whole-deck review rewrites weak cards, re-gated</span></li>
+          <li><span class="tick">✓</span><span><b>Page references</b> on every card. Click one and the original slide opens beside it.</span></li>
+          <li><span class="tick">✓</span><span><b>Coverage ledger.</b> After every batch the model sees which pages and concepts still lack cards, and plans around the gaps.</span></li>
+          <li><span class="tick">✓</span><span><b>Quality pass.</b> A final whole-deck review rewrites weak cards, and every edit passes the same gate.</span></li>
         </ul>
       </div>
       <div class="card">
         <p class="q">How does an overfit model differ from an underfit model in terms of training and test error?</p>
-        <p class="a">Overfit: very low <mark>training error</mark>, high <mark>test error</mark> — too much capacity or too little data. Underfit: high error on both — the model is too simple to capture the underlying pattern.</p>
+        <p class="a">Overfit: very low <mark>training error</mark> but high <mark>test error</mark>, from too much capacity or too little data. Underfit: high error on both, because the model is too simple to capture the underlying pattern.</p>
         <div class="meta"><span>p. 46, 49</span><span>Overfitting</span></div>
       </div>
     </div>
@@ -356,15 +356,15 @@
     <p class="eyebrow">One lecture in, one deck out</p>
     <h2>How it works</h2>
     <p class="body">
-      The pipeline runs entirely on your machine — no backend, no account. The only
-      things Lectern talks to are the Gemini API (with your key, stored in the OS
-      keychain) and your local Anki.
+      The pipeline runs entirely on your machine, with no backend and no account.
+      Lectern talks only to the Gemini API, using your key from the OS keychain,
+      and to your local Anki.
     </p>
     <div class="steps">
       <div class="step">
         <p class="n">1 · map</p>
         <h3>Read the whole lecture</h3>
-        <p>Gemini builds a concept map: objectives, concepts, relations — page by page.</p>
+        <p>Gemini builds a concept map of the whole document: objectives, concepts, and relations, page by page.</p>
       </div>
       <div class="step">
         <p class="n">2 · generate</p>
@@ -395,9 +395,9 @@
     <p class="eyebrow">A ~10 MB desktop app</p>
     <h2>Put a lecture on the desk</h2>
     <p class="body">
-      You need Anki with the AnkiConnect add-on, and a free Gemini API key.
-      A typical 70-page lecture costs a few cents to about a dollar, paid to
-      Google, not to us — there is no us to pay.
+      You need Anki with the AnkiConnect add-on and a free Gemini API key.
+      A typical 70-page lecture costs between a few cents and about a dollar in
+      Gemini usage. Lectern itself is free.
     </p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest">Download the latest release</a>
