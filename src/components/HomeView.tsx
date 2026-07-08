@@ -1,5 +1,30 @@
+import { useMemo } from 'react'
 import { useLectern } from '../state/store'
 import { MODEL_CHOICES } from '../engine/config'
+import { computeSizingPlan } from '../engine/pacing'
+
+/**
+ * The deck-size slider is exponential: card-by-card precision for small decks,
+ * coarser strides the higher it goes, up to genuinely large decks. The track
+ * position t ∈ [0, 1] maps to MIN·(max/MIN)^t, snapped to friendly steps.
+ */
+const SLIDER_MIN = 5
+const SLIDER_RESOLUTION = 500
+
+function snapCards(raw: number): number {
+  const step = raw < 30 ? 1 : raw < 100 ? 5 : 25
+  return Math.round(raw / step) * step
+}
+
+function cardsFromTrack(t: number, max: number): number {
+  const raw = SLIDER_MIN * Math.pow(max / SLIDER_MIN, t)
+  return Math.min(max, Math.max(SLIDER_MIN, snapCards(raw)))
+}
+
+function trackFromCards(cards: number, max: number): number {
+  const clamped = Math.min(max, Math.max(SLIDER_MIN, cards))
+  return Math.log(clamped / SLIDER_MIN) / Math.log(max / SLIDER_MIN)
+}
 
 export function HomeView() {
   const fileName = useLectern((s) => s.fileName)
@@ -14,7 +39,6 @@ export function HomeView() {
   const setFocusPrompt = useLectern((s) => s.setFocusPrompt)
   const targetCards = useLectern((s) => s.targetCards)
   const setTargetCards = useLectern((s) => s.setTargetCards)
-  const sizing = useLectern((s) => s.sizing)
   const estimate = useLectern((s) => s.estimate)
   const settings = useLectern((s) => s.settings)
   const hasApiKey = useLectern((s) => s.hasApiKey)
@@ -23,6 +47,12 @@ export function HomeView() {
 
   const missingDeck = !deckName.trim()
   const cannotGenerate = !hasApiKey || missingDeck
+
+  // The slider scale anchors on what the document itself suggests — never on
+  // the user override (which feeds store.sizing), or the scale would stretch
+  // while dragging.
+  const autoCap = useMemo(() => (pdfInfo ? computeSizingPlan(pdfInfo).totalCardCap : 40), [pdfInfo])
+  const sliderMax = Math.min(1000, Math.max(200, autoCap * 5))
 
   return (
     <main className="flex flex-1 items-start justify-center overflow-y-auto px-8 py-12">
@@ -88,17 +118,24 @@ export function HomeView() {
               <div className="flex items-baseline justify-between">
                 <span className="eyebrow">Deck size</span>
                 <span className="font-data text-chalk-dim text-xs">
-                  {targetCards ?? `auto · ~${sizing?.totalCardCap ?? '—'}`} cards
+                  {targetCards ?? `auto · ~${autoCap}`} cards
                 </span>
               </div>
               <input
                 type="range"
-                min={5}
-                max={Math.max(80, (sizing?.totalCardCap ?? 40) * 2)}
-                value={targetCards ?? sizing?.totalCardCap ?? 30}
-                onChange={(e) => setTargetCards(Number(e.target.value))}
+                min={0}
+                max={SLIDER_RESOLUTION}
+                value={Math.round(
+                  trackFromCards(targetCards ?? autoCap, sliderMax) * SLIDER_RESOLUTION,
+                )}
+                onChange={(e) =>
+                  setTargetCards(
+                    cardsFromTrack(Number(e.target.value) / SLIDER_RESOLUTION, sliderMax),
+                  )
+                }
                 className="mt-2"
                 aria-label="Target number of cards"
+                aria-valuetext={`${targetCards ?? autoCap} cards`}
               />
               {targetCards !== null && (
                 <button

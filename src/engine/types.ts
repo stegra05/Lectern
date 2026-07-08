@@ -138,12 +138,7 @@ export interface GateVerdict {
 // Pipeline events — the single event vocabulary of the app
 // ---------------------------------------------------------------------------
 
-export type PipelinePhase =
-  | 'uploading'
-  | 'mapping'
-  | 'generating'
-  | 'reflecting'
-  | 'complete'
+export type PipelinePhase = 'uploading' | 'mapping' | 'generating' | 'reflecting' | 'complete'
 
 export type PipelineEvent =
   | { type: 'phase'; phase: PipelinePhase }

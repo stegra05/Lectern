@@ -68,7 +68,8 @@ export const FINISH_GENERATION_TOOL = {
       reason: { type: 'string' },
       coverage_assessment: {
         type: 'string',
-        description: 'One-paragraph assessment of what the deck covers and what was deliberately left out.',
+        description:
+          'One-paragraph assessment of what the deck covers and what was deliberately left out.',
       },
     },
     required: ['reason'],
@@ -278,5 +279,7 @@ const removeCardsArgsZ = z.object({
 /** Extract {cardIds, reason} from remove_cards tool-call arguments. */
 export function parseRemoveCardsArgs(raw: unknown): { cardIds: string[]; reason: string } {
   const result = removeCardsArgsZ.safeParse(raw)
-  return result.success ? { cardIds: result.data.card_ids, reason: result.data.reason } : { cardIds: [], reason: '' }
+  return result.success
+    ? { cardIds: result.data.card_ids, reason: result.data.reason }
+    : { cardIds: [], reason: '' }
 }

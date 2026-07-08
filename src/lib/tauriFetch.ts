@@ -6,6 +6,4 @@
 import { fetch as pluginFetch } from '@tauri-apps/plugin-http'
 import { IS_TAURI } from './platform'
 
-export const tauriFetch: typeof fetch = IS_TAURI
-  ? pluginFetch
-  : (...args) => fetch(...args)
+export const tauriFetch: typeof fetch = IS_TAURI ? pluginFetch : (...args) => fetch(...args)

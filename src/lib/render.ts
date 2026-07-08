@@ -7,7 +7,21 @@ import DOMPurify from 'dompurify'
 import katex from 'katex'
 
 const ALLOWED_TAGS = [
-  'b', 'strong', 'i', 'em', 'u', 'sub', 'sup', 'br', 'p', 'ul', 'ol', 'li', 'span', 'div', 'code',
+  'b',
+  'strong',
+  'i',
+  'em',
+  'u',
+  'sub',
+  'sup',
+  'br',
+  'p',
+  'ul',
+  'ol',
+  'li',
+  'span',
+  'div',
+  'code',
 ]
 
 function renderMath(html: string): string {
@@ -35,16 +49,54 @@ function renderClozeHidden(text: string): string {
   })
 }
 
-export function renderCardHtml(
-  raw: string,
-  opts: { cloze?: 'shown' | 'hidden' } = {},
-): string {
+export function renderCardHtml(raw: string, opts: { cloze?: 'shown' | 'hidden' } = {}): string {
   let html = raw
   if (opts.cloze === 'shown') html = renderClozeShown(html)
   else if (opts.cloze === 'hidden') html = renderClozeHidden(html)
   html = renderMath(html)
   return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [...ALLOWED_TAGS, 'math', 'annotation', 'semantics', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'msqrt', 'mtext', 'mspace', 'mover', 'munder', 'mtable', 'mtr', 'mtd', 'mstyle', 'mpadded', 'mphantom', 'svg', 'path', 'line'],
-    ALLOWED_ATTR: ['class', 'style', 'aria-hidden', 'xmlns', 'width', 'height', 'viewBox', 'd', 'x1', 'x2', 'y1', 'y2', 'stroke-width', 'preserveAspectRatio'],
+    ALLOWED_TAGS: [
+      ...ALLOWED_TAGS,
+      'math',
+      'annotation',
+      'semantics',
+      'mrow',
+      'mi',
+      'mo',
+      'mn',
+      'msup',
+      'msub',
+      'mfrac',
+      'msqrt',
+      'mtext',
+      'mspace',
+      'mover',
+      'munder',
+      'mtable',
+      'mtr',
+      'mtd',
+      'mstyle',
+      'mpadded',
+      'mphantom',
+      'svg',
+      'path',
+      'line',
+    ],
+    ALLOWED_ATTR: [
+      'class',
+      'style',
+      'aria-hidden',
+      'xmlns',
+      'width',
+      'height',
+      'viewBox',
+      'd',
+      'x1',
+      'x2',
+      'y1',
+      'y2',
+      'stroke-width',
+      'preserveAspectRatio',
+    ],
   })
 }

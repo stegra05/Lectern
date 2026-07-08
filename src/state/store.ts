@@ -5,6 +5,7 @@
 
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
+import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { create } from 'zustand'
 import { AnkiClient, checkConnection, previewSync, syncCards } from '../engine/anki'
 import { estimateCost, type CostEstimate } from '../engine/cost'
@@ -23,12 +24,20 @@ import type {
   SyncResult,
 } from '../engine/types'
 import { computeSizingPlan } from '../engine/pacing'
+import { confirmDiscard } from '../lib/confirm'
 import { IS_TAURI } from '../lib/platform'
 import { getApiKey, loadSettings, saveSettings } from '../lib/settings'
 import { tauriFetch } from '../lib/tauriFetch'
 
 const THUMBNAIL_PAGE_LIMIT = 150
 const UNDO_WINDOW_MS = 30_000
+/** Render width for the slide peek panel (2x a ~550px panel). */
+const SLIDE_PEEK_RENDER_WIDTH = 1100
+
+// The open pdf.js document, kept out of the store (not serializable state).
+// Owned by loadPdfFromBytes; used by peekSlide for on-demand full renders.
+let currentDoc: PDFDocumentProxy | null = null
+const slideRendersInFlight = new Set<number>()
 
 export interface LogLine {
   level: 'info' | 'warn' | 'error'
@@ -44,13 +53,7 @@ export interface Toast {
 }
 
 export type AppPhase =
-  | 'idle'
-  | 'uploading'
-  | 'mapping'
-  | 'generating'
-  | 'reflecting'
-  | 'complete'
-  | 'error'
+  'idle' | 'uploading' | 'mapping' | 'generating' | 'reflecting' | 'complete' | 'error'
 
 interface LecternState {
   // boot + connections
@@ -86,8 +89,13 @@ interface LecternState {
 
   // review
   editingUid: string | null
+  selectedUid: string | null
   searchQuery: string
   pageFilter: number | null
+  /** Page shown in the slide peek panel, null when closed. */
+  slidePeek: number | null
+  /** Full-size page renders for the peek panel, keyed by page number. */
+  slideRenders: Record<number, string>
 
   // sync
   syncState: 'idle' | 'previewing' | 'syncing' | 'done'
@@ -115,13 +123,15 @@ interface LecternActions {
 
   startGeneration: () => Promise<void>
   cancelGeneration: () => void
-  backToHome: () => void
+  backToHome: () => Promise<void>
 
   updateCardFields: (uid: string, fields: Record<string, string>) => void
   removeCard: (uid: string) => void
   setEditingUid: (uid: string | null) => void
+  setSelectedUid: (uid: string | null) => void
   setSearchQuery: (q: string) => void
   setPageFilter: (page: number | null) => void
+  peekSlide: (page: number | null) => void
 
   previewSyncNow: () => Promise<void>
   syncNow: () => Promise<void>
@@ -222,8 +232,11 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     errorMessage: null,
 
     editingUid: null,
+    selectedUid: null,
     searchQuery: '',
     pageFilter: null,
+    slidePeek: null,
+    slideRenders: {},
 
     syncState: 'idle',
     syncPreview: null,
@@ -240,9 +253,10 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     },
 
     refreshAnki: async () => {
-      const { settings } = get()
+      const { settings, ankiStatus } = get()
       if (!settings) return
-      set({ ankiStatus: 'checking' })
+      // Focus-triggered re-probes shouldn't flicker an already-green dot.
+      if (ankiStatus !== 'connected') set({ ankiStatus: 'checking' })
       const client = new AnkiClient(settings.ankiUrl, tauriFetch)
       const status = await checkConnection(client)
       if (status.ok) {
@@ -304,12 +318,17 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       try {
         const doc = await openPdf(bytes)
         const pdfInfo = await extractPdfInfo(doc)
+        void currentDoc?.loadingTask.destroy().catch(() => {})
+        currentDoc = doc
+        slideRendersInFlight.clear()
         const suggestedDeck = get().deckName || fileName.replace(/\.pdf$/i, '')
         set({
           fileName,
           pdfBytes: bytes,
           pdfInfo,
           pageThumbs: {},
+          slidePeek: null,
+          slideRenders: {},
           deckName: suggestedDeck,
         })
         refreshEstimate()
@@ -330,8 +349,20 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       }
     },
 
-    clearPdf: () =>
-      set({ fileName: null, pdfBytes: null, pdfInfo: null, pageThumbs: {}, estimate: null }),
+    clearPdf: () => {
+      void currentDoc?.loadingTask.destroy().catch(() => {})
+      currentDoc = null
+      slideRendersInFlight.clear()
+      set({
+        fileName: null,
+        pdfBytes: null,
+        pdfInfo: null,
+        pageThumbs: {},
+        estimate: null,
+        slidePeek: null,
+        slideRenders: {},
+      })
+    },
 
     setDeckName: (name) => set({ deckName: name }),
     setFocusPrompt: (focus) => set({ focusPrompt: focus }),
@@ -371,8 +402,10 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         syncPreview: null,
         syncResult: null,
         editingUid: null,
+        selectedUid: null,
         searchQuery: '',
         pageFilter: null,
+        slidePeek: null,
       })
 
       try {
@@ -405,7 +438,18 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     cancelGeneration: () => abortController?.abort(),
 
-    backToHome: () => set({ view: 'home', phase: 'idle' }),
+    backToHome: async () => {
+      const unsent = get().cards.filter((c) => !c.ankiNoteId).length
+      if (unsent > 0) {
+        const counted = unsent === 1 ? "1 card hasn't" : `${unsent} cards haven't`
+        const ok = await confirmDiscard(
+          `${counted} been sent to Anki. Leaving discards them.`,
+          'Discard this deck?',
+        )
+        if (!ok) return
+      }
+      set({ view: 'home', phase: 'idle' })
+    },
 
     updateCardFields: (uid, fields) =>
       set((s) => ({
@@ -429,8 +473,20 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     },
 
     setEditingUid: (uid) => set({ editingUid: uid }),
+    setSelectedUid: (uid) => set({ selectedUid: uid }),
     setSearchQuery: (q) => set({ searchQuery: q }),
     setPageFilter: (page) => set({ pageFilter: page }),
+
+    peekSlide: (page) => {
+      set({ slidePeek: page })
+      if (page === null || !currentDoc) return
+      if (get().slideRenders[page] || slideRendersInFlight.has(page)) return
+      slideRendersInFlight.add(page)
+      renderPageThumbnail(currentDoc, page, SLIDE_PEEK_RENDER_WIDTH)
+        .then((url) => set((s) => ({ slideRenders: { ...s.slideRenders, [page]: url } })))
+        .catch(() => {}) // panel falls back to the filmstrip thumbnail
+        .finally(() => slideRendersInFlight.delete(page))
+    },
 
     previewSyncNow: async () => {
       const { settings, cards, deckName, conceptMap } = get()

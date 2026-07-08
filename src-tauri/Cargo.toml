@@ -15,7 +15,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-tauri-plugin-http = "2"
+# unsafe-headers lets the webview supply its own Origin header. AnkiConnect
+# 403s the default `tauri://localhost` origin; anki.ts sends `http://localhost`,
+# which is in AnkiConnect's default webCorsOriginList.
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-store = "2"

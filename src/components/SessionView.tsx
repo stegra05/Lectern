@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppPhase } from '../state/store'
 import { useLectern } from '../state/store'
 import { CardTile } from './CardTile'
+import { ConceptSheet } from './ConceptSheet'
 import { Filmstrip } from './Filmstrip'
+import { isTypingTarget, SlidePeek } from './SlidePeek'
 import { SyncBar } from './SyncBar'
 
 const PHASES: Array<{ id: AppPhase; label: string }> = [
@@ -23,7 +25,7 @@ export function SessionView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Filmstrip interactive={reviewable} />
+      <Filmstrip streaming={!reviewable} />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <section className="relative flex min-w-0 flex-1 flex-col">
@@ -31,6 +33,7 @@ export function SessionView() {
           <CardColumn />
           {reviewable && hasCards && <SyncBar />}
         </section>
+        <SlidePeek interactive={reviewable} />
       </div>
     </div>
   )
@@ -47,6 +50,7 @@ function Sidebar() {
   const cancelGeneration = useLectern((s) => s.cancelGeneration)
   const backToHome = useLectern((s) => s.backToHome)
   const logRef = useRef<HTMLDivElement>(null)
+  const [conceptsOpen, setConceptsOpen] = useState(false)
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight })
@@ -90,22 +94,26 @@ function Sidebar() {
 
       {/* The ledger, in numbers */}
       {coverage && (
-        <dl className="border-desk-edge/60 space-y-1.5 border-t pt-4">
+        <div className="border-desk-edge/60 space-y-1.5 border-t pt-4">
           <Stat label="Pages covered" value={`${Math.round(coverage.pageCoveragePercent)}%`} />
           <Stat
             label="Concepts"
             value={`${Math.round(coverage.effectiveConceptCoveragePercent)}%`}
+            onClick={conceptMap ? () => setConceptsOpen(true) : undefined}
           />
           {conceptMap && coverage.missingHighPriority.length > 0 && (
             <Stat
               label="Key concepts open"
               value={String(coverage.missingHighPriority.length)}
               warn
+              onClick={() => setConceptsOpen(true)}
             />
           )}
           {progress && <Stat label="Cards" value={`${progress.produced} / ${progress.cap}`} />}
-        </dl>
+        </div>
       )}
+
+      {conceptsOpen && <ConceptSheet onClose={() => setConceptsOpen(false)} />}
 
       {/* Activity log */}
       <div className="border-desk-edge/60 flex min-h-0 flex-1 flex-col border-t pt-4">
@@ -145,7 +153,7 @@ function Sidebar() {
             Stop generating
           </button>
         ) : (
-          <button onClick={backToHome} className="btn-secondary w-full px-3 py-2">
+          <button onClick={() => void backToHome()} className="btn-secondary w-full px-3 py-2">
             New session
           </button>
         )}
@@ -154,12 +162,33 @@ function Sidebar() {
   )
 }
 
-function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+function Stat({
+  label,
+  value,
+  warn,
+  onClick,
+}: {
+  label: string
+  value: string
+  warn?: boolean
+  onClick?: () => void
+}) {
+  const row = (
+    <>
+      <span className="text-chalk-dim text-xs">{label}</span>
+      <span className={`font-data text-xs ${warn ? 'text-lamp' : 'text-chalk'}`}>{value}</span>
+    </>
+  )
+  if (!onClick) return <div className="flex items-baseline justify-between">{row}</div>
   return (
-    <div className="flex items-baseline justify-between">
-      <dt className="text-chalk-dim text-xs">{label}</dt>
-      <dd className={`font-data text-xs ${warn ? 'text-lamp' : 'text-chalk'}`}>{value}</dd>
-    </div>
+    <button
+      onClick={onClick}
+      className="hover:bg-desk-raised/70 -mx-1 flex w-[calc(100%+0.5rem)] items-baseline justify-between rounded-sm px-1 transition-colors duration-150"
+      aria-label={`${label}: ${value} — show the extracted concepts`}
+      title="Show the extracted concepts"
+    >
+      {row}
+    </button>
   )
 }
 
@@ -186,7 +215,7 @@ function ErrorBanner() {
         >
           Try again
         </button>
-        <button onClick={backToHome} className="btn-ghost px-3 py-1.5">
+        <button onClick={() => void backToHome()} className="btn-ghost px-3 py-1.5">
           Back to start
         </button>
       </div>
@@ -202,6 +231,7 @@ function CardColumn() {
   const pageFilter = useLectern((s) => s.pageFilter)
   const setPageFilter = useLectern((s) => s.setPageFilter)
   const rejectedCount = useLectern((s) => s.rejectedCount)
+  const selectedUid = useLectern((s) => s.selectedUid)
   const listRef = useRef<HTMLDivElement>(null)
   const isDone = phase === 'complete'
   const isError = phase === 'error'
@@ -226,10 +256,68 @@ function CardColumn() {
     if (nearBottom) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [cards.length, reviewable])
 
+  // Keyboard review: ↑↓/jk walk the visible cards, e/↩ edits, x removes
+  // (undoable), s peeks the card's source slide. Fields keep their own keys.
+  useEffect(() => {
+    if (!reviewable) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
+      const state = useLectern.getState()
+      if (state.editingUid || state.settingsOpen) return
+      const index = visible.findIndex((c) => c.uid === state.selectedUid)
+      const select = (i: number) => state.setSelectedUid(visible[i]?.uid ?? null)
+
+      switch (e.key) {
+        case 'j':
+        case 'ArrowDown':
+          e.preventDefault()
+          if (visible.length > 0) select(index === -1 ? 0 : Math.min(visible.length - 1, index + 1))
+          break
+        case 'k':
+        case 'ArrowUp':
+          e.preventDefault()
+          if (visible.length > 0) select(index === -1 ? visible.length - 1 : Math.max(0, index - 1))
+          break
+        case 'e':
+        case 'Enter':
+          if (index !== -1) {
+            e.preventDefault()
+            state.setEditingUid(visible[index].uid)
+          }
+          break
+        case 'x':
+        case 'Backspace':
+        case 'Delete':
+          if (index !== -1) {
+            e.preventDefault()
+            const next = visible[index + 1] ?? visible[index - 1]
+            state.setSelectedUid(next?.uid ?? null)
+            state.removeCard(visible[index].uid)
+          }
+          break
+        case 's':
+          if (index !== -1) {
+            const page = visible[index].sourcePages[0]
+            if (page !== undefined) {
+              e.preventDefault()
+              state.peekSlide(state.slidePeek === page ? null : page)
+            }
+          }
+          break
+        case 'Escape':
+          // The slide peek's own Esc wins while it is open.
+          if (state.slidePeek === null) state.setSelectedUid(null)
+          break
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [reviewable, visible])
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {reviewable && cards.length > 0 && (
-        <div className="mx-auto flex w-full max-w-2xl shrink-0 items-center gap-3 px-6 pt-4 pb-1">
+        <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-6 pt-4 pb-1">
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -247,10 +335,19 @@ function CardColumn() {
               page {pageFilter} ✕
             </button>
           )}
-          <span aria-live="polite" className="font-data text-chalk-dim ml-auto text-xs">
-            {visible.length} of {cards.length} cards
-            {rejectedCount > 0 && ` · ${rejectedCount} rejected by the quality gate`}
-          </span>
+          <div className="ml-auto flex flex-row-reverse flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <span aria-live="polite" className="font-data text-chalk-dim text-xs whitespace-nowrap">
+              {visible.length} of {cards.length} cards
+              {rejectedCount > 0 && ` · ${rejectedCount} rejected by the quality gate`}
+            </span>
+            <span
+              aria-hidden
+              className="font-data text-chalk-dim/70 text-2xs whitespace-nowrap"
+              title="Keyboard review: ↑↓ select a card, e edit, x remove, s show its slide"
+            >
+              ↑↓ select · e edit · x remove · s slide
+            </span>
+          </div>
         </div>
       )}
 
@@ -264,6 +361,7 @@ function CardColumn() {
                 key={card.uid}
                 card={card}
                 editable={reviewable}
+                selected={reviewable && card.uid === selectedUid}
                 animate={!reviewable && i >= cards.length - 3}
               />
             ))}

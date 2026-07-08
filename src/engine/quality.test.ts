@@ -189,10 +189,9 @@ describe('normalizeCardPayload', () => {
         fields: { Text: '{{c1::x}}' },
       })?.modelName,
     ).toBe('Cloze')
-    expect(
-      normalizeCardPayload({ modelName: 'BASIC', fields: { Front: 'Q' } })
-        ?.modelName,
-    ).toBe('Basic')
+    expect(normalizeCardPayload({ modelName: 'BASIC', fields: { Front: 'Q' } })?.modelName).toBe(
+      'Basic',
+    )
   })
 
   it('rejects out-of-range slide numbers', () => {

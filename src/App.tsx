@@ -1,5 +1,7 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEffect, useState } from 'react'
+import { confirmDiscard } from './lib/confirm'
 import { IS_TAURI } from './lib/platform'
 import { HomeView } from './components/HomeView'
 import { SessionView } from './components/SessionView'
@@ -18,6 +20,14 @@ export default function App() {
     void init()
   }, [init])
 
+  // Coming back to the window is the natural moment Anki may have been opened
+  // (or closed) — re-probe so the status dot never goes stale.
+  useEffect(() => {
+    const onFocus = () => void useLectern.getState().refreshAnki()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
   // ⌘, — the macOS settings convention.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -28,6 +38,25 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // Closing the window mid-session would silently drop an unsent deck.
+  useEffect(() => {
+    if (!IS_TAURI) return
+    const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
+      const { view: currentView, cards } = useLectern.getState()
+      const unsent = cards.filter((c) => !c.ankiNoteId).length
+      if (currentView !== 'session' || unsent === 0) return
+      const counted = unsent === 1 ? "1 card hasn't" : `${unsent} cards haven't`
+      const ok = await confirmDiscard(
+        `${counted} been sent to Anki. Quitting discards them.`,
+        'Quit Lectern?',
+      )
+      if (!ok) event.preventDefault()
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
   }, [])
 
   // Native drag & drop of PDFs onto the window.

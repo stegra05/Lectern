@@ -4,12 +4,16 @@
  * nothing here feeds the model.
  */
 
+import './streamPolyfill'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import type { PdfInfo } from './types'
 
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
+// Custom worker entry (instead of workerSrc pointing at the stock build) so
+// the ReadableStream polyfill also runs inside the worker context.
+pdfjs.GlobalWorkerOptions.workerPort = new Worker(new URL('./pdfWorker.ts', import.meta.url), {
+  type: 'module',
+})
 
 /** Pages beyond this are skipped for image counting (sizing heuristic only). */
 const IMAGE_SCAN_PAGE_LIMIT = 300
@@ -34,10 +38,7 @@ export async function extractPdfInfo(doc: PDFDocumentProxy): Promise<PdfInfo> {
       if (i <= IMAGE_SCAN_PAGE_LIMIT) {
         const ops = await page.getOperatorList()
         for (const fn of ops.fnArray) {
-          if (
-            fn === pdfjs.OPS.paintImageXObject ||
-            fn === pdfjs.OPS.paintInlineImageXObject
-          ) {
+          if (fn === pdfjs.OPS.paintImageXObject || fn === pdfjs.OPS.paintInlineImageXObject) {
             imageCount++
           }
         }

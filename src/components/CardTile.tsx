@@ -1,5 +1,6 @@
-import { memo, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { Card } from '../engine/types'
+import { confirmDiscard } from '../lib/confirm'
 import { renderCardHtml } from '../lib/render'
 import { useLectern } from '../state/store'
 
@@ -9,23 +10,35 @@ const QUALITY_ATTENTION_THRESHOLD = 85
 export const CardTile = memo(function CardTile({
   card,
   editable,
+  selected,
   animate,
 }: {
   card: Card
   editable: boolean
+  selected: boolean
   animate: boolean
 }) {
   const editingUid = useLectern((s) => s.editingUid)
   const setEditingUid = useLectern((s) => s.setEditingUid)
+  const setSelectedUid = useLectern((s) => s.setSelectedUid)
   const removeCard = useLectern((s) => s.removeCard)
+  const peekSlide = useLectern((s) => s.peekSlide)
+  const ref = useRef<HTMLElement>(null)
   const isEditing = editingUid === card.uid
   const needsAttention = card.qualityScore < QUALITY_ATTENTION_THRESHOLD
 
+  // Keep the keyboard-selected card in view.
+  useEffect(() => {
+    if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
+
   return (
     <article
+      ref={ref}
+      onClick={editable ? () => setSelectedUid(card.uid) : undefined}
       className={`group bg-paper shadow-card relative rounded-lg p-4 ${
         animate ? 'card-settle' : ''
-      }`}
+      } ${selected ? 'ring-lamp ring-2' : ''}`}
     >
       {isEditing ? (
         <CardEditorInline card={card} />
@@ -34,7 +47,27 @@ export const CardTile = memo(function CardTile({
           <CardBody card={card} />
           <footer className="border-ink/8 mt-3 flex items-baseline justify-between gap-3 border-t pt-2">
             <span className="font-data text-ink-soft truncate text-2xs">
-              {card.sourcePages.length > 0 && `p. ${card.sourcePages.join(', ')}`}
+              {card.sourcePages.length > 0 && (
+                <>
+                  {'p. '}
+                  {card.sourcePages.map((p, i) => (
+                    <button
+                      key={p}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (editable) setSelectedUid(card.uid)
+                        peekSlide(p)
+                      }}
+                      className="hover:text-lamp-ink rounded-sm underline-offset-2 transition-colors duration-150 hover:underline"
+                      aria-label={`View slide ${p}`}
+                      title={`View slide ${p}`}
+                    >
+                      {i > 0 && ', '}
+                      {p}
+                    </button>
+                  ))}
+                </>
+              )}
               {needsAttention && (
                 <span
                   className="bg-lamp/20 text-lamp-ink ml-2 rounded-sm px-1 py-px"
@@ -102,12 +135,19 @@ function CardEditorInline({ card }: { card: Card }) {
   })
 
   const save = () => updateCardFields(card.uid, draft)
+  const dirty = Object.keys(draft).some((name) => draft[name] !== card.fields[name])
+  const cancel = () => {
+    if (!dirty) return setEditingUid(null)
+    void confirmDiscard('Your edits to this card will be lost.', 'Discard edits?').then((ok) => {
+      if (ok) setEditingUid(null)
+    })
+  }
 
   return (
     <div
       className="space-y-3"
       onKeyDown={(e) => {
-        if (e.key === 'Escape') setEditingUid(null)
+        if (e.key === 'Escape') cancel()
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save()
       }}
     >
@@ -126,7 +166,7 @@ function CardEditorInline({ card }: { card: Card }) {
       <div className="flex items-center justify-end gap-2">
         <span className="font-data text-ink-soft/70 mr-auto text-2xs">esc cancels · ⌘↩ saves</span>
         <button
-          onClick={() => setEditingUid(null)}
+          onClick={cancel}
           className="btn text-ink-soft hover:bg-paper-shade hover:text-ink px-3 py-1.5 text-sm"
         >
           Cancel

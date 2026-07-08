@@ -14,14 +14,7 @@
  *   envelope) raise `AnkiApiError` and fail fast.
  */
 
-import type {
-  Card,
-  Settings,
-  SyncFailure,
-  SyncPreview,
-  SyncProgress,
-  SyncResult,
-} from './types'
+import type { Card, Settings, SyncFailure, SyncPreview, SyncProgress, SyncResult } from './types'
 
 // --- Constants (mirroring anki_connector.py) --------------------------------
 
@@ -95,11 +88,9 @@ export interface AnkiClientOptions {
 
 // --- Helpers ------------------------------------------------------------------
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-const errorMessage = (err: unknown): string =>
-  err instanceof Error ? err.message : String(err)
+const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 const toStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((v) => String(v)) : []
@@ -125,11 +116,7 @@ export class AnkiClient {
   }
 
   /** Single request: envelope {action, version: 6, params?}, unwrap {result, error}. */
-  private async invokeOnce(
-    action: string,
-    params: unknown,
-    timeoutMs: number,
-  ): Promise<unknown> {
+  private async invokeOnce(action: string, params: unknown, timeoutMs: number): Promise<unknown> {
     const payload: { action: string; version: 6; params?: unknown } =
       params === undefined ? { action, version: 6 } : { action, version: 6, params }
 
@@ -143,7 +130,12 @@ export class AnkiClient {
     try {
       response = await fetchFn(this.baseUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // AnkiConnect rejects origins outside its webCorsOriginList (403 with
+        // an empty body). Tauri's fetch would otherwise stamp the request with
+        // `tauri://localhost`; `http://localhost` is in AnkiConnect's default
+        // list. Browsers strip Origin from userland fetch, so this is a no-op
+        // in plain-browser dev mode.
+        headers: { 'Content-Type': 'application/json', Origin: 'http://localhost' },
         body: JSON.stringify(payload),
         signal: controller.signal,
       })
@@ -156,18 +148,14 @@ export class AnkiClient {
     }
 
     if (!response.ok) {
-      throw new AnkiTransportError(
-        `AnkiConnect returned HTTP error ${response.status}`,
-      )
+      throw new AnkiTransportError(`AnkiConnect returned HTTP error ${response.status}`)
     }
 
     let data: unknown
     try {
       data = await response.json()
     } catch (err) {
-      throw new AnkiTransportError(
-        `AnkiConnect returned non-JSON response: ${errorMessage(err)}`,
-      )
+      throw new AnkiTransportError(`AnkiConnect returned non-JSON response: ${errorMessage(err)}`)
     }
 
     if (!isRecord(data)) {

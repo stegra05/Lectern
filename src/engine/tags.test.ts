@@ -18,9 +18,7 @@ describe('cleanTagPart', () => {
 
   it('preserves acronyms and digits while Title Casing the rest', () => {
     expect(cleanTagPart('INTRO to NLP', { titleCase: true })).toBe('INTRO-To-NLP')
-    expect(cleanTagPart('chapter 2 basics', { titleCase: true })).toBe(
-      'Chapter-2-Basics',
-    )
+    expect(cleanTagPart('chapter 2 basics', { titleCase: true })).toBe('Chapter-2-Basics')
   })
 
   it('lowercases in slug mode', () => {
@@ -40,24 +38,20 @@ describe('buildHierarchicalTag', () => {
       slideSet: 'lecture 1: supervised learning',
       topic: 'image classification',
     })
-    expect(tag).toBe(
-      'Machine-Learning::Lecture-1-Supervised-Learning::Image-Classification',
-    )
+    expect(tag).toBe('Machine-Learning::Lecture-1-Supervised-Learning::Image-Classification')
   })
 
   it('collapses the trailing separator when the topic is empty', () => {
-    expect(
-      buildHierarchicalTag(TEMPLATE, { deck: 'ML', slideSet: 'Intro' }),
-    ).toBe('ML::Intro')
-    expect(
-      buildHierarchicalTag(TEMPLATE, { deck: 'ML', slideSet: 'Intro', topic: '' }),
-    ).toBe('ML::Intro')
+    expect(buildHierarchicalTag(TEMPLATE, { deck: 'ML', slideSet: 'Intro' })).toBe('ML::Intro')
+    expect(buildHierarchicalTag(TEMPLATE, { deck: 'ML', slideSet: 'Intro', topic: '' })).toBe(
+      'ML::Intro',
+    )
   })
 
   it('collapses an empty middle segment', () => {
-    expect(
-      buildHierarchicalTag(TEMPLATE, { deck: 'ML', slideSet: '', topic: 'Trees' }),
-    ).toBe('ML::Trees')
+    expect(buildHierarchicalTag(TEMPLATE, { deck: 'ML', slideSet: '', topic: 'Trees' })).toBe(
+      'ML::Trees',
+    )
   })
 
   it('cleans each segment of a hierarchical deck name separately', () => {
@@ -113,9 +107,9 @@ describe('buildCardTags', () => {
     expect(buildCardTags({ ...base, defaultTag: '', enableDefaultTag: true })).toEqual([
       'Machine-Learning::Lecture-1::Regression',
     ])
-    expect(
-      buildCardTags({ ...base, defaultTag: '   ', enableDefaultTag: true }),
-    ).toEqual(['Machine-Learning::Lecture-1::Regression'])
+    expect(buildCardTags({ ...base, defaultTag: '   ', enableDefaultTag: true })).toEqual([
+      'Machine-Learning::Lecture-1::Regression',
+    ])
   })
 
   it('dedupes the default tag against the primary tag', () => {

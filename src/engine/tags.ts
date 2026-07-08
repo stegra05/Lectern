@@ -17,8 +17,7 @@ export interface TagParts {
 
 /** Python str.isupper(): at least one cased char, none lowercase. After
  *  cleaning, parts are ASCII-only, so [A-Za-z] covers the cased chars. */
-const isUpperWord = (word: string): boolean =>
-  /[A-Z]/.test(word) && !/[a-z]/.test(word)
+const isUpperWord = (word: string): boolean => /[A-Z]/.test(word) && !/[a-z]/.test(word)
 
 /** Python str.capitalize(): first char upper, the rest lowered. */
 const capitalize = (word: string): string =>
@@ -48,9 +47,7 @@ export function cleanTagPart(
   } else if (options.titleCase) {
     s = s
       .split(' ')
-      .map((word) =>
-        isUpperWord(word) || /^\d+$/.test(word) ? word : capitalize(word),
-      )
+      .map((word) => (isUpperWord(word) || /^\d+$/.test(word) ? word : capitalize(word)))
       .join(' ')
   }
 
@@ -71,12 +68,8 @@ export function buildHierarchicalTag(template: string, parts: TagParts): string 
         .map((segment) => cleanTagPart(segment))
         .join('::')
     : ''
-  const cleanedSlideSet = parts.slideSet
-    ? cleanTagPart(parts.slideSet, { titleCase: true })
-    : ''
-  const cleanedTopic = parts.topic
-    ? cleanTagPart(parts.topic, { titleCase: true })
-    : ''
+  const cleanedSlideSet = parts.slideSet ? cleanTagPart(parts.slideSet, { titleCase: true }) : ''
+  const cleanedTopic = parts.topic ? cleanTagPart(parts.topic, { titleCase: true }) : ''
 
   let tag = template
     .replace(/\{\{deck\}\}/g, cleanedDeck)

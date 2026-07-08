@@ -31,7 +31,13 @@ import {
   computeCoverageData,
   isCoverageSufficient,
 } from './coverage'
-import { GeminiClient, parseJsonPayload, type FunctionCallStep, type GeminiUsage, type InputPart } from './gemini'
+import {
+  GeminiClient,
+  parseJsonPayload,
+  type FunctionCallStep,
+  type GeminiUsage,
+  type InputPart,
+} from './gemini'
 import {
   ADD_CARDS_TOOL,
   CONCEPT_MAP_RESPONSE_SCHEMA,
@@ -130,13 +136,15 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   const conceptMap = parseConceptMap(parseJsonPayload(mapResult.outputText))
   ctx = { language: conceptMap.language || 'en', focusPrompt: opts.focusPrompt }
 
-  const sizing = computeSizingPlan(
-    reconcilePdfInfo(opts.pdfInfo, conceptMap),
-    {
-      userTargetCards: opts.userTargetCards,
-      forceMode: conceptMap.documentType === 'script' ? 'script' : conceptMap.documentType === 'slides' ? 'slides' : undefined,
-    },
-  )
+  const sizing = computeSizingPlan(reconcilePdfInfo(opts.pdfInfo, conceptMap), {
+    userTargetCards: opts.userTargetCards,
+    forceMode:
+      conceptMap.documentType === 'script'
+        ? 'script'
+        : conceptMap.documentType === 'slides'
+          ? 'slides'
+          : undefined,
+  })
   const catalog = buildCoverageCatalog(conceptMap)
   emit({ type: 'concept_map', conceptMap, sizing })
   emit({
@@ -187,14 +195,23 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       nonProgressRounds++
       if (nonProgressRounds >= NON_PROGRESS_MAX_ROUNDS) {
         terminationReason = 'model_stalled'
-        emit({ type: 'log', level: 'warn', message: 'Model stopped calling tools; ending generation.' })
+        emit({
+          type: 'log',
+          level: 'warn',
+          message: 'Model stopped calling tools; ending generation.',
+        })
         break
       }
       response = await client.interact({
         model: opts.model,
         instructions: systemInstructions(ctx),
         previousInteractionId: response.id,
-        input: [{ type: 'text', text: 'Continue: call submit_cards with the next batch, or finish_generation if coverage is complete.' }],
+        input: [
+          {
+            type: 'text',
+            text: 'Continue: call submit_cards with the next batch, or finish_generation if coverage is complete.',
+          },
+        ],
         tools,
         toolChoice: 'any',
         thinkingLevel: THINKING_BY_PHASE.generating,
@@ -215,14 +232,20 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           terminationReason = 'coverage_sufficient_model_done'
           results.push(functionResult(call, 'Accepted. Generation complete.'))
         } else {
-          emit({ type: 'log', level: 'warn', message: 'Model tried to finish early — coverage gaps remain, continuing.' })
+          emit({
+            type: 'log',
+            level: 'warn',
+            message: 'Model tried to finish early — coverage gaps remain, continuing.',
+          })
           results.push(functionResult(call, verdict.message))
         }
         continue
       }
 
       if (call.name !== 'submit_cards') {
-        results.push(functionResult(call, `Unknown tool ${call.name}. Use submit_cards or finish_generation.`))
+        results.push(
+          functionResult(call, `Unknown tool ${call.name}. Use submit_cards or finish_generation.`),
+        )
         continue
       }
 
@@ -292,7 +315,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     nonProgressRounds = acceptedThisRound === 0 ? nonProgressRounds + 1 : 0
     if (nonProgressRounds >= NON_PROGRESS_MAX_ROUNDS) {
       terminationReason = 'non_progress'
-      emit({ type: 'log', level: 'warn', message: 'Two rounds without accepted cards — stopping generation.' })
+      emit({
+        type: 'log',
+        level: 'warn',
+        message: 'Two rounds without accepted cards — stopping generation.',
+      })
       break
     }
 

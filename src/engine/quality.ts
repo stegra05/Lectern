@@ -180,7 +180,10 @@ export function evaluateCard(card: Card): GateVerdict {
   if (card.modelName === 'Cloze' && !CLOZE_DELETION_RE.test(clozeBasis)) {
     failures.push('cloze_without_deletion')
   }
-  if (card.modelName === 'Basic' && CLOZE_DELETION_RE.test(`${fields['Front'] ?? ''}${fields['Back'] ?? ''}`)) {
+  if (
+    card.modelName === 'Basic' &&
+    CLOZE_DELETION_RE.test(`${fields['Front'] ?? ''}${fields['Back'] ?? ''}`)
+  ) {
     failures.push('cloze_markup_in_basic')
   }
 
@@ -223,7 +226,12 @@ export interface NormalizedCardPayload {
 
 /** titleize_model_name + note_export.is_cloze: substring match on "cloze". */
 const coerceModelName = (value: unknown): NoteKind =>
-  String(value ?? '').trim().toLowerCase().includes('cloze') ? 'Cloze' : 'Basic'
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .includes('cloze')
+    ? 'Cloze'
+    : 'Basic'
 
 /** stringify_slide_number + ai_client int coercion: 1..99999 or nothing. */
 const coerceSlideNumber = (value: unknown): number | null => {

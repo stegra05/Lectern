@@ -275,7 +275,7 @@ describe('resolveModelNames', () => {
   it('detects localized built-ins by field signature (German Einfach/Lückentext)', async () => {
     const fieldsByModel: Record<string, string[]> = {
       Einfach: ['Vorderseite', 'Rückseite'],
-      'Lückentext': ['Text', 'Extra'],
+      Lückentext: ['Text', 'Extra'],
       Geographie: ['Land', 'Hauptstadt'],
     }
     const { fetchFn } = makeFetch(
@@ -539,7 +539,12 @@ describe('syncCards', () => {
     expect(result.failures).toHaveLength(1)
     expect(result.failures[0]).toMatchObject({ uid: 'u2', front: 'Q2 dup' })
     expect(result.failures[0].error).toContain('duplicate')
-    expect(result.noteIds).toEqual(new Map([['u1', 1501], ['u3', 777]]))
+    expect(result.noteIds).toEqual(
+      new Map([
+        ['u1', 1501],
+        ['u3', 777],
+      ]),
+    )
 
     // Progress after every card, including the failing one.
     expect(onProgress.mock.calls.map(([p]) => p)).toEqual([

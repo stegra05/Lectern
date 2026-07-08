@@ -208,7 +208,9 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
     uncoveredPages,
     pageCoveragePercent: percent(coveredPages.size, catalog.pageCount),
     coveredConceptIds: [...explicitConceptIds].sort(),
-    inferredConceptIds: [...conceptsCoveredByPage].filter((id) => !explicitConceptIds.has(id)).sort(),
+    inferredConceptIds: [...conceptsCoveredByPage]
+      .filter((id) => !explicitConceptIds.has(id))
+      .sort(),
     conceptCoveragePercent: percent(explicitConceptIds.size, totalConcepts),
     effectiveConceptCoveragePercent: percent(coveredConceptUnion.size, totalConcepts),
     coveredRelationKeys: [...coveredRelationUnion].sort(),
@@ -351,4 +353,3 @@ export function isCoverageSufficient(coverage: CoverageData): boolean {
       coverage.pageCoveragePercent >= COVERAGE_MIN_PAGE_PERCENT)
   )
 }
-

@@ -122,11 +122,7 @@ export class GeminiClient {
       }
     }
 
-    const raw = await this.postWithRetry(
-      `${this.baseUrl}/v1beta/interactions`,
-      body,
-      req.signal,
-    )
+    const raw = await this.postWithRetry(`${this.baseUrl}/v1beta/interactions`, body, req.signal)
     return parseInteraction(raw)
   }
 
@@ -216,10 +212,10 @@ export class GeminiClient {
         )
       }
       await sleep(1500, signal)
-      const pollRes = await this.fetchFn(
-        `${this.baseUrl}/v1beta/${file.name}`,
-        { headers: { 'x-goog-api-key': this.apiKey }, signal },
-      )
+      const pollRes = await this.fetchFn(`${this.baseUrl}/v1beta/${file.name}`, {
+        headers: { 'x-goog-api-key': this.apiKey },
+        signal,
+      })
       if (!pollRes.ok) throw await toGeminiError(pollRes)
       const polled = (await pollRes.json()) as { state?: string }
       state = polled.state ?? 'ACTIVE'
@@ -270,7 +266,10 @@ export class GeminiClient {
         RETRY_BASE_DELAY_MS * 2 ** attempt * (1 + Math.random() * 0.1),
         RETRY_MAX_DELAY_MS,
       )
-      await sleep(Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : backoff, signal)
+      await sleep(
+        Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : backoff,
+        signal,
+      )
     }
     throw lastError ?? new GeminiError('request failed', 0, 'The Gemini request failed.')
   }
@@ -350,11 +349,7 @@ async function toGeminiError(res: Response): Promise<GeminiError> {
 
 function userMessageFor(status: number, message: string): string {
   const lower = message.toLowerCase()
-  if (
-    lower.includes('spending') ||
-    lower.includes('billing') ||
-    lower.includes('quota exceeded')
-  ) {
+  if (lower.includes('spending') || lower.includes('billing') || lower.includes('quota exceeded')) {
     return 'Your Gemini quota or spending cap was reached. Check your Google AI Studio billing settings.'
   }
   if (status === 429) return 'Gemini is rate-limiting requests. Lectern will retry automatically.'
