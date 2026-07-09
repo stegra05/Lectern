@@ -18,6 +18,16 @@
 ### Changed
 - After the deck is complete, the sidebar counts the live deck size instead of
   the original generation budget, so follow-up additions show up immediately.
+- Batch feedback to the model now names duplicate submissions instead of only
+  counting them, and announces truncated lists, so the agent loop stops
+  resubmitting the same cards.
+
+### Fixed
+- A network blip mid-generation no longer kills the run: dropped connections
+  retry like server errors, while unrecoverable client errors (a rejected API
+  key, a malformed request) stop immediately instead of retrying for minutes.
+- Tighter desktop shell: a strict content-security policy, and file read
+  access scoped to PDF files.
 
 ## 2.4.0 (2026-07-08)
 

@@ -160,7 +160,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
       }
 
       const rejected: Array<{ front: string; reasons: string[] }> = []
-      let duplicates = 0
+      const duplicateFronts: string[] = []
 
       for (const raw of parseSubmitCardsArgs(call.arguments)) {
         const normalized = normalizeCardPayload(raw)
@@ -173,7 +173,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
 
         const key = cardKey(card)
         if (seenKeys.has(key)) {
-          duplicates++
+          duplicateFronts.push(firstField(card))
           continue
         }
         if (!verdict.pass) {
@@ -200,7 +200,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
           buildFollowUpFeedback({
             acceptedCount: acceptedThisRound,
             rejected,
-            duplicates,
+            duplicateFronts,
             cardsRemaining: FOLLOWUP_CARD_CAP - added.length,
           }),
         ),

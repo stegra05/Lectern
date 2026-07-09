@@ -165,7 +165,8 @@ export class AnkiClient {
       )
     }
     if (data.error !== null && data.error !== undefined) {
-      throw new AnkiApiError(`AnkiConnect error for ${action}: ${String(data.error)}`)
+      const detail = typeof data.error === 'string' ? data.error : JSON.stringify(data.error)
+      throw new AnkiApiError(`AnkiConnect error for ${action}: ${detail}`)
     }
     return data.result
   }

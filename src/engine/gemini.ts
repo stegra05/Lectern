@@ -138,7 +138,12 @@ export class GeminiClient {
         return await this.uploadPdfOnce(data, displayName, signal)
       } catch (e) {
         lastError = e
-        if (signal?.aborted) throw e
+        if (signal?.aborted || isAbortError(e)) throw e
+        // Client errors other than rate limiting (e.g. a rejected API key)
+        // will not fix themselves — surface them instead of retrying.
+        if (e instanceof GeminiError && e.status >= 400 && e.status < 500 && e.status !== 429) {
+          throw e
+        }
         await sleep(RETRY_BASE_DELAY_MS * (attempt + 1), signal)
       }
     }
@@ -241,16 +246,36 @@ export class GeminiClient {
   ): Promise<unknown> {
     let lastError: GeminiError | undefined
     for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt++) {
-      const res = await this.fetchFn(url, {
-        method: 'POST',
-        signal,
-        headers: {
-          'x-goog-api-key': this.apiKey,
-          'Content-Type': 'application/json',
-          'Api-Revision': GEMINI_API_REVISION,
-        },
-        body: JSON.stringify(body),
-      })
+      const backoff = Math.min(
+        RETRY_BASE_DELAY_MS * 2 ** attempt * (1 + Math.random() * 0.1),
+        RETRY_MAX_DELAY_MS,
+      )
+
+      let res: Response
+      try {
+        res = await this.fetchFn(url, {
+          method: 'POST',
+          signal,
+          headers: {
+            'x-goog-api-key': this.apiKey,
+            'Content-Type': 'application/json',
+            'Api-Revision': GEMINI_API_REVISION,
+          },
+          body: JSON.stringify(body),
+        })
+      } catch (e) {
+        // Network-level failure (offline, DNS, connection reset) — retried
+        // like a 5xx so a blip mid-generation does not kill the whole run.
+        if (signal?.aborted || isAbortError(e)) throw e
+        lastError = new GeminiError(
+          e instanceof Error ? e.message : String(e),
+          0,
+          'The connection to Gemini dropped. Lectern will retry.',
+        )
+        if (attempt === RATE_LIMIT_MAX_RETRIES) throw lastError
+        await sleep(backoff, signal)
+        continue
+      }
       if (res.ok) return res.json()
 
       const error = await toGeminiError(res)
@@ -262,10 +287,6 @@ export class GeminiClient {
       const retryAfterMs = retryAfterHeader
         ? Number.parseFloat(retryAfterHeader) * 1000
         : extractRetryAfterMs(error.message)
-      const backoff = Math.min(
-        RETRY_BASE_DELAY_MS * 2 ** attempt * (1 + Math.random() * 0.1),
-        RETRY_MAX_DELAY_MS,
-      )
       await sleep(
         Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : backoff,
         signal,
@@ -368,6 +389,8 @@ function extractRetryAfterMs(message: string): number | undefined {
   }
   return undefined
 }
+
+const isAbortError = (e: unknown): boolean => e instanceof Error && e.name === 'AbortError'
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

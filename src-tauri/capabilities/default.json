@@ -13,7 +13,7 @@
     "process:allow-restart",
     {
       "identifier": "fs:allow-read-file",
-      "allow": [{ "path": "**" }]
+      "allow": [{ "path": "**/*.pdf" }, { "path": "**/*.PDF" }]
     },
     {
       "identifier": "http:default",

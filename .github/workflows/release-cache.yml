@@ -1,0 +1,64 @@
+name: Release cache
+
+# Primes the per-platform release-profile Rust caches from main. Tag builds
+# (release.yml) restore these instead of compiling every crate cold, which is
+# where most of a release's wall-clock goes. Runs only when the Rust shell
+# changes — for pure frontend releases the last saved cache stays a full hit.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src-tauri/**"
+      - ".github/workflows/release-cache.yml"
+
+concurrency:
+  group: release-cache-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prime:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            targets: ""
+          - platform: windows-latest
+            targets: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libgtk-3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      # shared-key must match release.yml so tag builds can restore it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: release-${{ matrix.platform }}
+
+      - name: Build release-profile crates
+        shell: bash
+        run: |
+          # tauri-build wants frontendDist to exist; an empty dir satisfies it.
+          mkdir -p dist
+          if [ -n "${{ matrix.targets }}" ]; then
+            for t in $(echo "${{ matrix.targets }}" | tr ',' ' '); do
+              cargo build --release --manifest-path src-tauri/Cargo.toml --target "$t"
+            done
+          else
+            cargo build --release --manifest-path src-tauri/Cargo.toml
+          fi

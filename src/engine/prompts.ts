@@ -164,11 +164,19 @@ export function generationMissionPrompt(
   )
 }
 
+/** List entries capped per feedback payload; the cap is always announced so
+ *  the model never mistakes a truncated list for the full one. */
+const FEEDBACK_LIST_LIMIT = 10
+
+function pushTruncationNote(lines: string[], total: number, shown: number, noun: string): void {
+  if (total > shown) lines.push(`  …and ${total - shown} more ${noun} not listed.`)
+}
+
 /** Feedback payload returned to the model after each submit_cards call. */
 export function buildSubmitFeedback(opts: {
   acceptedCount: number
   rejected: Array<{ front: string; reasons: string[] }>
-  duplicates: number
+  duplicateFronts: string[]
   unknownMetadataDropped: number
   cardsRemaining: number
   gapText: string
@@ -176,13 +184,21 @@ export function buildSubmitFeedback(opts: {
 }): string {
   const lines: string[] = []
   lines.push(
-    `Accepted ${opts.acceptedCount} card(s). Rejected ${opts.rejected.length}. Duplicates dropped: ${opts.duplicates}.`,
+    `Accepted ${opts.acceptedCount} card(s). Rejected ${opts.rejected.length}. Duplicates dropped: ${opts.duplicateFronts.length}.`,
   )
   if (opts.rejected.length > 0) {
     lines.push('Rejected cards (fix and resubmit the underlying content):')
-    for (const r of opts.rejected.slice(0, 10)) {
+    for (const r of opts.rejected.slice(0, FEEDBACK_LIST_LIMIT)) {
       lines.push(`  - "${r.front.slice(0, 80)}" → ${r.reasons.join(', ')}`)
     }
+    pushTruncationNote(lines, opts.rejected.length, FEEDBACK_LIST_LIMIT, 'rejected card(s)')
+  }
+  if (opts.duplicateFronts.length > 0) {
+    lines.push('Duplicates of cards already in the deck (do not resubmit these):')
+    for (const front of opts.duplicateFronts.slice(0, FEEDBACK_LIST_LIMIT)) {
+      lines.push(`  - "${front.slice(0, 80)}"`)
+    }
+    pushTruncationNote(lines, opts.duplicateFronts.length, FEEDBACK_LIST_LIMIT, 'duplicate(s)')
   }
   if (opts.unknownMetadataDropped > 0) {
     lines.push(
@@ -255,18 +271,26 @@ export function followUpRequestPrompt(
 export function buildFollowUpFeedback(opts: {
   acceptedCount: number
   rejected: Array<{ front: string; reasons: string[] }>
-  duplicates: number
+  duplicateFronts: string[]
   cardsRemaining: number
 }): string {
   const lines: string[] = []
   lines.push(
-    `Accepted ${opts.acceptedCount} card(s). Rejected ${opts.rejected.length}. Duplicates dropped: ${opts.duplicates}.`,
+    `Accepted ${opts.acceptedCount} card(s). Rejected ${opts.rejected.length}. Duplicates dropped: ${opts.duplicateFronts.length}.`,
   )
   if (opts.rejected.length > 0) {
     lines.push('Rejected cards (fix and resubmit if the request still needs them):')
-    for (const r of opts.rejected.slice(0, 10)) {
+    for (const r of opts.rejected.slice(0, FEEDBACK_LIST_LIMIT)) {
       lines.push(`  - "${r.front.slice(0, 80)}" → ${r.reasons.join(', ')}`)
     }
+    pushTruncationNote(lines, opts.rejected.length, FEEDBACK_LIST_LIMIT, 'rejected card(s)')
+  }
+  if (opts.duplicateFronts.length > 0) {
+    lines.push('Duplicates of cards already in the deck (do not resubmit these):')
+    for (const front of opts.duplicateFronts.slice(0, FEEDBACK_LIST_LIMIT)) {
+      lines.push(`  - "${front.slice(0, 80)}"`)
+    }
+    pushTruncationNote(lines, opts.duplicateFronts.length, FEEDBACK_LIST_LIMIT, 'duplicate(s)')
   }
   lines.push(`Remaining request budget: ${opts.cardsRemaining} card(s).`)
   lines.push(
@@ -279,15 +303,22 @@ export function buildFollowUpFeedback(opts: {
 export function buildReviewFeedback(opts: {
   applied: string[]
   rejected: Array<{ ref: string; reasons: string[] }>
+  unknownMetadataDropped: number
   gapText: string
 }): string {
   const lines: string[] = []
   if (opts.applied.length > 0) lines.push(`Applied: ${opts.applied.join('; ')}.`)
   if (opts.rejected.length > 0) {
     lines.push('Rejected (card unchanged):')
-    for (const r of opts.rejected.slice(0, 10)) {
+    for (const r of opts.rejected.slice(0, FEEDBACK_LIST_LIMIT)) {
       lines.push(`  - ${r.ref} → ${r.reasons.join(', ')}`)
     }
+    pushTruncationNote(lines, opts.rejected.length, FEEDBACK_LIST_LIMIT, 'rejection(s)')
+  }
+  if (opts.unknownMetadataDropped > 0) {
+    lines.push(
+      `${opts.unknownMetadataDropped} concept_id/relation_key value(s) did not match your concept map and were dropped — copy ids exactly from the map.`,
+    )
   }
   if (opts.applied.length === 0 && opts.rejected.length === 0) lines.push('No edits applied.')
   lines.push(opts.gapText)

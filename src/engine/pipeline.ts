@@ -139,7 +139,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       { type: 'document', uri: file.uri, mime_type: file.mimeType },
       { type: 'text', text: conceptMapPrompt(ctx) },
     ],
-    responseSchema: CONCEPT_MAP_RESPONSE_SCHEMA as unknown as Record<string, unknown>,
+    responseSchema: CONCEPT_MAP_RESPONSE_SCHEMA,
     thinkingLevel: THINKING_BY_PHASE.mapping,
     signal,
   })
@@ -241,6 +241,12 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
         if (verdict.allowed) {
           finished = true
           terminationReason = 'coverage_sufficient_model_done'
+          const args = (call.arguments ?? {}) as Record<string, unknown>
+          const assessment =
+            typeof args.coverage_assessment === 'string' ? args.coverage_assessment.trim() : ''
+          if (assessment) {
+            emit({ type: 'log', level: 'info', message: `Coverage assessment: ${assessment}` })
+          }
           results.push(functionResult(call, 'Accepted. Generation complete.'))
         } else {
           emit({
@@ -262,7 +268,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
       const rawCards = parseSubmitCardsArgs(call.arguments)
       const rejected: Array<{ front: string; reasons: string[] }> = []
-      let duplicates = 0
+      const duplicateFronts: string[] = []
       let unknownMetadataDropped = 0
 
       for (const raw of rawCards) {
@@ -276,7 +282,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
         const key = cardKey(card)
         if (seenKeys.has(key)) {
-          duplicates++
+          duplicateFronts.push(firstField(card))
           continue
         }
         if (!verdict.pass) {
@@ -306,7 +312,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           buildSubmitFeedback({
             acceptedCount: acceptedThisRound,
             rejected,
-            duplicates,
+            duplicateFronts,
             unknownMetadataDropped,
             cardsRemaining: capacityLeft,
             gapText: buildGenerationGapText(catalog, coverage),
@@ -620,6 +626,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
 
       const applied: string[] = []
       const rejected: Array<{ ref: string; reasons: string[] }> = []
+      let unknownMetadataDropped = 0
 
       if (call.name === 'update_card') {
         const { cardId, card: rawCard } = parseUpdateCardArgs(call.arguments)
@@ -630,7 +637,8 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
         } else if (!normalized) {
           rejected.push({ ref: cardId, reasons: ['invalid_structure'] })
         } else {
-          const { card, verdict } = buildCard(normalized, catalog)
+          const { card, verdict, unknownMetadata } = buildCard(normalized, catalog)
+          unknownMetadataDropped += unknownMetadata
           const oldKey = cardKey(cards[index])
           const newKey = cardKey(card)
           if (!verdict.pass) {
@@ -654,7 +662,8 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
             rejected.push({ ref: '(new card)', reasons: ['invalid_structure'] })
             continue
           }
-          const { card, verdict } = buildCard(normalized, catalog)
+          const { card, verdict, unknownMetadata } = buildCard(normalized, catalog)
+          unknownMetadataDropped += unknownMetadata
           if (!verdict.pass) {
             rejected.push({ ref: firstField(card), reasons: verdict.failures })
             continue
@@ -711,6 +720,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           buildReviewFeedback({
             applied,
             rejected,
+            unknownMetadataDropped,
             gapText: buildReflectionGapText(catalog, coverage),
           }),
         ),

@@ -455,7 +455,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         return
       }
 
-      abortController = new AbortController()
+      const controller = new AbortController()
+      abortController = controller
       set({
         view: 'session',
         phase: 'uploading',
@@ -491,7 +492,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           apiKey,
           fetchFn: tauriFetch,
           emit: handlePipelineEvent,
-          signal: abortController.signal,
+          signal: controller.signal,
         })
         set({ followUp: outcome.followUp })
       } catch (e) {
@@ -505,7 +506,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           pushLog('error', message)
         }
       } finally {
-        abortController = null
+        if (abortController === controller) abortController = null
       }
     },
 
@@ -522,7 +523,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         return
       }
 
-      abortController = new AbortController()
+      const controller = new AbortController()
+      abortController = controller
       set({ followUpBusy: true })
       pushLog('info', request, undefined, 'user')
 
@@ -537,7 +539,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           apiKey,
           fetchFn: tauriFetch,
           emit: handlePipelineEvent,
-          signal: abortController.signal,
+          signal: controller.signal,
         })
         set((s) => ({
           followUp: outcome.seed,
@@ -575,7 +577,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           get().toast('error', `Request failed: ${message}`)
         }
       } finally {
-        abortController = null
+        if (abortController === controller) abortController = null
         set({ followUpBusy: false })
       }
     },

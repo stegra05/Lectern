@@ -49,9 +49,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ contains(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      # Restores the release-profile cache primed on main (release-cache.yml).
+      # Saving is skipped: caches created on a tag are unreachable from other
+      # refs, so uploading the multi-GB target dir would only slow the release.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: release-${{ matrix.platform }}
+          save-if: false
 
       - run: pnpm install --frozen-lockfile
 
