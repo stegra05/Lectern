@@ -72,9 +72,11 @@ export const CARD_EXAMPLES =
 // --- Focus prompt sanitizing (prompt-injection hardening) -------------------
 
 const MAX_FOCUS_PROMPT_LEN = 180
+/** Follow-up chat requests get more room than the one-line focus field. */
+export const MAX_REQUEST_PROMPT_LEN = 500
 const BLOCKED_FRAGMENTS = ['system:', 'assistant:', 'user:', 'ignore previous instructions']
 
-export function sanitizeFocusPrompt(value: string): string {
+export function sanitizeFocusPrompt(value: string, maxLen: number = MAX_FOCUS_PROMPT_LEN): string {
   let s = (value ?? '')
     .replace(/[\r\n]/g, ' ')
     .replace(/`/g, '')
@@ -85,7 +87,7 @@ export function sanitizeFocusPrompt(value: string): string {
     s = s.replace(pattern, '')
   }
   s = s.split(/\s+/).join(' ')
-  return s.slice(0, MAX_FOCUS_PROMPT_LEN).trim()
+  return s.slice(0, maxLen).trim()
 }
 
 // --- Prompt builder ---------------------------------------------------------
@@ -221,6 +223,56 @@ export function reviewMissionPrompt(
     `\n${opts.coverageGaps}\n` +
     `\nDeck under review (card_id → content):\n${opts.deckListing}`
   )
+}
+
+/** Post-completion follow-up: the user asked for additional cards in the
+ *  activity-log chat. Continues the same conversation, additions only. */
+export function followUpRequestPrompt(
+  ctx: PromptContext,
+  opts: {
+    request: string
+    deckFronts: string[]
+    cardBudget: number
+    gapText: string
+  },
+): string {
+  const listing =
+    opts.deckFronts.length > 0
+      ? opts.deckFronts.map((front) => `- ${front}`).join('\n')
+      : '(the deck is currently empty)'
+  return (
+    `The user reviewed the finished deck and asks for additional cards:\n"${opts.request}"\n\n` +
+    `Additions only — the existing deck stays untouched. Call add_cards with the new cards, read the verdicts, and call finish_request with a short summary once the request is served (immediately if it needs no new cards). Add only what the request asks for, up to ${opts.cardBudget} card(s) — no filler.\n` +
+    `Every card meets the same quality bar and metadata requirements as before (source_pages, concept_ids copied from the concept map, rationale, source_excerpt).\n` +
+    `Ground each card in the document. If the request needs material the document does not contain, still write the card: set in_source=false, leave source_pages empty, and put the knowledge the answer rests on in source_excerpt — the app labels such cards "outside source" for the user to check.\n` +
+    `All content stays in ${ctx.language}.\n` +
+    `\nCurrent deck fronts (do not duplicate them):\n${listing}\n` +
+    `\n${opts.gapText}`
+  )
+}
+
+/** Feedback payload returned to the model after each follow-up add_cards. */
+export function buildFollowUpFeedback(opts: {
+  acceptedCount: number
+  rejected: Array<{ front: string; reasons: string[] }>
+  duplicates: number
+  cardsRemaining: number
+}): string {
+  const lines: string[] = []
+  lines.push(
+    `Accepted ${opts.acceptedCount} card(s). Rejected ${opts.rejected.length}. Duplicates dropped: ${opts.duplicates}.`,
+  )
+  if (opts.rejected.length > 0) {
+    lines.push('Rejected cards (fix and resubmit if the request still needs them):')
+    for (const r of opts.rejected.slice(0, 10)) {
+      lines.push(`  - "${r.front.slice(0, 80)}" → ${r.reasons.join(', ')}`)
+    }
+  }
+  lines.push(`Remaining request budget: ${opts.cardsRemaining} card(s).`)
+  lines.push(
+    'Continue with add_cards if the request is not yet served, otherwise call finish_request.',
+  )
+  return lines.join('\n')
 }
 
 /** Feedback payload returned to the model after each review-tool round. */

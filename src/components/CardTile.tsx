@@ -23,6 +23,7 @@ export const CardTile = memo(function CardTile({
   const setSelectedUid = useLectern((s) => s.setSelectedUid)
   const removeCard = useLectern((s) => s.removeCard)
   const peekSlide = useLectern((s) => s.peekSlide)
+  const setCardSyncExcluded = useLectern((s) => s.setCardSyncExcluded)
   const ref = useRef<HTMLElement>(null)
   const isEditing = editingUid === card.uid
   const needsAttention = card.qualityScore < QUALITY_ATTENTION_THRESHOLD
@@ -73,6 +74,14 @@ export const CardTile = memo(function CardTile({
                   ))}
                 </>
               )}
+              {card.outsideSource && (
+                <span
+                  className="bg-brick/10 text-brick ml-2 rounded-sm px-1 py-px"
+                  title="You asked for this card, but it is not in the uploaded document — check it before sending."
+                >
+                  outside source
+                </span>
+              )}
               {needsAttention && (
                 <span
                   className="bg-lamp/20 text-lamp-ink ml-2 rounded-sm px-1 py-px"
@@ -83,6 +92,18 @@ export const CardTile = memo(function CardTile({
               )}
               {card.ankiNoteId ? ' · in Anki' : ''}
             </span>
+            {card.outsideSource && editable && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCardSyncExcluded(card.uid, !card.syncExcluded)
+                }}
+                className="font-data text-ink-soft hover:text-ink shrink-0 text-2xs underline underline-offset-2 transition-colors duration-150"
+                title="Outside-source cards stay out of the Anki send until you include them"
+              >
+                {card.syncExcluded ? 'not sent to Anki — include' : 'sent to Anki — exclude'}
+              </button>
+            )}
           </footer>
           {card.sourceExcerpt && (
             <details className="mt-2" onClick={(e) => e.stopPropagation()}>

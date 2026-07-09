@@ -233,6 +233,13 @@ describe('runPipeline (scripted)', () => {
     expect(reviewInput[0].call_id).toBe('call-submit')
     expect(String((reviewInput[1] as { text: string }).text)).toContain('Deck under review')
 
+    // The finished pipeline hands over a clean continuation seed: the last
+    // interaction id, with the dangling finish_review call answered.
+    expect(outcome.followUp.interactionId).toBe('i-finish')
+    expect(outcome.followUp.pendingInput).toMatchObject([
+      { type: 'function_result', call_id: 'call-finish' },
+    ])
+
     // Edit verdicts flow back as one function_result per tool call.
     const finishInput = captured[3].body.input as Array<Record<string, unknown>>
     const resultTexts = finishInput

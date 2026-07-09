@@ -21,6 +21,11 @@ export interface Card {
   sourceExcerpt?: string
   qualityScore: number
   qualityIssues: string[]
+  /** The user asked for this card, but the document does not contain it
+   *  (follow-up requests only). Rendered as an "outside source" label. */
+  outsideSource?: boolean
+  /** Kept out of Anki syncs until the user opts it in. */
+  syncExcluded?: boolean
   /** Set after a successful Anki sync. */
   ankiNoteId?: number
 }

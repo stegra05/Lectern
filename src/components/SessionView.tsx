@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Concept, ConceptMap, CoverageData } from '../engine/types'
 import type { AppPhase } from '../state/store'
 import { useLectern } from '../state/store'
-import { ActivityLog } from './ActivityLog'
+import { ActivityLog, FollowUpComposer } from './ActivityLog'
 import { CardTile } from './CardTile'
 import { ConceptMapPreview } from './ConceptGraph'
 import { ConceptSheet } from './ConceptSheet'
@@ -51,6 +51,8 @@ function Sidebar() {
   const doneSummary = useLectern((s) => s.doneSummary)
   const cancelGeneration = useLectern((s) => s.cancelGeneration)
   const backToHome = useLectern((s) => s.backToHome)
+  const cardCount = useLectern((s) => s.cards.length)
+  const followUpReady = useLectern((s) => s.followUp !== null)
   const [conceptsOpen, setConceptsOpen] = useState(false)
 
   const running = phase !== 'complete' && phase !== 'error' && phase !== 'idle'
@@ -111,17 +113,26 @@ function Sidebar() {
             />
           )}
           {coverage && progress && (
-            <Stat label="Cards" value={`${progress.produced} / ${progress.cap}`} />
+            <Stat
+              label="Cards"
+              // Follow-up requests can grow the deck past the original cap,
+              // so the finished session shows the live count alone.
+              value={
+                phase === 'complete' ? String(cardCount) : `${progress.produced} / ${progress.cap}`
+              }
+            />
           )}
         </div>
       )}
 
       {conceptsOpen && <ConceptSheet onClose={() => setConceptsOpen(false)} />}
 
-      {/* Activity log — the session minutes */}
+      {/* Activity log — the session minutes, with the follow-up composer
+          once the deck is done */}
       <div className="border-desk-edge/60 flex min-h-0 flex-1 flex-col border-t pt-4">
         <span className="eyebrow mb-2">Activity</span>
         <ActivityLog />
+        {phase === 'complete' && followUpReady && <FollowUpComposer />}
       </div>
 
       {/* Session actions */}

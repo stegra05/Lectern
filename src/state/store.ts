@@ -13,7 +13,8 @@ import { ensureLecternModels, migrateNotesToLectern } from '../engine/noteTypeSy
 import { loadNoteTypeFonts } from '../lib/noteTypeFonts'
 import { estimateCost, type CostEstimate } from '../engine/cost'
 import { extractPdfInfo, openPdf, renderPageThumbnail } from '../engine/pdf'
-import { runPipeline } from '../engine/pipeline'
+import { runFollowUp } from '../engine/followUp'
+import { runPipeline, type FollowUpSeed } from '../engine/pipeline'
 import type {
   Card,
   ConceptMap,
@@ -48,6 +49,8 @@ export interface LogLine {
   message: string
   /** Prose from the model or a card, quoted under the message in serif. */
   quote?: string
+  /** 'user' marks a follow-up request typed into the activity log. */
+  speaker?: 'user'
   at: number
 }
 
@@ -92,6 +95,10 @@ interface LecternState {
   usage: { inputTokens: number; outputTokens: number; costUsd: number } | null
   doneSummary: string | null
   errorMessage: string | null
+  /** Conversation handle for post-completion card requests; null until the
+   *  pipeline completes. */
+  followUp: FollowUpSeed | null
+  followUpBusy: boolean
 
   // review
   editingUid: string | null
@@ -131,9 +138,14 @@ interface LecternActions {
   startGeneration: () => Promise<void>
   cancelGeneration: () => void
   backToHome: () => Promise<void>
+  /** Post-completion chat: ask Gemini for additional cards. Additions only —
+   *  the existing deck is never edited. */
+  requestMoreCards: (text: string) => Promise<void>
 
   updateCardFields: (uid: string, fields: Record<string, string>) => void
   removeCard: (uid: string) => void
+  /** Opt an outside-source card in or out of the Anki send. */
+  setCardSyncExcluded: (uid: string, excluded: boolean) => void
   setEditingUid: (uid: string | null) => void
   setSelectedUid: (uid: string | null) => void
   setSearchQuery: (q: string) => void
@@ -154,8 +166,15 @@ let abortController: AbortController | null = null
 let toastSeq = 1
 
 export const useLectern = create<LecternState & LecternActions>()((set, get) => {
-  const pushLog = (level: LogLine['level'], message: string, quote?: string) =>
-    set((s) => ({ logs: [...s.logs.slice(-400), { level, message, quote, at: Date.now() }] }))
+  const pushLog = (
+    level: LogLine['level'],
+    message: string,
+    quote?: string,
+    speaker?: LogLine['speaker'],
+  ) =>
+    set((s) => ({
+      logs: [...s.logs.slice(-400), { level, message, quote, speaker, at: Date.now() }],
+    }))
 
   const handlePipelineEvent = (event: PipelineEvent): void => {
     switch (event.type) {
@@ -269,6 +288,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     usage: null,
     doneSummary: null,
     errorMessage: null,
+    followUp: null,
+    followUpBusy: false,
 
     editingUid: null,
     selectedUid: null,
@@ -447,6 +468,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         usage: null,
         doneSummary: null,
         errorMessage: null,
+        followUp: null,
+        followUpBusy: false,
         syncState: 'idle',
         syncPreview: null,
         syncResult: null,
@@ -458,7 +481,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       })
 
       try {
-        await runPipeline({
+        const outcome = await runPipeline({
           pdfBytes,
           pdfInfo,
           fileName,
@@ -470,6 +493,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           emit: handlePipelineEvent,
           signal: abortController.signal,
         })
+        set({ followUp: outcome.followUp })
       } catch (e) {
         if ((e as Error).name === 'AbortError') {
           set({ view: 'home', phase: 'idle' })
@@ -486,6 +510,75 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     },
 
     cancelGeneration: () => abortController?.abort(),
+
+    requestMoreCards: async (text) => {
+      const { settings, conceptMap, followUp, followUpBusy, cards, focusPrompt } = get()
+      const request = text.trim()
+      if (!request || !settings || !conceptMap || !followUp || followUpBusy) return
+      const apiKey = await getApiKey().catch(() => null)
+      if (!apiKey) {
+        set({ settingsOpen: true })
+        get().toast('error', 'Add your Gemini API key in Settings first.')
+        return
+      }
+
+      abortController = new AbortController()
+      set({ followUpBusy: true })
+      pushLog('info', request, undefined, 'user')
+
+      try {
+        const outcome = await runFollowUp({
+          request,
+          deck: cards,
+          conceptMap,
+          seed: followUp,
+          focusPrompt: focusPrompt || undefined,
+          model: settings.model,
+          apiKey,
+          fetchFn: tauriFetch,
+          emit: handlePipelineEvent,
+          signal: abortController.signal,
+        })
+        set((s) => ({
+          followUp: outcome.seed,
+          usage: {
+            inputTokens: (s.usage?.inputTokens ?? 0) + outcome.usage.inputTokens,
+            outputTokens: (s.usage?.outputTokens ?? 0) + outcome.usage.outputTokens,
+            costUsd: (s.usage?.costUsd ?? 0) + outcome.usage.costUsd,
+          },
+        }))
+        const added = outcome.added.length
+        const outside = outcome.outsideSourceCount
+        const optIn = `kept out of the Anki send until you include ${outside === 1 ? 'it' : 'them'}`
+        const outsideNote =
+          outside === 0
+            ? ''
+            : outside === added
+              ? outside === 1
+                ? ` It is outside the source — ${optIn}.`
+                : ` All are outside the source — ${optIn}.`
+              : ` ${outside} of them ${outside === 1 ? 'is' : 'are'} outside the source — ${optIn}.`
+        pushLog(
+          'info',
+          added === 0
+            ? 'No cards were added for this request.'
+            : `Added ${added === 1 ? '1 card' : `${added} cards`}.${outsideNote}`,
+          outcome.note,
+        )
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') {
+          pushLog('warn', 'Request stopped.')
+        } else {
+          const message =
+            (e as { userMessage?: string }).userMessage ?? (e as Error).message ?? 'Unknown error'
+          pushLog('error', message)
+          get().toast('error', `Request failed: ${message}`)
+        }
+      } finally {
+        abortController = null
+        set({ followUpBusy: false })
+      }
+    },
 
     backToHome: async () => {
       const unsent = get().cards.filter((c) => !c.ankiNoteId).length
@@ -521,6 +614,11 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       get().toast('info', 'Card removed.', undo)
     },
 
+    setCardSyncExcluded: (uid, excluded) =>
+      set((s) => ({
+        cards: s.cards.map((c) => (c.uid === uid ? { ...c, syncExcluded: excluded } : c)),
+      })),
+
     setEditingUid: (uid) => set({ editingUid: uid }),
     setSelectedUid: (uid) => set({ selectedUid: uid }),
     setSearchQuery: (q) => set({ searchQuery: q }),
@@ -539,14 +637,15 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     previewSyncNow: async () => {
       const { settings, cards, deckName, conceptMap } = get()
-      if (!settings || cards.length === 0) return
+      const syncable = cards.filter((c) => !c.syncExcluded)
+      if (!settings || syncable.length === 0) return
       set({ syncState: 'previewing' })
       try {
         const client = new AnkiClient(settings.ankiUrl, tauriFetch)
         await ensureNoteTypes(client, settings)
         const preview = await previewSync(
           client,
-          cards,
+          syncable,
           deckName,
           settings,
           (card) => cardTags(card, settings, deckName, conceptMap),
@@ -561,14 +660,15 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     syncNow: async () => {
       const { settings, cards, deckName, conceptMap } = get()
-      if (!settings || cards.length === 0) return
-      set({ syncState: 'syncing', syncProgress: { done: 0, total: cards.length } })
+      const syncable = cards.filter((c) => !c.syncExcluded)
+      if (!settings || syncable.length === 0) return
+      set({ syncState: 'syncing', syncProgress: { done: 0, total: syncable.length } })
       try {
         const client = new AnkiClient(settings.ankiUrl, tauriFetch)
         await ensureNoteTypes(client, settings)
         const result = await syncCards(
           client,
-          cards,
+          syncable,
           deckName,
           settings,
           (card) => cardTags(card, settings, deckName, conceptMap),

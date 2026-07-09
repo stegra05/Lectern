@@ -37,6 +37,7 @@ import {
   type FunctionCallStep,
   type GeminiUsage,
   type InputPart,
+  type InteractionResult,
 } from './gemini'
 import {
   ADD_CARDS_TOOL,
@@ -93,12 +94,22 @@ export interface PipelineOptions {
   signal?: AbortSignal
 }
 
+/** Handle for continuing the session's Gemini conversation after the
+ *  pipeline completes (follow-up requests). `pendingInput` answers any
+ *  function calls the last interaction left open — the next request must
+ *  lead with them. */
+export interface FollowUpSeed {
+  interactionId: string
+  pendingInput: InputPart[]
+}
+
 export interface PipelineOutcome {
   cards: Card[]
   conceptMap: ConceptMap
   coverage: CoverageData
   usage: GeminiUsage & { costUsd: number }
   terminationReason: string
+  followUp: FollowUpSeed
 }
 
 export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcome> {
@@ -337,6 +348,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     track(response.usage)
   }
 
+  // The loop may exit with function calls it never answered (round budget
+  // exhausted); close them so the chain continues from a clean state.
+  pendingResults = closeUnansweredCalls(response, pendingResults)
+  let followUpSeed: FollowUpSeed = { interactionId: response.id, pendingInput: pendingResults }
+
   // --- Phase 3: agentic review loop over the deck -----------------------------
   if (cards.length > 0) {
     throwIfAborted(signal)
@@ -356,6 +372,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       signal,
       track,
     })
+    followUpSeed = { interactionId: review.interactionId, pendingInput: review.pendingInput }
     coverage = computeCoverageData(catalog, cards)
     emit({
       type: 'log',
@@ -374,7 +391,14 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   const summary = summarize(terminationReason, cards.length, coverage)
   emit({ type: 'done', reason: terminationReason, summary })
 
-  return { cards, conceptMap, coverage, usage: { ...usage, costUsd }, terminationReason }
+  return {
+    cards,
+    conceptMap,
+    coverage,
+    usage: { ...usage, costUsd },
+    terminationReason,
+    followUp: followUpSeed,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -413,9 +437,12 @@ function handleFinishRequest(
  * are dropped so the coverage ledger stays truthful), then the card is
  * annotated with its gate verdict.
  */
-function buildCard(
+export function buildCard(
   normalized: NormalizedCardPayload,
   catalog: CoverageCatalog,
+  /** Follow-up requests only: honor the payload's in_source=false declaration.
+   *  Everywhere else the declaration is ignored so it cannot dodge the gate. */
+  allowOutsideSource = false,
 ): { card: Card; verdict: GateVerdict; unknownMetadata: number } {
   const conceptIds = normalized.conceptIds.filter((id) => catalog.conceptIds.has(id))
   const relationKeys = normalized.relationKeys
@@ -440,13 +467,14 @@ function buildCard(
     qualityScore: 0,
     qualityIssues: [],
   }
+  if (allowOutsideSource && normalized.inSource === false) card.outsideSource = true
   const verdict = evaluateCard(card)
   card.qualityScore = verdict.score
   card.qualityIssues = verdict.issues
   return { card, verdict, unknownMetadata }
 }
 
-function functionResult(call: FunctionCallStep, text: string): InputPart {
+export function functionResult(call: FunctionCallStep, text: string): InputPart {
   return {
     type: 'function_result',
     name: call.name,
@@ -455,9 +483,30 @@ function functionResult(call: FunctionCallStep, text: string): InputPart {
   }
 }
 
-function firstField(card: Card): string {
+export function firstField(card: Card): string {
   const first = card.fields.Front ?? card.fields.Text ?? Object.values(card.fields)[0] ?? ''
   return first.replace(/<[^>]+>/g, '').slice(0, 120)
+}
+
+/**
+ * Answer any function calls of `response` that `built` does not already
+ * answer. A loop can exit with calls it never processed (round budget
+ * exhausted) — the Interactions API requires every call answered before the
+ * conversation can continue, so the next phase or follow-up leads with these.
+ */
+export function closeUnansweredCalls(response: InteractionResult, built: InputPart[]): InputPart[] {
+  const answered = new Set(
+    built.filter((part) => part.type === 'function_result').map((part) => part.call_id),
+  )
+  const closures = response.functionCalls
+    .filter((call) => !answered.has(call.id))
+    .map((call) =>
+      functionResult(
+        call,
+        'The round budget ran out before this call was processed. The deck stands as accepted.',
+      ),
+    )
+  return [...built, ...closures]
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +539,9 @@ interface ReviewOutcome {
   updated: number
   added: number
   removed: number
+  /** Where the conversation chain ends — follow-up requests continue here. */
+  interactionId: string
+  pendingInput: InputPart[]
 }
 
 /**
@@ -514,10 +566,13 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
     .join('\n')
 
   const removalBudget = Math.floor(cards.length * REFLECTION_MAX_REMOVAL_RATIO)
-  const outcome: ReviewOutcome = { updated: 0, added: 0, removed: 0 }
+  const counts = { updated: 0, added: 0, removed: 0 }
+  let note: string | undefined
   let coverage = computeCoverageData(catalog, cards)
   let finished = false
   let idleRounds = 0
+  /** Tool results built but not yet sent when the loop exits. */
+  let pendingResults: InputPart[] = []
 
   const indexOfId = (cardId: string): number => {
     const uid = idToUid.get(cardId)
@@ -558,7 +613,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
       if (call.name === 'finish_review') {
         finished = true
         const args = (call.arguments ?? {}) as Record<string, unknown>
-        outcome.note = typeof args.summary === 'string' ? args.summary : undefined
+        note = typeof args.summary === 'string' ? args.summary : undefined
         results.push(functionResult(call, 'Review complete.'))
         continue
       }
@@ -587,7 +642,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
             seenKeys.delete(oldKey)
             seenKeys.add(newKey)
             cards[index] = card
-            outcome.updated++
+            counts.updated++
             editsThisRound++
             applied.push(`updated ${cardId}`)
           }
@@ -615,7 +670,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           }
           seenKeys.add(key)
           cards.push(card)
-          outcome.added++
+          counts.added++
           editsThisRound++
           applied.push(`added ${assignId(card.uid)}`)
         }
@@ -627,14 +682,14 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
             rejected.push({ ref: cardId, reasons: ['unknown_card_id'] })
             continue
           }
-          if (outcome.removed >= removalBudget) {
+          if (counts.removed >= removalBudget) {
             rejected.push({ ref: cardId, reasons: ['removal_budget_exhausted'] })
             continue
           }
           seenKeys.delete(cardKey(cards[index]))
           cards.splice(index, 1)
           idToUid.delete(cardId)
-          outcome.removed++
+          counts.removed++
           editsThisRound++
           applied.push(`removed ${cardId}`)
         }
@@ -662,6 +717,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
       )
     }
 
+    pendingResults = results
     if (finished) break
     idleRounds = editsThisRound === 0 ? idleRounds + 1 : 0
     if (idleRounds >= NON_PROGRESS_MAX_ROUNDS) {
@@ -679,10 +735,16 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
       thinkingLevel: THINKING_BY_PHASE.reflecting,
       signal,
     })
+    pendingResults = []
     opts.track(response.usage)
   }
 
-  return outcome
+  return {
+    note,
+    ...counts,
+    interactionId: response.id,
+    pendingInput: closeUnansweredCalls(response, pendingResults),
+  }
 }
 
 /** Compact card shape listed in the review mission prompt. */

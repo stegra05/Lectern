@@ -48,6 +48,15 @@ export const MAX_REFLECTION_ROUNDS = 10
 /** Review may delete at most this fraction of the pre-review deck. */
 export const REFLECTION_MAX_REMOVAL_RATIO = 0.5
 
+// --- Follow-up requests (post-completion "more cards" chat) -----------------
+// Additions only: a follow-up never edits or removes existing cards, so each
+// request gets its own small budget instead of the session cap.
+
+/** New cards one follow-up request may add. */
+export const FOLLOWUP_CARD_CAP = 10
+/** Absolute ceiling on agentic rounds per follow-up request. */
+export const MAX_FOLLOWUP_ROUNDS = 6
+
 // --- Gemini ----------------------------------------------------------------
 
 export const DEFAULT_MODEL = 'gemini-3.5-flash'
@@ -64,6 +73,7 @@ export const THINKING_BY_PHASE = {
   mapping: 'high',
   generating: 'low',
   reflecting: 'medium',
+  followUp: 'low',
 } as const satisfies Record<string, ThinkingLevel>
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'

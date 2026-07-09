@@ -123,6 +123,30 @@ describe('evaluateCard', () => {
     const verdict = evaluateCard(makeCard({ fields: { Front: '<i>&nbsp;</i>' } }))
     expect(verdict.failures).toContain('missing_prompt_text')
   })
+
+  it('accepts a declared outside-source card without pages or excerpt, flagged', () => {
+    const verdict = evaluateCard(
+      makeCard({
+        fields: { Front: 'What is X?', Back: 'X is Y.' },
+        rationale: 'The user asked for it.',
+        outsideSource: true,
+      }),
+    )
+    expect(verdict.pass).toBe(true)
+    expect(verdict.issues).toEqual(['outside_source'])
+    expect(verdict.score).toBe(90)
+  })
+
+  it('still rejects the same ungrounded card without the outside-source declaration', () => {
+    const verdict = evaluateCard(
+      makeCard({
+        fields: { Front: 'What is X?', Back: 'X is Y.' },
+        rationale: 'The user asked for it.',
+      }),
+    )
+    expect(verdict.pass).toBe(false)
+    expect(verdict.failures).toEqual(['missing_source_pages', 'missing_source_excerpt'])
+  })
 })
 
 describe('normalizeCardPayload', () => {

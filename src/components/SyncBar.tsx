@@ -13,7 +13,9 @@ export function SyncBar() {
   const previewSyncNow = useLectern((s) => s.previewSyncNow)
   const syncNow = useLectern((s) => s.syncNow)
 
-  const canSend = ankiStatus === 'connected' && syncState !== 'syncing' && cards.length > 0
+  const syncable = cards.filter((c) => !c.syncExcluded)
+  const excluded = cards.length - syncable.length
+  const canSend = ankiStatus === 'connected' && syncState !== 'syncing' && syncable.length > 0
 
   // ⌘↩ sends — the review flow's one power shortcut.
   useEffect(() => {
@@ -85,24 +87,31 @@ export function SyncBar() {
           <>
             <div className="min-w-0 flex-1">
               <p className="text-chalk truncate text-sm">
-                {cards.length} cards → <span className="font-medium">{deckName}</span>
+                {syncable.length} cards → <span className="font-medium">{deckName}</span>
               </p>
-              {syncPreview && (
+              {(syncPreview || excluded > 0) && (
                 <p className="font-data text-chalk-dim truncate text-xs">
-                  {syncPreview.toCreate} new · {syncPreview.toUpdate} updates
-                  {syncPreview.duplicates > 0 && ` · ${syncPreview.duplicates} already in Anki`}
+                  {syncPreview &&
+                    `${syncPreview.toCreate} new · ${syncPreview.toUpdate} updates` +
+                      (syncPreview.duplicates > 0
+                        ? ` · ${syncPreview.duplicates} already in Anki`
+                        : '')}
+                  {syncPreview && excluded > 0 && ' · '}
+                  {excluded > 0 &&
+                    `${excluded} outside-source card${excluded === 1 ? '' : 's'} stay${excluded === 1 ? 's' : ''} behind`}
                 </p>
               )}
             </div>
             <button
               onClick={() => void previewSyncNow()}
-              disabled={syncState === 'previewing'}
+              disabled={syncState === 'previewing' || syncable.length === 0}
               className="btn-secondary px-3 py-2"
             >
               {syncState === 'previewing' ? 'Checking…' : 'Preview'}
             </button>
             <button
               onClick={() => void syncNow()}
+              disabled={syncable.length === 0}
               className="btn-primary px-4 py-2"
               title="Send to Anki (⌘↩)"
             >

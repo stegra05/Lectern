@@ -7,6 +7,9 @@ import { useLectern } from '../state/store'
  * The session minutes: a mono elapsed-time gutter stamps each event, the
  * app narrates in sans, and prose from the model (quality notes, rejected
  * card fronts) is quoted in serif behind a rule, clamped until opened.
+ * After generation, the user speaks here too — follow-up card requests are
+ * typed into the composer below the log and quoted like the model's prose,
+ * behind a lamp-colored rule.
  */
 export function ActivityLog() {
   const logs = useLectern((s) => s.logs)
@@ -53,11 +56,70 @@ function Entry({ line, time }: { line: LogLine; time: string | null }) {
         {time}
       </span>
       <div className="min-w-0 flex-1">
-        <p className={`text-xs leading-snug break-words ${MESSAGE_COLOR[line.level]}`}>
-          {line.message}
-        </p>
+        {line.speaker === 'user' ? (
+          <div className="border-lamp/50 border-l-2 pl-2">
+            <span className="eyebrow block">You</span>
+            <p className="log-quote leading-snug break-words">{line.message}</p>
+          </div>
+        ) : (
+          <p className={`text-xs leading-snug break-words ${MESSAGE_COLOR[line.level]}`}>
+            {line.message}
+          </p>
+        )}
         {line.quote && <Quote text={line.quote} />}
       </div>
+    </div>
+  )
+}
+
+/**
+ * The follow-up composer: one line at the foot of the minutes where the user
+ * asks for additional cards ("add cards on X"). Additions only — requests
+ * never edit the reviewed deck.
+ */
+export function FollowUpComposer() {
+  const busy = useLectern((s) => s.followUpBusy)
+  const requestMoreCards = useLectern((s) => s.requestMoreCards)
+  const cancelGeneration = useLectern((s) => s.cancelGeneration)
+  const [draft, setDraft] = useState('')
+
+  const submit = () => {
+    const text = draft.trim()
+    if (!text || busy) return
+    setDraft('')
+    void requestMoreCards(text)
+  }
+
+  return (
+    <div className="mt-2 shrink-0">
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            submit()
+          }
+          if (e.key === 'Escape') setDraft('')
+        }}
+        maxLength={500}
+        disabled={busy}
+        placeholder={busy ? 'Adding cards…' : 'Request more cards…'}
+        aria-label="Request more cards"
+        title="Ask for cards on a missing topic or an emphasis — e.g. “add cards on the trolley problem”"
+        className="field w-full px-2.5 py-1.5 text-xs"
+      />
+      {busy && (
+        <div className="mt-1 flex items-baseline justify-between">
+          <span className="font-data text-2xs text-chalk-dim animate-pulse">Working on it…</span>
+          <button
+            onClick={cancelGeneration}
+            className="font-data text-2xs text-chalk-dim hover:text-brick-soft transition-colors duration-150"
+          >
+            stop
+          </button>
+        </div>
+      )}
     </div>
   )
 }

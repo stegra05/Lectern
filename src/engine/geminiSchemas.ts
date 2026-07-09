@@ -174,6 +174,55 @@ export const REMOVE_CARDS_TOOL = {
   },
 }
 
+// --- Follow-up request tools (post-completion "more cards" chat) ------------
+
+/** Follow-up card schema: the base card plus an explicit grounding
+ *  declaration. Kept out of the generation/review schemas so the main
+ *  pipeline cannot use it to dodge the grounding gate. */
+const FOLLOWUP_CARD_JSON_SCHEMA = {
+  ...CARD_JSON_SCHEMA,
+  properties: {
+    ...CARD_JSON_SCHEMA.properties,
+    in_source: {
+      type: 'boolean',
+      description:
+        'False when the card content is not present in the uploaded document. Such cards keep source_pages empty and are labeled "outside source" in the app.',
+    },
+  },
+} as const
+
+export const FOLLOWUP_ADD_CARDS_TOOL = {
+  type: 'function' as const,
+  name: 'add_cards',
+  description:
+    'Add new cards fulfilling the user request. Same schema and quality gate as generation; declare in_source=false on any card whose content the document does not contain.',
+  parameters: {
+    type: 'object',
+    properties: {
+      cards: { type: 'array', items: FOLLOWUP_CARD_JSON_SCHEMA },
+    },
+    required: ['cards'],
+  },
+}
+
+export const FINISH_REQUEST_TOOL = {
+  type: 'function' as const,
+  name: 'finish_request',
+  description:
+    'Declare the user request handled. Call once the requested cards are added, or immediately when the request needs no new cards.',
+  parameters: {
+    type: 'object',
+    properties: {
+      summary: {
+        type: 'string',
+        description:
+          'One or two sentences addressed to the user: what was added, what was left out and why. Markdown is rendered.',
+      },
+    },
+    required: ['summary'],
+  },
+}
+
 export const FINISH_REVIEW_TOOL = {
   type: 'function' as const,
   name: 'finish_review',

@@ -171,9 +171,13 @@ export function evaluateCard(card: Card): GateVerdict {
   const failures: string[] = []
   if (!front && !text) failures.push('missing_prompt_text')
   if (!answerText) failures.push('missing_answer_text')
-  if (sourcePages.length === 0) failures.push('missing_source_pages')
+  // A card declared outside the source has no pages or slide excerpt to
+  // ground it — the outside_source flag replaces those two requirements.
+  if (sourcePages.length === 0 && !card.outsideSource) failures.push('missing_source_pages')
   if (!stripMarkup(card.rationale ?? '')) failures.push('missing_rationale')
-  if (!stripMarkup(card.sourceExcerpt ?? '')) failures.push('missing_source_excerpt')
+  if (!stripMarkup(card.sourceExcerpt ?? '') && !card.outsideSource) {
+    failures.push('missing_source_excerpt')
+  }
   // A Cloze note without a {{cN::…}} deletion is rejected by Anki itself;
   // cloze markup on a Basic note renders as literal braces. Catch both here
   // so the model gets an actionable failure instead of a broken sync later.
@@ -188,7 +192,10 @@ export function evaluateCard(card: Card): GateVerdict {
   }
 
   const soft: string[] = []
-  if (normalizeStringList(card.conceptIds).length === 0) soft.push('missing_concept_ids')
+  if (card.outsideSource) soft.push('outside_source')
+  if (normalizeStringList(card.conceptIds).length === 0 && !card.outsideSource) {
+    soft.push('missing_concept_ids')
+  }
   if (front.length > LONG_FRONT_THRESHOLD) soft.push('long_front')
   if (answerText.length > LONG_ANSWER_THRESHOLD) soft.push('long_answer')
   if (sourcePages.length > BROAD_GROUNDING_THRESHOLD) soft.push('broad_grounding')
@@ -222,6 +229,9 @@ export interface NormalizedCardPayload {
   relationKeys: string[]
   rationale?: string
   sourceExcerpt?: string
+  /** Explicit grounding declaration from the follow-up schema: false means
+   *  "this content is not in the document". Absent everywhere else. */
+  inSource?: boolean
 }
 
 /** titleize_model_name + note_export.is_cloze: substring match on "cloze". */
@@ -325,6 +335,8 @@ export function normalizeCardPayload(raw: unknown): NormalizedCardPayload | null
 
   const sourceExcerpt = optionalString(raw['source_excerpt'] ?? raw['sourceExcerpt'])
   if (sourceExcerpt !== undefined) payload.sourceExcerpt = sourceExcerpt
+
+  if ((raw['in_source'] ?? raw['inSource']) === false) payload.inSource = false
 
   return payload
 }
