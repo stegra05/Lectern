@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.5.0 (2026-07-09)
+
+### Added
+- **Ask for more cards**: once generation finishes, the activity log grows a
+  small composer. Type a request in plain language — "add cards on the trolley
+  problem", "emphasize the Rawls slides" — and Lectern adds matching cards to
+  the deck. Requests are additions only: cards you already reviewed are never
+  edited or removed, new cards pass the same quality gate, and duplicates of
+  existing cards are dropped. Your request and the model's reply become part
+  of the session minutes.
+- **Outside-source cards, honestly labeled**: if a request asks for material
+  the lecture doesn't contain, the card is still written but carries an
+  "outside source" label and stays out of the Anki send until you include it
+  with one click. Page citations are never invented.
+
+### Changed
+- After the deck is complete, the sidebar counts the live deck size instead of
+  the original generation budget, so follow-up additions show up immediately.
+
 ## 2.4.0 (2026-07-08)
 
 ### Changed
