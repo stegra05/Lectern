@@ -24,10 +24,15 @@ for debugging and UI automation.
 ```sh
 pnpm typecheck        # tsc --noEmit
 pnpm test             # vitest (offline; live API tests are skipped by default)
+pnpm lint             # eslint (typescript-eslint type-aware + react-hooks)
 pnpm format           # prettier (no semis, single quotes, printWidth 100)
+pnpm format:check     # prettier check only (what CI runs)
 ```
 
-Please make sure `typecheck` and `test` pass before opening a PR.
+CI runs lint, format check, tests, the production build, and `cargo fmt`/`clippy`
+on every PR. A pre-commit hook (installed automatically by `pnpm install` via the
+`prepare` script, see `.githooks/`) checks formatting and lint on exactly the
+staged files; bypass a single commit with `git commit -n`.
 
 ## Code layout
 
