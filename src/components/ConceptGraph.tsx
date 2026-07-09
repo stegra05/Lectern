@@ -47,6 +47,8 @@ export function ConceptGraph({
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<{ pointerId: number; start: Transform; x0: number; y0: number } | null>(null)
   const didPan = useRef(false)
+  // Mirrors `drag` for the cursor class — refs must not be read during render.
+  const [panning, setPanning] = useState(false)
   const activeId = hoverId ?? selectedId
 
   const neighbors = useMemo(() => {
@@ -99,6 +101,7 @@ export function ConceptGraph({
     const p = toViewBox(e.clientX, e.clientY)
     drag.current = { pointerId: e.pointerId, start: t, x0: p.x, y0: p.y }
     didPan.current = false
+    setPanning(true)
     e.currentTarget.setPointerCapture(e.pointerId)
   }
 
@@ -115,7 +118,10 @@ export function ConceptGraph({
   }
 
   const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (drag.current?.pointerId === e.pointerId) drag.current = null
+    if (drag.current?.pointerId === e.pointerId) {
+      drag.current = null
+      setPanning(false)
+    }
   }
 
   return (
@@ -124,7 +130,7 @@ export function ConceptGraph({
         ref={svgRef}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         preserveAspectRatio="xMidYMid meet"
-        className={`h-full w-full ${drag.current ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`h-full w-full ${panning ? 'cursor-grabbing' : 'cursor-grab'}`}
         role="group"
         aria-label="Concept map graph"
         onPointerDown={onPointerDown}

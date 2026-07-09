@@ -36,7 +36,7 @@ describe('streamPolyfill', () => {
   it('supports for await over a stream', async () => {
     const seen: string[] = []
     for await (const chunk of makeStream(['a', 'b', 'c'])) {
-      seen.push(chunk as string)
+      seen.push(chunk)
     }
     expect(seen).toEqual(['a', 'b', 'c'])
   })

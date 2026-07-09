@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { CoverageData } from '../engine/types'
 import { useLectern } from '../state/store'
 
 /**
@@ -14,13 +15,23 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
   const pageFilter = useLectern((s) => s.pageFilter)
   const slidePeek = useLectern((s) => s.slidePeek)
   const peekSlide = useLectern((s) => s.peekSlide)
-  const litBefore = useRef<Set<number>>(new Set())
   const stripRef = useRef<HTMLDivElement>(null)
   const scrolledTo = useRef<Set<number>>(new Set())
 
-  useEffect(() => {
-    if (!coverage) litBefore.current = new Set()
-  }, [coverage === null])
+  // Pages covered in earlier coverage snapshots — a page flares only in the
+  // renders between the snapshot that lit it and the next one. Tracked with
+  // the previous-render comparison pattern so no ref is read during render.
+  const [prev, setPrev] = useState<{ coverage: CoverageData | null; lit: ReadonlySet<number> }>({
+    coverage: null,
+    lit: new Set(),
+  })
+  if (prev.coverage !== coverage) {
+    setPrev({
+      coverage,
+      lit: coverage ? new Set([...prev.lit, ...(prev.coverage?.coveredPages ?? [])]) : new Set(),
+    })
+  }
+  const litBefore = prev.lit
 
   // While generating, keep the newest lit page in view so the flare is seen.
   useEffect(() => {
@@ -49,8 +60,7 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
       <div ref={stripRef} className="flex gap-2 overflow-x-auto px-4 py-3">
         {Array.from({ length: pdfInfo.pageCount }, (_, i) => i + 1).map((page) => {
           const isCovered = covered.has(page)
-          const isNew = isCovered && !litBefore.current.has(page)
-          if (isNew) litBefore.current.add(page)
+          const isNew = isCovered && !litBefore.has(page)
           const isFiltered = pageFilter === page
           const isPeeked = slidePeek === page
           const count = counts[page] ?? 0

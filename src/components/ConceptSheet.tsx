@@ -25,7 +25,9 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Read by the Esc handler without re-binding the listener per selection.
   const selectedRef = useRef(selectedId)
-  selectedRef.current = selectedId
+  useEffect(() => {
+    selectedRef.current = selectedId
+  }, [selectedId])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

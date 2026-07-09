@@ -23,12 +23,16 @@ export function SettingsSheet() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const sheetRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (open && settings) {
-      setDraft({ ...settings })
-      setKeyDraft('')
-    }
-  }, [open, settings])
+  // Reset the drafts from the saved settings each time the sheet opens (or
+  // the settings object changes underneath an open sheet) — done during
+  // render via the previous-render comparison pattern, not an effect.
+  const [syncedFrom, setSyncedFrom] = useState<Settings | null>(null)
+  if (!open && syncedFrom !== null) setSyncedFrom(null)
+  if (open && settings && syncedFrom !== settings) {
+    setSyncedFrom(settings)
+    setDraft({ ...settings })
+    setKeyDraft('')
+  }
 
   // Esc closes; focus returns to the button that opened the sheet.
   useEffect(() => {

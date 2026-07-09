@@ -111,7 +111,7 @@ interface CapturedInteraction {
 
 function makeScriptedFetch(captured: CapturedInteraction[]): typeof fetch {
   const turns = [...SCRIPT]
-  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (!url.includes('/v1beta/interactions')) throw new Error(`unexpected fetch: ${url}`)
     captured.push({ body: JSON.parse(String(init?.body)) as Record<string, unknown> })
@@ -125,7 +125,7 @@ function makeScriptedFetch(captured: CapturedInteraction[]): typeof fetch {
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     )
-  }) as typeof fetch
+  }
 }
 
 describe('runFollowUp (scripted)', () => {

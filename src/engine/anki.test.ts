@@ -351,9 +351,7 @@ describe('resolveModelNames', () => {
   })
 
   it('falls back to the classic resolution when Lectern note types are absent', async () => {
-    const { fetchFn } = makeFetch(
-      routes({ modelNames: () => ({ result: ['Basic', 'Cloze'] }) }),
-    )
+    const { fetchFn } = makeFetch(routes({ modelNames: () => ({ result: ['Basic', 'Cloze'] }) }))
     const settings = makeSettings({ useLecternNoteTypes: true })
 
     await expect(resolveModelNames(makeClient(fetchFn), settings)).resolves.toEqual({

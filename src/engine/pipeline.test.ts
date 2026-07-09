@@ -137,7 +137,7 @@ interface CapturedInteraction {
 
 function makeScriptedFetch(script: ScriptedTurn[], captured: CapturedInteraction[]): typeof fetch {
   const turns = [...script]
-  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const json = (body: unknown, headers: Record<string, string> = {}) =>
       new Response(JSON.stringify(body), {
@@ -170,7 +170,7 @@ function makeScriptedFetch(script: ScriptedTurn[], captured: CapturedInteraction
       return json(interactionResponse(turn))
     }
     throw new Error(`unexpected fetch: ${url}`)
-  }) as typeof fetch
+  }
 }
 
 // --- The test ----------------------------------------------------------------
