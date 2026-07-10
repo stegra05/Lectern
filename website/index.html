@@ -45,6 +45,8 @@
         --lamp-glow-intense: rgba(232, 163, 61, 0.22);
         --lamp-ink: #8a5a12;
 
+        --sage: #8ab36a;
+
         --sans: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
         --serif: 'Source Serif 4', Georgia, serif;
         --mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -56,6 +58,14 @@
         --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
         --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.5);
         --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+        /* Motion system: strong ease-out for anything answering the user,
+           ease-in-out for on-screen movement. UI durations stay under 300ms. */
+        --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+        --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+        --dur-press: 120ms;
+        --dur-fast: 180ms;
+        --dur-base: 240ms;
       }
 
       * {
@@ -77,8 +87,14 @@
         font-family: var(--sans);
         font-size: 16px;
         line-height: 1.6;
+        font-optical-sizing: auto;
         -webkit-font-smoothing: antialiased;
         overflow-x: hidden;
+      }
+
+      ::selection {
+        background: rgba(232, 163, 61, 0.32);
+        color: #fff;
       }
 
       a {
@@ -108,17 +124,43 @@
         margin-bottom: 12px;
       }
 
-      /* ---- header (sticky glassmorphism) ---- */
+      /* The reading lamp follows you: a warm pointer-tracked glow,
+         driven by a spring-like lerp in JS (transform-only, compositor friendly). */
+      .lamp-cursor {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 640px;
+        height: 640px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(232, 163, 61, 0.055) 0%, transparent 65%);
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0;
+        transition: opacity 600ms ease;
+        will-change: transform;
+      }
+      .lamp-cursor.lit {
+        opacity: 1;
+      }
+
+      /* ---- header (translucent material with a scroll edge effect) ---- */
       header {
         position: sticky;
         top: 0;
         z-index: 100;
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        background: rgba(12, 10, 9, 0.75);
-        border-bottom: 1px solid rgba(68, 62, 56, 0.25);
         padding: 16px 0;
-        transition: background 0.3s ease;
+        background: transparent;
+        border-bottom: 1px solid transparent;
+        transition:
+          background var(--dur-base) ease,
+          border-color var(--dur-base) ease;
+      }
+      header.scrolled {
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        background: rgba(12, 10, 9, 0.72);
+        border-bottom-color: rgba(68, 62, 56, 0.25);
       }
 
       header .wrap {
@@ -132,10 +174,10 @@
         align-items: center;
         gap: 12px;
         font-weight: 700;
-        transition: transform 0.2s ease;
+        transition: transform var(--dur-press) var(--ease-out);
       }
-      .brand:hover {
-        transform: scale(1.02);
+      .brand:active {
+        transform: scale(0.97);
       }
       .brand img {
         width: 28px;
@@ -159,44 +201,85 @@
         text-decoration: none;
         position: relative;
         padding: 4px 0;
-        transition: color 0.2s ease;
-      }
-      nav a:hover {
-        color: var(--chalk);
+        transition: color var(--dur-fast) ease;
       }
       nav a::after {
         content: '';
         position: absolute;
         bottom: -2px;
-        left: 50%;
-        width: 0;
+        left: 0;
+        width: 100%;
         height: 2px;
         background: var(--lamp);
-        transition: all 0.25s ease;
-        transform: translateX(-50%);
         border-radius: 2px;
+        transform: scaleX(0);
+        transition: transform var(--dur-fast) var(--ease-out);
       }
-      nav a:hover::after {
-        width: 100%;
+      @media (hover: hover) and (pointer: fine) {
+        nav a:hover {
+          color: var(--chalk);
+        }
+        nav a:hover::after {
+          transform: scaleX(1);
+        }
       }
 
       /* ---- hero ---- */
       .hero {
         position: relative;
-        text-align: center;
-        padding: 80px 0 60px;
+        padding: 72px 0 56px;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 56px;
+        align-items: center;
+      }
+
+      /* One-time entrance: content rises into place, staggered ~60ms apart. */
+      @keyframes rise-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .js .hero-copy > * {
+        animation: rise-in 640ms var(--ease-out) both;
+      }
+      .js .hero-copy > *:nth-child(2) {
+        animation-delay: 60ms;
+      }
+      .js .hero-copy > *:nth-child(3) {
+        animation-delay: 120ms;
+      }
+      .js .hero-copy > *:nth-child(4) {
+        animation-delay: 180ms;
+      }
+      .js .hero-copy > *:nth-child(5) {
+        animation-delay: 230ms;
+      }
+      .js .hero-stack {
+        animation: rise-in 720ms var(--ease-out) 200ms both;
+      }
+      .js .hero-strip {
+        animation: rise-in 720ms var(--ease-out) 320ms both;
       }
 
       .hero h1 {
         font-family: var(--serif);
         font-weight: 600;
-        font-size: clamp(36px, 5.8vw, 60px);
-        line-height: 1.12;
+        font-size: clamp(34px, 4.8vw, 54px);
+        line-height: 1.08;
         color: #fff;
-        max-width: 20ch;
-        margin: 16px auto 0;
+        max-width: 18ch;
+        margin: 16px 0 0;
         text-wrap: balance;
-        letter-spacing: -0.015em;
+        letter-spacing: -0.02em; /* large serif wants negative tracking */
       }
 
       .hero h1 em {
@@ -208,10 +291,10 @@
       }
 
       .hero p.sub {
-        max-width: 60ch;
-        margin: 24px auto 0;
+        max-width: 52ch;
+        margin: 22px 0 0;
         color: var(--chalk-dim);
-        font-size: 18px;
+        font-size: 17.5px;
         line-height: 1.6;
       }
 
@@ -222,6 +305,10 @@
         align-items: center;
         margin-top: 36px;
         flex-wrap: wrap;
+      }
+      .hero-copy .cta-row {
+        justify-content: flex-start;
+        margin-top: 32px;
       }
 
       .btn {
@@ -234,7 +321,14 @@
         text-decoration: none;
         border-radius: var(--radius-md);
         padding: 12px 24px;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        transition:
+          transform var(--dur-press) var(--ease-out),
+          background var(--dur-fast) ease,
+          border-color var(--dur-fast) ease,
+          box-shadow var(--dur-fast) ease;
+      }
+      .btn:active {
+        transform: scale(0.97);
       }
 
       .btn-primary {
@@ -244,29 +338,22 @@
           0 4px 14px rgba(232, 163, 61, 0.25),
           inset 0 1px 0 rgba(255, 255, 255, 0.25);
       }
-      .btn-primary:hover {
-        background: #f1b358;
-        box-shadow:
-          0 6px 20px rgba(232, 163, 61, 0.4),
-          inset 0 1px 0 rgba(255, 255, 255, 0.3);
-        transform: translateY(-1px);
-      }
-      .btn-primary:active {
-        transform: translateY(1px);
-      }
-
       .btn-secondary {
         border: 1px solid var(--desk-edge);
         color: var(--chalk);
         background: rgba(28, 25, 23, 0.4);
       }
-      .btn-secondary:hover {
-        border-color: var(--chalk-dim);
-        background: rgba(28, 25, 23, 0.8);
-        transform: translateY(-1px);
-      }
-      .btn-secondary:active {
-        transform: translateY(1px);
+      @media (hover: hover) and (pointer: fine) {
+        .btn-primary:hover {
+          background: #f1b358;
+          box-shadow:
+            0 6px 20px rgba(232, 163, 61, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+        .btn-secondary:hover {
+          border-color: var(--chalk-dim);
+          background: rgba(28, 25, 23, 0.8);
+        }
       }
 
       .cta-note {
@@ -274,6 +361,205 @@
         font-family: var(--mono);
         font-size: 12px;
         color: var(--chalk-muted);
+      }
+
+      /* ---- hero deck: paper flashcards you can pick up ----
+         Direct manipulation: 1:1 drag that respects the grab point,
+         velocity handoff into springs, momentum projection to decide
+         dismiss vs. settle, rubber-banding on the vertical axis. */
+      .hero-stack {
+        min-width: 0;
+      }
+      .deck {
+        position: relative;
+        height: 310px;
+        max-width: 430px;
+        margin: 0 auto;
+        perspective: 1400px;
+      }
+      .deck-card {
+        position: absolute;
+        inset: 0;
+        touch-action: pan-y;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: grab;
+        will-change: transform;
+        transition:
+          transform 420ms var(--ease-out),
+          opacity 320ms ease;
+      }
+      .deck-card:focus-visible {
+        outline: 2px solid var(--lamp);
+        outline-offset: 6px;
+        border-radius: var(--radius-lg);
+      }
+      .deck-card.free {
+        transition: opacity 320ms ease; /* JS drives the transform */
+      }
+      .deck-card.dragging {
+        cursor: grabbing;
+      }
+      .deck-card[data-depth='1'] {
+        transform: translateY(16px) rotate(2deg) scale(0.955);
+      }
+      .deck-card[data-depth='2'] {
+        transform: translateY(30px) rotate(-2.2deg) scale(0.91);
+      }
+      .deck-card[data-depth='3'] {
+        transform: translateY(34px) scale(0.88);
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .deck-card-inner {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        transform-style: preserve-3d;
+        /* flip overshoots slightly — the tap gesture carries momentum */
+        transition:
+          transform 560ms cubic-bezier(0.34, 1.2, 0.4, 1),
+          scale 200ms var(--ease-out);
+      }
+      .deck-card.flipped .deck-card-inner {
+        transform: rotateY(180deg);
+      }
+      .deck-card.dragging .deck-card-inner {
+        scale: 1.03; /* the card lifts off the desk the moment you grab it */
+      }
+
+      .deck-face {
+        position: absolute;
+        inset: 0;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        border-radius: var(--radius-lg);
+        background: linear-gradient(165deg, var(--paper) 0%, var(--paper-shade) 100%);
+        color: var(--ink);
+        box-shadow:
+          var(--shadow-md),
+          0 0 0 1px var(--paper-border);
+        padding: 24px 26px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .deck-card.dragging .deck-face {
+        box-shadow:
+          var(--shadow-lg),
+          0 0 0 1px var(--paper-border);
+      }
+      .deck-back {
+        transform: rotateY(180deg);
+      }
+      /* Printed watermark in the corner, like a study card from a set */
+      .deck-front::after,
+      .deck-back::after {
+        position: absolute;
+        right: 18px;
+        bottom: 40px;
+        font-family: var(--serif);
+        font-style: italic;
+        font-size: 84px;
+        font-weight: 600;
+        line-height: 1;
+        color: rgba(33, 30, 26, 0.05);
+        pointer-events: none;
+      }
+      .deck-front::after {
+        content: 'Q';
+      }
+      .deck-back::after {
+        content: 'A';
+      }
+
+      .deck-tag {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--lamp-ink);
+        margin-bottom: 14px;
+      }
+      .deck-q {
+        font-family: var(--serif);
+        font-size: 19.5px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--ink);
+        text-wrap: pretty;
+      }
+      .deck-a {
+        font-family: var(--serif);
+        font-size: 15.5px;
+        line-height: 1.55;
+        color: var(--ink);
+        text-wrap: pretty;
+      }
+      .deck-a mark {
+        background: rgba(232, 163, 61, 0.35);
+        color: inherit;
+        font-weight: 600;
+        padding: 1px 3px;
+        border-radius: 3px;
+      }
+      .deck-hint {
+        margin-top: auto;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-soft);
+      }
+      .deck-foot {
+        margin-top: auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--paper-border);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-soft);
+      }
+      .deck-foot .ref {
+        border: 1px solid rgba(138, 90, 18, 0.35);
+        color: var(--lamp-ink);
+        padding: 2px 9px;
+        border-radius: 20px;
+        font-weight: 500;
+      }
+
+      .deck-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        max-width: 430px;
+        margin: 18px auto 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--chalk-muted);
+      }
+      .deck-next {
+        background: none;
+        border: none;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--chalk-dim);
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: var(--radius-sm);
+        transition:
+          color var(--dur-fast) ease,
+          transform var(--dur-press) var(--ease-out);
+      }
+      .deck-next:active {
+        transform: scale(0.96);
+      }
+      @media (hover: hover) and (pointer: fine) {
+        .deck-next:hover {
+          color: var(--lamp);
+        }
       }
 
       /* ---- filmstrip ---- */
@@ -300,11 +586,13 @@
         animation: cover 9s infinite;
         position: relative;
         border: 1px solid rgba(0, 0, 0, 0.06);
-        transition: transform 0.2s ease;
+        transition: transform var(--dur-fast) var(--ease-out);
       }
-      .filmstrip .tile:hover {
-        transform: scale(1.1);
-        z-index: 2;
+      @media (hover: hover) and (pointer: fine) {
+        .filmstrip .tile:hover {
+          transform: scale(1.1);
+          z-index: 2;
+        }
       }
 
       .filmstrip .tile:nth-child(2) {
@@ -374,6 +662,27 @@
         }
       }
 
+      /* Once the visitor starts reviewing the deck, the strip stops being an
+         ambient loop and becomes a real coverage ledger: reviewed pages stay
+         lit. Transitions (not keyframes) so rapid swipes retarget smoothly. */
+      .filmstrip.live .tile {
+        animation: none;
+        transition:
+          opacity 480ms ease,
+          filter 480ms ease,
+          box-shadow 480ms ease,
+          border-color 480ms ease,
+          transform var(--dur-fast) var(--ease-out);
+      }
+      .filmstrip .tile.covered {
+        opacity: 1;
+        filter: grayscale(0);
+        border-color: transparent;
+        box-shadow:
+          0 0 0 2px var(--lamp),
+          0 4px 14px rgba(232, 163, 61, 0.35);
+      }
+
       .filmstrip-caption {
         margin-top: 18px;
         text-align: center;
@@ -384,6 +693,20 @@
       .filmstrip-caption b {
         color: var(--lamp);
         font-weight: 500;
+      }
+
+      /* ---- scroll reveal (subtle rise, once, staggered via --reveal-delay) ---- */
+      .js [data-reveal] {
+        opacity: 0;
+        transform: translateY(14px);
+        transition:
+          opacity 560ms var(--ease-out),
+          transform 560ms var(--ease-out);
+        transition-delay: var(--reveal-delay, 0ms);
+      }
+      .js [data-reveal].in {
+        opacity: 1;
+        transform: none;
       }
 
       /* ---- demo section ---- */
@@ -433,7 +756,8 @@
         font-weight: 600;
         font-size: clamp(28px, 4vw, 40px);
         color: #fff;
-        line-height: 1.2;
+        line-height: 1.15;
+        letter-spacing: -0.015em;
         margin-top: 10px;
       }
 
@@ -486,20 +810,32 @@
       }
 
       .card-item {
+        display: block;
+        width: 100%;
+        font: inherit;
+        color: inherit;
         background: rgba(28, 25, 23, 0.4);
         border: 1px solid var(--desk-edge);
         border-radius: var(--radius-md);
         padding: 18px 20px;
         cursor: pointer;
         text-align: left;
-        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        transition:
+          transform var(--dur-press) var(--ease-out),
+          border-color var(--dur-fast) ease,
+          background var(--dur-fast) ease,
+          box-shadow var(--dur-fast) ease;
         position: relative;
         overflow: hidden;
       }
-      .card-item:hover {
-        border-color: rgba(232, 163, 61, 0.4);
-        background: rgba(28, 25, 23, 0.7);
-        transform: translateX(4px);
+      .card-item:active {
+        transform: scale(0.98);
+      }
+      @media (hover: hover) and (pointer: fine) {
+        .card-item:hover {
+          border-color: rgba(232, 163, 61, 0.4);
+          background: rgba(28, 25, 23, 0.7);
+        }
       }
       .card-item.active {
         border-color: var(--lamp);
@@ -514,11 +850,12 @@
         bottom: 0;
         width: 3px;
         background: var(--lamp);
-        opacity: 0;
-        transition: opacity 0.2s ease;
+        transform: scaleY(0);
+        transform-origin: top;
+        transition: transform var(--dur-fast) var(--ease-out);
       }
       .card-item.active::before {
-        opacity: 1;
+        transform: scaleY(1);
       }
 
       .card-item-tag {
@@ -536,6 +873,7 @@
         font-weight: 600;
         color: #fff;
         line-height: 1.4;
+        display: block;
       }
 
       /* Glassmorphic Live Card & Slide */
@@ -570,6 +908,19 @@
         height: 120px;
         background: radial-gradient(circle, rgba(232, 163, 61, 0.12) 0%, transparent 70%);
         pointer-events: none;
+      }
+
+      /* Crossfade with a touch of blur to bridge the two states */
+      #card-content-area,
+      .card-footer {
+        transition:
+          opacity 150ms ease,
+          filter 150ms ease;
+      }
+      .grounded-card.swapping #card-content-area,
+      .grounded-card.swapping .card-footer {
+        opacity: 0;
+        filter: blur(2px);
       }
 
       .card-q {
@@ -649,23 +1000,25 @@
         letter-spacing: 0.05em;
       }
 
-      .slide-content-area {
+      /* Slides stack in one grid cell and crossfade — transitions retarget
+         smoothly when the user clicks through cards quickly. */
+      .slide-stage {
         flex-grow: 1;
-        display: none;
-        animation: slideFadeIn 0.3s ease forwards;
+        display: grid;
+      }
+      .slide-content-area {
+        grid-area: 1 / 1;
+        opacity: 0;
+        transform: translateY(6px);
+        pointer-events: none;
+        transition:
+          opacity var(--dur-base) var(--ease-out),
+          transform var(--dur-base) var(--ease-out);
       }
       .slide-content-area.active {
-        display: block;
-      }
-      @keyframes slideFadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(6px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
       }
 
       .slide-title {
@@ -709,6 +1062,7 @@
       .how {
         padding: 96px 0;
         border-top: 1px solid rgba(68, 62, 56, 0.2);
+        scroll-margin-top: 72px;
       }
       .steps {
         margin-top: 40px;
@@ -721,14 +1075,25 @@
         border: 1px solid var(--desk-edge);
         padding: 28px 24px;
         border-radius: var(--radius-lg);
-        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        transition:
+          transform var(--dur-base) var(--ease-out),
+          border-color var(--dur-fast) ease,
+          background var(--dur-fast) ease,
+          box-shadow var(--dur-base) var(--ease-out);
         position: relative;
       }
-      .step:hover {
-        border-color: rgba(232, 163, 61, 0.3);
-        background: rgba(28, 25, 23, 0.7);
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-md);
+      @media (hover: hover) and (pointer: fine) {
+        .step:hover {
+          border-color: rgba(232, 163, 61, 0.3);
+          background: rgba(28, 25, 23, 0.7);
+          transform: translateY(-4px);
+          box-shadow: var(--shadow-md);
+        }
+        .step:hover .step-icon {
+          background: var(--lamp);
+          color: var(--desk);
+          box-shadow: 0 0 12px rgba(232, 163, 61, 0.3);
+        }
       }
       .step-icon {
         width: 42px;
@@ -741,12 +1106,10 @@
         justify-content: center;
         margin-bottom: 18px;
         border: 1px solid rgba(232, 163, 61, 0.15);
-        transition: all 0.25s ease;
-      }
-      .step:hover .step-icon {
-        background: var(--lamp);
-        color: var(--desk);
-        box-shadow: 0 0 12px rgba(232, 163, 61, 0.3);
+        transition:
+          background var(--dur-fast) ease,
+          color var(--dur-fast) ease,
+          box-shadow var(--dur-fast) ease;
       }
       .step .n {
         font-family: var(--mono);
@@ -805,6 +1168,15 @@
         padding: 96px 0;
         text-align: center;
         border-top: 1px solid rgba(68, 62, 56, 0.2);
+        scroll-margin-top: 72px;
+      }
+      .install h2 {
+        font-family: var(--serif);
+        font-weight: 600;
+        font-size: clamp(28px, 4vw, 40px);
+        color: #fff;
+        line-height: 1.15;
+        letter-spacing: -0.015em;
       }
       .install p.body {
         margin: 16px auto 0;
@@ -885,20 +1257,56 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        transition: all 0.2s ease;
+        transition:
+          transform var(--dur-press) var(--ease-out),
+          background var(--dur-fast) ease,
+          color var(--dur-fast) ease,
+          border-color var(--dur-fast) ease;
       }
-      .copy-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: #fff;
-        border-color: rgba(255, 255, 255, 0.15);
+      .copy-btn:active {
+        transform: scale(0.96);
+      }
+      @media (hover: hover) and (pointer: fine) {
+        .copy-btn:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: #fff;
+          border-color: rgba(255, 255, 255, 0.15);
+        }
       }
       .copy-btn svg {
         stroke: currentColor;
       }
+      .copy-btn .copy-icons {
+        position: relative;
+        width: 14px;
+        height: 14px;
+        display: inline-block;
+      }
+      .copy-btn .copy-icons svg {
+        position: absolute;
+        inset: 0;
+        transition:
+          opacity 150ms ease,
+          filter 150ms ease,
+          transform 150ms var(--ease-out);
+      }
+      .copy-btn .ic-check {
+        opacity: 0;
+        transform: scale(0.8);
+      }
       .copy-btn.copied {
         background: rgba(138, 179, 106, 0.1);
-        color: #8ab36a;
+        color: var(--sage);
         border-color: rgba(138, 179, 106, 0.2);
+      }
+      .copy-btn.copied .ic-copy {
+        opacity: 0;
+        filter: blur(2px);
+        transform: scale(0.8);
+      }
+      .copy-btn.copied .ic-check {
+        opacity: 1;
+        transform: scale(1);
       }
 
       .platforms {
@@ -923,7 +1331,7 @@
       }
       footer a {
         color: var(--chalk-muted);
-        transition: color 0.2s ease;
+        transition: color var(--dur-fast) ease;
       }
       footer a:hover {
         color: var(--chalk);
@@ -931,6 +1339,24 @@
 
       /* ---- responsive styles ---- */
       @media (max-width: 900px) {
+        .hero-grid {
+          grid-template-columns: 1fr;
+          gap: 44px;
+          text-align: center;
+        }
+        .hero h1 {
+          margin-inline: auto;
+        }
+        .hero p.sub {
+          margin-inline: auto;
+        }
+        .hero-copy .cta-row {
+          justify-content: center;
+        }
+        .deck {
+          height: 280px;
+          max-width: 400px;
+        }
         .playground-layout {
           grid-template-columns: 1fr;
           gap: 36px;
@@ -972,19 +1398,89 @@
         }
       }
 
+      /* Frostier surfaces / stronger edges for users who ask for them */
+      @media (prefers-reduced-transparency: reduce) {
+        header.scrolled {
+          background: var(--desk);
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+        }
+        .grounded-card {
+          background: var(--desk-raised);
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+        }
+      }
+
+      /* Reduced motion: gentle fades stay, movement goes */
       @media (prefers-reduced-motion: reduce) {
         html {
           scroll-behavior: auto;
+        }
+        .js .hero-copy > *,
+        .js .hero-stack,
+        .js .hero-strip {
+          animation: none;
+        }
+        /* The deck: no drag physics, no 3D. Tap crossfades the faces instead
+           of rotating them — a gentler equivalent, not zero feedback. */
+        .deck-card {
+          transition: opacity 300ms ease;
+          cursor: pointer;
+        }
+        .deck-card-inner {
+          transition: none;
+        }
+        .deck-card.dragging .deck-card-inner {
+          scale: none;
+        }
+        .deck-card.flipped .deck-card-inner {
+          transform: none;
+        }
+        .deck-face {
+          transition: opacity 200ms ease;
+        }
+        .deck-back {
+          transform: none;
+          opacity: 0;
+        }
+        .deck-card.flipped .deck-front {
+          opacity: 0;
+        }
+        .deck-card.flipped .deck-back {
+          opacity: 1;
+        }
+        .js [data-reveal] {
+          opacity: 1;
+          transform: none;
+          transition: none;
         }
         .filmstrip .tile {
           animation: none;
           opacity: 0.8;
           filter: none;
         }
+        .lamp-cursor {
+          display: none;
+        }
+        .slide-content-area {
+          transform: none;
+          transition: opacity var(--dur-base) ease;
+        }
+        .btn,
+        .card-item,
+        .step,
+        .brand,
+        .copy-btn {
+          transition-property: background, border-color, box-shadow, color, opacity;
+        }
       }
     </style>
   </head>
   <body>
+    <!-- Pointer-tracked reading-lamp glow (decorative) -->
+    <div class="lamp-cursor" aria-hidden="true"></div>
+
     <!-- Header -->
     <header>
       <div class="wrap">
@@ -1000,42 +1496,173 @@
     </header>
 
     <!-- Hero Section -->
-    <section class="hero wrap">
-      <p class="eyebrow">Free &amp; open source · your own Gemini key</p>
-      <h1>Lecture PDFs into Anki flashcards <em>you can trust</em></h1>
-      <p class="sub">
-        Lectern reads the whole lecture, maps its concepts, and generates cards that cite the exact
-        pages they came from. You see what's covered, check any card against its slide, and send the
-        deck straight to Anki.
-      </p>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest"
-          >Download Lectern</a
-        >
-        <a class="btn btn-secondary" href="https://github.com/stegra05/Lectern">View on GitHub</a>
-      </div>
-      <p class="cta-note">macOS · Windows · Linux · no account, no subscription</p>
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Free &amp; open source · your own Gemini key</p>
+          <h1>Lecture PDFs into Anki flashcards <em>you can trust</em></h1>
+          <p class="sub">
+            Lectern reads the whole lecture, maps its concepts, and generates cards that cite the
+            exact pages they came from. You see what's covered, check any card against its slide,
+            and send the deck straight to Anki.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest"
+              >Download Lectern</a
+            >
+            <a class="btn btn-secondary" href="https://github.com/stegra05/Lectern"
+              >View on GitHub</a
+            >
+          </div>
+          <p class="cta-note">macOS · Windows · Linux · no account, no subscription</p>
+        </div>
 
-      <div class="filmstrip" aria-hidden="true">
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
-        <div class="tile"></div>
+        <!-- A real deck on the desk: grab a card, flick it aside, tap to flip -->
+        <div class="hero-stack">
+          <div class="deck" id="deck">
+            <article
+              class="deck-card"
+              data-depth="0"
+              data-tiles="7,8"
+              tabindex="0"
+              role="button"
+              aria-pressed="false"
+              aria-label="Flashcard: How does an overfit model differ from an underfit model? Press Enter to flip, right arrow for the next card."
+            >
+              <div class="deck-card-inner">
+                <div class="deck-face deck-front">
+                  <span class="deck-tag">Overfitting · slide 46</span>
+                  <p class="deck-q">How does an overfit model differ from an underfit model?</p>
+                  <span class="deck-hint">tap to flip · drag to review</span>
+                </div>
+                <div class="deck-face deck-back">
+                  <span class="deck-tag">Answer</span>
+                  <p class="deck-a">
+                    Overfit: <mark>low training error</mark> but <mark>high test error</mark> — too
+                    much capacity or too little data. Underfit: high error on both.
+                  </p>
+                  <div class="deck-foot">
+                    <span class="ref">p. 46, 49</span><span>Overfitting</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article
+              class="deck-card"
+              data-depth="1"
+              data-tiles="3,4"
+              tabindex="-1"
+              role="button"
+              aria-pressed="false"
+              aria-label="Flashcard: What does the learning rate control in gradient descent? Press Enter to flip, right arrow for the next card."
+            >
+              <div class="deck-card-inner">
+                <div class="deck-face deck-front">
+                  <span class="deck-tag">Gradient descent · slide 23</span>
+                  <p class="deck-q">What does the learning rate control in gradient descent?</p>
+                  <span class="deck-hint">tap to flip · drag to review</span>
+                </div>
+                <div class="deck-face deck-back">
+                  <span class="deck-tag">Answer</span>
+                  <p class="deck-a">
+                    The size of each update step: too large and the loss <mark>diverges</mark>, too
+                    small and training <mark>crawls to a halt</mark>.
+                  </p>
+                  <div class="deck-foot">
+                    <span class="ref">p. 23</span><span>Gradient descent</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article
+              class="deck-card"
+              data-depth="2"
+              data-tiles="8,9"
+              tabindex="-1"
+              role="button"
+              aria-pressed="false"
+              aria-label="Flashcard: What tension does the bias–variance trade-off describe? Press Enter to flip, right arrow for the next card."
+            >
+              <div class="deck-card-inner">
+                <div class="deck-face deck-front">
+                  <span class="deck-tag">Bias–variance · slide 51</span>
+                  <p class="deck-q">What tension does the bias–variance trade-off describe?</p>
+                  <span class="deck-hint">tap to flip · drag to review</span>
+                </div>
+                <div class="deck-face deck-back">
+                  <span class="deck-tag">Answer</span>
+                  <p class="deck-a">
+                    A model too simple <mark>underfits (high bias)</mark>; one too flexible
+                    <mark>fits noise (high variance)</mark>. Total error is lowest in between.
+                  </p>
+                  <div class="deck-foot">
+                    <span class="ref">p. 51</span><span>Bias–variance</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article
+              class="deck-card"
+              data-depth="3"
+              data-tiles="9,10"
+              tabindex="-1"
+              role="button"
+              aria-pressed="false"
+              aria-label="Flashcard: Why does k-fold cross-validation beat a single train/test split? Press Enter to flip, right arrow for the next card."
+            >
+              <div class="deck-card-inner">
+                <div class="deck-face deck-front">
+                  <span class="deck-tag">Cross-validation · slide 58</span>
+                  <p class="deck-q">Why does k-fold cross-validation beat a single train/test split?</p>
+                  <span class="deck-hint">tap to flip · drag to review</span>
+                </div>
+                <div class="deck-face deck-back">
+                  <span class="deck-tag">Answer</span>
+                  <p class="deck-a">
+                    Every sample serves in training and validation across folds, so the estimate
+                    <mark>averages k splits</mark> instead of trusting one.
+                  </p>
+                  <div class="deck-foot">
+                    <span class="ref">p. 58</span><span>Cross-validation</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div class="deck-meta">
+            <span aria-hidden="true">a deck from one lecture</span>
+            <button class="deck-next" type="button" id="deck-next">next card →</button>
+          </div>
+        </div>
       </div>
-      <p class="filmstrip-caption">your slides <b>light up</b> as cards cover them</p>
+
+      <div class="wrap hero-strip">
+        <div class="filmstrip" aria-hidden="true">
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+        </div>
+        <p class="filmstrip-caption">
+          your slides <b>light up</b> as cards cover them<span id="coverage-note"></span>
+        </p>
+      </div>
     </section>
 
     <!-- Demo Video/Gif Window -->
     <section class="demo wrap">
-      <div class="demo-window">
+      <div class="demo-window" data-reveal>
         <img
           src="assets/demo.gif"
           alt="Lectern generating a deck from a 72-page machine-learning lecture: the filmstrip lights up page by page as grounded cards stream in"
@@ -1046,7 +1673,7 @@
 
     <!-- Grounded specimen & interactive playground -->
     <section class="specimen wrap">
-      <div class="section-intro">
+      <div class="section-intro" data-reveal>
         <p class="eyebrow">Every card can back itself up</p>
         <h2>Grounded, or it doesn't get in</h2>
       </div>
@@ -1054,21 +1681,21 @@
       <div class="playground-layout">
         <!-- Left Column: Details + Selectable cards -->
         <div class="playground-info">
-          <p class="body">
+          <p class="body" data-reveal>
             A chatbot will happily invent plausible flashcards. Lectern gates every card on
             provenance: which pages it came from, which concept it teaches, and a source excerpt to
             verify it against. Cards without support are rejected.
           </p>
 
           <ul class="checklist">
-            <li>
+            <li data-reveal>
               <span class="tick">✓</span>
               <div>
                 <b>Page references on every card.</b>
                 <span>Click a citation and the original slide slides into focus instantly.</span>
               </div>
             </li>
-            <li>
+            <li data-reveal style="--reveal-delay: 60ms">
               <span class="tick">✓</span>
               <div>
                 <b>Coverage ledger.</b>
@@ -1078,7 +1705,7 @@
                 >
               </div>
             </li>
-            <li>
+            <li data-reveal style="--reveal-delay: 120ms">
               <span class="tick">✓</span>
               <div>
                 <b>Quality pass.</b>
@@ -1091,30 +1718,48 @@
           </ul>
 
           <!-- Interactive Feed Selector -->
-          <div class="playground-feed">
-            <div class="card-item active" data-slide="slide-overfit">
+          <div class="playground-feed" role="tablist" aria-label="Example cards" data-reveal>
+            <button
+              type="button"
+              class="card-item active"
+              data-slide="slide-overfit"
+              role="tab"
+              aria-selected="true"
+            >
               <span class="card-item-tag">Concept: Overfitting · Slide 46</span>
               <span class="card-item-title"
                 >How does an overfit model differ from an underfit model?</span
               >
-            </div>
-            <div class="card-item" data-slide="slide-concept">
+            </button>
+            <button
+              type="button"
+              class="card-item"
+              data-slide="slide-concept"
+              role="tab"
+              aria-selected="false"
+            >
               <span class="card-item-tag">Concept: Concept Mapping · Slide 3</span>
               <span class="card-item-title"
                 >What is the purpose of building a concept map during ingestion?</span
               >
-            </div>
-            <div class="card-item" data-slide="slide-ankiconnect">
+            </button>
+            <button
+              type="button"
+              class="card-item"
+              data-slide="slide-ankiconnect"
+              role="tab"
+              aria-selected="false"
+            >
               <span class="card-item-tag">Concept: Synchronization · Slide 70</span>
               <span class="card-item-title"
                 >How does Lectern prevent duplicate card creation in Anki?</span
               >
-            </div>
+            </button>
           </div>
         </div>
 
         <!-- Right Column: Live Grounded Preview Display -->
-        <div class="playground-display">
+        <div class="playground-display" data-reveal style="--reveal-delay: 80ms">
           <!-- Grounded card rendering (updates based on selected item) -->
           <div class="grounded-card">
             <div id="card-content-area">
@@ -1143,70 +1788,72 @@
             </div>
 
             <!-- Slide contents -->
-            <div class="slide-content-area active" id="slide-overfit">
-              <h3 class="slide-title">Model Generalization &amp; Fit</h3>
-              <ul class="slide-bullets">
-                <li>
-                  <b>Overfitting:</b> Occurs when model parameters learn training noise.
-                  <ul>
-                    <li>
-                      Result: <mark>training error is low</mark>, but
-                      <mark>test error is high</mark>.
-                    </li>
-                    <li>Causes: model capacity too high, or size of dataset too small.</li>
-                  </ul>
-                </li>
-                <li>
-                  <b>Underfitting:</b> Occurs when the model structure is too simple.
-                  <ul>
-                    <li>Result: training and test error are both high.</li>
-                  </ul>
-                </li>
-              </ul>
-            </div>
+            <div class="slide-stage">
+              <div class="slide-content-area active" id="slide-overfit">
+                <h3 class="slide-title">Model Generalization &amp; Fit</h3>
+                <ul class="slide-bullets">
+                  <li>
+                    <b>Overfitting:</b> Occurs when model parameters learn training noise.
+                    <ul>
+                      <li>
+                        Result: <mark>training error is low</mark>, but
+                        <mark>test error is high</mark>.
+                      </li>
+                      <li>Causes: model capacity too high, or size of dataset too small.</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <b>Underfitting:</b> Occurs when the model structure is too simple.
+                    <ul>
+                      <li>Result: training and test error are both high.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
 
-            <div class="slide-content-area" id="slide-concept">
-              <h3 class="slide-title">Concept Ingestion Pipeline</h3>
-              <ul class="slide-bullets">
-                <li>
-                  <b>Initial Pass:</b> Ingest PDF and build conceptual map tree.
-                  <ul>
-                    <li>Identifies core learning goals and term relationships page-by-page.</li>
-                    <li>Maintains a strict matrix ledger of coverage.</li>
-                  </ul>
-                </li>
-                <li>
-                  <b>Automated Planning:</b> Tracks and resolves information gaps.
-                  <ul>
-                    <li>
-                      Steers generation loops explicitly to <mark>track coverage</mark> and
-                      <mark>detect gaps</mark>.
-                    </li>
-                  </ul>
-                </li>
-              </ul>
-            </div>
+              <div class="slide-content-area" id="slide-concept">
+                <h3 class="slide-title">Concept Ingestion Pipeline</h3>
+                <ul class="slide-bullets">
+                  <li>
+                    <b>Initial Pass:</b> Ingest PDF and build conceptual map tree.
+                    <ul>
+                      <li>Identifies core learning goals and term relationships page-by-page.</li>
+                      <li>Maintains a strict matrix ledger of coverage.</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <b>Automated Planning:</b> Tracks and resolves information gaps.
+                    <ul>
+                      <li>
+                        Steers generation loops explicitly to <mark>track coverage</mark> and
+                        <mark>detect gaps</mark>.
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
 
-            <div class="slide-content-area" id="slide-ankiconnect">
-              <h3 class="slide-title">AnkiConnect Sync Protocol</h3>
-              <ul class="slide-bullets">
-                <li>
-                  <b>Export API:</b> Interfaces directly with local Anki database.
-                  <ul>
-                    <li>Requires AnkiConnect addon configured on port 8765.</li>
-                  </ul>
-                </li>
-                <li>
-                  <b>Idempotent Sync:</b> Keeps notes clean.
-                  <ul>
-                    <li>Each card has a persistent source hash.</li>
-                    <li>
-                      Re-running an ingestion <mark>updates existing notes in-place</mark> rather
-                      than creating duplicate cards.
-                    </li>
-                  </ul>
-                </li>
-              </ul>
+              <div class="slide-content-area" id="slide-ankiconnect">
+                <h3 class="slide-title">AnkiConnect Sync Protocol</h3>
+                <ul class="slide-bullets">
+                  <li>
+                    <b>Export API:</b> Interfaces directly with local Anki database.
+                    <ul>
+                      <li>Requires AnkiConnect addon configured on port 8765.</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <b>Idempotent Sync:</b> Keeps notes clean.
+                    <ul>
+                      <li>Each card has a persistent source hash.</li>
+                      <li>
+                        Re-running an ingestion <mark>updates existing notes in-place</mark> rather
+                        than creating duplicate cards.
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <div class="slide-footer-bar">
@@ -1221,7 +1868,7 @@
     <!-- How it works pipeline -->
     <section class="how" id="how">
       <div class="wrap">
-        <div class="section-intro">
+        <div class="section-intro" data-reveal>
           <p class="eyebrow">One lecture in, one deck out</p>
           <h2>How it works</h2>
           <p style="margin-top: 14px; color: var(--chalk-dim); max-width: 60ch">
@@ -1232,7 +1879,7 @@
         </div>
 
         <div class="steps">
-          <div class="step">
+          <div class="step" data-reveal>
             <div class="step-icon">
               <svg
                 viewBox="0 0 24 24"
@@ -1259,7 +1906,7 @@
             </p>
           </div>
 
-          <div class="step">
+          <div class="step" data-reveal style="--reveal-delay: 60ms">
             <div class="step-icon">
               <svg
                 viewBox="0 0 24 24"
@@ -1284,7 +1931,7 @@
             </p>
           </div>
 
-          <div class="step">
+          <div class="step" data-reveal style="--reveal-delay: 120ms">
             <div class="step-icon">
               <svg
                 viewBox="0 0 24 24"
@@ -1308,7 +1955,7 @@
             </p>
           </div>
 
-          <div class="step">
+          <div class="step" data-reveal style="--reveal-delay: 180ms">
             <div class="step-icon">
               <svg
                 viewBox="0 0 24 24"
@@ -1338,7 +1985,7 @@
 
     <!-- Static Preview Screenshot -->
     <section class="peek wrap">
-      <figure>
+      <figure data-reveal>
         <div class="peek-window">
           <img
             src="assets/slide-peek.png"
@@ -1352,15 +1999,17 @@
 
     <!-- Installation and CLI terminal component -->
     <section class="install wrap" id="install">
-      <p class="eyebrow">A ~10 MB desktop app</p>
-      <h2>Put a lecture on the desk</h2>
-      <p class="body">
-        You need Anki with the AnkiConnect add-on and a free Gemini API key. A typical 70-page
-        lecture costs between a few cents and about a dollar in Gemini usage. Lectern itself is
-        free.
-      </p>
+      <div data-reveal>
+        <p class="eyebrow">A ~10 MB desktop app</p>
+        <h2>Put a lecture on the desk</h2>
+        <p class="body">
+          You need Anki with the AnkiConnect add-on and a free Gemini API key. A typical 70-page
+          lecture costs between a few cents and about a dollar in Gemini usage. Lectern itself is
+          free.
+        </p>
+      </div>
 
-      <div class="terminal-container">
+      <div class="terminal-container" data-reveal style="--reveal-delay: 80ms">
         <div class="terminal-block">
           <div class="terminal-header">
             <span class="terminal-dot red"></span>
@@ -1377,26 +2026,42 @@
               class="copy-btn"
               onclick="copyCommand(this, 'brew install --cask stegra05/tap/lectern')"
             >
-              <svg
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
+              <span class="copy-icons">
+                <svg
+                  class="ic-copy"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <svg
+                  class="ic-check"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
               <span>Copy</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div class="cta-row">
+      <div class="cta-row" data-reveal style="--reveal-delay: 140ms">
         <a class="btn btn-primary" href="https://github.com/stegra05/Lectern/releases/latest"
           >Download Desktop App</a
         >
@@ -1406,7 +2071,7 @@
     </section>
 
     <!-- Footer -->
-    <footer class="wrap">
+    <footer>
       <div class="wrap">
         <span>© 2026 Steffen Grabert · MIT License</span>
         <span>
@@ -1421,17 +2086,23 @@
 
     <!-- Page Interactivity Scripts -->
     <script>
+      document.documentElement.classList.add('js')
+
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+      const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
+
       // Copy Command to Clipboard
+      let copyResetTimer
       function copyCommand(btn, text) {
         navigator.clipboard
           .writeText(text)
           .then(() => {
-            const span = btn.querySelector('span')
-            const origText = span.textContent
+            const span = btn.querySelector('.copy-icons + span')
             span.textContent = 'Copied!'
             btn.classList.add('copied')
-            setTimeout(() => {
-              span.textContent = origText
+            clearTimeout(copyResetTimer)
+            copyResetTimer = setTimeout(() => {
+              span.textContent = 'Copy'
               btn.classList.remove('copied')
             }, 2000)
           })
@@ -1440,9 +2111,305 @@
           })
       }
 
+      // Header scroll edge effect: the material only appears once content
+      // actually scrolls underneath the bar.
+      const header = document.querySelector('header')
+      const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 8)
+      window.addEventListener('scroll', onScroll, { passive: true })
+      onScroll()
+
+      // Scroll reveal (once, unobserve after entry)
+      const revealTargets = document.querySelectorAll('[data-reveal]')
+      if ('IntersectionObserver' in window && !reducedMotion.matches) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('in')
+                io.unobserve(entry.target)
+              }
+            })
+          },
+          { rootMargin: '0px 0px -60px 0px' },
+        )
+        revealTargets.forEach((el) => io.observe(el))
+      } else {
+        revealTargets.forEach((el) => el.classList.add('in'))
+      }
+
+      // Pointer-tracked reading-lamp glow. The glow lags the pointer with a
+      // lerp so it has momentum instead of feeling stapled to the cursor.
+      const lampCursor = document.querySelector('.lamp-cursor')
+      if (lampCursor && finePointer.matches && !reducedMotion.matches) {
+        const half = 320 // half the glow's size
+        let targetX = 0
+        let targetY = 0
+        let x = 0
+        let y = 0
+        let raf = null
+        let started = false
+
+        const tick = () => {
+          x += (targetX - x) * 0.09
+          y += (targetY - y) * 0.09
+          lampCursor.style.transform = `translate3d(${x - half}px, ${y - half}px, 0)`
+          if (Math.abs(targetX - x) > 0.5 || Math.abs(targetY - y) > 0.5) {
+            raf = requestAnimationFrame(tick)
+          } else {
+            raf = null
+          }
+        }
+
+        window.addEventListener(
+          'pointermove',
+          (e) => {
+            targetX = e.clientX
+            targetY = e.clientY
+            if (!started) {
+              started = true
+              x = targetX
+              y = targetY
+              lampCursor.style.transform = `translate3d(${x - half}px, ${y - half}px, 0)`
+              lampCursor.classList.add('lit')
+            }
+            if (!raf) raf = requestAnimationFrame(tick)
+          },
+          { passive: true },
+        )
+      }
+
+      // ----- Hero deck: pick up, flick, flip -----
+      // Springs (velocity-aware, interruptible) instead of fixed-duration
+      // curves: the drag hands its release velocity to the spring, and
+      // momentum projection decides whether the card leaves or settles back.
+      const deck = document.getElementById('deck')
+      if (deck) {
+        const strip = document.querySelector('.filmstrip')
+        const tiles = strip ? Array.from(strip.querySelectorAll('.tile')) : []
+        const coverageNote = document.getElementById('coverage-note')
+        const covered = new Set()
+        const order = Array.from(deck.querySelectorAll('.deck-card'))
+        const states = new WeakMap()
+        let drag = null
+
+        const getState = (card) => {
+          if (!states.has(card)) states.set(card, { el: card, x: 0, y: 0, vx: 0, vy: 0, raf: null })
+          return states.get(card)
+        }
+
+        const render = (st) => {
+          st.el.style.transform = `translate3d(${st.x}px, ${st.y}px, 0) rotate(${st.x * 0.04}deg)`
+        }
+
+        const layout = () => {
+          order.forEach((card, i) => {
+            card.dataset.depth = String(Math.min(i, 3))
+            card.style.zIndex = String(order.length - i)
+            card.tabIndex = i === 0 ? 0 : -1
+          })
+        }
+        layout()
+
+        const markCovered = (card) => {
+          if (!strip) return
+          strip.classList.add('live')
+          const owned = (card.dataset.tiles || '').split(',').map(Number)
+          owned.forEach((t, j) => {
+            if (!tiles[t] || covered.has(t)) return
+            covered.add(t)
+            setTimeout(() => tiles[t].classList.add('covered'), 120 + j * 90)
+          })
+          if (coverageNote) coverageNote.textContent = ` · ${covered.size}/${tiles.length} covered`
+        }
+
+        const flip = (card) => {
+          const flipped = card.classList.toggle('flipped')
+          card.setAttribute('aria-pressed', String(flipped))
+        }
+
+        // Send the front card to the back of the pile. It re-enters from
+        // scale(0.88) + opacity 0 — never from nothing.
+        const recycle = (card) => {
+          const st = getState(card)
+          st.x = st.y = st.vx = st.vy = 0
+          card.classList.add('free')
+          card.classList.remove('flipped')
+          card.setAttribute('aria-pressed', 'false')
+          card.dataset.depth = '3'
+          card.style.transform = ''
+          void card.offsetHeight /* commit the back-of-pile position before transitions resume */
+          card.classList.remove('free')
+          order.push(order.shift())
+          layout()
+        }
+
+        // Critically damped by default; a touch of bounce only where the
+        // gesture carried momentum (Apple's damping/response parameters).
+        const springTo = (st, tx, ty, response, damping, done) => {
+          cancelAnimationFrame(st.raf)
+          const k = Math.pow((2 * Math.PI) / response, 2)
+          const c = 2 * damping * Math.sqrt(k)
+          let last = performance.now()
+          const step = (now) => {
+            const dt = Math.min((now - last) / 1000, 1 / 30)
+            last = now
+            st.vx += (-k * (st.x - tx) - c * st.vx) * dt
+            st.vy += (-k * (st.y - ty) - c * st.vy) * dt
+            st.x += st.vx * dt
+            st.y += st.vy * dt
+            render(st)
+            const settled =
+              Math.abs(st.x - tx) < 0.5 &&
+              Math.abs(st.y - ty) < 0.5 &&
+              Math.abs(st.vx) < 20 &&
+              Math.abs(st.vy) < 20
+            if (settled) {
+              st.raf = null
+              st.x = tx
+              st.y = ty
+              render(st)
+              if (done) done()
+            } else {
+              st.raf = requestAnimationFrame(step)
+            }
+          }
+          st.raf = requestAnimationFrame(step)
+        }
+
+        // Apple's momentum projection: where would the card coast to?
+        const project = (velocity, rate = 0.998) => ((velocity / 1000) * rate) / (1 - rate)
+        // Progressive resistance past the vertical bounds instead of a hard stop
+        const rubberband = (overshoot, dim, constant = 0.55) =>
+          (overshoot * dim * constant) / (dim + constant * Math.abs(overshoot))
+
+        const settleBack = (card) => {
+          card.classList.remove('free')
+          card.style.transform = ''
+        }
+
+        const dismiss = (card, st, targetX) => {
+          springTo(st, targetX, st.y, 0.5, 1, () => {
+            markCovered(card)
+            recycle(card)
+          })
+        }
+
+        const advance = () => {
+          if (drag) return
+          const card = order[0]
+          if (reducedMotion.matches) {
+            markCovered(card)
+            recycle(card)
+            return
+          }
+          card.classList.add('free')
+          dismiss(card, getState(card), deck.offsetWidth + 140)
+        }
+
+        const nextBtn = document.getElementById('deck-next')
+        if (nextBtn) nextBtn.addEventListener('click', advance)
+
+        if (!reducedMotion.matches) {
+          deck.addEventListener('pointerdown', (e) => {
+            const card = e.target.closest('.deck-card')
+            if (!card || card !== order[0] || drag) return
+            if (e.pointerType === 'mouse' && e.button !== 0) return
+            e.preventDefault()
+            const st = getState(card)
+            // Interruptible: grabbing a card mid-flight stops the spring and
+            // continues from the current on-screen value.
+            cancelAnimationFrame(st.raf)
+            st.raf = null
+            drag = {
+              card,
+              st,
+              id: e.pointerId,
+              startX: e.clientX,
+              startY: e.clientY,
+              baseX: st.x, // respect where the card was grabbed
+              baseY: st.y,
+              hist: [],
+              moved: false,
+            }
+            card.setPointerCapture(e.pointerId)
+            card.classList.add('free', 'dragging')
+            render(st)
+          })
+
+          deck.addEventListener('pointermove', (e) => {
+            if (!drag || e.pointerId !== drag.id) return
+            const dx = e.clientX - drag.startX
+            const dy = e.clientY - drag.startY
+            if (!drag.moved && Math.hypot(dx, dy) > 8) drag.moved = true // hysteresis before it's a drag
+            drag.st.x = drag.baseX + dx
+            drag.st.y = rubberband(drag.baseY + dy, deck.offsetHeight)
+            drag.hist.push({ t: e.timeStamp, x: e.clientX })
+            if (drag.hist.length > 6) drag.hist.shift()
+            render(drag.st)
+          })
+
+          const endDrag = (e) => {
+            if (!drag || e.pointerId !== drag.id) return
+            const { card, st, hist, moved } = drag
+            drag = null
+            card.classList.remove('dragging')
+            if (!moved) {
+              // It was a tap. If the card was grabbed mid-flight, let it
+              // settle first instead of hard-cutting to rest.
+              if (Math.abs(st.x) < 1 && Math.abs(st.y) < 1) {
+                settleBack(card)
+                flip(card)
+              } else {
+                springTo(st, 0, 0, 0.4, 1, () => settleBack(card))
+              }
+              return
+            }
+            let vx = 0
+            const first = hist[0]
+            const lastSample = hist[hist.length - 1]
+            if (first && lastSample && lastSample.t > first.t) {
+              vx = ((lastSample.x - first.x) / (lastSample.t - first.t)) * 1000 // px/s
+            }
+            st.vx = vx // velocity handoff: the spring starts at the finger's speed
+            const destination = st.x + project(vx)
+            if (Math.abs(destination) > deck.offsetWidth * 0.55) {
+              dismiss(card, st, Math.sign(destination || 1) * (deck.offsetWidth + 140))
+            } else {
+              // A flick that stays gets a little bounce — it carried momentum
+              springTo(st, 0, 0, 0.4, 0.8, () => settleBack(card))
+            }
+          }
+          deck.addEventListener('pointerup', endDrag)
+          deck.addEventListener('pointercancel', endDrag)
+        } else {
+          // No drag physics under reduced motion; tap still flips (crossfade)
+          deck.querySelectorAll('.deck-hint').forEach((el) => (el.textContent = 'tap to flip'))
+          deck.addEventListener('click', (e) => {
+            const card = e.target.closest('.deck-card')
+            if (card && card === order[0]) flip(card)
+          })
+        }
+
+        deck.addEventListener('keydown', (e) => {
+          const card = e.target.closest('.deck-card')
+          if (!card || card !== order[0] || drag) return
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            flip(card)
+          } else if (e.key === 'ArrowRight') {
+            // Keyboard-initiated: no travel animation, just the result
+            e.preventDefault()
+            markCovered(card)
+            recycle(card)
+            order[0].focus()
+          }
+        })
+      }
+
       // Interactive Grounded Playground Selection
       const cardItems = document.querySelectorAll('.card-item')
       const slides = document.querySelectorAll('.slide-content-area')
+      const groundedCard = document.querySelector('.grounded-card')
 
       // Interactive card details content
       const cardData = {
@@ -1475,38 +2442,41 @@
       const displayConcept = document.getElementById('display-concept')
       const displaySlidePage = document.getElementById('display-slide-page')
 
+      let swapTimer
+      let activeSlideId = 'slide-overfit'
+
       cardItems.forEach((item) => {
         item.addEventListener('click', () => {
-          // Toggle Active Card class
-          cardItems.forEach((c) => c.classList.remove('active'))
-          item.classList.add('active')
-
-          // Toggle Active Slide contents
           const targetSlideId = item.getAttribute('data-slide')
-          slides.forEach((s) => s.classList.remove('active'))
-          document.getElementById(targetSlideId).classList.add('active')
+          if (targetSlideId === activeSlideId) return
+          activeSlideId = targetSlideId
 
-          // Transition & Update grounded card text details
+          // Toggle active card
+          cardItems.forEach((c) => {
+            const isActive = c === item
+            c.classList.toggle('active', isActive)
+            c.setAttribute('aria-selected', String(isActive))
+          })
+
+          // Crossfade the slide stack (transitions retarget on rapid clicks)
+          slides.forEach((s) => s.classList.toggle('active', s.id === targetSlideId))
+
+          // Crossfade the grounded card text: blur+fade out, swap, fade in
           const data = cardData[targetSlideId]
           if (data) {
-            // Subtle fade transition for the text container
-            const contentArea = document.getElementById('card-content-area')
-            contentArea.style.opacity = 0
-            setTimeout(() => {
+            groundedCard.classList.add('swapping')
+            clearTimeout(swapTimer)
+            swapTimer = setTimeout(() => {
               displayQ.textContent = data.q
               displayA.innerHTML = data.a
               displayRef.textContent = data.ref
               displayConcept.textContent = data.concept
               displaySlidePage.textContent = data.pageText
-              contentArea.style.opacity = 1
+              groundedCard.classList.remove('swapping')
             }, 150)
           }
         })
       })
-
-      // Add transitions support to grounded card container
-      const contentArea = document.getElementById('card-content-area')
-      contentArea.style.transition = 'opacity 0.2s ease'
     </script>
   </body>
 </html>
