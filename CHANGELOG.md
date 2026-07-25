@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.9.0 (2026-07-25)
+
+### Added
+- The home view shows the run's estimated token count next to the price.
+  The ceiling most people meet first is a quota, not a bill.
+
+### Changed
+- **Rate limits are visible instead of silent**: a throttled run used to
+  look like a hung one. Every wait now appears in the activity log —
+  "Gemini rate limit reached — waiting 30s (retry 1 of 5)" — and the
+  server's own retry-after is honoured over Lectern's backoff.
+
+### Fixed
+- When the retries run out, the error no longer promises a retry that is
+  not coming. It tells apart a spent per-minute limit from an exhausted
+  daily quota — waiting only helps for one of them — and says plainly that
+  the cards generated so far are kept.
+
 ## 2.8.0 (2026-07-25)
 
 ### Added
