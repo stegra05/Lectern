@@ -149,7 +149,7 @@ describe('runFollowUp (scripted)', () => {
           },
         ],
       },
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       apiKey: 'test-key',
       fetchFn: makeScriptedFetch(captured),
       emit: (e) => events.push(e),

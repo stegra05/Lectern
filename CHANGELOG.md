@@ -1,8 +1,33 @@
 # Changelog
 
+## 2.12.0 (2026-07-25)
+
+### Changed
+
+- **Lectern runs on Gemini 3.6 Flash.** The new Flash is cheaper per output
+  token ($7.50 per million against 3.5's $9.00) and writes fewer of them —
+  Google measures about 17% fewer — so a typical run costs roughly 5–7% less
+  end to end. Most of a run's bill is the lecture PDF being re-read on each
+  round, which is why the headline saving lands softer than the price drop.
+  It also plans better: it reaches the same deck in fewer tool calls and
+  fewer rounds, and edits during review with more precision, so the loop
+  spends less time going in circles.
+- **A deck you already had keeps the model you already chose — unless that
+  model is gone.** A saved setting wins over the built-in default, so
+  bumping the default alone would have left every existing install on 3.5
+  Flash, quietly paying the older rate forever. Settings now carry a retired
+  model forward to the one that replaced it, and a model id Lectern no
+  longer offers falls back to the default rather than being sent to the API
+  and rejected. Choosing Gemini 3.1 Pro is still your choice to make, and it
+  is left alone.
+- Gemini 3.6 retires the `temperature`, `top_p` and `top_k` sampling knobs.
+  Lectern never used them — card tone and length come from the prompts and
+  the quality gate — so nothing about the cards changes here.
+
 ## 2.11.0 (2026-07-25)
 
 ### Fixed
+
 - **Tags keep the letters of every language.** Tag parts were filtered to
   ASCII, so a German lecture filed itself under `K-nstliche-Intelligenz`,
   `Übungsblatt` lost its first letter entirely, and a CJK topic cleaned to
@@ -33,6 +58,7 @@
   card broken by an edit went out looking clean.
 
 ### Changed
+
 - **Grounding is checked, not taken on trust.** Lectern already read the
   PDF's text; it now keeps it, and flags a card whose source excerpt is
   absent from the page it cites. Pages the document does not have are
@@ -66,6 +92,7 @@
   are re-uploaded rather than assumed.
 
 ### Accessibility
+
 - The focus ring is visible on paper (it was 2.05:1), dimmed text on the desk
   meets 4.5:1, error messages and the activity log can be selected and
   copied, the card grid is a listbox that moves focus with the selection, the
@@ -76,6 +103,7 @@
 ## 2.10.0 (2026-07-25)
 
 ### Added
+
 - **Extend a deck instead of replacing it**: re-run a lecture into a deck
   that already holds cards and Lectern reads them back out of Anki first,
   then generates only what is missing. The deck field offers "Don't repeat
@@ -94,6 +122,7 @@
   adding, which it will say.
 
 ### Fixed
+
 - A deck holding several lectures no longer confuses whose pages are whose.
   Page numbers only mean something next to their own document, so cards from
   another lecture keep their place in the duplicate check but do not mark
@@ -104,16 +133,19 @@
 ## 2.9.0 (2026-07-25)
 
 ### Added
+
 - The home view shows the run's estimated token count next to the price.
   The ceiling most people meet first is a quota, not a bill.
 
 ### Changed
+
 - **Rate limits are visible instead of silent**: a throttled run used to
   look like a hung one. Every wait now appears in the activity log —
   "Gemini rate limit reached — waiting 30s (retry 1 of 5)" — and the
   server's own retry-after is honoured over Lectern's backoff.
 
 ### Fixed
+
 - When the retries run out, the error no longer promises a retry that is
   not coming. It tells apart a spent per-minute limit from an exhausted
   daily quota — waiting only helps for one of them — and says plainly that
@@ -122,6 +154,7 @@
 ## 2.8.0 (2026-07-25)
 
 ### Added
+
 - **Tells you when the deck is ready**: a run that finishes raises a desktop
   notification and bounces the dock, so you can start it and go do something
   else. Only when Lectern is in the background — if you are watching the
@@ -132,6 +165,7 @@
 ## 2.7.0 (2026-07-25)
 
 ### Changed
+
 - **Room to write a real brief**: the focus field holds 600 characters
   instead of 180, and the follow-up composer 1000 instead of 500. A counter
   appears once either is more than half full.
@@ -146,15 +180,17 @@
 ## 2.6.0 (2026-07-25)
 
 ### Added
+
 - **Copy the concept map**: the map sheet gains a Copy button with two
-  formats. *Outline* produces Markdown with each concept's relations nested
+  formats. _Outline_ produces Markdown with each concept's relations nested
   beneath it, so RemNote, Notion, and Obsidian turn them into child items
-  rather than a flat wall of text. *Diagram* produces a Mermaid graph that
+  rather than a flat wall of text. _Diagram_ produces a Mermaid graph that
   renders in the same apps without a plugin, with importance carried in the
   node shape as well as the colour so the ranking survives renderers that
   ignore styling.
 
 ### Changed
+
 - **The concept list reads like the outline it exports**: section headings
   stay put while their group scrolls and carry a count, each concept's
   relations sit beneath it in the same wording the export uses, and
@@ -167,6 +203,7 @@
 ## 2.5.0 (2026-07-09)
 
 ### Added
+
 - **Ask for more cards**: once generation finishes, the activity log grows a
   small composer. Type a request in plain language — "add cards on the trolley
   problem", "emphasize the Rawls slides" — and Lectern adds matching cards to
@@ -180,6 +217,7 @@
   with one click. Page citations are never invented.
 
 ### Changed
+
 - After the deck is complete, the sidebar counts the live deck size instead of
   the original generation budget, so follow-up additions show up immediately.
 - Batch feedback to the model now names duplicate submissions instead of only
@@ -187,6 +225,7 @@
   resubmitting the same cards.
 
 ### Fixed
+
 - A network blip mid-generation no longer kills the run: dropped connections
   retry like server errors, while unrecoverable client errors (a rejected API
   key, a malformed request) stop immediately instead of retrying for minutes.
@@ -196,6 +235,7 @@
 ## 2.4.0 (2026-07-08)
 
 ### Changed
+
 - **Activity log redesigned as session minutes**: every event is stamped with
   the elapsed session time, and the model's own words (the quality review
   summary, the front of a rejected card) appear as quoted excerpts you can
@@ -206,6 +246,7 @@
 ## 2.3.0 (2026-07-08)
 
 ### Added
+
 - **Concept map graph**: the extracted concepts are now drawn as an interactive
   map. Concepts are sized by importance, connected by the relations Gemini
   found in the lecture, and lit amber as cards cover them. Click a concept to
@@ -218,6 +259,7 @@
 ## 2.2.0 (2026-07-08)
 
 ### Added
+
 - **Lectern card design in Anki**: cards now sync to bundled "Lectern Basic" and
   "Lectern Cloze" note types that Lectern installs into your collection. Every
   card shows its topic, where it came from ("ML Foundations · pp. 23-24"), and
@@ -231,6 +273,7 @@
 - Procedure cards: ordered lists where each step is its own cloze card.
 
 ### Changed
+
 - Card tiles in the review list match the synced card anatomy (topic line,
   amber answer rule, source excerpt fold).
 
@@ -240,6 +283,7 @@ Settings → Card design.
 ## 2.1.0 (2026-07-08)
 
 ### Added
+
 - **Automatic updates**: Lectern now checks for new versions on launch and offers
   to install them in place. Update packages are cryptographically signed and
   verified before anything is replaced. On Linux this applies to the AppImage only.
@@ -251,6 +295,7 @@ Installs of 2.0.0 predate the updater, so this last hop is a manual download.
 Complete from-scratch rebuild as a Tauri 2 desktop app.
 
 ### Added
+
 - **Agentic generation**: Gemini plans its own batches through a tool loop
   (`submit_cards` / `finish_generation`) and receives an updated coverage ledger
   after every batch: which pages, concepts, and relations still lack cards.
@@ -266,6 +311,7 @@ Complete from-scratch rebuild as a Tauri 2 desktop app.
 - Gemini API key stored in the OS keychain, never on disk.
 
 ### Changed
+
 - No backend: the entire pipeline is TypeScript running in-process. The Python/
   FastAPI/PyWebView stack of v1 (~40k LOC) is replaced by ~6k LOC including tests.
 - Distribution is a ~10 MB native bundle instead of a PyInstaller archive.

@@ -64,16 +64,27 @@ export const MAX_FOLLOWUP_ROUNDS = 6
 
 // --- Gemini ----------------------------------------------------------------
 
-export const DEFAULT_MODEL = 'gemini-3.5-flash'
+export const DEFAULT_MODEL = 'gemini-3.6-flash'
 export const MODEL_CHOICES = [
-  { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash — fast, agentic (recommended)' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash — fast, agentic (recommended)' },
   { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro — deepest reasoning, slower' },
 ] as const
 
+/** Models that were once offered and no longer are. A saved setting wins over
+ *  DEFAULT_MODEL on load, so without this an existing install would sit on a
+ *  retired id forever — and keep paying the older, higher output rate. */
+export const MODEL_MIGRATIONS: Record<string, string> = {
+  'gemini-3.5-flash': 'gemini-3.6-flash',
+  'gemini-3-flash': 'gemini-3.6-flash',
+  'gemini-3-pro': 'gemini-3.1-pro-preview',
+}
+
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high'
-/** Thinking effort per phase. `low` is retuned in 3.5 Flash for agentic
- *  loops (few steps per decision); the one-shot document analysis gets
- *  `high`, and review edits sit in between. */
+/** Thinking effort per phase. All four levels carry over unchanged in 3.6
+ *  Flash (the API default moved to `medium`, but every call here sets the
+ *  level explicitly). `low` suits the agentic loops — few steps per decision,
+ *  and 3.6 needs fewer still; the one-shot document analysis gets `high`, and
+ *  review edits sit in between. */
 export const THINKING_BY_PHASE = {
   mapping: 'high',
   generating: 'low',
@@ -83,7 +94,8 @@ export const THINKING_BY_PHASE = {
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
 /** Pins the May-2026 Interactions API schema (`steps` timeline) — required
- *  when not going through an official SDK. */
+ *  when not going through an official SDK. Still the current revision for
+ *  3.6 Flash; the model bump introduced no new one. */
 export const GEMINI_API_REVISION = '2026-05-20'
 
 // --- Retry -----------------------------------------------------------------
@@ -96,10 +108,15 @@ export const UPLOAD_MAX_RETRIES = 3
 export const FILE_ACTIVE_TIMEOUT_MS = 120_000
 
 // --- Pricing (USD per million tokens: [input, output]) ---------------------
-// Approximate — shown to the user as an estimate only.
+// Approximate — shown to the user as an estimate only. Output prices include
+// thinking tokens, which Google bills as output; usage accounting adds
+// total_thought_tokens into outputTokens to match.
+// Retired ids stay listed so a saved run's recorded cost still resolves.
 
 export const GEMINI_PRICING: Record<string, [number, number]> = {
+  'gemini-3.6-flash': [1.5, 7.5],
   'gemini-3.5-flash': [1.5, 9.0],
+  'gemini-3.5-flash-lite': [0.3, 2.5],
   'gemini-3.1-pro-preview': [2.0, 12.0],
   'gemini-3-pro': [2.0, 12.0],
   'gemini-3-flash': [0.5, 3.0],

@@ -7,7 +7,7 @@
  *                    batch is quality-gated and deduped, and the tool result
  *                    feeds back verdicts + a fresh coverage ledger so the
  *                    model plans the next batch itself (thinking: low, the
- *                    3.5-Flash agentic mode)
+ *                    Flash agentic mode)
  *   3. reflecting  — agentic review loop: the model edits the deck through
  *                    update_card / add_cards / remove_cards, each edit gated
  *                    like generation, until finish_review (thinking: medium)

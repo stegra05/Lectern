@@ -1,8 +1,10 @@
 /**
- * The prompt library, rewritten for the Gemini 3.5 generation. Official 3.x
+ * The prompt library, written for the Gemini 3.x generation. Official 3.x
  * guidance: concise direct instructions, goals stated positively, no
  * chain-of-thought coaching (thinking_level does that), steering through
- * mission briefs rather than per-round pressure.
+ * mission briefs rather than per-round pressure. Sampling knobs are not part
+ * of the toolkit — temperature/top_p/top_k are deprecated from 3.6 on, so
+ * tone, length and format are steered from the instructions below.
  *
  * The constraints themselves (MathJax delimiters, HTML-not-Markdown, cloze
  * limits, self-containment, grounding metadata) describe the Anki renderer

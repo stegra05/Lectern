@@ -84,7 +84,7 @@ const makeClient = (fetchFn: typeof fetch): AnkiClient =>
 // --- Fixtures ------------------------------------------------------------------
 
 const makeSettings = (overrides: Partial<Settings> = {}): Settings => ({
-  model: 'gemini-3.5-flash',
+  model: 'gemini-3.6-flash',
   ankiUrl: BASE_URL,
   // Off by default so the fixtures exercise the classic Basic/Cloze paths;
   // the bundled-note-type behavior gets dedicated tests.

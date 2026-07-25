@@ -181,7 +181,7 @@ export type PipelineSink = (event: PipelineEvent) => void
 // ---------------------------------------------------------------------------
 
 export interface Settings {
-  /** Gemini model id, e.g. "gemini-3.5-flash" */
+  /** Gemini model id, e.g. "gemini-3.6-flash" */
   model: string
   ankiUrl: string
   /** Install and sync to the bundled "Lectern Basic"/"Lectern Cloze" note

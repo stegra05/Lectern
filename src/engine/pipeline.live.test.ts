@@ -45,7 +45,7 @@ describe.skipIf(!apiKey)('pipeline live E2E', () => {
         pdfInfo,
         fileName: 'test_script.pdf',
         userTargetCards: 6,
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         apiKey: apiKey ?? '',
         fetchFn: fetch,
         emit: (e) => {

@@ -8,7 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { load, type Store } from '@tauri-apps/plugin-store'
-import { DEFAULT_SETTINGS } from '../engine/config'
+import { DEFAULT_MODEL, DEFAULT_SETTINGS, MODEL_CHOICES, MODEL_MIGRATIONS } from '../engine/config'
 import type { Settings } from '../engine/types'
 import { IS_TAURI } from './platform'
 
@@ -23,14 +23,28 @@ function getStore(): Promise<Store> {
   return storePromise
 }
 
+/** Carry a saved model id forward to the one that replaced it. A saved value
+ *  the picker no longer offers cannot be corrected from the UI, so anything
+ *  unrecognized falls back to the default rather than being sent to the API. */
+export function migrateModel(model: string | undefined): string {
+  if (!model) return DEFAULT_MODEL
+  const mapped = MODEL_MIGRATIONS[model] ?? model
+  return MODEL_CHOICES.some((m) => m.id === mapped) ? mapped : DEFAULT_MODEL
+}
+
+function withMigrations(saved: Partial<Settings>): Settings {
+  const merged = { ...DEFAULT_SETTINGS, ...saved }
+  return { ...merged, model: migrateModel(merged.model) }
+}
+
 export async function loadSettings(): Promise<Settings> {
   if (!IS_TAURI) {
     const raw = localStorage.getItem(LS_SETTINGS)
-    return { ...DEFAULT_SETTINGS, ...(raw ? (JSON.parse(raw) as Partial<Settings>) : {}) }
+    return withMigrations(raw ? (JSON.parse(raw) as Partial<Settings>) : {})
   }
   const store = await getStore()
   const saved = (await store.get<Partial<Settings>>('settings')) ?? {}
-  return { ...DEFAULT_SETTINGS, ...saved }
+  return withMigrations(saved)
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
