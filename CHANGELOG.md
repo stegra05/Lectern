@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.7.0 (2026-07-25)
+
+### Changed
+- **Room to write a real brief**: the focus field holds 600 characters
+  instead of 180, and the follow-up composer 1000 instead of 500. A counter
+  appears once either is more than half full.
+- The follow-up composer is now a textarea that grows to fit what you typed
+  — a one-line input was hiding requests that ran to a paragraph. Enter
+  still sends; Shift+Enter breaks the line.
+- Line breaks in a focus note survive as separators instead of being
+  flattened to spaces, so a pasted list keeps its item boundaries. They are
+  still never sent as newlines, which is what stops a pasted note from
+  impersonating an instruction.
+
 ## 2.6.0 (2026-07-25)
 
 ### Added
