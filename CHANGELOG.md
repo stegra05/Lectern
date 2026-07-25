@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.8.0 (2026-07-25)
+
+### Added
+- **Tells you when the deck is ready**: a run that finishes raises a desktop
+  notification and bounces the dock, so you can start it and go do something
+  else. Only when Lectern is in the background — if you are watching the
+  cards land, you already know. Failures notify too, since that is exactly
+  what you walked away expecting not to happen. There is an off switch in
+  Settings.
+
 ## 2.7.0 (2026-07-25)
 
 ### Changed
