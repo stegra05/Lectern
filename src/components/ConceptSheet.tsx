@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Concept, ConceptMap, Importance } from '../engine/types'
+import { conceptMapToMarkdown, conceptMapToMermaid, relationsFor } from '../engine/conceptExport'
+import type { Concept, ConceptMap, Difficulty, Importance } from '../engine/types'
+import { copyText } from '../lib/clipboard'
 import { useLectern } from '../state/store'
 import { ConceptGraph, humanizeRelation, type ConceptState } from './ConceptGraph'
 
@@ -23,18 +25,24 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
   const peekSlide = useLectern((s) => s.peekSlide)
   const [view, setView] = useState<'graph' | 'list'>('graph')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  // Read by the Esc handler without re-binding the listener per selection.
+  const [copyOpen, setCopyOpen] = useState(false)
+  // Read by the Esc handler without re-binding the listener per change.
   const selectedRef = useRef(selectedId)
+  const copyOpenRef = useRef(copyOpen)
   useEffect(() => {
     selectedRef.current = selectedId
   }, [selectedId])
+  useEffect(() => {
+    copyOpenRef.current = copyOpen
+  }, [copyOpen])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.stopPropagation()
-      // First Esc clears a selected node, the next closes the sheet.
-      if (selectedRef.current) setSelectedId(null)
+      // Esc unwinds one layer at a time: menu, then selection, then the sheet.
+      if (copyOpenRef.current) setCopyOpen(false)
+      else if (selectedRef.current) setSelectedId(null)
       else onClose()
     }
     window.addEventListener('keydown', onKeyDown, true)
@@ -76,6 +84,7 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
             {coverage && ` · ${Math.round(coverage.effectiveConceptCoveragePercent)}% covered`}
           </span>
           <div className="flex-1" />
+          <CopyMenu conceptMap={conceptMap} open={copyOpen} setOpen={setCopyOpen} />
           <div
             className="border-desk-edge/60 flex overflow-hidden rounded-md border"
             role="group"
@@ -132,60 +141,29 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
             </footer>
           </>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-5">
-            <div className="mx-auto max-w-xl">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+            <div className="mx-auto max-w-2xl">
               {IMPORTANCE_ORDER.map((importance) => {
                 const group = conceptMap.concepts.filter((c) => c.importance === importance)
                 if (group.length === 0) return null
                 return (
-                  <section key={importance} className="mt-3 first:mt-0">
-                    <h3 className="eyebrow mb-1.5">{IMPORTANCE_LABEL[importance]}</h3>
-                    <ul className="space-y-px">
-                      {group.map((c) => {
-                        const state = stateOf(c)
-                        return (
-                          <li key={c.id} className="flex items-baseline gap-2.5 py-1">
-                            <span
-                              title={
-                                state === 'covered'
-                                  ? 'Covered by a card'
-                                  : state === 'inferred'
-                                    ? 'Likely covered — cards exist on its pages'
-                                    : 'No card yet'
-                              }
-                              className={`size-1.5 shrink-0 self-center rounded-full ${
-                                state === 'covered'
-                                  ? 'bg-lamp'
-                                  : state === 'inferred'
-                                    ? 'bg-lamp/40'
-                                    : 'bg-desk-edge'
-                              }`}
-                            />
-                            <span
-                              className={`min-w-0 flex-1 text-sm ${
-                                state === 'open' ? 'text-chalk-dim' : 'text-chalk'
-                              }`}
-                            >
-                              {c.name}
-                              <span className="text-chalk-dim/70 font-data ml-2 text-2xs">
-                                {c.difficulty}
-                              </span>
-                            </span>
-                            <span className="font-data shrink-0 text-2xs">
-                              {c.pageReferences.map((p, i) => (
-                                <button
-                                  key={p}
-                                  onClick={() => openPage(p)}
-                                  className="text-chalk-dim hover:text-lamp rounded-sm underline-offset-2 transition-colors duration-150 hover:underline"
-                                  aria-label={`View slide ${p}`}
-                                >
-                                  {i > 0 && ', '}p. {p}
-                                </button>
-                              ))}
-                            </span>
-                          </li>
-                        )
-                      })}
+                  <section key={importance}>
+                    {/* The heading stays put while its own group scrolls under
+                        it, so a long map never loses its place. */}
+                    <h3 className="bg-desk-raised border-desk-edge/60 sticky top-0 z-10 flex items-baseline gap-2 border-b pt-4 pb-1.5">
+                      <span className="eyebrow">{IMPORTANCE_LABEL[importance]}</span>
+                      <span className="font-data text-chalk-dim/60 text-2xs">{group.length}</span>
+                    </h3>
+                    <ul>
+                      {group.map((c) => (
+                        <ConceptRow
+                          key={c.id}
+                          concept={c}
+                          state={stateOf(c)}
+                          conceptMap={conceptMap}
+                          onOpenPage={openPage}
+                        />
+                      ))}
                     </ul>
                   </section>
                 )
@@ -200,6 +178,205 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
 
 function Dot({ className }: { className: string }) {
   return <span aria-hidden className={`inline-block size-1.5 rounded-full ${className}`} />
+}
+
+/** Page links per row before the rest collapse into a "+n". */
+const PAGE_REFS_SHOWN = 4
+
+const DIFFICULTY_STEPS: Record<Difficulty, number> = {
+  foundational: 1,
+  intermediate: 2,
+  advanced: 3,
+}
+
+/** Difficulty as three rungs rather than the word. Repeated down every row,
+ *  "foundational" is noise; a shape you can scan in peripheral vision is not. */
+function DifficultyMeter({ difficulty }: { difficulty: Difficulty }) {
+  const filled = DIFFICULTY_STEPS[difficulty]
+  return (
+    <span
+      className="flex shrink-0 items-end gap-px"
+      title={`${difficulty} — ${filled} of 3`}
+      aria-label={difficulty}
+    >
+      {[1, 2, 3].map((step) => (
+        <span
+          key={step}
+          className={`w-0.5 rounded-full ${step <= filled ? 'bg-chalk-dim' : 'bg-desk-edge'}`}
+          style={{ height: `${2 + step * 2}px` }}
+        />
+      ))}
+    </span>
+  )
+}
+
+/**
+ * One concept in the list view: state, name, difficulty, pages — and the
+ * relations that hang off it, phrased exactly as the Markdown export writes
+ * them, so what you read here is what lands in your notes.
+ */
+function ConceptRow({
+  concept,
+  state,
+  conceptMap,
+  onOpenPage,
+}: {
+  concept: Concept
+  state: ConceptState
+  conceptMap: ConceptMap
+  onOpenPage: (page: number) => void
+}) {
+  const nameOf = (id: string) => conceptMap.concepts.find((c) => c.id === id)?.name.trim()
+  const relations = relationsFor(concept, conceptMap.relations, nameOf)
+
+  return (
+    <li className="border-desk-edge/25 border-b py-2 last:border-b-0">
+      <div className="flex items-baseline gap-2.5">
+        <span
+          title={
+            state === 'covered'
+              ? 'Covered by a card'
+              : state === 'inferred'
+                ? 'Likely covered — cards exist on its pages'
+                : 'No card yet'
+          }
+          className={`size-1.5 shrink-0 self-center rounded-full ${
+            state === 'covered'
+              ? 'bg-lamp'
+              : state === 'inferred'
+                ? 'bg-lamp/40'
+                : 'border-chalk-dim/50 border'
+          }`}
+        />
+        <span
+          className={`min-w-0 flex-1 text-sm ${state === 'open' ? 'text-chalk-dim' : 'text-chalk'}`}
+        >
+          {concept.name}
+        </span>
+        <DifficultyMeter difficulty={concept.difficulty} />
+        {/* "p." once, then the numbers — the same shape a card's footer uses.
+            Long lists are clipped so the column can never wrap and drag the
+            row apart; the full set stays in the tooltip. */}
+        <span
+          className="font-data text-chalk-dim min-w-[5.5rem] shrink-0 text-right text-2xs whitespace-nowrap"
+          title={
+            concept.pageReferences.length > 0
+              ? `Pages ${concept.pageReferences.join(', ')}`
+              : undefined
+          }
+        >
+          {concept.pageReferences.length > 0 && 'p. '}
+          {concept.pageReferences.slice(0, PAGE_REFS_SHOWN).map((p, i) => (
+            <button
+              key={p}
+              onClick={() => onOpenPage(p)}
+              className="hover:text-lamp rounded-sm underline-offset-2 transition-colors duration-150 hover:underline"
+              aria-label={`View slide ${p}`}
+            >
+              {i > 0 && ', '}
+              {p}
+            </button>
+          ))}
+          {concept.pageReferences.length > PAGE_REFS_SHOWN && (
+            <span className="text-chalk-dim/60">
+              {' '}
+              +{concept.pageReferences.length - PAGE_REFS_SHOWN}
+            </span>
+          )}
+        </span>
+      </div>
+      {relations.length > 0 && (
+        <ul className="border-desk-edge/50 mt-1 ml-[0.4375rem] space-y-0.5 border-l pl-3">
+          {relations.map((relation) => (
+            <li key={relation.text} className="font-data text-chalk-dim/70 text-2xs">
+              {relation.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+/**
+ * Take the map with you: the outline pastes into an outliner as nested
+ * bullets (RemNote, Notion, Obsidian), the Mermaid block renders as the graph
+ * in the same places. Open state lives in the sheet so Esc unwinds the menu
+ * before the sheet itself.
+ */
+function CopyMenu({
+  conceptMap,
+  open,
+  setOpen,
+}: {
+  conceptMap: ConceptMap
+  open: boolean
+  setOpen: (open: boolean) => void
+}) {
+  const toast = useLectern((s) => s.toast)
+
+  const copy = async (label: string, build: (map: ConceptMap) => string) => {
+    setOpen(false)
+    const ok = await copyText(build(conceptMap))
+    if (ok) toast('success', `Concept map copied as ${label}.`)
+    else toast('error', 'Could not reach the clipboard.')
+  }
+
+  const formats: Array<{
+    key: string
+    label: string
+    hint: string
+    build: (m: ConceptMap) => string
+  }> = [
+    {
+      key: 'outline',
+      label: 'an outline',
+      hint: 'Markdown · RemNote, Notion, Obsidian',
+      build: conceptMapToMarkdown,
+    },
+    {
+      key: 'diagram',
+      label: 'a diagram',
+      hint: 'Mermaid · renders as the graph',
+      build: conceptMapToMermaid,
+    },
+  ]
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="btn-ghost px-2.5 py-1 text-xs"
+        title="Copy the concept map to paste elsewhere"
+      >
+        Copy
+      </button>
+      {open && (
+        <>
+          {/* Catches the click that dismisses the menu. */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
+          <div
+            role="menu"
+            className="bg-desk-raised border-desk-edge/60 shadow-sheet fade-in absolute right-0 z-20 mt-1 w-60 rounded-md border p-1"
+          >
+            {formats.map((format) => (
+              <button
+                key={format.key}
+                role="menuitem"
+                onClick={() => void copy(format.label, format.build)}
+                className="hover:bg-desk-hover block w-full rounded-sm px-2.5 py-1.5 text-left transition-colors duration-150"
+              >
+                <span className="text-chalk block text-sm">Copy as {format.label}</span>
+                <span className="font-data text-chalk-dim block text-2xs">{format.hint}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 /** Footer detail for the selected node: state, pages, and its relations. */
