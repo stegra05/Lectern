@@ -16,7 +16,7 @@
 
 // --- Identity ---------------------------------------------------------------
 
-export const NOTE_TYPE_VERSION = 1
+export const NOTE_TYPE_VERSION = 2
 
 export const LECTERN_BASIC_MODEL = 'Lectern Basic'
 export const LECTERN_CLOZE_MODEL = 'Lectern Cloze'
@@ -115,17 +115,19 @@ const FOOT_FRONT = `{{#Source}}
   <div class="lc-foot"><span class="lc-src">{{Source}}</span></div>
   {{/Source}}`
 
+// Two conditions, not one nested in the other: a note with an excerpt and no
+// source used to render neither.
 const FOOT_BACK = `{{#Source}}
-  <div class="lc-foot">
-    <span class="lc-src">{{Source}}</span>
-    {{#Excerpt}}
+  <div class="lc-foot"><span class="lc-src">{{Source}}</span></div>
+  {{/Source}}
+  {{#Excerpt}}
+  <div class="lc-foot lc-foot-ex">
     <details class="lc-ex">
       <summary>Source excerpt</summary>
       <blockquote>{{Excerpt}}</blockquote>
     </details>
-    {{/Excerpt}}
   </div>
-  {{/Source}}`
+  {{/Excerpt}}`
 
 const BASIC_FRONT = `<div class="lc">
   {{#Topic}}<div class="lc-topic">{{Topic}}</div>{{/Topic}}
@@ -288,6 +290,9 @@ export function noteTypeCss(theme: NoteTypeTheme): string {
   --rule: ${t.ruleLight};
   --quote-bg: ${t.quoteBgLight};
   --sheet-shadow: 0 1px 2px rgba(56, 46, 32, 0.08), 0 6px 18px rgba(56, 46, 32, 0.11);
+  /* Every size below is relative to this one, so changing it here — which is
+     what Anki's Fields → Styling editor is for — resizes the whole card. */
+  font-size: 16px;
   padding: 0.5em 0;
 }
 .card.night_mode {
@@ -311,7 +316,7 @@ html:not(.mobile) .card {
   box-shadow: var(--sheet-shadow);
   color: var(--ink);
   font-family: 'Lectern Serif', Charter, Georgia, serif;
-  font-size: 16px;
+  font-size: 1em;
   line-height: 1.56;
   margin: 0 auto;
   max-width: 32em;
@@ -326,7 +331,7 @@ html:not(.mobile) .card {
 .lc-topic {
   color: var(--ink-soft);
   font-family: 'Lectern Mono', ui-monospace, Menlo, monospace;
-  font-size: 11px;
+  font-size: 0.6875em;
   font-weight: 500;
   letter-spacing: 0.09em;
   margin-bottom: 1.2em;
@@ -366,6 +371,16 @@ html:not(.mobile) .card {
   margin: 0.3em 0;
 }
 
+/* Anything that cannot wrap scrolls inside the sheet rather than painting
+   over the rounded edge: display math, code, comparison tables. */
+.lc mjx-container[display='true'],
+.lc pre,
+.lc table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .lc img {
   border-radius: 4px;
   display: block;
@@ -377,9 +392,15 @@ html:not(.mobile) .card {
   border-top: 1px solid var(--edge);
   color: var(--ink-soft);
   font-family: 'Lectern Mono', ui-monospace, Menlo, monospace;
-  font-size: 12px;
+  font-size: 0.75em;
   margin-top: 1.7em;
   padding-top: 0.95em;
+}
+/* The excerpt block follows the source line, so it brings no second rule. */
+.lc-foot-ex {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .lc-ex {
@@ -405,7 +426,7 @@ html:not(.mobile) .card {
   border-radius: 0 4px 4px 0;
   color: var(--ink-soft);
   font-family: 'Lectern Serif', Charter, Georgia, serif;
-  font-size: 14px;
+  font-size: 0.875em;
   font-style: italic;
   line-height: 1.55;
   margin: 0.7em 0 0.2em;
@@ -420,14 +441,14 @@ input#typeans {
   border-radius: 6px;
   color: var(--ink);
   font-family: 'Lectern Mono', ui-monospace, Menlo, monospace;
-  font-size: 14px;
+  font-size: 0.875em;
   padding: 0.6em 0.8em;
 }
 code#typeans {
   background-color: var(--quote-bg);
   border-radius: 6px;
   font-family: 'Lectern Mono', ui-monospace, Menlo, monospace;
-  font-size: 14px;
+  font-size: 0.875em;
   padding: 0.35em 0.7em;
 }
 `

@@ -304,6 +304,14 @@ export class AnkiClient {
     await this.invoke('createModel', params)
   }
 
+  /** How many cards one note of this model makes — a "Basic (and reversed
+   *  card)" note makes two, and a one-template target would orphan the
+   *  second. Unknown shapes count as 1, which is the tolerant answer. */
+  async modelTemplateCount(model: string): Promise<number> {
+    const result = await this.invoke('modelTemplates', { modelName: model })
+    return isRecord(result) ? Object.keys(result).length : 1
+  }
+
   async modelStyling(model: string): Promise<string> {
     const result = await this.invoke('modelStyling', { modelName: model })
     if (!isRecord(result) || typeof result.css !== 'string') {

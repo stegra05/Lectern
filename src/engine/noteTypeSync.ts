@@ -34,6 +34,8 @@ export interface EnsureModelsResult {
   updated: string[]
   /** Marker missing — the user edited the styling; left untouched. */
   userOwned: string[]
+  /** Installed by a newer Lectern than this one; left untouched. */
+  newerVersion: string[]
 }
 
 /**
@@ -47,21 +49,28 @@ export async function ensureLecternModels(
   loadFonts: () => Promise<FontAsset[]>,
 ): Promise<EnsureModelsResult> {
   const existing = new Set(await client.modelNames())
-  const result: EnsureModelsResult = { created: [], updated: [], userOwned: [] }
+  const result: EnsureModelsResult = { created: [], updated: [], userOwned: [], newerVersion: [] }
   const css = noteTypeCss(theme)
 
   const toCreate = LECTERN_NOTE_TYPES.filter((def) => !existing.has(def.name))
   const toInspect = LECTERN_NOTE_TYPES.filter((def) => existing.has(def.name))
 
-  const toUpdate: typeof LECTERN_NOTE_TYPES = []
+  /** Restyle only, or restyle and rewrite the templates with it. */
+  const toUpdate: Array<{ def: (typeof LECTERN_NOTE_TYPES)[number]; templates: boolean }> = []
   for (const def of toInspect) {
     const marker = parseStyleMarker(await client.modelStyling(def.name))
     if (!marker) {
       result.userOwned.push(def.name)
+    } else if (marker.version > NOTE_TYPE_VERSION) {
+      // Installed by a newer Lectern (a second machine): downgrades never
+      // overwrite, and saying so beats a silent no-op.
+      result.newerVersion.push(def.name)
     } else if (marker.version < NOTE_TYPE_VERSION || marker.theme !== theme) {
-      // Older bundled version or theme switch. A marker from a NEWER app
-      // version is left alone (downgrades never overwrite).
-      if (marker.version <= NOTE_TYPE_VERSION) toUpdate.push(def)
+      // Templates are only rewritten when the bundled version actually
+      // changed. A theme switch is a colour change, and rewriting templates
+      // for it threw away a {{Tags}} line or a type-in box the user had
+      // added — ownership of the CSS was never meant to cover those.
+      toUpdate.push({ def, templates: marker.version < NOTE_TYPE_VERSION })
     }
   }
 
@@ -83,12 +92,17 @@ export async function ensureLecternModels(
     result.created.push(def.name)
   }
 
-  for (const def of toUpdate) {
+  for (const { def, templates } of toUpdate) {
+    // Templates before styling: the marker in the CSS is what the next run
+    // reads to decide the upgrade is done, so it has to be written last. The
+    // other order turned one failed call into a permanent half-upgrade.
+    if (templates) {
+      await client.updateModelTemplates(
+        def.name,
+        Object.fromEntries(def.templates.map((t) => [t.Name, { Front: t.Front, Back: t.Back }])),
+      )
+    }
     await client.updateModelStyling(def.name, css)
-    await client.updateModelTemplates(
-      def.name,
-      Object.fromEntries(def.templates.map((t) => [t.Name, { Front: t.Front, Back: t.Back }])),
-    )
     result.updated.push(def.name)
   }
 
@@ -111,12 +125,40 @@ export interface MigrationResult {
 }
 
 const BACK_EXTRA_FIELD_NAMES = new Set(['back extra', 'extra'])
+const CLOZE_DELETION_RE = /\{\{c\d+::/
 
 const fieldValue = (info: AnkiNoteInfo, names: Set<string>): string | undefined => {
   for (const [name, field] of Object.entries(info.fields ?? {})) {
     if (names.has(name.trim().toLowerCase()) && field) return field.value
   }
   return undefined
+}
+
+/** Field names the migration maps by itself; everything else is the user's. */
+const MAPPED_FIELD_NAMES = new Set([
+  ...FRONT_FIELD_NAMES,
+  ...BACK_FIELD_NAMES,
+  ...TEXT_FIELD_NAMES,
+  ...BACK_EXTRA_FIELD_NAMES,
+  'topic',
+  'source',
+  'excerpt',
+])
+
+/** Non-empty fields the target note type has nowhere to put. */
+const carriedFields = (info: AnkiNoteInfo): Array<[string, string]> =>
+  Object.entries(info.fields ?? {})
+    .filter(([name, field]) => {
+      const value = field?.value?.trim() ?? ''
+      return value !== '' && !MAPPED_FIELD_NAMES.has(name.trim().toLowerCase())
+    })
+    .map(([name, field]) => [name, field?.value ?? ''] as [string, string])
+
+/** Keep a user's own fields visible on the card rather than deleting them. */
+const appendCarried = (base: string, carried: Array<[string, string]>): string => {
+  if (carried.length === 0) return base
+  const block = carried.map(([name, value]) => `<div><b>${name}:</b> ${value}</div>`).join('')
+  return base.trim() === '' ? block : `${base}<br>${block}`
 }
 
 /**
@@ -140,6 +182,17 @@ export async function migrateNotesToLectern(
 
   const result: MigrationResult = { migrated: 0, skipped: 0, failures: [] }
 
+  /** Templates per source model, so a note whose model makes more cards than
+   *  the target never loses one to an ordinal with nothing to render it. */
+  const templateCounts = new Map<string, number>()
+  const templateCountOf = async (modelName: string): Promise<number> => {
+    const cached = templateCounts.get(modelName)
+    if (cached !== undefined) return cached
+    const count = await client.modelTemplateCount(modelName).catch(() => 1)
+    templateCounts.set(modelName, count)
+    return count
+  }
+
   for (const info of infos) {
     const noteId = info.noteId
     if (typeof noteId !== 'number' || isLecternModel(info.modelName ?? '')) {
@@ -147,18 +200,37 @@ export async function migrateNotesToLectern(
       continue
     }
 
+    // A reverse card has no home on a one-template note type: migrating the
+    // note would strand it in Anki's Empty Cards list.
+    if ((await templateCountOf(info.modelName ?? '')) > 1) {
+      result.skipped++
+      continue
+    }
+
     const front = fieldValue(info, FRONT_FIELD_NAMES)
     const back = fieldValue(info, BACK_FIELD_NAMES)
     const text = fieldValue(info, TEXT_FIELD_NAMES)
+    // Anything the user added in Anki beyond the fields we map — a mnemonic,
+    // a source note. Dropping it silently was the worst thing this button did.
+    const carried = carriedFields(info)
 
     let modelName: string
     let fields: Record<string, string>
     if (front !== undefined && back !== undefined) {
       modelName = LECTERN_BASIC_MODEL
-      fields = { Front: front, Back: back }
+      fields = { Front: front, Back: appendCarried(back, carried) }
     } else if (text !== undefined && front === undefined) {
+      // A "Text"-shaped field with no deletion is not a cloze note; moving it
+      // to the Cloze type would produce a note Anki cannot render at all.
+      if (!CLOZE_DELETION_RE.test(text)) {
+        result.skipped++
+        continue
+      }
       modelName = LECTERN_CLOZE_MODEL
-      fields = { Text: text, 'Back Extra': fieldValue(info, BACK_EXTRA_FIELD_NAMES) ?? '' }
+      fields = {
+        Text: text,
+        'Back Extra': appendCarried(fieldValue(info, BACK_EXTRA_FIELD_NAMES) ?? '', carried),
+      }
     } else {
       result.skipped++
       continue

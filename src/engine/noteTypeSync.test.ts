@@ -60,6 +60,7 @@ describe('ensureLecternModels', () => {
       created: ['Lectern Basic', 'Lectern Cloze'],
       updated: [],
       userOwned: [],
+      newerVersion: [],
     })
     const actions = actionsOf(calls)
     expect(actions.indexOf('storeMediaFile')).toBeLessThan(actions.indexOf('createModel'))
@@ -85,7 +86,7 @@ describe('ensureLecternModels', () => {
 
     const result = await ensureLecternModels(client, 'paper', loadFonts)
 
-    expect(result).toEqual({ created: [], updated: [], userOwned: [] })
+    expect(result).toEqual({ created: [], updated: [], userOwned: [], newerVersion: [] })
     expect(actionsOf(calls)).not.toContain('storeMediaFile')
     expect(actionsOf(calls)).not.toContain('updateModelStyling')
   })
@@ -124,6 +125,27 @@ describe('ensureLecternModels', () => {
       model: { css: string }
     }
     expect(styling.model.css).toContain(styleMarker('nord'))
+    // A colour change is not a reason to throw away a {{Tags}} line or a
+    // type-in box the user added: templates are only rewritten on a version
+    // bump, which the CSS marker alone cannot tell us about.
+    expect(actionsOf(calls)).not.toContain('updateModelTemplates')
+  })
+
+  it('writes templates before the marker that says they are current', async () => {
+    const { client, calls } = mockAnki({
+      modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      modelStyling: () => ({ css: `${styleMarker('paper', NOTE_TYPE_VERSION - 1)}\n.card {}` }),
+      storeMediaFile: () => 'ok',
+      updateModelStyling: () => ({}),
+      updateModelTemplates: () => ({}),
+    })
+
+    await ensureLecternModels(client, 'paper', loadFonts)
+
+    const actions = actionsOf(calls)
+    expect(actions.indexOf('updateModelTemplates')).toBeLessThan(
+      actions.indexOf('updateModelStyling'),
+    )
   })
 
   it('never touches a note type whose marker is gone (user-owned)', async () => {
@@ -151,7 +173,12 @@ describe('ensureLecternModels', () => {
 
     const result = await ensureLecternModels(client, 'paper', loadFonts)
 
-    expect(result).toEqual({ created: [], updated: [], userOwned: [] })
+    expect(result).toEqual({
+      created: [],
+      updated: [],
+      userOwned: [],
+      newerVersion: ['Lectern Basic', 'Lectern Cloze'],
+    })
     expect(actionsOf(calls)).not.toContain('updateModelStyling')
   })
 })
@@ -215,6 +242,54 @@ describe('migrateNotesToLectern', () => {
         tags: ['lectern'],
       },
     ])
+  })
+
+  it('carries fields the target type has no home for instead of dropping them', async () => {
+    const updates: unknown[] = []
+    const { client } = mockAnki({
+      findNotes: () => [1],
+      notesInfo: () => [noteInfo(1, 'Basic', { Front: 'Q', Back: 'A', Mnemonic: 'my note' })],
+      updateNoteModel: (params) => {
+        updates.push(params?.note)
+        return {}
+      },
+    })
+
+    const result = await migrateNotesToLectern(client, 'lectern')
+
+    expect(result.migrated).toBe(1)
+    expect((updates[0] as { fields: Record<string, string> }).fields.Back).toBe(
+      'A<br><div><b>Mnemonic:</b> my note</div>',
+    )
+  })
+
+  it('skips a note whose model makes more cards than the target can render', async () => {
+    const { client } = mockAnki({
+      findNotes: () => [1],
+      notesInfo: () => [noteInfo(1, 'Basic (and reversed card)', { Front: 'Q', Back: 'A' })],
+      modelTemplates: () => ({ 'Card 1': {}, 'Card 2': {} }),
+      updateNoteModel: () => ({}),
+    })
+
+    expect(await migrateNotesToLectern(client, 'lectern')).toEqual({
+      migrated: 0,
+      skipped: 1,
+      failures: [],
+    })
+  })
+
+  it('does not move a deletion-free note onto the Cloze type', async () => {
+    const { client } = mockAnki({
+      findNotes: () => [1],
+      notesInfo: () => [noteInfo(1, 'Notes', { Text: 'just a plain note' })],
+      updateNoteModel: () => ({}),
+    })
+
+    expect(await migrateNotesToLectern(client, 'lectern')).toEqual({
+      migrated: 0,
+      skipped: 1,
+      failures: [],
+    })
   })
 
   it('maps localized field names (German Vorderseite/Rückseite)', async () => {
