@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.10.0 (2026-07-25)
+
+### Added
+- **Extend a deck instead of replacing it**: re-run a lecture into a deck
+  that already holds cards and Lectern reads them back out of Anki first,
+  then generates only what is missing. The deck field offers "Don't repeat
+  what this deck already covers", on by default, and the size slider becomes
+  "Cards to add" — 40 on top of the 87 you already have, not 40 in total.
+- The cards already in the deck appear in the session, dimmed and labelled,
+  so a short run explains itself. They are never rewritten or deleted by the
+  quality pass — the model is not shown them at all — and they are not
+  re-sent to Anki. Editing one by hand opts it back into the next send.
+- **Depth instead of a shrug**: extending a deck that already covers the
+  whole document used to be able to finish with nothing added, which is
+  technically true and useless. Once there is no breadth left, the ledger
+  switches to depth — the relations between concepts, pages carrying a
+  single card, concepts no card names outright — and the run keeps going
+  until it has added what you asked for or genuinely has nothing worth
+  adding, which it will say.
+
+### Fixed
+- A deck holding several lectures no longer confuses whose pages are whose.
+  Page numbers only mean something next to their own document, so cards from
+  another lecture keep their place in the duplicate check but do not mark
+  this lecture's pages as covered. Matching survives the model rephrasing or
+  abbreviating a title between runs, while treating the lecture number as
+  decisive — titles within a course are identical apart from it.
+
 ## 2.9.0 (2026-07-25)
 
 ### Added
