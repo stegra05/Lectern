@@ -567,11 +567,10 @@ describe('syncCards', () => {
       routes({
         modelNames: () => ({ result: ['Basic', 'Cloze'] }),
         createDeck: () => ({ result: 42 }),
-        addNote: (_params, nth) =>
-          nth === 0
-            ? { result: 1501 }
-            : { apiError: 'cannot create note because it is a duplicate' },
-        updateNoteFields: () => ({ result: null }),
+        // Anki already holds the second card's first field.
+        canAddNotes: () => ({ result: [true, false] }),
+        addNote: () => ({ result: 1501 }),
+        updateNote: () => ({ result: null }),
       }),
     )
     const onProgress = vi.fn<(p: SyncProgress) => void>()
@@ -587,9 +586,10 @@ describe('syncCards', () => {
 
     expect(result.created).toBe(1)
     expect(result.updated).toBe(1)
-    expect(result.failures).toHaveLength(1)
-    expect(result.failures[0]).toMatchObject({ uid: 'u2', front: 'Q2 dup' })
-    expect(result.failures[0].error).toContain('duplicate')
+    // A card Anki would refuse is left alone, not attempted and failed.
+    expect(result.failures).toEqual([])
+    expect(result.duplicates).toEqual([{ uid: 'u2', front: 'Q2 dup' }])
+    expect(calls.filter((c) => c.action === 'addNote')).toHaveLength(1)
     expect(result.noteIds).toEqual(
       new Map([
         ['u1', 1501],
@@ -597,7 +597,7 @@ describe('syncCards', () => {
       ]),
     )
 
-    // Progress after every card, including the failing one.
+    // Progress after every card, including the skipped one.
     expect(onProgress.mock.calls.map(([p]) => p)).toEqual([
       { done: 1, total: 3 },
       { done: 2, total: 3 },
@@ -608,11 +608,28 @@ describe('syncCards', () => {
     const actionOrder = calls.map((c) => c.action)
     expect(actionOrder.indexOf('createDeck')).toBeLessThan(actionOrder.indexOf('addNote'))
 
-    // The update call targets the existing note id with mapped fields.
-    const updateCall = calls.find((c) => c.action === 'updateNoteFields')
+    // The update carries the note's tags, not just its fields — otherwise a
+    // renamed deck or a changed template never reaches an existing note.
+    const updateCall = calls.find((c) => c.action === 'updateNote')
     expect(updateCall?.params).toEqual({
-      note: { id: 777, fields: { Front: 'Q3', Back: 'A3 v2' } },
+      note: { id: 777, fields: { Front: 'Q3', Back: 'A3 v2' }, tags: ['lectern', 'bio'] },
     })
+  })
+
+  it('writes an emptied "Back Extra" through so Anki can clear it', () => {
+    const note = cardToNote(
+      makeCard({ modelName: 'Cloze', fields: { Text: '{{c1::ATP}}', 'Back Extra': '' } }),
+      { deckName: 'D', modelName: 'Cloze', tags: [] },
+    )
+    expect(note.fields).toEqual({ Text: '{{c1::ATP}}', 'Back Extra': '' })
+
+    // A card that never carried the field still omits it.
+    const without = cardToNote(makeCard({ modelName: 'Cloze', fields: { Text: '{{c1::ATP}}' } }), {
+      deckName: 'D',
+      modelName: 'Cloze',
+      tags: [],
+    })
+    expect(without.fields).toEqual({ Text: '{{c1::ATP}}' })
   })
 
   it('adds provenance fields only when the card lands on a Lectern note type', async () => {

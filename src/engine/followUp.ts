@@ -39,8 +39,8 @@ import {
   systemInstructions,
   type PromptContext,
 } from './prompts'
-import { cardKey, normalizeCardPayload } from './quality'
-import type { Card, ConceptMap, PipelineSink } from './types'
+import { cardKey, findNearDuplicate, normalizeCardPayload, type EvaluateOptions } from './quality'
+import type { Card, ConceptMap, PdfInfo, PipelineSink } from './types'
 
 export interface FollowUpOptions {
   /** The user's free-text request from the activity-log composer. */
@@ -51,6 +51,9 @@ export interface FollowUpOptions {
   conceptMap: ConceptMap
   seed: FollowUpSeed
   focusPrompt?: string
+  /** The document the deck was built from, so a follow-up card's citations
+   *  face the same checks generation did. */
+  pdfInfo?: PdfInfo
   model: string
   apiKey: string
   fetchFn: typeof fetch
@@ -84,7 +87,11 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
     focusPrompt: opts.focusPrompt,
   }
   const request = sanitizeFocusPrompt(opts.request, MAX_REQUEST_PROMPT_LEN)
-  const catalog = buildCoverageCatalog(opts.conceptMap)
+  const catalog = buildCoverageCatalog(opts.conceptMap, opts.pdfInfo?.pageCount)
+  const gateOptions: EvaluateOptions = {
+    pageCount: opts.pdfInfo?.pageCount,
+    pageTexts: opts.pdfInfo?.pageTexts,
+  }
   const seenKeys = new Set(opts.deck.map(cardKey).filter((key) => key !== ''))
   const added: Card[] = []
   let coverage = computeCoverageData(catalog, opts.deck)
@@ -106,7 +113,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
           request,
           deckFronts: opts.deck.map((card) => firstField(card)).filter((front) => front !== ''),
           cardBudget: FOLLOWUP_CARD_CAP,
-          gapText: buildGenerationGapText(catalog, coverage),
+          gapText: buildGenerationGapText(catalog, coverage, opts.deck),
         }),
       },
     ],
@@ -170,11 +177,11 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
           rejected.push({ front: '(unparseable card)', reasons: ['invalid_structure'] })
           continue
         }
-        const { card, verdict } = buildCard(normalized, catalog, true)
+        const { card, verdict } = buildCard(normalized, catalog, true, gateOptions)
         if (card.outsideSource) card.syncExcluded = true
 
         const key = cardKey(card)
-        if (seenKeys.has(key)) {
+        if (seenKeys.has(key) || findNearDuplicate(key, seenKeys) !== null) {
           duplicateFronts.push(firstField(card))
           continue
         }

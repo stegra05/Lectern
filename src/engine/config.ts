@@ -33,6 +33,11 @@ export const MAX_GENERATION_ROUNDS = 30
 /** A page holding more than this many cards counts as saturated. */
 export const SATURATION_CARDS_PER_PAGE = 2
 
+/** Times an extend run is sent back to look for depth before its request to
+ *  stop early is taken at face value. One push, not an endless one: the brief
+ *  asks for an honest short deck, so the gate has to let it be one. */
+export const DEPTH_FINISH_ATTEMPTS = 1
+
 // --- Coverage sufficiency (loop termination) -------------------------------
 
 export const COVERAGE_MIN_RELATION_PERCENT = 50

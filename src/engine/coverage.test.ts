@@ -160,6 +160,22 @@ describe('computeCoverageData', () => {
     expect(coverage.effectiveConceptCoveragePercent).toBe(67) // union: 2/3
     expect(coverage.coveredRelationKeys).toEqual(['c1|uses|c2'])
     expect(coverage.relationCoveragePercent).toBe(50)
+    // Page overlap alone does not discharge a high-importance concept: a card
+    // that happens to cite page 3 is not evidence that it teaches c2.
+    expect(coverage.missingHighPriority).toEqual(['c2'])
+  })
+
+  it('lets an inherited card discharge a high-importance concept by page', () => {
+    // A card read back out of Anki has no concept ids to give — a re-run
+    // builds a fresh map — so its pages have to speak for it.
+    const cards = [
+      makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'] }),
+      makeCard({ uid: 'b', sourcePages: [3], fromAnki: true }),
+    ]
+    const coverage = computeCoverageData(catalog, cards)
+
+    expect(coverage.coveredConceptIds).toEqual(['c1'])
+    expect(coverage.inferredConceptIds).toEqual(['c2'])
     expect(coverage.missingHighPriority).toEqual([])
   })
 

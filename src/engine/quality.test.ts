@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { cardKey, evaluateCard, normalizeCardPayload } from './quality'
+import {
+  ankiCardCount,
+  cardKey,
+  evaluateCard,
+  findNearDuplicate,
+  normalizeCardPayload,
+  stripMarkup,
+} from './quality'
 import type { Card } from './types'
 
 const makeCard = (overrides: Partial<Card> = {}): Card => ({
@@ -280,5 +287,136 @@ describe('cardKey', () => {
   it('returns an empty key when there is no usable prompt', () => {
     expect(cardKey({ modelName: 'Basic', fields: {} })).toBe('')
     expect(cardKey({ modelName: 'Basic', fields: { Back: 'only back' } })).toBe('')
+  })
+})
+
+// --- Renderer-truth checks (what Anki actually shows the student) ----------
+
+describe('evaluateCard — markup the renderer would betray', () => {
+  it('rejects a cloze deletion Anki would truncate at an inner "}}"', () => {
+    const verdict = evaluateCard(
+      groundedCard({
+        modelName: 'Cloze',
+        fields: { Text: 'The sigmoid is {{c1::\\(\\frac{1}{1+e^{-x}}\\)}}.' },
+      }),
+    )
+    expect(verdict.pass).toBe(false)
+    expect(verdict.failures).toContain('cloze_unterminated')
+  })
+
+  it('accepts balanced math inside a deletion', () => {
+    const verdict = evaluateCard(
+      groundedCard({
+        modelName: 'Cloze',
+        fields: { Text: 'The derivative of \\(x^n\\) is {{c1::\\(n x^{n-1}\\)}}.' },
+      }),
+    )
+    expect(verdict.pass).toBe(true)
+  })
+
+  it('rejects more than two deletions unless they number an <ol>', () => {
+    const crowded = evaluateCard(
+      groundedCard({
+        modelName: 'Cloze',
+        fields: { Text: '{{c1::A}} and {{c2::B}} and {{c3::C}}.' },
+      }),
+    )
+    expect(crowded.failures).toContain('too_many_cloze_deletions')
+
+    const procedure = evaluateCard(
+      groundedCard({
+        modelName: 'Cloze',
+        fields: {
+          Text: 'One iteration:<ol><li>{{c1::Forward}}</li><li>{{c2::Loss}}</li><li>{{c3::Backprop}}</li></ol>',
+        },
+      }),
+    )
+    expect(procedure.pass).toBe(true)
+  })
+
+  it('rejects Markdown, which Anki prints as literal characters', () => {
+    expect(
+      evaluateCard(groundedCard({ fields: { Front: 'What is **bold**?', Back: 'A weight.' } }))
+        .failures,
+    ).toContain('markdown_not_html')
+    expect(
+      evaluateCard(groundedCard({ fields: { Front: 'Steps?', Back: '## Answer\nDo it.' } }))
+        .failures,
+    ).toContain('markdown_not_html')
+    expect(
+      evaluateCard(groundedCard({ fields: { Front: 'Steps?', Back: '- one\n- two' } })).failures,
+    ).toContain('markdown_not_html')
+  })
+
+  it('leaves real HTML lists alone', () => {
+    expect(
+      evaluateCard(
+        groundedCard({ fields: { Front: 'Steps?', Back: '<ul><li>one</li><li>two</li></ul>' } }),
+      ).pass,
+    ).toBe(true)
+  })
+
+  it('rejects $…$ math but not prices', () => {
+    expect(
+      evaluateCard(groundedCard({ fields: { Front: 'Compute $x^2$', Back: '4' } })).failures,
+    ).toContain('dollar_math_delimiters')
+    expect(
+      evaluateCard(groundedCard({ fields: { Front: 'Cost range?', Back: 'Between $5 and $10.' } }))
+        .pass,
+    ).toBe(true)
+  })
+
+  it('rejects an answer that only repeats the prompt', () => {
+    expect(
+      evaluateCard(groundedCard({ fields: { Front: 'Define entropy', Back: 'define entropy' } }))
+        .failures,
+    ).toContain('answer_repeats_prompt')
+  })
+
+  it('rejects a page the document does not have', () => {
+    const verdict = evaluateCard(groundedCard({ sourcePages: [900] }), { pageCount: 40 })
+    expect(verdict.pass).toBe(false)
+    expect(verdict.failures).toContain('page_out_of_range')
+    expect(evaluateCard(groundedCard({ sourcePages: [12] }), { pageCount: 40 }).pass).toBe(true)
+  })
+
+  it('flags yes/no fronts, slide deixis and a parroted excerpt without rejecting', () => {
+    const verdict = evaluateCard(
+      groundedCard({
+        fields: { Front: 'Is the sigmoid bounded?', Back: 'Yes, between 0 and 1.' },
+        sourceExcerpt: 'Yes, between 0 and 1.',
+      }),
+    )
+    expect(verdict.pass).toBe(true)
+    expect(verdict.issues).toContain('yes_no_question')
+    expect(verdict.issues).toContain('excerpt_repeats_answer')
+
+    const deixis = evaluateCard(
+      groundedCard({ fields: { Front: 'What does the diagram above show?', Back: 'A cycle.' } }),
+    )
+    expect(deixis.pass).toBe(true)
+    expect(deixis.issues).toContain('points_at_source')
+  })
+})
+
+describe('stripMarkup / ankiCardCount / findNearDuplicate', () => {
+  it('keeps escaped angle brackets that were never markup', () => {
+    expect(stripMarkup('x &lt; y then z &gt; 0')).toBe('x < y then z > 0')
+    expect(stripMarkup('<b>bold</b> &amp; clear')).toBe('bold & clear')
+  })
+
+  it('counts the Anki cards a cloze note becomes', () => {
+    expect(ankiCardCount({ modelName: 'Basic', fields: { Front: 'a', Back: 'b' } })).toBe(1)
+    expect(
+      ankiCardCount({ modelName: 'Cloze', fields: { Text: '{{c1::a}} {{c2::b}} {{c1::c}}' } }),
+    ).toBe(2)
+  })
+
+  it('catches a rephrased prompt the exact key misses', () => {
+    const existing = ['what is the learning rate of the optimizer']
+    expect(findNearDuplicate('what is a learning rate of the optimizer', existing)).toBe(
+      existing[0],
+    )
+    expect(findNearDuplicate('what is the batch size of the optimizer', existing)).toBeNull()
   })
 })

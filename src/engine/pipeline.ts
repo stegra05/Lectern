@@ -17,6 +17,7 @@
  */
 
 import {
+  DEPTH_FINISH_ATTEMPTS,
   GEMINI_PRICING,
   MAX_GENERATION_ROUNDS,
   MAX_REFLECTION_ROUNDS,
@@ -67,8 +68,10 @@ import {
 import {
   cardKey,
   evaluateCard,
+  findNearDuplicate,
   normalizeCardPayload,
   normalizeRelationKey,
+  type EvaluateOptions,
   type NormalizedCardPayload,
 } from './quality'
 import type {
@@ -155,7 +158,8 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   const conceptMap = parseConceptMap(parseJsonPayload(mapResult.outputText))
   ctx = { language: conceptMap.language || 'en', focusPrompt: opts.focusPrompt }
 
-  const sizing = computeSizingPlan(reconcilePdfInfo(opts.pdfInfo, conceptMap), {
+  const reconciled = reconcilePdfInfo(opts.pdfInfo, conceptMap)
+  const sizing = computeSizingPlan(reconciled, {
     userTargetCards: opts.userTargetCards,
     forceMode:
       conceptMap.documentType === 'script'
@@ -164,7 +168,13 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           ? 'slides'
           : undefined,
   })
-  const catalog = buildCoverageCatalog(conceptMap)
+  // The ledger counts against the pages the file really has, not the page
+  // count the model reported for it.
+  const catalog = buildCoverageCatalog(conceptMap, reconciled.pageCount)
+  const gateOptions: EvaluateOptions = {
+    pageCount: reconciled.pageCount,
+    pageTexts: opts.pdfInfo.pageTexts,
+  }
   emit({ type: 'concept_map', conceptMap, sizing })
   emit({
     type: 'log',
@@ -213,12 +223,20 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   // outward to, so the run's budget buys depth instead. Recomputed each round:
   // a run can start on breadth and cross into depth once the gaps close.
   const inDepthMode = (): boolean => inheritedCount > 0 && isCoverageSufficient(coverage)
+  /** How many times the model has asked to stop while short of the target. */
+  let depthFinishAttempts = 0
   const depthGate = () =>
     inheritedCount > 0
-      ? { newCards: cards.length - inheritedCount, newCardTarget: sizing.totalCardCap }
+      ? {
+          newCards: cards.length - inheritedCount,
+          newCardTarget: sizing.totalCardCap,
+          attempts: depthFinishAttempts,
+        }
       : undefined
   const ledgerText = () =>
-    inDepthMode() ? buildDepthGapText(catalog, coverage) : buildGenerationGapText(catalog, coverage)
+    inDepthMode()
+      ? buildDepthGapText(catalog, coverage)
+      : buildGenerationGapText(catalog, coverage, cards)
 
   const tools = [SUBMIT_CARDS_TOOL, FINISH_GENERATION_TOOL]
   let response = await client.interact({
@@ -284,6 +302,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     for (const call of response.functionCalls) {
       if (call.name === 'finish_generation') {
         const verdict = handleFinishRequest(coverage, cards.length, cardCap, depthGate())
+        if (!verdict.allowed) depthFinishAttempts++
         if (verdict.allowed) {
           finished = true
           terminationReason = 'coverage_sufficient_model_done'
@@ -323,11 +342,16 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: '(unparseable card)', reasons: ['invalid_structure'] })
           continue
         }
-        const { card, verdict, unknownMetadata } = buildCard(normalized, catalog)
+        const { card, verdict, unknownMetadata } = buildCard(
+          normalized,
+          catalog,
+          false,
+          gateOptions,
+        )
         unknownMetadataDropped += unknownMetadata
 
         const key = cardKey(card)
-        if (seenKeys.has(key)) {
+        if (seenKeys.has(key) || findNearDuplicate(key, seenKeys) !== null) {
           duplicateFronts.push(firstField(card))
           continue
         }
@@ -429,6 +453,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       catalog,
       cardCap,
       inheritedCount,
+      gateOptions,
       emit,
       signal,
       track,
@@ -485,7 +510,7 @@ function handleFinishRequest(
   cardCap: number,
   /** Extend runs: how far this run has got toward the cards the user asked
    *  for, which is the gate once breadth is already complete. */
-  depth?: { newCards: number; newCardTarget: number },
+  depth?: { newCards: number; newCardTarget: number; attempts: number },
 ): { allowed: boolean; message: string } {
   if (produced >= cardCap) return { allowed: true, message: 'ok' }
 
@@ -502,7 +527,15 @@ function handleFinishRequest(
 
   // Breadth is done, but the user asked this run to add cards. Finishing at
   // zero would be technically true and useless — send it after depth instead.
-  if (depth !== undefined && depth.newCards < depth.newCardTarget) {
+  // Once, though: the brief invites an honest early finish ("a short honest
+  // deck beats a padded one"), so refusing every attempt until the quota is
+  // spent would be asking for the padding it warns against. A second call
+  // means the model has said twice that it has nothing worth adding.
+  if (
+    depth !== undefined &&
+    depth.newCards < depth.newCardTarget &&
+    depth.attempts < DEPTH_FINISH_ATTEMPTS
+  ) {
     return {
       allowed: false,
       message:
@@ -510,8 +543,8 @@ function handleFinishRequest(
         `You have added ${depth.newCards} of ${depth.newCardTarget} card(s). ` +
         'Go after the depth ledger: relations between concepts, pages carrying a single card, ' +
         'and concepts no existing card names outright. Prefer why/how/compare/apply over ' +
-        'restating what is already asked. Call finish_generation once you genuinely have ' +
-        'nothing worth adding.',
+        'restating what is already asked. If, after looking, another card would only rephrase ' +
+        'one the deck already has, call finish_generation again and say so — it will be accepted.',
     }
   }
 
@@ -530,6 +563,8 @@ export function buildCard(
   /** Follow-up requests only: honor the payload's in_source=false declaration.
    *  Everywhere else the declaration is ignored so it cannot dodge the gate. */
   allowOutsideSource = false,
+  /** Document facts the gate checks citations against. */
+  gateOptions: EvaluateOptions = {},
 ): { card: Card; verdict: GateVerdict; unknownMetadata: number } {
   const conceptIds = normalized.conceptIds.filter((id) => catalog.conceptIds.has(id))
   const relationKeys = normalized.relationKeys
@@ -555,7 +590,7 @@ export function buildCard(
     qualityIssues: [],
   }
   if (allowOutsideSource && normalized.inSource === false) card.outsideSource = true
-  const verdict = evaluateCard(card)
+  const verdict = evaluateCard(card, gateOptions)
   card.qualityScore = verdict.score
   card.qualityIssues = verdict.issues
   return { card, verdict, unknownMetadata }
@@ -620,6 +655,8 @@ interface ReviewLoopOptions {
    *  but are withheld from the review: the model must not rewrite or delete
    *  cards the user has already been studying. */
   inheritedCount: number
+  /** Document facts the gate checks citations against. */
+  gateOptions: EvaluateOptions
   emit: PipelineSink
   signal?: AbortSignal
   track: (u: GeminiUsage) => void
@@ -726,7 +763,12 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
         } else if (!normalized) {
           rejected.push({ ref: cardId, reasons: ['invalid_structure'] })
         } else {
-          const { card, verdict, unknownMetadata } = buildCard(normalized, catalog)
+          const { card, verdict, unknownMetadata } = buildCard(
+            normalized,
+            catalog,
+            false,
+            opts.gateOptions,
+          )
           unknownMetadataDropped += unknownMetadata
           const oldKey = cardKey(cards[index])
           const newKey = cardKey(card)
@@ -751,14 +793,19 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
             rejected.push({ ref: '(new card)', reasons: ['invalid_structure'] })
             continue
           }
-          const { card, verdict, unknownMetadata } = buildCard(normalized, catalog)
+          const { card, verdict, unknownMetadata } = buildCard(
+            normalized,
+            catalog,
+            false,
+            opts.gateOptions,
+          )
           unknownMetadataDropped += unknownMetadata
           if (!verdict.pass) {
             rejected.push({ ref: firstField(card), reasons: verdict.failures })
             continue
           }
           const key = cardKey(card)
-          if (seenKeys.has(key)) {
+          if (seenKeys.has(key) || findNearDuplicate(key, seenKeys) !== null) {
             rejected.push({ ref: firstField(card), reasons: ['duplicate'] })
             continue
           }
@@ -859,6 +906,9 @@ function toReviewShape(cardId: string, card: Card): Record<string, unknown> {
     relation_keys: card.relationKeys,
     rationale: card.rationale,
     source_excerpt: card.sourceExcerpt,
+    // What the gate already noticed about this card. Without it the review
+    // has to re-derive by eye what the app measured on the way in.
+    quality_issues: card.qualityIssues.length > 0 ? card.qualityIssues : undefined,
   }
 }
 

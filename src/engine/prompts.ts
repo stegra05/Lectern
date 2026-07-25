@@ -12,11 +12,12 @@
 // --- Formatting rules (constraints of the Anki renderer) --------------------
 
 export const FORMATTING_RULES = `Formatting — Anki renders HTML and MathJax; Markdown renders as literal characters:
-- Math: inline \\( ... \\), display \\[ ... \\]. Bold math with \\mathbf{...}/\\boldsymbol{...} (symbols) or \\textbf{...} (words); keep HTML outside math.
-- Emphasis: <b> or <strong>, <i> or <em>. Write ** or # as HTML instead.
+- Math: inline \\( ... \\), display \\[ ... \\]. Never $ ... $ — Anki prints the dollars. Bold math with \\mathbf{...}/\\boldsymbol{...} (symbols) or \\textbf{...} (words); keep HTML outside math.
+- Emphasis: <b> or <strong>, <i> or <em>. Write ** or # as HTML instead. Lists are <ul>/<ol>, never "- " lines.
 - Text only — cards carry no images or <img> tags.
 - Each card stands alone: name the thing itself ("the sigmoid saturates for large inputs"), never point at the source ("as shown in the diagram"). When a concept depends on a visual, describe the visual relationship in words.
-- Cloze: at most 2 deletions per card, each a single specific term whose surrounding context makes the answer unambiguous. Exception — ordered procedures: an <ol> with one numbered deletion per step ({{c1::…}}, {{c2::…}}, …), so each step drills as its own card.`
+- Cloze: at most 2 deletions per card, each a single specific term whose surrounding context makes the answer unambiguous. Exception — ordered procedures: an <ol> with one numbered deletion per step ({{c1::…}}, {{c2::…}}, …), so each step drills as its own card.
+- A deletion ends at the first "}}", so an answer whose math ends in nested braces must not close them next to the deletion: write {{c1::\\(e^{-x^{2}} \\) }}, not {{c1::\\(e^{-x^{2}}\\)}} — otherwise Anki cuts the answer in half.`
 
 // --- Style-teaching examples -------------------------------------------------
 

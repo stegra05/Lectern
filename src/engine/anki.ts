@@ -15,7 +15,15 @@
  */
 
 import { isLecternModel, LECTERN_BASIC_MODEL, LECTERN_CLOZE_MODEL } from './noteTypes'
-import type { Card, Settings, SyncFailure, SyncPreview, SyncProgress, SyncResult } from './types'
+import type {
+  Card,
+  Settings,
+  SyncFailure,
+  SyncPreview,
+  SyncProgress,
+  SyncResult,
+  SyncSkip,
+} from './types'
 
 // --- Constants (mirroring anki_connector.py) --------------------------------
 
@@ -238,6 +246,17 @@ export class AnkiClient {
 
   async updateNoteFields(id: number, fields: Record<string, string>): Promise<void> {
     await this.invoke('updateNoteFields', { note: { id, fields } })
+  }
+
+  /** Update fields *and* tags in one call. `updateNoteFields` leaves tags
+   *  alone, which silently froze them at whatever the first sync wrote —
+   *  a renamed deck or an edited topic never reached the note. */
+  async updateNote(note: {
+    id: number
+    fields: Record<string, string>
+    tags: string[]
+  }): Promise<void> {
+    await this.invoke('updateNote', { note })
   }
 
   async deleteNotes(ids: number[]): Promise<void> {
@@ -518,8 +537,11 @@ export function cardToNote(
 
   if (card.modelName === 'Cloze') {
     fields['Text'] = source['Text'] ?? source['Front'] ?? ''
+    // Present-but-empty has to survive: an update only writes the keys it
+    // carries, so dropping an emptied "Back Extra" left the old hint in Anki
+    // forever. A card that never had the field still omits it.
     const backExtra = source['Back Extra'] ?? source['Back']
-    if (backExtra !== undefined && backExtra !== '') {
+    if (backExtra !== undefined) {
       fields['Back Extra'] = backExtra
     }
     for (const [name, value] of Object.entries(source)) {
@@ -639,28 +661,51 @@ export async function syncCards(
     // actionable errors.
   }
 
+  const buildNote = (card: Card): AnkiNote => {
+    const modelName = modelNameFor(card, resolved)
+    return cardToNote(card, {
+      deckName,
+      modelName,
+      tags: resolveTags(card),
+      extraFields: isLecternModel(modelName) ? noteExtras?.(card) : undefined,
+    })
+  }
+
+  // Cards Anki would refuse as duplicates are recognized before the send
+  // rather than during it: attempting them produced a hard per-card error
+  // for something the preview had already described as benign.
+  const newCards = cards.filter((card) => typeof card.ankiNoteId !== 'number')
+  const duplicateUids = new Set<string>()
+  if (newCards.length > 0) {
+    try {
+      const canAdd = await client.canAddNotes(newCards.map(buildNote))
+      newCards.forEach((card, i) => {
+        if (canAdd[i] === false) duplicateUids.add(card.uid)
+      })
+    } catch {
+      // Probe failed — fall through and let the add itself report.
+    }
+  }
+
   let created = 0
   let updated = 0
   const failures: SyncFailure[] = []
+  const duplicates: SyncSkip[] = []
   const noteIds = new Map<string, number>()
   const total = cards.length
 
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i]
     try {
-      const modelName = modelNameFor(card, resolved)
-      const note = cardToNote(card, {
-        deckName,
-        modelName,
-        tags: resolveTags(card),
-        extraFields: isLecternModel(modelName) ? noteExtras?.(card) : undefined,
-      })
-      if (typeof card.ankiNoteId === 'number') {
-        await client.updateNoteFields(card.ankiNoteId, note.fields)
+      if (duplicateUids.has(card.uid)) {
+        duplicates.push({ uid: card.uid, front: cardFrontText(card) })
+      } else if (typeof card.ankiNoteId === 'number') {
+        const note = buildNote(card)
+        await client.updateNote({ id: card.ankiNoteId, fields: note.fields, tags: note.tags })
         updated++
         noteIds.set(card.uid, card.ankiNoteId)
       } else {
-        const id = await client.addNote(note)
+        const id = await client.addNote(buildNote(card))
         created++
         noteIds.set(card.uid, id)
       }
@@ -674,5 +719,5 @@ export async function syncCards(
     onProgress({ done: i + 1, total })
   }
 
-  return { created, updated, failures, noteIds }
+  return { created, updated, duplicates, failures, noteIds }
 }

@@ -27,14 +27,23 @@ export async function extractPdfInfo(doc: PDFDocumentProxy): Promise<PdfInfo> {
   let textChars = 0
   let imageCount = 0
   const pageCount = doc.numPages
+  // Kept, not just counted: the quality gate checks a card's source excerpt
+  // against the page it claims to come from, which is the difference between
+  // provenance the model asserts and provenance the app can verify.
+  const pageTexts: string[] = []
 
   for (let i = 1; i <= pageCount; i++) {
     const page = await doc.getPage(i)
     try {
       const text = await page.getTextContent()
+      const parts: string[] = []
       for (const item of text.items) {
-        if ('str' in item) textChars += item.str.length
+        if ('str' in item) {
+          textChars += item.str.length
+          parts.push(item.str)
+        }
       }
+      pageTexts.push(parts.join(' '))
       if (i <= IMAGE_SCAN_PAGE_LIMIT) {
         const ops = await page.getOperatorList()
         for (const fn of ops.fnArray) {
@@ -47,7 +56,7 @@ export async function extractPdfInfo(doc: PDFDocumentProxy): Promise<PdfInfo> {
       page.cleanup()
     }
   }
-  return { pageCount, textChars, imageCount }
+  return { pageCount, textChars, imageCount, pageTexts }
 }
 
 /** Render one page to a data-URL thumbnail (used by coverage grid & card provenance). */

@@ -73,7 +73,17 @@ const cardRelationKeys = (card: Card): string[] =>
 // Catalog building (port of build_coverage_catalog)
 // ---------------------------------------------------------------------------
 
-export function buildCoverageCatalog(conceptMap: ConceptMap): EngineCoverageCatalog {
+/**
+ * @param pageCount Pages the PDF actually has. The concept map carries a
+ *   page_count too, but the model estimates it — and when it under-counts,
+ *   every page past its number silently leaves the ledger: no gap is ever
+ *   reported for them and page coverage reads 100% (or more) while a third
+ *   of the lecture has no cards.
+ */
+export function buildCoverageCatalog(
+  conceptMap: ConceptMap,
+  pageCount?: number,
+): EngineCoverageCatalog {
   const conceptIds = new Set<string>()
   const highPriorityIds = new Set<string>()
   const conceptNames = new Map<string, string>()
@@ -135,7 +145,7 @@ export function buildCoverageCatalog(conceptMap: ConceptMap): EngineCoverageCata
     conceptsByPage,
     pagesByConcept,
     conceptNames,
-    pageCount: conceptMap.pageCount,
+    pageCount: pageCount !== undefined && pageCount > 0 ? pageCount : conceptMap.pageCount,
     relationsByPage,
   }
 }
@@ -157,6 +167,10 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
   const coveredPages = new Set<number>()
   const explicitConceptIds = new Set<string>()
   const conceptsCoveredByPage = new Set<string>()
+  /** Page-inferred concepts of cards that *cannot* name ids: a card read back
+   *  out of Anki lost them to a fresh concept map, so page overlap is the
+   *  only evidence it will ever have. */
+  const conceptsCoveredByInheritedPage = new Set<string>()
   const explicitRelationKeys = new Set<string>()
   const relationsCoveredByPage = new Set<string>()
   const cardsPerPage = new Map<number, number>()
@@ -168,6 +182,7 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
       cardsPerPage.set(page, (cardsPerPage.get(page) ?? 0) + 1)
       for (const conceptId of catalog.conceptsByPage.get(page) ?? []) {
         conceptsCoveredByPage.add(conceptId)
+        if (card.fromAnki === true) conceptsCoveredByInheritedPage.add(conceptId)
       }
       for (const relationKey of relationsByPage.get(page) ?? []) {
         relationsCoveredByPage.add(relationKey)
@@ -188,8 +203,14 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
     if (!coveredPages.has(page)) uncoveredPages.push(page)
   }
 
+  // A high-importance concept counts as taught when a card claims it
+  // outright. Page overlap stays good enough for the percentages — one card
+  // on page 5 does say something about page 5 — but it is not evidence that
+  // the card teaches the hard concept that happens to live there, and this
+  // list is what decides whether the run is allowed to stop. Cards inherited
+  // from Anki are the exception: ids are the one thing they cannot carry.
   const missingHighPriority = [...catalog.highPriorityIds].filter(
-    (id) => !coveredConceptUnion.has(id),
+    (id) => !explicitConceptIds.has(id) && !conceptsCoveredByInheritedPage.has(id),
   )
 
   const saturatedPages = sortedNumbers(cardsPerPage.keys()).filter(
@@ -262,7 +283,52 @@ const summarizeGaps = (catalog: CoverageCatalog, coverage: CoverageData): GapSum
   }
 }
 
-export function buildGenerationGapText(catalog: CoverageCatalog, coverage: CoverageData): string {
+// ---------------------------------------------------------------------------
+// Question mix
+// ---------------------------------------------------------------------------
+
+/** Below this the mix is noise rather than a pattern worth steering. */
+const MIX_MIN_CARDS = 8
+
+const QUESTION_KINDS: Array<{ kind: string; re: RegExp }> = [
+  { kind: 'why', re: /\b(why|warum|wieso|weshalb)\b/i },
+  { kind: 'how', re: /\b(how|wie)\b/i },
+  {
+    kind: 'compare',
+    re: /\b(compare|comparison|difference|differs?|versus|vs\.?|unterschied|vergleich)\w*\b/i,
+  },
+  { kind: 'apply', re: /\b(given|calculate|compute|derive|apply|predict|berechne|gegeben)\w*\b/i },
+]
+
+/**
+ * What kinds of question the deck is made of.
+ *
+ * The system prompt asks for variety and for understanding over recall, but
+ * nothing measured it, so nothing steered it — a deck of forty "What is …?"
+ * definitions satisfied every counter in this ledger. Naming the mix back to
+ * the model is the same trick the coverage numbers already play.
+ */
+export function summarizeQuestionMix(cards: readonly Card[]): string | null {
+  if (cards.length < MIX_MIN_CARDS) return null
+  const counts = new Map<string, number>()
+  for (const card of cards) {
+    const front = (card.fields?.['Front'] ?? card.fields?.['Text'] ?? '')
+      .replace(/<[^>]+>/g, ' ')
+      .slice(0, 200)
+    const kind = QUESTION_KINDS.find((k) => k.re.test(front))?.kind ?? 'recall/definition'
+    counts.set(kind, (counts.get(kind) ?? 0) + 1)
+  }
+  const parts = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([kind, count]) => `${count} ${kind}`)
+  return `${parts.join(', ')} (of ${cards.length})`
+}
+
+export function buildGenerationGapText(
+  catalog: CoverageCatalog,
+  coverage: CoverageData,
+  cards: readonly Card[] = [],
+): string {
   const gaps = summarizeGaps(catalog, coverage)
 
   const lines = [
@@ -271,6 +337,13 @@ export function buildGenerationGapText(catalog: CoverageCatalog, coverage: Cover
     `  - Concepts covered: ${gaps.coveredConceptCount}/${catalog.conceptIds.size} (${gaps.explicitConceptCount} explicit).`,
     `  - Relations covered: ${gaps.coveredRelationCount}/${catalog.relationKeys.size}.`,
   ]
+
+  const mix = summarizeQuestionMix(cards)
+  if (mix !== null) {
+    lines.push(
+      `  - Question mix so far: ${mix}. A deck that only asks for definitions tests recall, not understanding — weight the next batch toward why/how/compare/apply.`,
+    )
+  }
 
   if (coverage.uncoveredPages.length > 0) {
     lines.push(`  - Prioritize uncovered pages: ${preview(coverage.uncoveredPages, 15, String)}`)

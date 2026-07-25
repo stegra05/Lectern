@@ -122,6 +122,9 @@ export interface PdfInfo {
   pageCount: number
   textChars: number
   imageCount: number
+  /** Extracted text per page, index 0 = page 1. Absent when the info came
+   *  from somewhere other than a real PDF read (tests, older sessions). */
+  pageTexts?: string[]
 }
 
 export type ContentMode = 'slides' | 'script'
@@ -211,9 +214,18 @@ export interface SyncFailure {
   error: string
 }
 
+/** A card the send deliberately left alone — not an error. */
+export interface SyncSkip {
+  uid: string
+  front: string
+}
+
 export interface SyncResult {
   created: number
   updated: number
+  /** Cards Anki already holds under the same first field; left untouched
+   *  rather than attempted and reported as failures. */
+  duplicates: SyncSkip[]
   failures: SyncFailure[]
 }
 
