@@ -203,7 +203,7 @@ export function ConceptGraph({
                 tabIndex={0}
                 aria-pressed={c.id === selectedId}
                 aria-label={`${c.name} — ${STATE_LABEL[state]}`}
-                className={`cursor-pointer outline-none transition-opacity duration-150 ${
+                className={`cursor-pointer transition-opacity duration-150 ${
                   dimmed ? 'opacity-30' : ''
                 }`}
                 onPointerDown={(e) => e.stopPropagation()}

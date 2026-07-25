@@ -53,9 +53,13 @@ export function UpdatePill() {
   }
 
   return (
-    // Top right, under the window chrome: the bottom-right corner belongs to
-    // the send bar's primary button, and an update notice landed on top of it.
-    <div className="rise-in bg-desk-raised ring-desk-edge shadow-card absolute top-14 right-4 z-20 flex items-center gap-3 rounded-md px-4 py-2.5 text-sm ring-1">
+    // Bottom left: the bottom-right corner belongs to the send bar's primary
+    // button, and the top-right corner turned out to sit on the filmstrip,
+    // covering — and blocking clicks on — the last few slides all session.
+    <div
+      role="status"
+      className="rise-in bg-desk-raised ring-desk-edge shadow-card absolute bottom-4 left-4 z-20 flex items-center gap-3 rounded-md px-4 py-2.5 text-sm ring-1"
+    >
       {percent === null ? (
         <>
           <span className="text-chalk">Version {update.version} is available.</span>
@@ -67,14 +71,14 @@ export function UpdatePill() {
           </button>
           <button
             onClick={() => setUpdate(null)}
-            aria-label="Dismiss"
+            aria-label="Dismiss the update notice"
             className="text-chalk -m-1 rounded-sm p-1 opacity-70 transition-opacity duration-150 hover:opacity-100"
           >
             ✕
           </button>
         </>
       ) : (
-        <span className="text-chalk" role="status">
+        <span className="text-chalk">
           {percent < 100 ? `Downloading update… ${percent}%` : 'Restarting…'}
         </span>
       )}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { prefersReducedMotion } from '../lib/motion'
 import type { CoverageData } from '../engine/types'
 import { useLectern } from '../state/store'
 
@@ -43,9 +44,8 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
     const fresh = coverage.coveredPages.filter((p) => !scrolledTo.current.has(p))
     if (fresh.length === 0) return
     for (const p of fresh) scrolledTo.current.add(p)
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     stripRef.current?.querySelector(`[data-page="${fresh[fresh.length - 1]}"]`)?.scrollIntoView({
-      behavior: reduced ? 'auto' : 'smooth',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
       inline: 'nearest',
       block: 'nearest',
     })
@@ -57,7 +57,24 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
 
   return (
     <div className="border-desk-edge/60 shrink-0 border-b">
-      <div ref={stripRef} className="flex gap-2 overflow-x-auto px-4 py-3">
+      {/* One tab stop for the whole strip, ←/→ inside it: a 70-page lecture
+          otherwise put 70 stops between the window chrome and the cards. */}
+      <div
+        ref={stripRef}
+        role="toolbar"
+        aria-label="Lecture pages"
+        aria-orientation="horizontal"
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+          const buttons = [...(stripRef.current?.querySelectorAll('button') ?? [])]
+          const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+          if (index === -1) return
+          e.preventDefault()
+          const next = e.key === 'ArrowRight' ? index + 1 : index - 1
+          buttons[Math.min(buttons.length - 1, Math.max(0, next))]?.focus()
+        }}
+        className="flex gap-2 overflow-x-auto px-4 py-3"
+      >
         {Array.from({ length: pdfInfo.pageCount }, (_, i) => i + 1).map((page) => {
           const isCovered = covered.has(page)
           const isNew = isCovered && !litBefore.has(page)
@@ -94,6 +111,7 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
             <div key={page} data-page={page} className="flex shrink-0 flex-col items-center gap-1">
               <button
                 onClick={() => peekSlide(isPeeked ? null : page)}
+                tabIndex={page === (slidePeek ?? 1) ? 0 : -1}
                 className={`group ${wrapperClass}`}
                 aria-label={`View slide ${page}${count > 0 ? ` (${count} cards)` : ''}`}
                 aria-pressed={isPeeked}
@@ -101,7 +119,7 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
                 {tile}
               </button>
               <span
-                className={`font-data text-2xs ${isCovered ? 'text-lamp' : 'text-chalk-dim/60'}`}
+                className={`font-data text-2xs ${isCovered ? 'text-lamp' : 'text-chalk-faint'}`}
               >
                 {page}
               </span>

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { isSyncable } from '../engine/anki'
+import { ankiCardCount } from '../engine/quality'
 import { useLectern } from '../state/store'
 
 /** Settling time before re-asking Anki what the send would do, so removing a
@@ -17,13 +18,17 @@ export function SyncBar() {
   const syncResult = useLectern((s) => s.syncResult)
   const previewSyncNow = useLectern((s) => s.previewSyncNow)
   const syncNow = useLectern((s) => s.syncNow)
+  const editingUid = useLectern((s) => s.editingUid)
 
   const syncable = cards.filter(isSyncable)
   // Two different reasons a card stays behind, and they read very differently
   // to the user: one is already in Anki, the other was deliberately withheld.
   const inherited = cards.filter((c) => c.fromAnki).length
   const excluded = cards.length - syncable.length - inherited
-  const canSend = ankiStatus === 'connected' && syncState !== 'syncing' && syncable.length > 0
+  // Not while a card editor is open: ⌘↩ is advertised inside it as "saves",
+  // and it used to also push the whole deck to Anki.
+  const canSend =
+    ankiStatus === 'connected' && syncState !== 'syncing' && syncable.length > 0 && !editingUid
 
   // What the send will actually do — how many are new, how many update a note
   // already in Anki, how many Anki would refuse as duplicates — is the whole
@@ -70,6 +75,12 @@ export function SyncBar() {
     if (syncPreview.toUpdate > 0) detail.push(`${syncPreview.toUpdate} updated`)
     if (syncPreview.duplicates > 0) detail.push(`${syncPreview.duplicates} already in Anki`)
   }
+  // A cloze note with three deletions is three cards to study. The deck size
+  // the user chose counts notes, so the difference is worth saying once.
+  const ankiCards = syncable.reduce((total, card) => total + ankiCardCount(card), 0)
+  if (ankiCards > syncable.length) {
+    detail.push(`${ankiCards} cards to study — clozes make one per deletion`)
+  }
   if (inherited > 0) detail.push(`${inherited} kept from the deck, unchanged`)
   if (excluded > 0) {
     detail.push(
@@ -80,7 +91,7 @@ export function SyncBar() {
 
   return (
     <div className="border-desk-edge/60 bg-desk/95 absolute inset-x-0 bottom-0 border-t px-6 py-3 backdrop-blur">
-      <div aria-live="polite" className="mx-auto flex max-w-2xl items-center gap-4">
+      <div className="mx-auto flex max-w-2xl items-center gap-4">
         {ankiStatus !== 'connected' ? (
           <>
             <p className="text-chalk-dim flex-1 text-sm">
@@ -99,6 +110,7 @@ export function SyncBar() {
               aria-valuemin={0}
               aria-valuemax={syncProgress?.total ?? cards.length}
               aria-valuenow={syncProgress?.done ?? 0}
+              aria-valuetext={`${syncProgress?.done ?? 0} of ${syncProgress?.total ?? cards.length} cards sent`}
               className="bg-desk-edge h-1 flex-1 overflow-hidden rounded-full"
             >
               <div
@@ -113,9 +125,15 @@ export function SyncBar() {
             </span>
           </>
         ) : syncState === 'done' && syncResult ? (
-          <>
+          <div aria-live="polite" className="flex flex-1 items-center gap-4">
             <p className="text-chalk flex-1 text-sm">
               Sent {syncResult.created + syncResult.updated} cards to “{deckName}”.
+              {syncResult.duplicates.length > 0 && (
+                <span className="text-chalk-dim">
+                  {' '}
+                  {syncResult.duplicates.length} already there, left alone.
+                </span>
+              )}
               {syncResult.failures.length > 0 && (
                 <span className="text-brick-soft">
                   {' '}
@@ -126,7 +144,7 @@ export function SyncBar() {
             <button onClick={() => void syncNow()} className="btn-secondary px-3 py-2">
               Send again
             </button>
-          </>
+          </div>
         ) : (
           <>
             <div className="min-w-0 flex-1">
@@ -135,7 +153,9 @@ export function SyncBar() {
                 <span className="font-medium">{deckName}</span>
               </p>
               {detail.length > 0 && (
-                <p className="font-data text-chalk-dim truncate text-xs">{detail.join(' · ')}</p>
+                <p className="font-data text-chalk-dim truncate text-xs" title={detail.join(' · ')}>
+                  {detail.join(' · ')}
+                </p>
               )}
             </div>
             <button

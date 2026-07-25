@@ -32,9 +32,13 @@ export interface Card {
   sourceSetName?: string
   /** Read back out of the target Anki deck at the start of an extend run.
    *  Such a card is ballast: it seeds dedupe and coverage, the model never
-   *  edits it, and it is not re-sent. Editing one by hand clears the flag,
-   *  which opts it into the next send as an update. */
+   *  edits it, and it is not re-sent. The flag stays set once set — it is
+   *  what tells the UI this card lives in Anki and cannot be deleted here. */
   fromAnki?: boolean
+  /** The user edited an inherited card by hand, which opts it into the next
+   *  send as an update to its existing note. Separate from `fromAnki`, which
+   *  used to be cleared for this and took the delete guard with it. */
+  edited?: boolean
   /** Set after a successful Anki sync. */
   ankiNoteId?: number
 }

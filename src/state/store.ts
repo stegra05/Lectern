@@ -8,11 +8,17 @@ import { readFile } from '@tauri-apps/plugin-fs'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { create } from 'zustand'
 import { AnkiClient, checkConnection, isSyncable, previewSync, syncCards } from '../engine/anki'
-import { countDeckNotes, fetchDeckCards, MAX_IMPORT_CARDS } from '../engine/ankiImport'
+import {
+  countDeckNotes,
+  fetchDeckCards,
+  looksLikeSameSet,
+  MAX_IMPORT_CARDS,
+} from '../engine/ankiImport'
 import { provenanceFieldValues } from '../engine/noteTypes'
 import { ensureLecternModels, migrateNotesToLectern } from '../engine/noteTypeSync'
 import { loadNoteTypeFonts } from '../lib/noteTypeFonts'
 import { estimateCost, type CostEstimate } from '../engine/cost'
+import { evaluateCard } from '../engine/quality'
 import { extractPdfInfo, openPdf, renderPageThumbnail } from '../engine/pdf'
 import { runFollowUp } from '../engine/followUp'
 import { runPipeline, type FollowUpSeed } from '../engine/pipeline'
@@ -73,6 +79,9 @@ interface LecternState {
   ankiStatus: 'unknown' | 'checking' | 'connected' | 'offline'
   ankiDecks: string[]
   settingsOpen: boolean
+  /** The concept-map sheet. In the store rather than in Sidebar's local
+   *  state because the card shortcuts have to know a modal is open. */
+  conceptsOpen: boolean
 
   // source document
   fileName: string | null
@@ -133,6 +142,7 @@ interface LecternActions {
    *  Settings, rather than the saved one. */
   refreshAnki: (urlOverride?: string) => Promise<void>
   openSettings: (open: boolean) => void
+  openConcepts: (open: boolean) => void
   applySettings: (settings: Settings) => Promise<void>
   setHasApiKey: (has: boolean) => void
 
@@ -247,6 +257,16 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     }
   }
 
+  /**
+   * A send report describes the deck as it was when it was sent. Once a card
+   * is edited, removed, or opted in, the bar has to go back to saying what
+   * the *next* send would do — otherwise it sits on "Sent 40 cards / Send
+   * again" for the rest of the session, with no hint that pressing it now
+   * updates all forty.
+   */
+  const staleSync = (s: LecternState): Partial<LecternState> =>
+    s.syncState === 'done' ? { syncState: 'idle', syncResult: null, syncPreview: null } : {}
+
   const scheduleDeckProbe = () => {
     if (deckProbeTimer !== null) window.clearTimeout(deckProbeTimer)
     deckProbeTimer = window.setTimeout(() => {
@@ -265,12 +285,21 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
   /** Best-effort install/upgrade of the bundled note types. Failure is not
    *  fatal: model resolution falls back to plain Basic/Cloze when the
    *  Lectern types are absent. */
-  const ensureNoteTypes = async (client: AnkiClient, settings: Settings): Promise<void> => {
+  const ensureNoteTypes = async (
+    client: AnkiClient,
+    settings: Settings,
+    /** Report the outcome as a toast too — a design change made from Home
+     *  has no activity log to land in, and used to look like nothing. */
+    announce = false,
+  ): Promise<void> => {
     if (!settings.useLecternNoteTypes) return
     try {
       const result = await ensureLecternModels(client, settings.noteTypeTheme, loadNoteTypeFonts)
       if (result.created.length > 0) {
         pushLog('info', `Added the ${result.created.join(' and ')} note type(s) to Anki.`)
+      }
+      if (result.updated.length > 0) {
+        pushLog('info', `Restyled ${result.updated.join(' and ')} in Anki.`)
       }
       if (result.userOwned.length > 0) {
         pushLog(
@@ -278,14 +307,57 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           `${result.userOwned.join(' and ')}: styling was edited in Anki, so Lectern leaves it as is.`,
         )
       }
+      if (result.newerVersion.length > 0) {
+        pushLog(
+          'info',
+          `${result.newerVersion.join(' and ')} came from a newer Lectern — left untouched.`,
+        )
+      }
+      if (!announce) return
+      if (result.updated.length > 0) {
+        get().toast('success', 'Card design applied — cards in Anki show it right away.')
+      } else if (result.userOwned.length > 0) {
+        get().toast(
+          'info',
+          `Left as it is: you edited the styling of ${result.userOwned.join(' and ')} in Anki.`,
+        )
+      } else if (result.newerVersion.length > 0) {
+        get().toast('info', 'A newer Lectern installed these note types — left untouched.')
+      }
     } catch (e) {
       pushLog('warn', `Could not set up the Lectern note types: ${(e as Error).message}`)
+      if (announce) {
+        get().toast('error', `Could not apply the card design: ${(e as Error).message}`)
+      }
     }
   }
 
+  /**
+   * The slide-set name written onto cards. The model names the set fresh on
+   * every run ("ML Lecture 2" one week, "Machine Learning Lecture 2" the
+   * next), which would file the same lecture under two different tags; when
+   * the deck already holds cards from this document, their spelling wins.
+   */
+  const slideSetName = (): string => {
+    const fromModel = get().conceptMap?.slideSetName ?? ''
+    const inherited = get().cards.find(
+      (card) => card.sourceSetName !== undefined && looksLikeSameSet(card.sourceSetName, fromModel),
+    )
+    return inherited?.sourceSetName ?? fromModel
+  }
+
   /** Topic/Source/Excerpt values for the Lectern note types. */
-  const noteExtras = (card: Card): Record<string, string> =>
-    provenanceFieldValues(card, get().conceptMap?.slideSetName ?? '')
+  const noteExtras = (card: Card): Record<string, string> => {
+    const runSet = slideSetName()
+    // A card from a different lecture sharing this deck: this run knows
+    // neither its pages (adoptExistingCards drops them) nor its document, so
+    // it writes no provenance rather than replacing the note's own with a
+    // wrong one.
+    if (card.sourceSetName !== undefined && !looksLikeSameSet(card.sourceSetName, runSet)) {
+      return {}
+    }
+    return provenanceFieldValues(card, card.sourceSetName ?? runSet)
+  }
 
   return {
     settings: null,
@@ -293,6 +365,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     ankiStatus: 'unknown',
     ankiDecks: [],
     settingsOpen: false,
+    conceptsOpen: false,
 
     fileName: null,
     pdfBytes: null,
@@ -363,6 +436,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     openSettings: (open) => set({ settingsOpen: open }),
 
+    openConcepts: (open) => set({ conceptsOpen: open }),
+
     applySettings: async (settings) => {
       const before = get().settings
       await saveSettings(settings)
@@ -375,7 +450,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         (before?.useLecternNoteTypes !== settings.useLecternNoteTypes ||
           before?.noteTypeTheme !== settings.noteTypeTheme)
       if (designChanged) {
-        void ensureNoteTypes(new AnkiClient(settings.ankiUrl, tauriFetch), settings)
+        void ensureNoteTypes(new AnkiClient(settings.ankiUrl, tauriFetch), settings, true)
       }
     },
 
@@ -462,9 +537,11 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     },
 
     setDeckName: (name) => {
-      // The old count belongs to the old name — drop it rather than show a
-      // stale "87 cards already here" against a deck nobody has looked up.
-      set({ deckName: name, existingDeckCount: null })
+      // Trimmed here rather than at each use: "Stats " and "Stats" are two
+      // different decks to Anki, and the probe, the import and createDeck all
+      // took the raw string while only the validity check trimmed it.
+      // Interior spaces are the user's business; the ends never are.
+      set({ deckName: name.replace(/^\s+/, '').replace(/\s+$/, ''), existingDeckCount: null })
       scheduleDeckProbe()
     },
 
@@ -626,7 +703,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     cancelGeneration: () => abortController?.abort(),
 
     requestMoreCards: async (text) => {
-      const { settings, conceptMap, followUp, followUpBusy, cards, focusPrompt } = get()
+      const { settings, conceptMap, followUp, followUpBusy, cards, focusPrompt, pdfInfo } = get()
       const request = text.trim()
       if (!request || !settings || !conceptMap || !followUp || followUpBusy) return
       const apiKey = await getApiKey().catch(() => null)
@@ -648,6 +725,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           conceptMap,
           seed: followUp,
           focusPrompt: focusPrompt || undefined,
+          pdfInfo: pdfInfo ?? undefined,
           model: settings.model,
           apiKey,
           fetchFn: tauriFetch,
@@ -656,6 +734,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         })
         set((s) => ({
           followUp: outcome.seed,
+          ...staleSync(s),
           usage: {
             inputTokens: (s.usage?.inputTokens ?? 0) + outcome.usage.inputTokens,
             outputTokens: (s.usage?.outputTokens ?? 0) + outcome.usage.outputTokens,
@@ -708,16 +787,32 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       set({ view: 'home', phase: 'idle' })
     },
 
-    updateCardFields: (uid, fields) =>
+    updateCardFields: (uid, fields) => {
+      const pdfInfo = get().pdfInfo
       set((s) => ({
-        cards: s.cards.map((c) =>
-          // Editing a card inherited from Anki is how you opt it into the
-          // next send: it stops being untouched ballast and becomes an
-          // update against its existing note.
-          c.uid === uid ? { ...c, fields, fromAnki: undefined } : c,
-        ),
+        cards: s.cards.map((c) => {
+          if (c.uid !== uid) return c
+          // Editing a card inherited from Anki opts it into the next send as
+          // an update against its existing note — without it ceasing to be a
+          // card that lives in Anki.
+          const edited: Card = { ...c, fields, edited: true }
+          // The same gate the model's edits pass. Without this the badge kept
+          // describing the card as it was generated: a fixed card stayed
+          // flagged, and a newly broken one (an emptied field, a deleted
+          // cloze marker) went out looking clean.
+          const verdict = evaluateCard(edited, {
+            pageCount: pdfInfo?.pageCount,
+            pageTexts: pdfInfo?.pageTexts,
+          })
+          edited.qualityScore = verdict.score
+          edited.qualityIssues = verdict.issues
+          return edited
+        }),
         editingUid: null,
-      })),
+        // The send bar's breakdown describes a deck that just changed.
+        ...staleSync(s),
+      }))
+    },
 
     removeCard: (uid) => {
       const { cards } = get()
@@ -729,12 +824,12 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         get().toast('info', 'This card is already in Anki — remove it there.')
         return
       }
-      set({ cards: cards.filter((c) => c.uid !== uid) })
+      set((s) => ({ cards: s.cards.filter((c) => c.uid !== uid), ...staleSync(s) }))
       const undo = () =>
         set((s) => {
           const restored = [...s.cards]
           restored.splice(Math.min(index, restored.length), 0, card)
-          return { cards: restored }
+          return { cards: restored, ...staleSync(s) }
         })
       get().toast('info', 'Card removed.', undo)
     },
@@ -742,6 +837,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     setCardSyncExcluded: (uid, excluded) =>
       set((s) => ({
         cards: s.cards.map((c) => (c.uid === uid ? { ...c, syncExcluded: excluded } : c)),
+        ...staleSync(s),
       })),
 
     setEditingUid: (uid) => set({ editingUid: uid }),
@@ -811,13 +907,29 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
             return noteId ? { ...c, ankiNoteId: noteId } : c
           }),
         }))
-        if (result.failures.length === 0) {
-          get().toast('success', `Sent ${result.created + result.updated} cards to Anki.`)
-        } else {
-          get().toast(
-            'error',
-            `Sent ${result.created + result.updated} cards; ${result.failures.length} failed.`,
+        // "see Activity" used to point at a log that never heard about the
+        // send: every per-card outcome was thrown away with the toast.
+        for (const skipped of result.duplicates) {
+          pushLog(
+            'info',
+            'Already in Anki — left as it is',
+            plainCardText(skipped.front).slice(0, 120),
           )
+        }
+        for (const failure of result.failures) {
+          pushLog('error', `Not sent: ${failure.error}`, plainCardText(failure.front).slice(0, 120))
+        }
+        const sent = result.created + result.updated
+        const extras = [
+          result.duplicates.length > 0 ? `${result.duplicates.length} already there` : '',
+          result.failures.length > 0 ? `${result.failures.length} failed` : '',
+        ].filter(Boolean)
+        const suffix = extras.length > 0 ? ` (${extras.join(', ')})` : ''
+        pushLog('info', `Sent ${sent} card(s) to “${deckName}”${suffix}.`)
+        if (result.failures.length === 0) {
+          get().toast('success', `Sent ${sent} cards to Anki.${suffix}`)
+        } else {
+          get().toast('error', `Sent ${sent} cards; ${result.failures.length} failed.`)
         }
       } catch (e) {
         set({ syncState: 'idle' })

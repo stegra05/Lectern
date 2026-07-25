@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { conceptMapToMarkdown, conceptMapToMermaid, relationsFor } from '../engine/conceptExport'
 import type { Concept, ConceptMap, Difficulty, Importance } from '../engine/types'
 import { copyText } from '../lib/clipboard'
+import { useDialogFocus } from '../lib/useDialogFocus'
 import { useLectern } from '../state/store'
 import { ConceptGraph, humanizeRelation, type ConceptState } from './ConceptGraph'
 
@@ -27,6 +28,7 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
   // Read by the Esc handler without re-binding the listener per change.
+  const sheetRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef(selectedId)
   const copyOpenRef = useRef(copyOpen)
   useEffect(() => {
@@ -48,6 +50,10 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [onClose])
+
+  // A dialog that declares aria-modal has to behave like one: focus starts
+  // inside it, Tab stays inside it, and focus returns where it came from.
+  useDialogFocus(sheetRef)
 
   if (!conceptMap) return null
 
@@ -71,6 +77,7 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="concepts-title"
@@ -134,9 +141,9 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
                   <Dot className="bg-lamp" /> covered
                   <Dot className="bg-lamp/40" /> likely covered
                   <Dot className="border-chalk-dim/80 border" /> no card yet
-                  <span className="text-chalk-dim/60 mx-1">·</span>
+                  <span className="text-chalk-faint mx-1">·</span>
                   larger = more important
-                  <span className="text-chalk-dim/60 mx-1">·</span>
+                  <span className="text-chalk-faint mx-1">·</span>
                   click a concept for its relations and slides
                 </p>
               )}
@@ -154,7 +161,7 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
                         it, so a long map never loses its place. */}
                     <h3 className="bg-desk-raised border-desk-edge/60 sticky top-0 z-10 flex items-baseline gap-2 border-b pt-4 pb-1.5">
                       <span className="eyebrow">{IMPORTANCE_LABEL[importance]}</span>
-                      <span className="font-data text-chalk-dim/60 text-2xs">{group.length}</span>
+                      <span className="font-data text-chalk-faint text-2xs">{group.length}</span>
                     </h3>
                     <ul>
                       {group.map((c) => (
@@ -197,9 +204,10 @@ function DifficultyMeter({ difficulty }: { difficulty: Difficulty }) {
   const filled = DIFFICULTY_STEPS[difficulty]
   return (
     <span
+      role="img"
       className="flex shrink-0 items-end gap-px"
       title={`${difficulty} — ${filled} of 3`}
-      aria-label={difficulty}
+      aria-label={`Difficulty: ${difficulty}`}
     >
       {[1, 2, 3].map((step) => (
         <span
@@ -235,6 +243,14 @@ function ConceptRow({
     <li className="border-desk-edge/25 border-b py-2 last:border-b-0">
       <div className="flex items-baseline gap-2.5">
         <span
+          role="img"
+          aria-label={
+            state === 'covered'
+              ? 'Covered by a card'
+              : state === 'inferred'
+                ? 'Likely covered — cards exist on its pages'
+                : 'No card yet'
+          }
           title={
             state === 'covered'
               ? 'Covered by a card'
@@ -247,7 +263,7 @@ function ConceptRow({
               ? 'bg-lamp'
               : state === 'inferred'
                 ? 'bg-lamp/40'
-                : 'border-chalk-dim/50 border'
+                : 'border-chalk-dim/80 border'
           }`}
         />
         <span
@@ -280,7 +296,7 @@ function ConceptRow({
             </button>
           ))}
           {concept.pageReferences.length > PAGE_REFS_SHOWN && (
-            <span className="text-chalk-dim/60">
+            <span className="text-chalk-faint">
               {' '}
               +{concept.pageReferences.length - PAGE_REFS_SHOWN}
             </span>
@@ -290,7 +306,7 @@ function ConceptRow({
       {relations.length > 0 && (
         <ul className="border-desk-edge/50 mt-1 ml-[0.4375rem] space-y-0.5 border-l pl-3">
           {relations.map((relation) => (
-            <li key={relation.text} className="font-data text-chalk-dim/70 text-2xs">
+            <li key={relation.text} className="font-data text-chalk-faint text-2xs">
               {relation.text}
             </li>
           ))}

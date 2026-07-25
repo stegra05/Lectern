@@ -67,19 +67,22 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
           · {cardsHere > 0 ? `${cardsHere} card${cardsHere === 1 ? '' : 's'}` : 'no cards yet'}
         </span>
         <div className="flex-1" />
+        {/* aria-disabled rather than disabled: clicking to the first slide
+            used to disable the button under the pointer, which blurs it and
+            drops the tab position back to the window chrome. */}
         <button
-          onClick={() => peekSlide(page - 1)}
-          disabled={page <= 1}
-          className="btn-ghost px-2 py-1"
+          onClick={() => page > 1 && peekSlide(page - 1)}
+          aria-disabled={page <= 1}
+          className={`btn-ghost px-2 py-1 ${page <= 1 ? 'pointer-events-none opacity-45' : ''}`}
           aria-label="Previous slide (←)"
           title="Previous slide (←)"
         >
           ←
         </button>
         <button
-          onClick={() => peekSlide(page + 1)}
-          disabled={page >= pageCount}
-          className="btn-ghost px-2 py-1"
+          onClick={() => page < pageCount && peekSlide(page + 1)}
+          aria-disabled={page >= pageCount}
+          className={`btn-ghost px-2 py-1 ${page >= pageCount ? 'pointer-events-none opacity-45' : ''}`}
           aria-label="Next slide (→)"
           title="Next slide (→)"
         >

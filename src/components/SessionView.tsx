@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { plainCardText } from '../lib/render'
+import { prefersReducedMotion } from '../lib/motion'
 import type { Concept, ConceptMap, CoverageData } from '../engine/types'
 import type { AppPhase } from '../state/store'
 import { useLectern } from '../state/store'
@@ -52,7 +54,8 @@ function Sidebar() {
   const backToHome = useLectern((s) => s.backToHome)
   const cardCount = useLectern((s) => s.cards.length)
   const followUpReady = useLectern((s) => s.followUp !== null)
-  const [conceptsOpen, setConceptsOpen] = useState(false)
+  const conceptsOpen = useLectern((s) => s.conceptsOpen)
+  const setConceptsOpen = useLectern((s) => s.openConcepts)
 
   const running = phase !== 'complete' && phase !== 'error' && phase !== 'idle'
   const phaseIndex = PHASES.findIndex((p) => p.id === phase)
@@ -80,7 +83,7 @@ function Sidebar() {
                     ? 'text-chalk font-medium'
                     : state === 'done'
                       ? 'text-chalk-dim'
-                      : 'text-chalk-dim/50'
+                      : 'text-chalk-faint'
                 }`}
               >
                 {p.label}
@@ -285,10 +288,22 @@ function CardColumn() {
 
   const visible = useMemo(() => {
     let list = cards
-    if (pageFilter !== null) list = list.filter((c) => c.sourcePages.includes(pageFilter))
+    // Page filter matches what the filmstrip lit: a card grounded only by its
+    // slide number covers that page too, and used to vanish from its own filter.
+    if (pageFilter !== null) {
+      list = list.filter(
+        (c) =>
+          c.sourcePages.includes(pageFilter) ||
+          (c.sourcePages.length === 0 && c.slideNumber === pageFilter),
+      )
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      list = list.filter((c) => Object.values(c.fields).some((v) => v.toLowerCase().includes(q)))
+      // Against the text of the card, not its HTML: "learning rate" split by a
+      // <b> never matched, while "div" matched every card in the deck.
+      list = list.filter((c) =>
+        Object.values(c.fields).some((v) => plainCardText(v).toLowerCase().includes(q)),
+      )
     }
     return list
   }, [cards, pageFilter, searchQuery])
@@ -298,7 +313,8 @@ function CardColumn() {
     const el = listRef.current
     if (!el || reviewable) return
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 240
-    if (nearBottom) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    if (nearBottom)
+      el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
   }, [cards.length, reviewable])
 
   // Keyboard review: ↑↓/jk walk the visible cards, e/↩ edits, x removes
@@ -308,7 +324,7 @@ function CardColumn() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
       const state = useLectern.getState()
-      if (state.editingUid || state.settingsOpen) return
+      if (state.editingUid || state.settingsOpen || state.conceptsOpen) return
       const index = visible.findIndex((c) => c.uid === state.selectedUid)
       const select = (i: number) => state.setSelectedUid(visible[i]?.uid ?? null)
 
@@ -400,8 +416,7 @@ function CardColumn() {
               {rejectedCount > 0 && ` · ${rejectedCount} rejected by the quality gate`}
             </span>
             <span
-              aria-hidden
-              className="font-data text-chalk-dim/70 text-2xs whitespace-nowrap"
+              className="font-data text-chalk-faint text-2xs whitespace-nowrap"
               title="Keyboard review: ↑↓ select a card, e edit, x remove, s show its slide, ⌘↩ send the deck to Anki"
             >
               ↑↓ select · e edit · x remove · s slide · ⌘↩ send
@@ -421,7 +436,11 @@ function CardColumn() {
             }}
           />
         ) : (
-          <div className="mx-auto max-w-2xl space-y-3 pb-24">
+          <div
+            className="mx-auto max-w-2xl space-y-3 pb-24"
+            role={reviewable ? 'listbox' : undefined}
+            aria-label={reviewable ? 'Generated cards' : undefined}
+          >
             {visible.map((card, i) => (
               <CardTile
                 key={card.uid}

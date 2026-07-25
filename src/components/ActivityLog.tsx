@@ -52,7 +52,7 @@ function Entry({ line, time }: { line: LogLine; time: string | null }) {
     <div className="flex gap-2">
       <span
         aria-hidden={time === null}
-        className="font-data text-2xs text-chalk-dim/60 w-9 shrink-0 pt-px text-right"
+        className="font-data text-2xs text-chalk-faint w-9 shrink-0 pt-px text-right"
       >
         {time}
       </span>
@@ -63,7 +63,7 @@ function Entry({ line, time }: { line: LogLine; time: string | null }) {
             <p className="log-quote leading-snug break-words">{line.message}</p>
           </div>
         ) : (
-          <p className={`text-xs leading-snug break-words ${MESSAGE_COLOR[line.level]}`}>
+          <p className={`log-line text-xs leading-snug break-words ${MESSAGE_COLOR[line.level]}`}>
             {line.message}
           </p>
         )}
@@ -117,7 +117,7 @@ export function FollowUpComposer() {
       {/* How to send only needs saying once you have started writing. */}
       {draft.length > 0 && !busy && (
         <div className="mt-1 flex items-baseline justify-between gap-2">
-          <span className="font-data text-2xs text-chalk-dim/70">↩ sends · ⇧↩ new line</span>
+          <span className="font-data text-2xs text-chalk-faint">↩ sends · ⇧↩ new line</span>
           {draft.length > MAX_REQUEST_PROMPT_LEN * 0.6 && (
             <span className="font-data text-2xs text-chalk-dim">
               {draft.length} / {MAX_REQUEST_PROMPT_LEN}
@@ -162,7 +162,7 @@ function Quote({ text }: { text: string }) {
       className="border-desk-edge hover:border-chalk-dim/60 mt-1 block w-full border-l-2 pl-2 text-left transition-colors duration-150"
     >
       {body}
-      <span className="font-data text-2xs text-chalk-dim/70 mt-0.5 block">
+      <span className="font-data text-2xs text-chalk-faint mt-0.5 block">
         {open ? 'less' : 'more'}
       </span>
     </button>

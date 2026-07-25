@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MODEL_CHOICES } from '../engine/config'
 import { NOTE_TYPE_THEMES, type NoteTypeTheme } from '../engine/noteTypes'
+import { buildCardTags, unknownTagPlaceholders } from '../engine/tags'
 import type { Settings } from '../engine/types'
 import { confirmDiscard } from '../lib/confirm'
 import { deleteApiKey, setApiKey } from '../lib/settings'
@@ -18,6 +19,8 @@ export function SettingsSheet() {
   const toast = useLectern((s) => s.toast)
   const migrateLegacyCards = useLectern((s) => s.migrateLegacyCards)
   const migratingCards = useLectern((s) => s.migratingCards)
+  const deckName = useLectern((s) => s.deckName)
+  const slideSetName = useLectern((s) => s.conceptMap?.slideSetName ?? '')
 
   const [draft, setDraft] = useState<Settings | null>(null)
   const [keyDraft, setKeyDraft] = useState('')
@@ -94,6 +97,16 @@ export function SettingsSheet() {
   }, [open, requestClose])
 
   if (!open || !draft) return null
+
+  const unknownPlaceholders = unknownTagPlaceholders(draft.tagTemplate)
+  const tagPreview = buildCardTags({
+    template: draft.tagTemplate,
+    deck: deckName || 'Machine Learning::Lecture 2',
+    slideSet: slideSetName || 'Neural Networks',
+    topic: 'Backpropagation',
+    defaultTag: draft.defaultTag,
+    enableDefaultTag: draft.enableDefaultTag,
+  }).join('  ')
 
   const save = async () => {
     if (keyDraft.trim()) {
@@ -255,14 +268,16 @@ export function SettingsSheet() {
                 <div>
                   <button
                     onClick={() => void migrateLegacyCards()}
-                    disabled={migratingCards || ankiStatus !== 'connected'}
+                    disabled={migratingCards || ankiStatus !== 'connected' || dirty}
                     className="btn-secondary px-3 py-1.5 text-sm"
                   >
                     {migratingCards ? 'Restyling…' : 'Apply design to earlier synced cards'}
                   </button>
                   <p className="text-chalk-dim mt-1 text-xs">
-                    Moves cards tagged “{draft.defaultTag}” from plain Basic/Cloze onto the Lectern
-                    note types. Review progress is kept.
+                    Moves cards tagged “{settings?.defaultTag ?? draft.defaultTag}” from plain
+                    Basic/Cloze onto the Lectern note types. Review progress is kept; a note with
+                    fields Lectern does not use keeps them on its back.
+                    {dirty && ' Save your settings first — this acts on the saved ones.'}
                   </p>
                 </div>
               </div>
@@ -335,17 +350,46 @@ export function SettingsSheet() {
                   onChange={(e) => setDraft({ ...draft, tagTemplate: e.target.value })}
                   className="field bg-desk font-data mt-1.5 text-sm"
                 />
+                {/* The three placeholders were undiscoverable without reading
+                    the source, and the result was invisible until the cards
+                    were in Anki. */}
+                <p className="text-chalk-dim mt-1.5 text-2xs">
+                  Placeholders: <span className="font-data">{'{{deck}}'}</span>{' '}
+                  <span className="font-data">{'{{slide_set}}'}</span>{' '}
+                  <span className="font-data">{'{{topic}}'}</span>
+                </p>
+                {unknownPlaceholders.length > 0 && (
+                  <p className="text-lamp mt-1 text-2xs">
+                    {unknownPlaceholders.map((name) => `{{${name}}}`).join(', ')} is not a
+                    placeholder — it goes into the tag as written.
+                  </p>
+                )}
+                <p className="text-chalk-dim mt-1 text-2xs">
+                  A card would be tagged{' '}
+                  <span className="font-data text-chalk">{tagPreview || '(no tag)'}</span>
+                </p>
               </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={draft.enableDefaultTag}
-                  onChange={(e) => setDraft({ ...draft, enableDefaultTag: e.target.checked })}
-                  className="accent-lamp"
-                />
-                <span className="text-chalk text-sm">
-                  Also tag every card with “{draft.defaultTag}”
-                </span>
+              <label className="block">
+                <span className="eyebrow">Tag on every card</span>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={draft.enableDefaultTag}
+                    onChange={(e) => setDraft({ ...draft, enableDefaultTag: e.target.checked })}
+                    className="accent-lamp shrink-0"
+                    aria-label="Add a flat tag to every card"
+                  />
+                  <input
+                    value={draft.defaultTag}
+                    onChange={(e) => setDraft({ ...draft, defaultTag: e.target.value })}
+                    disabled={!draft.enableDefaultTag}
+                    className="field bg-desk font-data text-sm disabled:opacity-45"
+                    aria-label="The flat tag added to every card"
+                  />
+                </div>
+                <p className="text-chalk-dim mt-1 text-2xs">
+                  How Lectern finds its own cards later — the restyle button above searches for it.
+                </p>
               </label>
             </div>
           )}

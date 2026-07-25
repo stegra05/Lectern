@@ -6,19 +6,46 @@
 import DOMPurify from 'dompurify'
 import katex from 'katex'
 
+/**
+ * What the review grid renders. The list is wider than the prompt asks for on
+ * purpose: DOMPurify keeps the text of a tag it strips, so a comparison table
+ * or a code block previewed as one run-together line while Anki rendered it
+ * properly — and the user was left correcting a card that was never broken.
+ */
 const ALLOWED_TAGS = [
   'b',
   'strong',
   'i',
   'em',
   'u',
+  's',
+  'small',
   'sub',
   'sup',
   'br',
+  'hr',
   'p',
   'ul',
   'ol',
   'li',
+  'dl',
+  'dt',
+  'dd',
+  'blockquote',
+  'pre',
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'th',
+  'td',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
   'span',
   'div',
   'code',

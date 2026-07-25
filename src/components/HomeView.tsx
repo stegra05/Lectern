@@ -52,11 +52,22 @@ export function HomeView() {
   const existingDeckCount = useLectern((s) => s.existingDeckCount)
   const extendDeck = useLectern((s) => s.extendDeck)
   const setExtendDeck = useLectern((s) => s.setExtendDeck)
+  const ankiStatus = useLectern((s) => s.ankiStatus)
 
   const missingDeck = !deckName.trim()
   const cannotGenerate = !hasApiKey || missingDeck
   const hasExistingCards = (existingDeckCount ?? 0) > 0
   const extending = hasExistingCards && extendDeck
+  // Three states that used to look identical — an empty space under the
+  // field — while only one of them means "a new deck appears in Anki".
+  const deckState: 'unknown' | 'offline' | 'new' | 'empty' =
+    ankiStatus !== 'connected'
+      ? 'offline'
+      : missingDeck || existingDeckCount === null
+        ? 'unknown'
+        : ankiDecks.includes(deckName)
+          ? 'empty'
+          : 'new'
 
   // The slider scale anchors on what the document itself suggests — never on
   // the user override (which feeds store.sizing), or the scale would stretch
@@ -138,20 +149,40 @@ export function HomeView() {
             </section>
 
             {/* Deck */}
-            <label className="block">
-              <span className="eyebrow">Anki deck</span>
-              <input
-                value={deckName}
-                onChange={(e) => setDeckName(e.target.value)}
-                list="anki-decks"
-                placeholder="e.g. Machine Learning::Lecture 2"
-                className="field mt-1.5"
-              />
+            <div className="block">
+              <label className="block">
+                <span className="eyebrow">Anki deck</span>
+                <input
+                  value={deckName}
+                  onChange={(e) => setDeckName(e.target.value)}
+                  list="anki-decks"
+                  placeholder="e.g. Machine Learning::Lecture 2"
+                  className="field mt-1.5"
+                />
+              </label>
               <datalist id="anki-decks">
                 {ankiDecks.map((d) => (
                   <option key={d} value={d} />
                 ))}
               </datalist>
+              {/* What this name means in Anki right now. A typo silently
+                  created a second, near-identical deck at send time. */}
+              {!hasExistingCards && (
+                <p className="text-chalk-dim mt-1.5 text-2xs">
+                  {deckState === 'new' ? (
+                    <>
+                      New deck — Lectern creates “<span className="font-data">{deckName}</span>”
+                      when you send.
+                    </>
+                  ) : deckState === 'empty' ? (
+                    'This deck exists and holds no cards yet.'
+                  ) : deckState === 'offline' ? (
+                    'Anki is not reachable, so Lectern cannot tell whether this deck already exists.'
+                  ) : (
+                    ''
+                  )}
+                </p>
+              )}
               {hasExistingCards && (
                 <div className="border-desk-edge/60 bg-desk-raised/50 rise-in mt-2 rounded-md border px-2.5 py-2">
                   <label className="flex cursor-pointer items-start gap-2">
@@ -173,7 +204,7 @@ export function HomeView() {
                   </label>
                 </div>
               )}
-            </label>
+            </div>
 
             {/* Deck size — on an extend run this buys new cards on top of
                 the ones already in the deck, so it is worded that way. */}

@@ -32,6 +32,9 @@
   /* Text on desk: high / low contrast (chalk-dim ≥ 4.5:1 on desk & desk-raised) */
   --color-chalk: #d6d3cc;
   --color-chalk-dim: #938e85;
+  /* The quietest text still allowed to be text: 4.6:1 on desk-raised. Alpha
+     variants of chalk-dim used to fill this role and fell to 2.4-2.9:1. */
+  --color-chalk-faint: #8a857c;
 
   /* Lamp (brass accent): solid, pressed solid, readable-on-paper */
   --color-lamp: #e8a33d;
@@ -89,8 +92,13 @@ body {
   cursor: default;
 }
 
-/* Study content is selectable; chrome is not. */
+/* Study content is selectable; chrome is not. Error text and the activity
+   log join it: a message you cannot copy is a message you cannot search for
+   or paste into a bug report. */
 .card-content,
+[role='alert'],
+.log-quote,
+.log-line,
 input,
 textarea {
   user-select: text;
@@ -116,12 +124,94 @@ textarea {
 .card-content .katex {
   font-size: 1.02em;
 }
+/* Mirrors the note-type CSS (engine/noteTypes.ts): Tailwind's preflight
+   strips list markers, so the flagship ordered-procedure cloze previewed as
+   flush-left lines and studied in Anki as a numbered list. */
+.card-content ul {
+  list-style: disc;
+}
+.card-content ol {
+  list-style: decimal;
+}
+.card-content ul,
+.card-content ol {
+  margin: 0.4em 0 0;
+  padding-left: 1.4em;
+}
+.card-content li {
+  margin: 0.3em 0;
+}
+.card-content p + p {
+  margin-top: 0.5em;
+}
+.card-content table {
+  border-collapse: collapse;
+  margin: 0.5em 0 0;
+}
+.card-content th,
+.card-content td {
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  padding: 0.25em 0.5em;
+  text-align: left;
+}
+.card-content th {
+  font-weight: 600;
+}
+.card-content pre,
+.card-content code {
+  font-family: var(--font-data);
+  font-size: 0.9em;
+}
+.card-content pre {
+  background-color: var(--color-paper-shade);
+  border-radius: 3px;
+  margin-top: 0.5em;
+  padding: 0.5em 0.7em;
+}
+.card-content blockquote {
+  border-left: 2px solid var(--color-lamp-deep);
+  color: var(--color-ink-soft);
+  margin-top: 0.5em;
+  padding-left: 0.7em;
+}
+.card-content h1,
+.card-content h2,
+.card-content h3,
+.card-content h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin-top: 0.5em;
+}
+.card-content hr {
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  margin: 0.6em 0;
+}
+/* Nothing escapes the paper: long identifiers wrap, wide blocks scroll. */
+.card-content {
+  overflow-wrap: anywhere;
+}
+.card-content .katex-display,
+.card-content pre,
+.card-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
 
-/* Focus visibility on the dark desk. */
+/* Focus visibility. Lamp reads at 8.4:1 on the desk but only 2.05:1 on
+   paper, and every control inside a card tile sits on paper — so the paper
+   surfaces get the darker brass instead. */
 :focus-visible {
   outline: 2px solid var(--color-lamp);
   outline-offset: 2px;
   border-radius: 2px;
+}
+.bg-paper :focus-visible,
+.bg-paper-shade :focus-visible,
+.card-content :focus-visible,
+article.bg-paper:focus-visible {
+  outline-color: var(--color-lamp-ink);
 }
 
 /* ---- Controls: every interactive element derives from these. ---- */
