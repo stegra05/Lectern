@@ -2,6 +2,10 @@ import { useEffect } from 'react'
 import { isSyncable } from '../engine/anki'
 import { useLectern } from '../state/store'
 
+/** Settling time before re-asking Anki what the send would do, so removing a
+ *  run of cards costs one round trip rather than one per keystroke. */
+const PREVIEW_DEBOUNCE_MS = 400
+
 export function SyncBar() {
   const cards = useLectern((s) => s.cards)
   const deckName = useLectern((s) => s.deckName)
@@ -21,6 +25,26 @@ export function SyncBar() {
   const excluded = cards.length - syncable.length - inherited
   const canSend = ankiStatus === 'connected' && syncState !== 'syncing' && syncable.length > 0
 
+  // What the send will actually do — how many are new, how many update a note
+  // already in Anki, how many Anki would refuse as duplicates — is the whole
+  // question this bar has to answer. It used to hide behind a "Preview"
+  // button; now it just appears, and follows the deck as cards are removed or
+  // an inherited card is edited into the send.
+  const syncableKey = syncable.map((c) => c.uid).join(',')
+  const previewable = ankiStatus === 'connected' && syncState === 'idle' && syncableKey !== ''
+  useEffect(() => {
+    if (!previewable) return
+    const timer = window.setTimeout(() => void previewSyncNow(), PREVIEW_DEBOUNCE_MS)
+    // Coming back from Anki is where the answer changes without the deck
+    // changing — a duplicate deleted over there, a note edited by hand.
+    const onFocus = () => void previewSyncNow()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [previewable, syncableKey, deckName, previewSyncNow])
+
   // ⌘↩ sends — the review flow's one power shortcut.
   useEffect(() => {
     if (!canSend) return
@@ -37,6 +61,22 @@ export function SyncBar() {
   }, [canSend, syncNow])
 
   if (cards.length === 0) return null
+
+  // Only the parts the headline "N cards → deck" does not already say: a
+  // straight send of N brand-new cards needs no second line at all.
+  const detail: string[] = []
+  if (syncPreview && (syncPreview.toUpdate > 0 || syncPreview.duplicates > 0)) {
+    detail.push(`${syncPreview.toCreate} new`)
+    if (syncPreview.toUpdate > 0) detail.push(`${syncPreview.toUpdate} updated`)
+    if (syncPreview.duplicates > 0) detail.push(`${syncPreview.duplicates} already in Anki`)
+  }
+  if (inherited > 0) detail.push(`${inherited} kept from the deck, unchanged`)
+  if (excluded > 0) {
+    detail.push(
+      `${excluded} outside-source card${excluded === 1 ? '' : 's'} ` +
+        `stay${excluded === 1 ? 's' : ''} behind`,
+    )
+  }
 
   return (
     <div className="border-desk-edge/60 bg-desk/95 absolute inset-x-0 bottom-0 border-t px-6 py-3 backdrop-blur">
@@ -94,30 +134,10 @@ export function SyncBar() {
                 {syncable.length} {syncable.length === 1 ? 'card' : 'cards'} →{' '}
                 <span className="font-medium">{deckName}</span>
               </p>
-              {(syncPreview || excluded > 0 || inherited > 0) && (
-                <p className="font-data text-chalk-dim truncate text-xs">
-                  {[
-                    syncPreview &&
-                      `${syncPreview.toCreate} new · ${syncPreview.toUpdate} updates` +
-                        (syncPreview.duplicates > 0
-                          ? ` · ${syncPreview.duplicates} already in Anki`
-                          : ''),
-                    inherited > 0 && `${inherited} kept from the deck, unchanged`,
-                    excluded > 0 &&
-                      `${excluded} outside-source card${excluded === 1 ? '' : 's'} stay${excluded === 1 ? 's' : ''} behind`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
+              {detail.length > 0 && (
+                <p className="font-data text-chalk-dim truncate text-xs">{detail.join(' · ')}</p>
               )}
             </div>
-            <button
-              onClick={() => void previewSyncNow()}
-              disabled={syncState === 'previewing' || syncable.length === 0}
-              className="btn-secondary px-3 py-2"
-            >
-              {syncState === 'previewing' ? 'Checking…' : 'Preview'}
-            </button>
             <button
               onClick={() => void syncNow()}
               disabled={syncable.length === 0}

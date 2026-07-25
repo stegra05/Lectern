@@ -1,0 +1,27 @@
+#!/bin/sh
+# Pre-commit: check exactly what is staged, fast, with one-command fixes.
+# Installed automatically — `pnpm install` runs the `prepare` script, which
+# points core.hooksPath here. Bypass a single commit with `git commit -n`.
+
+set -e
+
+staged() {
+  git diff --cached --name-only --diff-filter=ACMR | grep -E "$1" || true
+}
+
+frontend=$(staged '^src/.*\.(ts|tsx|css)$')
+if [ -n "$frontend" ]; then
+  echo "$frontend" | tr '\n' '\0' | xargs -0 pnpm exec prettier --check ||
+    { echo 'pre-commit: formatting is off — run `pnpm format` and re-stage.' >&2; exit 1; }
+fi
+
+ts=$(staged '^src/.*\.(ts|tsx)$')
+if [ -n "$ts" ]; then
+  echo "$ts" | tr '\n' '\0' | xargs -0 pnpm exec eslint --max-warnings 0 ||
+    { echo 'pre-commit: eslint found problems (some may be `pnpm lint --fix`-able).' >&2; exit 1; }
+fi
+
+if [ -n "$(staged '^src-tauri/.*\.rs$')" ]; then
+  cargo fmt --manifest-path src-tauri/Cargo.toml --check ||
+    { echo 'pre-commit: Rust formatting is off — run `cargo fmt` in src-tauri.' >&2; exit 1; }
+fi

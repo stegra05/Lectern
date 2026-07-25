@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in */src/*.ts|*/src/*.tsx|*/src/*.css) pnpm exec prettier --write \"$f\" >/dev/null;; esac; } 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "prettier"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git status --porcelain -- src src-tauri/src | grep -q . || exit 0; out=$(pnpm typecheck 2>&1) || { printf 'Stop gate: typecheck failing:\\n%s\\n' \"$out\" | tail -30 >&2; exit 2; }; out=$(pnpm vitest run 2>&1) || { printf 'Stop gate: tests failing:\\n%s\\n' \"$out\" | tail -30 >&2; exit 2; }",
+            "timeout": 180,
+            "statusMessage": "Stop gate: typecheck + tests"
+          }
+        ]
+      }
+    ]
+  }
+}

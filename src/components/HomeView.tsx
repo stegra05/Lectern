@@ -37,7 +37,6 @@ export function HomeView() {
   const pdfInfo = useLectern((s) => s.pdfInfo)
   const pageThumbs = useLectern((s) => s.pageThumbs)
   const pickPdf = useLectern((s) => s.pickPdf)
-  const clearPdf = useLectern((s) => s.clearPdf)
   const deckName = useLectern((s) => s.deckName)
   const setDeckName = useLectern((s) => s.setDeckName)
   const ankiDecks = useLectern((s) => s.ankiDecks)
@@ -69,7 +68,7 @@ export function HomeView() {
     <main className="flex flex-1 items-start justify-center overflow-y-auto px-8 py-12">
       <div className="w-full max-w-xl">
         {!fileName ? (
-          <div className="pt-16">
+          <div className="pt-12">
             <button
               onClick={() => void pickPdf()}
               className="group relative mx-auto block w-full max-w-sm focus-visible:outline-none"
@@ -84,6 +83,30 @@ export function HomeView() {
               </div>
             </button>
             <p className="eyebrow mt-10 text-center">PDF → concept map → flashcards → Anki</p>
+
+            {/* The one prerequisite, said before the first PDF rather than
+                after it: without a key the Generate button is dead, and a red
+                dot in the corner is not an explanation. */}
+            {!hasApiKey && (
+              <div className="border-desk-edge/60 bg-desk-raised/50 rise-in mx-auto mt-8 flex max-w-sm items-center gap-3 rounded-md border px-3 py-2.5">
+                <span
+                  aria-hidden
+                  className="bg-brick-soft mt-1 size-1.5 shrink-0 self-start rounded-full"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-chalk text-xs">Lectern needs a Gemini API key.</p>
+                  <p className="text-chalk-dim mt-0.5 text-2xs">
+                    Free from Google AI Studio · kept in your keychain
+                  </p>
+                </div>
+                <button
+                  onClick={() => openSettings(true)}
+                  className="btn-secondary shrink-0 px-2.5 py-1.5"
+                >
+                  Add key
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
@@ -102,7 +125,14 @@ export function HomeView() {
                   </p>
                 )}
               </div>
-              <button onClick={clearPdf} className="btn-ghost px-2.5 py-1.5">
+              {/* "Replace" opens the picker straight away — clearing back to
+                  an empty desk first made it a two-step, and cancelling the
+                  dialog would have thrown the loaded lecture away. */}
+              <button
+                onClick={() => void pickPdf()}
+                className="btn-ghost px-2.5 py-1.5"
+                title="Choose a different lecture PDF"
+              >
                 Replace
               </button>
             </section>

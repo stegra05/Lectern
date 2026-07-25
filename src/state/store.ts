@@ -118,7 +118,7 @@ interface LecternState {
   slideRenders: Record<number, string>
 
   // sync
-  syncState: 'idle' | 'previewing' | 'syncing' | 'done'
+  syncState: 'idle' | 'syncing' | 'done'
   syncPreview: SyncPreview | null
   syncProgress: SyncProgress | null
   syncResult: SyncResult | null
@@ -129,7 +129,9 @@ interface LecternState {
 
 interface LecternActions {
   init: () => Promise<void>
-  refreshAnki: () => Promise<void>
+  /** Probe AnkiConnect. Pass a URL to test one the user is still typing in
+   *  Settings, rather than the saved one. */
+  refreshAnki: (urlOverride?: string) => Promise<void>
   openSettings: (open: boolean) => void
   applySettings: (settings: Settings) => Promise<void>
   setHasApiKey: (has: boolean) => void
@@ -137,7 +139,6 @@ interface LecternActions {
   pickPdf: () => Promise<void>
   loadPdfFromPath: (path: string) => Promise<void>
   loadPdfFromBytes: (fileName: string, bytes: Uint8Array) => Promise<void>
-  clearPdf: () => void
   setDeckName: (name: string) => void
   setExtendDeck: (extend: boolean) => void
   /** Count the notes in the named deck, so the home view can offer to keep
@@ -180,6 +181,8 @@ let toastSeq = 1
 let deckProbeTimer: number | null = null
 let deckProbeSeq = 0
 const DECK_PROBE_DEBOUNCE_MS = 400
+/** Last-writer-wins guard for the automatic send preview. */
+let syncPreviewSeq = 0
 
 export const useLectern = create<LecternState & LecternActions>()((set, get) => {
   const pushLog = (
@@ -341,12 +344,12 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       void get().refreshAnki()
     },
 
-    refreshAnki: async () => {
+    refreshAnki: async (urlOverride) => {
       const { settings, ankiStatus } = get()
       if (!settings) return
       // Focus-triggered re-probes shouldn't flicker an already-green dot.
-      if (ankiStatus !== 'connected') set({ ankiStatus: 'checking' })
-      const client = new AnkiClient(settings.ankiUrl, tauriFetch)
+      if (ankiStatus !== 'connected' || urlOverride) set({ ankiStatus: 'checking' })
+      const client = new AnkiClient(urlOverride ?? settings.ankiUrl, tauriFetch)
       const status = await checkConnection(client)
       if (status.ok) {
         const decks = await client.deckNames().catch(() => [] as string[])
@@ -421,7 +424,13 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         void currentDoc?.loadingTask.destroy().catch(() => {})
         currentDoc = doc
         slideRendersInFlight.clear()
-        const suggestedDeck = get().deckName || fileName.replace(/\.pdf$/i, '')
+        // A deck name the user typed survives swapping the PDF; one Lectern
+        // suggested from the previous file name follows the new file, so
+        // "Replace" doesn't leave last lecture's deck on this lecture.
+        const suggestedFrom = (name: string) => name.replace(/\.pdf$/i, '')
+        const previousDeck = get().deckName
+        const wasSuggested = previousDeck === suggestedFrom(get().fileName ?? '')
+        const suggestedDeck = !previousDeck || wasSuggested ? suggestedFrom(fileName) : previousDeck
         set({
           fileName,
           pdfBytes: bytes,
@@ -450,21 +459,6 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       } catch (e) {
         get().toast('error', `Could not read ${fileName}: ${(e as Error).message}`)
       }
-    },
-
-    clearPdf: () => {
-      void currentDoc?.loadingTask.destroy().catch(() => {})
-      currentDoc = null
-      slideRendersInFlight.clear()
-      set({
-        fileName: null,
-        pdfBytes: null,
-        pdfInfo: null,
-        pageThumbs: {},
-        estimate: null,
-        slidePeek: null,
-        slideRenders: {},
-      })
     },
 
     setDeckName: (name) => {
@@ -766,14 +760,18 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         .finally(() => slideRendersInFlight.delete(page))
     },
 
+    // Runs by itself whenever the send bar's card set changes, so the bar can
+    // say what the send will actually do ("12 new · 2 updates") without the
+    // user having to ask. Read-only: it never installs note types or touches
+    // the collection, and a failure just leaves the breakdown off the bar.
     previewSyncNow: async () => {
-      const { settings, cards, deckName, conceptMap } = get()
+      const { settings, cards, deckName, conceptMap, ankiStatus } = get()
       const syncable = cards.filter(isSyncable)
-      if (!settings || syncable.length === 0) return
-      set({ syncState: 'previewing' })
+      if (!settings || ankiStatus !== 'connected' || syncable.length === 0) return
+      const seq = ++syncPreviewSeq
+      set({ syncPreview: null })
       try {
         const client = new AnkiClient(settings.ankiUrl, tauriFetch)
-        await ensureNoteTypes(client, settings)
         const preview = await previewSync(
           client,
           syncable,
@@ -782,10 +780,9 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           (card) => cardTags(card, settings, deckName, conceptMap),
           noteExtras,
         )
-        set({ syncPreview: preview, syncState: 'idle' })
-      } catch (e) {
-        set({ syncState: 'idle' })
-        get().toast('error', `Anki preview failed: ${(e as Error).message}`)
+        if (seq === syncPreviewSeq) set({ syncPreview: preview })
+      } catch {
+        // The send bar simply shows no breakdown; the send itself still works.
       }
     },
 

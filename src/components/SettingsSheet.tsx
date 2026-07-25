@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MODEL_CHOICES } from '../engine/config'
 import { NOTE_TYPE_THEMES, type NoteTypeTheme } from '../engine/noteTypes'
 import type { Settings } from '../engine/types'
+import { confirmDiscard } from '../lib/confirm'
 import { deleteApiKey, setApiKey } from '../lib/settings'
 import { useLectern } from '../state/store'
 
@@ -34,13 +35,43 @@ export function SettingsSheet() {
     setKeyDraft('')
   }
 
-  // Esc closes; focus returns to the button that opened the sheet.
+  // Settings only take effect on Save, so every way out of the sheet has to
+  // ask before throwing typed changes away — an API key pasted and then
+  // dismissed with Esc used to vanish without a word.
+  const dirty =
+    draft !== null &&
+    settings !== null &&
+    (keyDraft.trim().length > 0 ||
+      (Object.keys(draft) as Array<keyof Settings>).some((k) => draft[k] !== settings[k]))
+  // A test ping against an unsaved URL leaves the status dot describing a
+  // server the app is not actually configured for — put it back on the way out.
+  const urlChanged = draft !== null && settings !== null && draft.ankiUrl !== settings.ankiUrl
+
+  const requestClose = useCallback(() => {
+    const finish = () => {
+      if (urlChanged) void useLectern.getState().refreshAnki()
+      openSettings(false)
+    }
+    if (!dirty) return finish()
+    void confirmDiscard('Your changes to Settings will be lost.', 'Discard changes?').then((ok) => {
+      if (ok) finish()
+    })
+  }, [openSettings, dirty, urlChanged])
+
+  // Focus returns to the button that opened the sheet. Its own effect, so that
+  // rebinding the key handler below never yanks focus out of a field mid-edit.
+  useEffect(() => {
+    if (!open) return
+    return () => document.getElementById('settings-trigger')?.focus()
+  }, [open])
+
+  // Esc closes, Tab stays inside the dialog.
   useEffect(() => {
     if (!open) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        openSettings(false)
+        requestClose()
       } else if (e.key === 'Tab') {
         // Keep focus inside the dialog.
         const focusables = sheetRef.current?.querySelectorAll<HTMLElement>(
@@ -59,11 +90,8 @@ export function SettingsSheet() {
       }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      document.getElementById('settings-trigger')?.focus()
-    }
-  }, [open, openSettings])
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, requestClose])
 
   if (!open || !draft) return null
 
@@ -85,20 +113,26 @@ export function SettingsSheet() {
   return (
     <div
       className="bg-desk/70 fade-in absolute inset-0 z-40 flex items-center justify-center backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && openSettings(false)}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
+      onClick={(e) => e.target === e.currentTarget && requestClose()}
     >
+      {/* Header and footer are pinned and only the settings scroll: on a short
+          window the Save button used to sit below the fold, with nothing to
+          suggest the sheet scrolled at all. */}
       <div
         ref={sheetRef}
-        className="bg-desk-raised shadow-sheet sheet-in max-h-[85%] w-[460px] overflow-y-auto rounded-lg p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        className="bg-desk-raised shadow-sheet sheet-in flex max-h-[85%] w-[460px] flex-col overflow-hidden rounded-lg"
       >
-        <h2 id="settings-title" className="text-chalk text-md font-semibold">
+        <h2
+          id="settings-title"
+          className="text-chalk shrink-0 px-6 pt-6 pb-1 text-md font-semibold"
+        >
           Settings
         </h2>
 
-        <div className="mt-5 space-y-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
           <label className="block">
             <span className="eyebrow">Gemini API key</span>
             <input
@@ -114,14 +148,22 @@ export function SettingsSheet() {
               className="field bg-desk mt-1.5"
             />
             {hasApiKey && (
+              // Deleting the key means fetching a new one from Google to
+              // generate again, so it asks first.
               <button
                 onClick={() => {
-                  void deleteApiKey().then(() => {
-                    setHasApiKey(false)
-                    toast('info', 'API key removed from the keychain.')
+                  void confirmDiscard(
+                    'Lectern cannot generate cards until you paste a key again.',
+                    'Remove the saved API key?',
+                  ).then((ok) => {
+                    if (!ok) return
+                    void deleteApiKey().then(() => {
+                      setHasApiKey(false)
+                      toast('info', 'API key removed from the keychain.')
+                    })
                   })
                 }}
-                className="text-chalk-dim hover:text-brick-soft mt-1 rounded-sm text-xs underline-offset-2 transition-colors duration-150 hover:underline"
+                className="text-chalk-dim hover:text-brick-soft mt-1.5 rounded-sm text-xs underline underline-offset-2 transition-colors duration-150"
               >
                 Remove saved key
               </button>
@@ -151,23 +193,36 @@ export function SettingsSheet() {
                 onChange={(e) => setDraft({ ...draft, ankiUrl: e.target.value })}
                 className="field bg-desk mt-1.5"
               />
+              {/* Tests the URL in the field, not the saved one — pressing this
+                  after editing the address used to check the old server. The
+                  button stays a verb and the outcome is reported below it. */}
               <button
-                onClick={() => void refreshAnki()}
+                onClick={() => void refreshAnki(draft.ankiUrl)}
                 disabled={ankiStatus === 'checking'}
                 className="btn-secondary mt-1.5 shrink-0 px-3 py-2"
               >
-                {ankiStatus === 'checking'
-                  ? 'Checking…'
-                  : ankiStatus === 'connected'
-                    ? 'Connected'
-                    : 'Ping'}
+                {ankiStatus === 'checking' ? 'Testing…' : 'Test'}
               </button>
             </div>
-            {ankiStatus === 'offline' && (
-              <p className="text-chalk-dim mt-1 text-xs">
-                Open Anki and install the AnkiConnect add-on (code 2055492159).
-              </p>
-            )}
+            <p className="text-chalk-dim mt-1.5 flex items-baseline gap-1.5 text-xs">
+              <span
+                aria-hidden
+                className={`size-1.5 shrink-0 translate-y-[-1px] rounded-full ${
+                  ankiStatus === 'connected'
+                    ? 'bg-sage'
+                    : ankiStatus === 'checking'
+                      ? 'bg-chalk-dim animate-pulse'
+                      : 'bg-brick-soft'
+                }`}
+              />
+              <span>
+                {ankiStatus === 'connected'
+                  ? 'Anki answered — cards can be sent.'
+                  : ankiStatus === 'checking'
+                    ? 'Checking…'
+                    : 'No answer. Open Anki and install the AnkiConnect add-on (code 2055492159).'}
+              </span>
+            </p>
           </label>
 
           <div className="block">
@@ -296,8 +351,9 @@ export function SettingsSheet() {
           )}
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
-          <button onClick={() => openSettings(false)} className="btn-ghost px-4 py-2">
+        <div className="border-desk-edge/60 flex shrink-0 items-center justify-end gap-2 border-t px-6 py-4">
+          {dirty && <span className="text-chalk-dim mr-auto text-xs">Unsaved changes</span>}
+          <button onClick={requestClose} className="btn-ghost px-4 py-2">
             Cancel
           </button>
           <button onClick={() => void save()} className="btn-primary px-4 py-2 text-sm">

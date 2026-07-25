@@ -114,10 +114,16 @@ export function FollowUpComposer() {
         title="Ask for cards on a missing topic or an emphasis — e.g. “add cards on the trolley problem”. ↩ sends, ⇧↩ adds a line."
         className="field w-full resize-none px-2.5 py-1.5 text-xs"
       />
-      {draft.length > MAX_REQUEST_PROMPT_LEN * 0.6 && (
-        <span className="font-data text-2xs text-chalk-dim mt-1 block text-right">
-          {draft.length} / {MAX_REQUEST_PROMPT_LEN}
-        </span>
+      {/* How to send only needs saying once you have started writing. */}
+      {draft.length > 0 && !busy && (
+        <div className="mt-1 flex items-baseline justify-between gap-2">
+          <span className="font-data text-2xs text-chalk-dim/70">↩ sends · ⇧↩ new line</span>
+          {draft.length > MAX_REQUEST_PROMPT_LEN * 0.6 && (
+            <span className="font-data text-2xs text-chalk-dim">
+              {draft.length} / {MAX_REQUEST_PROMPT_LEN}
+            </span>
+          )}
+        </div>
       )}
       {busy && (
         <div className="mt-1 flex items-baseline justify-between">

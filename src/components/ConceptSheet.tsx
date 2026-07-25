@@ -69,11 +69,13 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
     <div
       className="bg-desk/70 fade-in absolute inset-0 z-40 flex items-center justify-center backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="concepts-title"
     >
-      <div className="bg-desk-raised shadow-sheet sheet-in flex h-[85%] w-[min(940px,92vw)] flex-col rounded-lg">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="concepts-title"
+        className="bg-desk-raised shadow-sheet sheet-in flex h-[85%] w-[min(940px,92vw)] flex-col rounded-lg"
+      >
         <header className="flex items-baseline gap-3 px-6 pt-5 pb-3">
           <h2 id="concepts-title" className="text-chalk text-md font-semibold">
             Concept map

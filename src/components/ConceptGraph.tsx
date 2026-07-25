@@ -255,8 +255,14 @@ export function ConceptGraph({
         </g>
       </svg>
 
-      {/* Zoom controls */}
-      <div className="absolute right-3 bottom-3 flex flex-col overflow-hidden rounded-md">
+      {/* Zoom controls. Bordered as one group, like the graph/list toggle in
+          the sheet header — loose over the constellation they read as three
+          stray glyphs rather than buttons. */}
+      <div
+        role="group"
+        aria-label="Zoom"
+        className="border-desk-edge/60 bg-desk-raised/80 absolute right-3 bottom-3 flex flex-col overflow-hidden rounded-md border backdrop-blur-sm"
+      >
         <button
           onClick={() => zoomFromCenter(1.35)}
           className="btn-ghost rounded-none px-2 py-1"

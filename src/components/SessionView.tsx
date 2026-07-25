@@ -48,7 +48,6 @@ function Sidebar() {
   const coverage = useLectern((s) => s.coverage)
   const conceptMap = useLectern((s) => s.conceptMap)
   const usage = useLectern((s) => s.usage)
-  const doneSummary = useLectern((s) => s.doneSummary)
   const cancelGeneration = useLectern((s) => s.cancelGeneration)
   const backToHome = useLectern((s) => s.backToHome)
   const cardCount = useLectern((s) => s.cards.length)
@@ -143,7 +142,8 @@ function Sidebar() {
             {usage.costUsd.toFixed(2)}
           </p>
         )}
-        {doneSummary && <p className="text-chalk-dim mb-2 text-xs">{doneSummary}</p>}
+        {/* The closing summary is the last line of the activity log directly
+            above — printing it twice in one column just doubled the reading. */}
         {running ? (
           <button
             onClick={cancelGeneration}
@@ -363,14 +363,28 @@ function CardColumn() {
     <div className="flex min-h-0 flex-1 flex-col">
       {reviewable && cards.length > 0 && (
         <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-6 pt-4 pb-1">
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
-            placeholder="Search cards"
-            className="field w-56 px-3 py-1.5 text-sm"
-            aria-label="Search cards"
-          />
+          {/* A visible way out of a search — Esc clears it too, but only if
+              you already knew that. */}
+          <div className="relative w-56">
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
+              placeholder="Search cards"
+              className={`field py-1.5 pl-3 text-sm ${searchQuery ? 'pr-8' : 'pr-3'}`}
+              aria-label="Search cards"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-chalk-dim hover:text-chalk absolute inset-y-0 right-0 px-2.5 transition-colors duration-150"
+                aria-label="Clear the search (esc)"
+                title="Clear the search (esc)"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           {pageFilter !== null && (
             <button
               onClick={() => setPageFilter(null)}
@@ -388,9 +402,9 @@ function CardColumn() {
             <span
               aria-hidden
               className="font-data text-chalk-dim/70 text-2xs whitespace-nowrap"
-              title="Keyboard review: ↑↓ select a card, e edit, x remove, s show its slide"
+              title="Keyboard review: ↑↓ select a card, e edit, x remove, s show its slide, ⌘↩ send the deck to Anki"
             >
-              ↑↓ select · e edit · x remove · s slide
+              ↑↓ select · e edit · x remove · s slide · ⌘↩ send
             </span>
           </div>
         </div>
@@ -398,7 +412,14 @@ function CardColumn() {
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         {visible.length === 0 ? (
-          <Empty phase={phase} filtered={cards.length > 0} />
+          <Empty
+            phase={phase}
+            filtered={cards.length > 0}
+            onClearFilters={() => {
+              setSearchQuery('')
+              setPageFilter(null)
+            }}
+          />
         ) : (
           <div className="mx-auto max-w-2xl space-y-3 pb-24">
             {visible.map((card, i) => (
@@ -419,18 +440,33 @@ function CardColumn() {
   )
 }
 
-function Empty({ phase, filtered }: { phase: AppPhase; filtered: boolean }) {
+function Empty({
+  phase,
+  filtered,
+  onClearFilters,
+}: {
+  phase: AppPhase
+  filtered: boolean
+  onClearFilters: () => void
+}) {
   return (
-    <div className="flex h-full items-center justify-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3">
       <p className="text-chalk-dim text-base">
         {filtered
-          ? 'No cards match — clear the search or page filter.'
+          ? 'No cards match the search or page filter.'
           : phase === 'complete'
             ? 'No cards made it through. Try a larger deck size or a different focus.'
             : phase === 'error'
               ? 'No cards had been accepted before the stop.'
               : 'Reading the lecture…'}
       </p>
+      {/* Telling someone to clear a filter, without the button that clears it,
+          leaves them hunting for the two controls that caused it. */}
+      {filtered && (
+        <button onClick={onClearFilters} className="btn-secondary px-3 py-1.5">
+          Show all cards
+        </button>
+      )}
     </div>
   )
 }
