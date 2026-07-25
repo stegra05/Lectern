@@ -92,6 +92,7 @@ const makeSettings = (overrides: Partial<Settings> = {}): Settings => ({
   noteTypeTheme: 'paper',
   basicModelName: 'Basic',
   clozeModelName: 'Cloze',
+  notifyOnFinish: true,
   tagTemplate: '{{deck}}::{{slide_set}}::{{topic}}',
   defaultTag: 'lectern',
   enableDefaultTag: true,

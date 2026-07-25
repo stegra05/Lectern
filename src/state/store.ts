@@ -30,6 +30,7 @@ import type {
 import { computeSizingPlan } from '../engine/pacing'
 import { confirmDiscard } from '../lib/confirm'
 import { plainCardText } from '../lib/render'
+import { notifyRunFinished } from '../lib/notify'
 import { IS_TAURI } from '../lib/platform'
 import { getApiKey, loadSettings, saveSettings } from '../lib/settings'
 import { tauriFetch } from '../lib/tauriFetch'
@@ -495,6 +496,11 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           signal: controller.signal,
         })
         set({ followUp: outcome.followUp })
+        void notifyRunFinished({
+          enabled: settings.notifyOnFinish,
+          title: `${deckName} is ready`,
+          body: get().doneSummary ?? `${get().cards.length} cards are waiting for review.`,
+        })
       } catch (e) {
         if ((e as Error).name === 'AbortError') {
           set({ view: 'home', phase: 'idle' })
@@ -504,6 +510,13 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
             (e as { userMessage?: string }).userMessage ?? (e as Error).message ?? 'Unknown error'
           set({ phase: 'error', errorMessage: message })
           pushLog('error', message)
+          // Worth interrupting for: a failed run is exactly what you walked
+          // away from the window expecting not to happen.
+          void notifyRunFinished({
+            enabled: settings.notifyOnFinish,
+            title: 'Lectern stopped generating',
+            body: message,
+          })
         }
       } finally {
         if (abortController === controller) abortController = null

@@ -11,6 +11,9 @@
     "fs:default",
     "updater:default",
     "process:allow-restart",
+    "notification:default",
+    "core:window:allow-request-user-attention",
+    "core:window:allow-is-focused",
     {
       "identifier": "fs:allow-read-file",
       "allow": [{ "path": "**/*.pdf" }, { "path": "**/*.PDF" }]

@@ -218,6 +218,22 @@ export function SettingsSheet() {
             )}
           </div>
 
+          <div className="block">
+            <span className="eyebrow">While you wait</span>
+            <label className="mt-1.5 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.notifyOnFinish}
+                onChange={(e) => setDraft({ ...draft, notifyOnFinish: e.target.checked })}
+                className="accent-lamp"
+              />
+              <span className="text-chalk text-sm">Notify me when a deck finishes</span>
+            </label>
+            <p className="text-chalk-dim mt-1 text-xs">
+              Only when Lectern is in the background — no notification if you are watching it work.
+            </p>
+          </div>
+
           <button
             onClick={() => setAdvancedOpen(!advancedOpen)}
             className="eyebrow hover:text-chalk flex items-center gap-1 rounded-sm transition-colors duration-150"

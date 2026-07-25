@@ -119,4 +119,5 @@ export const DEFAULT_SETTINGS = {
   tagTemplate: '{{deck}}::{{slide_set}}::{{topic}}',
   defaultTag: 'lectern',
   enableDefaultTag: true,
+  notifyOnFinish: true,
 } as const

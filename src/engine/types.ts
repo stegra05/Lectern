@@ -180,6 +180,9 @@ export interface Settings {
   tagTemplate: string
   defaultTag: string
   enableDefaultTag: boolean
+  /** Send a desktop notification when a run finishes and the window is in
+   *  the background. */
+  notifyOnFinish: boolean
 }
 
 // ---------------------------------------------------------------------------
