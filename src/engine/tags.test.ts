@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildCardTags, buildHierarchicalTag, cleanTagPart } from './tags'
+import { buildCardTags, buildHierarchicalTag, cleanTagPart, unknownTagPlaceholders } from './tags'
 
 const TEMPLATE = '{{deck}}::{{slide_set}}::{{topic}}'
 
@@ -23,6 +23,23 @@ describe('cleanTagPart', () => {
 
   it('lowercases in slug mode', () => {
     expect(cleanTagPart('Deep Learning', { slug: true })).toBe('deep-learning')
+  })
+
+  it('keeps letters of every script — Anki tags are Unicode', () => {
+    expect(cleanTagPart('Künstliche Intelligenz', { titleCase: true })).toBe(
+      'Künstliche-Intelligenz',
+    )
+    expect(cleanTagPart('Übungsblatt 3', { titleCase: true })).toBe('Übungsblatt-3')
+    expect(cleanTagPart('Análisis Numérico', { titleCase: true })).toBe('Análisis-Numérico')
+    expect(cleanTagPart('機械学習', { titleCase: true })).toBe('機械学習')
+    expect(cleanTagPart('α-Zerfall', { titleCase: true })).toBe('α-Zerfall')
+  })
+
+  it('title-cases a lowercase word without recasing one the author cased', () => {
+    expect(cleanTagPart('relu and kNN', { titleCase: true })).toBe('Relu-And-kNN')
+    expect(cleanTagPart('Michaelis–Menten kinetics', { titleCase: true })).toBe(
+      'Michaelis-Menten-Kinetics',
+    )
   })
 
   it('handles empty input and strips edge dashes/spaces', () => {
@@ -69,15 +86,33 @@ describe('buildHierarchicalTag', () => {
       buildHierarchicalTag(TEMPLATE, {
         deck: 'Bio/Chem',
         slideSet: 'Enzymes & Kinetics!',
-        // en dash is sanitized to "-"; capitalize() lowers the rest of the
-        // word (Python parity), so "Menten" becomes "menten".
         topic: 'Michaelis–Menten',
       }),
-    ).toBe('Bio-Chem::Enzymes-Kinetics::Michaelis-menten')
+    ).toBe('Bio-Chem::Enzymes-Kinetics::Michaelis-Menten')
   })
 
   it('returns an empty string when every part is empty', () => {
     expect(buildHierarchicalTag(TEMPLATE, { deck: '', slideSet: '' })).toBe('')
+  })
+
+  // Anki splits its tag list on whitespace, so literal spaces in a
+  // user-written template used to turn one tag into two on every note.
+  it('never emits whitespace or quotes from the template itself', () => {
+    expect(
+      buildHierarchicalTag('Lecture {{topic}}', { deck: 'ML', slideSet: '', topic: 'Trees' }),
+    ).toBe('Lecture-Trees')
+    expect(
+      buildHierarchicalTag('{{deck}} - {{topic}}', { deck: 'ML', slideSet: '', topic: 'Trees' }),
+    ).toBe('ML-Trees')
+    expect(buildHierarchicalTag('"{{deck}}"', { deck: 'ML', slideSet: '' })).toBe('ML')
+  })
+})
+
+describe('unknownTagPlaceholders', () => {
+  it('names placeholders that will be emitted literally', () => {
+    expect(unknownTagPlaceholders(TEMPLATE)).toEqual([])
+    expect(unknownTagPlaceholders('{{deck}}::{{lecture}}::{{topic}}')).toEqual(['lecture'])
+    expect(unknownTagPlaceholders('{{a}}{{a}}{{ b }}')).toEqual(['a', 'b'])
   })
 })
 

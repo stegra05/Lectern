@@ -15,18 +15,24 @@ export interface TagParts {
   topic?: string
 }
 
-/** Python str.isupper(): at least one cased char, none lowercase. After
- *  cleaning, parts are ASCII-only, so [A-Za-z] covers the cased chars. */
-const isUpperWord = (word: string): boolean => /[A-Z]/.test(word) && !/[a-z]/.test(word)
+/** At least one cased letter, none lowercase — "NLP", "SVM", "ReLU" is not. */
+const isUpperWord = (word: string): boolean => /\p{Lu}/u.test(word) && !/\p{Ll}/u.test(word)
 
-/** Python str.capitalize(): first char upper, the rest lowered. */
+/** Title Case only words that are entirely lowercase. Anything the author
+ *  already cased — ReLU, kNN, McCulloch, pH — is left exactly as written;
+ *  lowercasing their tails turned real terms into misspellings. */
 const capitalize = (word: string): string =>
-  word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  /\p{Lu}/u.test(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)
 
 /**
  * _clean_tag_part: normalize a string for use inside an Anki hierarchical tag.
  * Disallowed character runs become "-", multiple dashes/spaces collapse, and
  * spaces end up as "-" (Anki tags cannot contain spaces).
+ *
+ * "Disallowed" is narrow on purpose: Anki tags are Unicode text, so letters
+ * and digits of every script are kept. An ASCII-only filter turned
+ * "Künstliche Intelligenz" into "K-nstliche-Intelligenz" and a CJK topic into
+ * nothing at all, which silently collapsed a whole level of the hierarchy.
  */
 export function cleanTagPart(
   value: string,
@@ -35,7 +41,7 @@ export function cleanTagPart(
   if (!value) return ''
 
   // Keep letters, digits, underscore, hyphen, spaces; runs of anything else → "-".
-  let s = value.replace(/[^a-zA-Z0-9_\-\s]+/g, '-')
+  let s = value.replace(/[^\p{L}\p{N}_\-\s]+/gu, '-')
   // Python .strip("- "): trim '-' and ' ' from both ends.
   s = s.replace(/^[- ]+/, '').replace(/[- ]+$/, '')
   // Collapse runs of 2+ dashes/whitespace into a single space
@@ -47,12 +53,34 @@ export function cleanTagPart(
   } else if (options.titleCase) {
     s = s
       .split(' ')
-      .map((word) => (isUpperWord(word) || /^\d+$/.test(word) ? word : capitalize(word)))
+      .map((word) => (isUpperWord(word) || /^\p{N}+$/u.test(word) ? word : capitalize(word)))
       .join(' ')
   }
 
   return s.replace(/ /g, '-')
 }
+
+/** The placeholders a tag template may use. Anything else is a typo the
+ *  Settings sheet warns about — the template is emitted literally, so
+ *  "{{lecture}}" would end up in the tag verbatim. */
+export const TAG_PLACEHOLDERS = ['deck', 'slide_set', 'topic'] as const
+
+/** Placeholder names in `template` that are not real ones, for the UI. */
+export function unknownTagPlaceholders(template: string): string[] {
+  const found = template.match(/\{\{([^}]*)\}\}/g) ?? []
+  const known = new Set<string>(TAG_PLACEHOLDERS)
+  const unknown = found.map((token) => token.slice(2, -2).trim()).filter((name) => !known.has(name))
+  return [...new Set(unknown)]
+}
+
+/**
+ * Anki stores tags as a whitespace-separated list, so a tag that contains a
+ * space is silently two tags. The parts are already space-free; this guards
+ * the literal text around them, which the template author controls
+ * ("Lecture {{topic}}" used to split every note's tag in half).
+ */
+const sanitizeRenderedTag = (tag: string): string =>
+  tag.replace(/"/g, '').replace(/\s+/g, '-').replace(/-{2,}/g, '-')
 
 /**
  * build_hierarchical_tag: render the tag template with cleaned parts.
@@ -80,7 +108,7 @@ export function buildHierarchicalTag(template: string, parts: TagParts): string 
   tag = tag.replace(/:{3,}/g, '::')
   tag = tag.replace(/^:+/, '').replace(/:+$/, '')
 
-  return tag
+  return sanitizeRenderedTag(tag).replace(/^-+/, '').replace(/-+$/, '')
 }
 
 /**
