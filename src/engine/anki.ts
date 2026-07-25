@@ -548,6 +548,14 @@ export function cardToNote(
   }
 }
 
+/**
+ * Which cards a send actually carries. Two kinds stay behind: outside-source
+ * cards the user has not opted in, and cards inherited from the target deck
+ * at the start of an extend run — those are already in Anki, untouched, and
+ * re-sending them would be a no-op update per card.
+ */
+export const isSyncable = (card: Card): boolean => !card.syncExcluded && card.fromAnki !== true
+
 const cardFrontText = (card: Card): string =>
   card.fields['Front'] ?? card.fields['Text'] ?? Object.values(card.fields)[0] ?? ''
 

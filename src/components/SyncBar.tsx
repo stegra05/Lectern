@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { isSyncable } from '../engine/anki'
 import { useLectern } from '../state/store'
 
 export function SyncBar() {
@@ -13,8 +14,11 @@ export function SyncBar() {
   const previewSyncNow = useLectern((s) => s.previewSyncNow)
   const syncNow = useLectern((s) => s.syncNow)
 
-  const syncable = cards.filter((c) => !c.syncExcluded)
-  const excluded = cards.length - syncable.length
+  const syncable = cards.filter(isSyncable)
+  // Two different reasons a card stays behind, and they read very differently
+  // to the user: one is already in Anki, the other was deliberately withheld.
+  const inherited = cards.filter((c) => c.fromAnki).length
+  const excluded = cards.length - syncable.length - inherited
   const canSend = ankiStatus === 'connected' && syncState !== 'syncing' && syncable.length > 0
 
   // ⌘↩ sends — the review flow's one power shortcut.
@@ -87,18 +91,23 @@ export function SyncBar() {
           <>
             <div className="min-w-0 flex-1">
               <p className="text-chalk truncate text-sm">
-                {syncable.length} cards → <span className="font-medium">{deckName}</span>
+                {syncable.length} {syncable.length === 1 ? 'card' : 'cards'} →{' '}
+                <span className="font-medium">{deckName}</span>
               </p>
-              {(syncPreview || excluded > 0) && (
+              {(syncPreview || excluded > 0 || inherited > 0) && (
                 <p className="font-data text-chalk-dim truncate text-xs">
-                  {syncPreview &&
-                    `${syncPreview.toCreate} new · ${syncPreview.toUpdate} updates` +
-                      (syncPreview.duplicates > 0
-                        ? ` · ${syncPreview.duplicates} already in Anki`
-                        : '')}
-                  {syncPreview && excluded > 0 && ' · '}
-                  {excluded > 0 &&
-                    `${excluded} outside-source card${excluded === 1 ? '' : 's'} stay${excluded === 1 ? 's' : ''} behind`}
+                  {[
+                    syncPreview &&
+                      `${syncPreview.toCreate} new · ${syncPreview.toUpdate} updates` +
+                        (syncPreview.duplicates > 0
+                          ? ` · ${syncPreview.duplicates} already in Anki`
+                          : ''),
+                    inherited > 0 && `${inherited} kept from the deck, unchanged`,
+                    excluded > 0 &&
+                      `${excluded} outside-source card${excluded === 1 ? '' : 's'} stay${excluded === 1 ? 's' : ''} behind`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </p>
               )}
             </div>

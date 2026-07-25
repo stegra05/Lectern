@@ -26,6 +26,7 @@ import {
 } from './config'
 import {
   buildCoverageCatalog,
+  buildDepthGapText,
   buildGenerationGapText,
   buildReflectionGapText,
   computeCoverageData,
@@ -52,6 +53,7 @@ import {
   parseSubmitCardsArgs,
   parseUpdateCardArgs,
 } from './geminiSchemas'
+import { looksLikeSameSet } from './ankiImport'
 import { computeSizingPlan } from './pacing'
 import {
   buildReviewFeedback,
@@ -77,7 +79,6 @@ import type {
   GateVerdict,
   PdfInfo,
   PipelineSink,
-  SizingPlan,
 } from './types'
 
 export interface PipelineOptions {
@@ -85,8 +86,13 @@ export interface PipelineOptions {
   pdfInfo: PdfInfo
   fileName: string
   focusPrompt?: string
-  /** User override for total deck size; otherwise sized from the document. */
+  /** User override for total deck size; otherwise sized from the document.
+   *  On an extend run this is the number of cards to *add*. */
   userTargetCards?: number
+  /** Cards already in the target Anki deck (extend runs). They seed the
+   *  dedupe set and the coverage ledger so the run fills gaps instead of
+   *  repeating work, and are never edited or removed by the model. */
+  existingCards?: Card[]
   model: string
   apiKey: string
   fetchFn: typeof fetch
@@ -168,15 +174,51 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
   // --- Phase 2: agentic generation loop -------------------------------------
   emit({ type: 'phase', phase: 'generating' })
-  const cards: Card[] = []
-  const seenKeys = new Set<string>()
+  // An extend run starts from the deck that is already in Anki: those cards
+  // count against nothing the user asked for, so the sizing target buys new
+  // cards on top of them.
+  const existing = adoptExistingCards(opts.existingCards ?? [], conceptMap.slideSetName)
+  const inheritedCount = existing.cards.length
+  const cards: Card[] = [...existing.cards]
+  const seenKeys = new Set<string>(existing.cards.map((card) => cardKey(card)))
+  const cardCap = sizing.totalCardCap + inheritedCount
   let coverage = computeCoverageData(catalog, cards)
+  if (inheritedCount > 0) {
+    emit({ type: 'coverage', coverage })
+    emit({
+      type: 'log',
+      level: 'info',
+      message:
+        `Carrying ${inheritedCount} card(s) already in the deck — ` +
+        `${Math.round(coverage.pageCoveragePercent)}% of pages start covered.`,
+    })
+    if (existing.otherDocuments > 0) {
+      emit({
+        type: 'log',
+        level: 'info',
+        message:
+          `${existing.otherDocuments} of them came from other material in this deck — ` +
+          'they still prevent repeats, but their page numbers are not read as coverage here.',
+      })
+    }
+  }
   let terminationReason = 'max_rounds_reached'
   let nonProgressRounds = 0
   let finished = false
   /** Tool results built but not yet sent when the loop exits — the review
    *  phase leads with them so no function call is left unanswered. */
   let pendingResults: InputPart[] = []
+
+  // Extending a deck that already covers the document leaves nothing to go
+  // outward to, so the run's budget buys depth instead. Recomputed each round:
+  // a run can start on breadth and cross into depth once the gaps close.
+  const inDepthMode = (): boolean => inheritedCount > 0 && isCoverageSufficient(coverage)
+  const depthGate = () =>
+    inheritedCount > 0
+      ? { newCards: cards.length - inheritedCount, newCardTarget: sizing.totalCardCap }
+      : undefined
+  const ledgerText = () =>
+    inDepthMode() ? buildDepthGapText(catalog, coverage) : buildGenerationGapText(catalog, coverage)
 
   const tools = [SUBMIT_CARDS_TOOL, FINISH_GENERATION_TOOL]
   let response = await client.interact({
@@ -189,7 +231,9 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
         text: generationMissionPrompt(ctx, {
           totalCardCap: sizing.totalCardCap,
           batchSize: sizing.batchSize,
-          gapText: buildGenerationGapText(catalog, coverage),
+          gapText: ledgerText(),
+          existingDeck: summarizeExistingDeck(existing.cards),
+          depthMode: inDepthMode(),
         }),
       },
     ],
@@ -239,7 +283,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
     for (const call of response.functionCalls) {
       if (call.name === 'finish_generation') {
-        const verdict = handleFinishRequest(coverage, cards.length, sizing)
+        const verdict = handleFinishRequest(coverage, cards.length, cardCap, depthGate())
         if (verdict.allowed) {
           finished = true
           terminationReason = 'coverage_sufficient_model_done'
@@ -291,7 +335,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: firstField(card), reasons: verdict.failures })
           continue
         }
-        if (cards.length >= sizing.totalCardCap) {
+        if (cards.length >= cardCap) {
           rejected.push({ front: firstField(card), reasons: ['budget_exhausted'] })
           continue
         }
@@ -305,9 +349,15 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
       coverage = computeCoverageData(catalog, cards)
       emit({ type: 'coverage', coverage })
-      emit({ type: 'progress', produced: cards.length, cap: sizing.totalCardCap, round })
+      // Progress counts what this run made, not the inherited deck.
+      emit({
+        type: 'progress',
+        produced: cards.length - inheritedCount,
+        cap: sizing.totalCardCap,
+        round,
+      })
 
-      const capacityLeft = sizing.totalCardCap - cards.length
+      const capacityLeft = cardCap - cards.length
       results.push(
         functionResult(
           call,
@@ -317,8 +367,10 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
             duplicateFronts,
             unknownMetadataDropped,
             cardsRemaining: capacityLeft,
-            gapText: buildGenerationGapText(catalog, coverage),
-            finishAllowed: isCoverageSufficient(coverage) || capacityLeft <= 0,
+            gapText: ledgerText(),
+            finishAllowed:
+              capacityLeft <= 0 ||
+              handleFinishRequest(coverage, cards.length, cardCap, depthGate()).allowed,
           }),
         ),
       )
@@ -327,7 +379,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     pendingResults = results
     if (finished) break
 
-    if (cards.length >= sizing.totalCardCap) {
+    if (cards.length >= cardCap) {
       terminationReason = 'max_cap_reached'
       break
     }
@@ -362,7 +414,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   let followUpSeed: FollowUpSeed = { interactionId: response.id, pendingInput: pendingResults }
 
   // --- Phase 3: agentic review loop over the deck -----------------------------
-  if (cards.length > 0) {
+  if (cards.length > inheritedCount) {
     throwIfAborted(signal)
     emit({ type: 'phase', phase: 'reflecting' })
     emit({ type: 'log', level: 'info', message: 'Reviewing the deck for quality and coverage…' })
@@ -375,7 +427,8 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       cards,
       seenKeys,
       catalog,
-      cardCap: sizing.totalCardCap,
+      cardCap,
+      inheritedCount,
       emit,
       signal,
       track,
@@ -396,7 +449,12 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   const costUsd = (usage.inputTokens * inPrice + usage.outputTokens * outPrice) / 1_000_000
   emit({ type: 'usage', inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costUsd })
   emit({ type: 'phase', phase: 'complete' })
-  const summary = summarize(terminationReason, cards.length, coverage)
+  const summary = summarize(
+    terminationReason,
+    cards.length - inheritedCount,
+    coverage,
+    inheritedCount,
+  )
   emit({ type: 'done', reason: terminationReason, summary })
 
   return {
@@ -424,19 +482,40 @@ function reconcilePdfInfo(pdfInfo: PdfInfo, conceptMap: ConceptMap): PdfInfo {
 function handleFinishRequest(
   coverage: CoverageData,
   produced: number,
-  sizing: SizingPlan,
+  cardCap: number,
+  /** Extend runs: how far this run has got toward the cards the user asked
+   *  for, which is the gate once breadth is already complete. */
+  depth?: { newCards: number; newCardTarget: number },
 ): { allowed: boolean; message: string } {
-  if (produced >= sizing.totalCardCap || isCoverageSufficient(coverage)) {
-    return { allowed: true, message: 'ok' }
+  if (produced >= cardCap) return { allowed: true, message: 'ok' }
+
+  if (!isCoverageSufficient(coverage)) {
+    const missing = coverage.missingHighPriority.length
+    return {
+      allowed: false,
+      message:
+        `Rejected: coverage is not sufficient yet (${missing} high-importance concept(s) uncovered, ` +
+        `page coverage ${Math.round(coverage.pageCoveragePercent)}%). ` +
+        'Continue with submit_cards targeting the remaining ledger gaps.',
+    }
   }
-  const missing = coverage.missingHighPriority.length
-  return {
-    allowed: false,
-    message:
-      `Rejected: coverage is not sufficient yet (${missing} high-importance concept(s) uncovered, ` +
-      `page coverage ${Math.round(coverage.pageCoveragePercent)}%). ` +
-      'Continue with submit_cards targeting the remaining ledger gaps.',
+
+  // Breadth is done, but the user asked this run to add cards. Finishing at
+  // zero would be technically true and useless — send it after depth instead.
+  if (depth !== undefined && depth.newCards < depth.newCardTarget) {
+    return {
+      allowed: false,
+      message:
+        `Rejected: the deck already covered this material, so your budget is for depth. ` +
+        `You have added ${depth.newCards} of ${depth.newCardTarget} card(s). ` +
+        'Go after the depth ledger: relations between concepts, pages carrying a single card, ' +
+        'and concepts no existing card names outright. Prefer why/how/compare/apply over ' +
+        'restating what is already asked. Call finish_generation once you genuinely have ' +
+        'nothing worth adding.',
+    }
   }
+
+  return { allowed: true, message: 'ok' }
 }
 
 /**
@@ -537,6 +616,10 @@ interface ReviewLoopOptions {
   catalog: CoverageCatalog
   /** The sizing cap — add_cards only fills slots below it. */
   cardCap: number
+  /** Cards inherited from Anki. They sit in `cards` for coverage and dedupe
+   *  but are withheld from the review: the model must not rewrite or delete
+   *  cards the user has already been studying. */
+  inheritedCount: number
   emit: PipelineSink
   signal?: AbortSignal
   track: (u: GeminiUsage) => void
@@ -569,11 +652,14 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
     idToUid.set(id, uid)
     return id
   }
-  const deckListing = cards
+  // Only this run's cards are put up for review; inherited ones are not
+  // listed, so no card_id resolves to them and no tool can touch them.
+  const reviewable = cards.filter((card) => card.fromAnki !== true)
+  const deckListing = reviewable
     .map((card) => JSON.stringify(toReviewShape(assignId(card.uid), card)))
     .join('\n')
 
-  const removalBudget = Math.floor(cards.length * REFLECTION_MAX_REMOVAL_RATIO)
+  const removalBudget = Math.floor(reviewable.length * REFLECTION_MAX_REMOVAL_RATIO)
   const counts = { updated: 0, added: 0, removed: 0 }
   let note: string | undefined
   let coverage = computeCoverageData(catalog, cards)
@@ -600,6 +686,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           coverageGaps: buildReflectionGapText(catalog, coverage),
           cardCap: opts.cardCap,
           freeSlots: Math.max(0, opts.cardCap - cards.length),
+          inheritedCount: opts.inheritedCount,
         }),
       },
     ],
@@ -775,7 +862,12 @@ function toReviewShape(cardId: string, card: Card): Record<string, unknown> {
   }
 }
 
-function summarize(reason: string, cardCount: number, coverage: CoverageData): string {
+function summarize(
+  reason: string,
+  cardCount: number,
+  coverage: CoverageData,
+  inheritedCount: number,
+): string {
   const reasonText: Record<string, string> = {
     coverage_sufficient_model_done: 'Coverage complete',
     max_cap_reached: 'Card budget reached',
@@ -783,11 +875,84 @@ function summarize(reason: string, cardCount: number, coverage: CoverageData): s
     model_stalled: 'Model stopped producing cards',
     max_rounds_reached: 'Round limit reached',
   }
+  // An extend run reports what it added and what the deck now holds; the
+  // coverage percentages always describe the whole deck.
+  const cardText =
+    inheritedCount > 0
+      ? `${cardCount} new cards (${cardCount + inheritedCount} in the deck)`
+      : `${cardCount} cards`
   return (
-    `${reasonText[reason] ?? reason} — ${cardCount} cards, ` +
+    `${reasonText[reason] ?? reason} — ${cardText}, ` +
     `${Math.round(coverage.pageCoveragePercent)}% page coverage, ` +
     `${Math.round(coverage.effectiveConceptCoveragePercent)}% concept coverage.`
   )
+}
+
+export interface AdoptedDeck {
+  cards: Card[]
+  /** Cards that came from other material sharing this deck. */
+  otherDocuments: number
+}
+
+/**
+ * Decide what the deck's existing cards are allowed to say about *this*
+ * document.
+ *
+ * A deck can hold several lectures. Page numbers are only meaningful next to
+ * the document they were written from, so a card from lecture 2 claiming
+ * pages 12–14 must not mark pages 12–14 of lecture 4 as covered — that would
+ * silently steer the run away from material nobody has made cards for. Such
+ * cards keep their place in the dedupe set (an identical card is still an
+ * identical card) but surrender their page references, and with them their
+ * slide links in the UI, which pointed at the wrong slides anyway.
+ */
+export function adoptExistingCards(existing: Card[], slideSetName: string): AdoptedDeck {
+  let otherDocuments = 0
+  const cards = existing.map((card) => {
+    // A card with no recorded document is given the benefit of the doubt: it
+    // is far more often this deck's own earlier work than a stranger's.
+    if (card.sourceSetName === undefined || looksLikeSameSet(card.sourceSetName, slideSetName)) {
+      return card
+    }
+    otherDocuments++
+    return { ...card, sourcePages: [], slideNumber: undefined }
+  })
+  return { cards, otherDocuments }
+}
+
+/** Entries listed in the "already covered" brief; the cap is announced. */
+const EXISTING_TOPIC_LIMIT = 25
+
+/**
+ * What the deck already teaches, as topics rather than card fronts: it is the
+ * question the user actually asks ("which topics have been done?"), and it
+ * costs a fraction of the context a full card listing would. Exact repeats are
+ * caught by the dedupe set anyway, and the feedback payload names them.
+ */
+export function summarizeExistingDeck(
+  existing: Card[],
+): { count: number; topics: string[]; truncated: number } | undefined {
+  if (existing.length === 0) return undefined
+
+  const byTopic = new Map<string, number>()
+  let untopiced = 0
+  for (const card of existing) {
+    const topic = card.slideTopic?.trim()
+    if (topic === undefined || topic === '') untopiced++
+    else byTopic.set(topic, (byTopic.get(topic) ?? 0) + 1)
+  }
+
+  const ranked = [...byTopic.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  const topics = ranked
+    .slice(0, EXISTING_TOPIC_LIMIT)
+    .map(([topic, count]) => `${topic} (${count})`)
+  if (untopiced > 0) topics.push(`untagged (${untopiced})`)
+
+  return {
+    count: existing.length,
+    topics,
+    truncated: Math.max(0, ranked.length - EXISTING_TOPIC_LIMIT),
+  }
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

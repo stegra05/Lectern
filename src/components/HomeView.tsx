@@ -50,9 +50,14 @@ export function HomeView() {
   const hasApiKey = useLectern((s) => s.hasApiKey)
   const openSettings = useLectern((s) => s.openSettings)
   const startGeneration = useLectern((s) => s.startGeneration)
+  const existingDeckCount = useLectern((s) => s.existingDeckCount)
+  const extendDeck = useLectern((s) => s.extendDeck)
+  const setExtendDeck = useLectern((s) => s.setExtendDeck)
 
   const missingDeck = !deckName.trim()
   const cannotGenerate = !hasApiKey || missingDeck
+  const hasExistingCards = (existingDeckCount ?? 0) > 0
+  const extending = hasExistingCards && extendDeck
 
   // The slider scale anchors on what the document itself suggests — never on
   // the user override (which feeds store.sizing), or the scale would stretch
@@ -117,14 +122,36 @@ export function HomeView() {
                   <option key={d} value={d} />
                 ))}
               </datalist>
+              {hasExistingCards && (
+                <div className="border-desk-edge/60 bg-desk-raised/50 rise-in mt-2 rounded-md border px-2.5 py-2">
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={extendDeck}
+                      onChange={(e) => setExtendDeck(e.target.checked)}
+                      className="accent-lamp mt-0.5 shrink-0"
+                    />
+                    <span className="min-w-0">
+                      <span className="text-chalk block text-xs">
+                        Don&apos;t repeat what this deck already covers
+                      </span>
+                      <span className="text-chalk-dim block text-2xs">
+                        <span className="font-data">{existingDeckCount}</span> cards are already
+                        here. Lectern reads them first, so this run goes after what is missing.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
             </label>
 
-            {/* Deck size */}
+            {/* Deck size — on an extend run this buys new cards on top of
+                the ones already in the deck, so it is worded that way. */}
             <div>
               <div className="flex items-baseline justify-between">
-                <span className="eyebrow">Deck size</span>
+                <span className="eyebrow">{extending ? 'Cards to add' : 'Deck size'}</span>
                 <span className="font-data text-chalk-dim text-xs">
-                  {targetCards ?? `auto · ~${autoCap}`} cards
+                  {targetCards ?? `auto · ~${autoCap}`} {extending ? 'new cards' : 'cards'}
                 </span>
               </div>
               <input
@@ -203,7 +230,7 @@ export function HomeView() {
                 disabled={cannotGenerate}
                 className="btn-primary px-5 py-2.5"
               >
-                Generate deck
+                {extending ? 'Extend deck' : 'Generate deck'}
               </button>
             </div>
             {!hasApiKey ? (

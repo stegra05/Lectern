@@ -39,7 +39,11 @@ export const CardTile = memo(function CardTile({
       onClick={editable ? () => setSelectedUid(card.uid) : undefined}
       className={`group bg-paper shadow-card relative rounded-lg p-4 ${
         animate ? 'card-settle' : ''
-      } ${selected ? 'ring-lamp ring-2' : ''}`}
+      } ${selected ? 'ring-lamp ring-2' : ''} ${
+        // Cards carried over from the deck sit back a step: they are context
+        // for this session, not its output.
+        card.fromAnki ? 'opacity-70 transition-opacity duration-150 hover:opacity-100' : ''
+      }`}
     >
       {isEditing ? (
         <CardEditorInline card={card} />
@@ -90,7 +94,18 @@ export const CardTile = memo(function CardTile({
                   check wording
                 </span>
               )}
-              {card.ankiNoteId ? ' · in Anki' : ''}
+              {card.fromAnki ? (
+                <span
+                  className="bg-ink/8 ml-2 rounded-sm px-1 py-px"
+                  title="Already in this deck from an earlier run. This session generated around it — edit it to send an update."
+                >
+                  already in the deck
+                </span>
+              ) : card.ankiNoteId ? (
+                ' · in Anki'
+              ) : (
+                ''
+              )}
             </span>
             {card.outsideSource && editable && (
               <button
@@ -120,12 +135,16 @@ export const CardTile = memo(function CardTile({
               <button onClick={() => setEditingUid(card.uid)} className="btn-paper px-2 py-1">
                 Edit
               </button>
-              <button
-                onClick={() => removeCard(card.uid)}
-                className="btn-paper text-brick hover:text-brick px-2 py-1"
-              >
-                Remove
-              </button>
+              {/* No Remove on an inherited card: this view cannot delete from
+                  Anki, and a button that only hid it would imply otherwise. */}
+              {!card.fromAnki && (
+                <button
+                  onClick={() => removeCard(card.uid)}
+                  className="btn-paper text-brick hover:text-brick px-2 py-1"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           )}
         </>

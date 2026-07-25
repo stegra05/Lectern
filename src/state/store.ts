@@ -7,7 +7,8 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { create } from 'zustand'
-import { AnkiClient, checkConnection, previewSync, syncCards } from '../engine/anki'
+import { AnkiClient, checkConnection, isSyncable, previewSync, syncCards } from '../engine/anki'
+import { countDeckNotes, fetchDeckCards, MAX_IMPORT_CARDS } from '../engine/ankiImport'
 import { provenanceFieldValues } from '../engine/noteTypes'
 import { ensureLecternModels, migrateNotesToLectern } from '../engine/noteTypeSync'
 import { loadNoteTypeFonts } from '../lib/noteTypeFonts'
@@ -84,6 +85,11 @@ interface LecternState {
   view: 'home' | 'session'
   phase: AppPhase
   deckName: string
+  /** Notes already in the named Anki deck; null while unknown (Anki offline,
+   *  no name typed, or a probe still in flight). */
+  existingDeckCount: number | null
+  /** Keep those cards and generate around them, rather than starting over. */
+  extendDeck: boolean
   focusPrompt: string
   targetCards: number | null
   conceptMap: ConceptMap | null
@@ -133,6 +139,10 @@ interface LecternActions {
   loadPdfFromBytes: (fileName: string, bytes: Uint8Array) => Promise<void>
   clearPdf: () => void
   setDeckName: (name: string) => void
+  setExtendDeck: (extend: boolean) => void
+  /** Count the notes in the named deck, so the home view can offer to keep
+   *  them. Debounced by setDeckName; safe to call directly. */
+  probeExistingDeck: () => Promise<void>
   setFocusPrompt: (focus: string) => void
   setTargetCards: (target: number | null) => void
 
@@ -165,6 +175,11 @@ interface LecternActions {
 
 let abortController: AbortController | null = null
 let toastSeq = 1
+/** Debounce + last-writer-wins guards for the deck probe, which fires on
+ *  every keystroke in the deck field. */
+let deckProbeTimer: number | null = null
+let deckProbeSeq = 0
+const DECK_PROBE_DEBOUNCE_MS = 400
 
 export const useLectern = create<LecternState & LecternActions>()((set, get) => {
   const pushLog = (
@@ -229,6 +244,14 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     }
   }
 
+  const scheduleDeckProbe = () => {
+    if (deckProbeTimer !== null) window.clearTimeout(deckProbeTimer)
+    deckProbeTimer = window.setTimeout(() => {
+      deckProbeTimer = null
+      void get().probeExistingDeck()
+    }, DECK_PROBE_DEBOUNCE_MS)
+  }
+
   const refreshEstimate = () => {
     const { pdfInfo, settings, targetCards } = get()
     if (!pdfInfo || !settings) return
@@ -277,6 +300,10 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     view: 'home',
     phase: 'idle',
     deckName: '',
+    existingDeckCount: null,
+    // Keeping what is already there is the safe default; it only takes effect
+    // once a probe finds cards in the named deck.
+    extendDeck: true,
     focusPrompt: '',
     targetCards: null,
     conceptMap: null,
@@ -324,8 +351,10 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       if (status.ok) {
         const decks = await client.deckNames().catch(() => [] as string[])
         set({ ankiStatus: 'connected', ankiDecks: decks })
+        // Anki just became reachable — the deck in the field can be looked up.
+        void get().probeExistingDeck()
       } else {
-        set({ ankiStatus: 'offline', ankiDecks: [] })
+        set({ ankiStatus: 'offline', ankiDecks: [], existingDeckCount: null })
       }
     },
 
@@ -401,8 +430,11 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           slidePeek: null,
           slideRenders: {},
           deckName: suggestedDeck,
+          existingDeckCount: null,
         })
         refreshEstimate()
+        // The suggested deck name may well be one that already exists.
+        void get().probeExistingDeck()
 
         // Render thumbnails progressively; the filmstrip fills in as they land.
         const pages = Math.min(pdfInfo.pageCount, THUMBNAIL_PAGE_LIMIT)
@@ -435,7 +467,32 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       })
     },
 
-    setDeckName: (name) => set({ deckName: name }),
+    setDeckName: (name) => {
+      // The old count belongs to the old name — drop it rather than show a
+      // stale "87 cards already here" against a deck nobody has looked up.
+      set({ deckName: name, existingDeckCount: null })
+      scheduleDeckProbe()
+    },
+
+    setExtendDeck: (extend) => set({ extendDeck: extend }),
+
+    probeExistingDeck: async () => {
+      const { settings, deckName, ankiStatus } = get()
+      if (!settings || ankiStatus !== 'connected' || !deckName.trim()) {
+        set({ existingDeckCount: null })
+        return
+      }
+      const seq = ++deckProbeSeq
+      try {
+        const client = new AnkiClient(settings.ankiUrl, tauriFetch)
+        const count = await countDeckNotes(client, deckName)
+        if (seq === deckProbeSeq) set({ existingDeckCount: count })
+      } catch {
+        // Unknown beats wrong: the extend offer simply does not appear.
+        if (seq === deckProbeSeq) set({ existingDeckCount: null })
+      }
+    },
+
     setFocusPrompt: (focus) => set({ focusPrompt: focus }),
     setTargetCards: (target) => {
       set({ targetCards: target })
@@ -443,7 +500,17 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     },
 
     startGeneration: async () => {
-      const { pdfBytes, pdfInfo, fileName, settings, deckName, focusPrompt, targetCards } = get()
+      const {
+        pdfBytes,
+        pdfInfo,
+        fileName,
+        settings,
+        deckName,
+        focusPrompt,
+        targetCards,
+        extendDeck,
+        existingDeckCount,
+      } = get()
       if (!pdfBytes || !pdfInfo || !fileName || !settings) return
       const apiKey = await getApiKey().catch(() => null)
       if (!apiKey) {
@@ -482,6 +549,44 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         slidePeek: null,
       })
 
+      // An extend run inherits the deck that is already in Anki. Reading it
+      // is a precondition, not a nicety: generating without it would produce
+      // a second copy of cards the user already has, so a failure here stops
+      // the run instead of quietly starting over.
+      let existingCards: Card[] = []
+      if (extendDeck && (existingDeckCount ?? 0) > 0) {
+        try {
+          const client = new AnkiClient(settings.ankiUrl, tauriFetch)
+          const imported = await fetchDeckCards(client, deckName)
+          existingCards = imported.cards
+          set({ cards: existingCards })
+          pushLog(
+            'info',
+            `Keeping ${imported.cards.length} card(s) already in “${deckName}” — this run adds to them.`,
+          )
+          if (imported.truncated) {
+            pushLog(
+              'warn',
+              `“${deckName}” holds ${imported.totalNotes} notes; only the first ${MAX_IMPORT_CARDS} were read. ` +
+                'Cards beyond that may be duplicated.',
+            )
+          }
+          const unreadable = Math.min(imported.totalNotes, MAX_IMPORT_CARDS) - imported.cards.length
+          if (unreadable > 0) {
+            pushLog('warn', `${unreadable} note(s) in the deck could not be read and are ignored.`)
+          }
+        } catch (e) {
+          const message = (e as Error).message
+          set({
+            phase: 'error',
+            errorMessage:
+              `Could not read “${deckName}” from Anki: ${message}. ` +
+              'Nothing was generated — running without the existing cards would duplicate them.',
+          })
+          return
+        }
+      }
+
       try {
         const outcome = await runPipeline({
           pdfBytes,
@@ -489,6 +594,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           fileName,
           focusPrompt: focusPrompt || undefined,
           userTargetCards: targetCards ?? undefined,
+          existingCards,
           model: settings.model,
           apiKey,
           fetchFn: tauriFetch,
@@ -610,7 +716,12 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     updateCardFields: (uid, fields) =>
       set((s) => ({
-        cards: s.cards.map((c) => (c.uid === uid ? { ...c, fields } : c)),
+        cards: s.cards.map((c) =>
+          // Editing a card inherited from Anki is how you opt it into the
+          // next send: it stops being untouched ballast and becomes an
+          // update against its existing note.
+          c.uid === uid ? { ...c, fields, fromAnki: undefined } : c,
+        ),
         editingUid: null,
       })),
 
@@ -619,6 +730,11 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       const index = cards.findIndex((c) => c.uid === uid)
       if (index === -1) return
       const card = cards[index]
+      if (card.fromAnki) {
+        // Removing it here would suggest it left Anki, which it did not.
+        get().toast('info', 'This card is already in Anki — remove it there.')
+        return
+      }
       set({ cards: cards.filter((c) => c.uid !== uid) })
       const undo = () =>
         set((s) => {
@@ -652,7 +768,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     previewSyncNow: async () => {
       const { settings, cards, deckName, conceptMap } = get()
-      const syncable = cards.filter((c) => !c.syncExcluded)
+      const syncable = cards.filter(isSyncable)
       if (!settings || syncable.length === 0) return
       set({ syncState: 'previewing' })
       try {
@@ -675,7 +791,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     syncNow: async () => {
       const { settings, cards, deckName, conceptMap } = get()
-      const syncable = cards.filter((c) => !c.syncExcluded)
+      const syncable = cards.filter(isSyncable)
       if (!settings || syncable.length === 0) return
       set({ syncState: 'syncing', syncProgress: { done: 0, total: syncable.length } })
       try {

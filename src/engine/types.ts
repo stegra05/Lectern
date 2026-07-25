@@ -26,6 +26,15 @@ export interface Card {
   outsideSource?: boolean
   /** Kept out of Anki syncs until the user opts it in. */
   syncExcluded?: boolean
+  /** Which document this card came from, read back off an imported note.
+   *  Page numbers only mean something relative to their own document, so a
+   *  deck holding several lectures needs this to know whose pages these are. */
+  sourceSetName?: string
+  /** Read back out of the target Anki deck at the start of an extend run.
+   *  Such a card is ballast: it seeds dedupe and coverage, the model never
+   *  edits it, and it is not re-sent. Editing one by hand clears the flag,
+   *  which opts it into the next send as an update. */
+  fromAnki?: boolean
   /** Set after a successful Anki sync. */
   ankiNoteId?: number
 }

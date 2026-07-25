@@ -303,6 +303,53 @@ export function buildGenerationGapText(catalog: CoverageCatalog, coverage: Cover
   return lines.join('\n') + '\n'
 }
 
+/**
+ * The ledger for a run that has nowhere left to go outward.
+ *
+ * Extending an already-thorough deck starts at full page coverage, where the
+ * generation ledger reads as "done" and would stop the run with nothing
+ * added. What is actually left is depth: pages carrying a single card,
+ * concepts no card names outright, and the relations between concepts —
+ * which are where a deck stops testing recall and starts testing
+ * understanding. This names those instead of counting pages.
+ */
+export function buildDepthGapText(catalog: CoverageCatalog, coverage: CoverageData): string {
+  const gaps = summarizeGaps(catalog, coverage)
+
+  // Pages the deck touches only once are the likeliest to be under-taught;
+  // saturated pages are where another card would just crowd.
+  const thinPages = coverage.coveredPages.filter((page) => (coverage.cardsPerPage[page] ?? 0) <= 1)
+  const unnamedConcepts = [...catalog.conceptIds].filter(
+    (id) => !coverage.coveredConceptIds.includes(id),
+  )
+
+  const lines = [
+    '- DEPTH LEDGER (breadth is already complete — add depth, not repeats):',
+    `  - Cards in the deck cover ${coverage.coveredPages.length}/${catalog.pageCount} pages.`,
+  ]
+
+  if (thinPages.length > 0) {
+    lines.push(`  - Pages carrying only one card: ${preview(thinPages, 15, String)}`)
+  }
+  if (gaps.uncoveredRelationKeys.length > 0) {
+    lines.push(
+      `  - Relations no card teaches yet: ${preview(gaps.uncoveredRelationKeys, 8, (key) => key)}`,
+    )
+  }
+  if (unnamedConcepts.length > 0) {
+    lines.push(
+      `  - Concepts no card names directly: ${preview(unnamedConcepts, 8, (id) =>
+        describeConcept(catalog, id),
+      )}`,
+    )
+  }
+  if (coverage.saturatedPages.length > 0) {
+    lines.push(`  - Already crowded, leave alone: ${preview(coverage.saturatedPages, 8, String)}`)
+  }
+
+  return lines.join('\n') + '\n'
+}
+
 export function buildReflectionGapText(catalog: CoverageCatalog, coverage: CoverageData): string {
   const gaps = summarizeGaps(catalog, coverage)
   const highPriorityTotal = catalog.highPriorityIds.size

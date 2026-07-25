@@ -148,11 +148,34 @@ export function generationMissionPrompt(
     totalCardCap: number
     batchSize: number
     gapText: string
+    /** Extend runs: what the target deck already teaches. */
+    existingDeck?: { count: number; topics: string[]; truncated: number }
+    /** The deck already covers the document — this run adds depth, not breadth. */
+    depthMode?: boolean
   },
 ): string {
   const focus = focusOf(ctx)
+  const existing = opts.existingDeck
+  const existingBrief =
+    existing === undefined
+      ? ''
+      : `\nThis deck already holds ${existing.count} card(s) from earlier runs over this material. ` +
+        `They stay exactly as they are — you are adding to them, not replacing them. ` +
+        `Their pages are already marked covered in the ledger below, so read it as "what is still missing".\n` +
+        `Topics already covered: ${existing.topics.join(', ')}` +
+        (existing.truncated > 0 ? `, …and ${existing.truncated} more topic(s) not listed` : '') +
+        `.\nA card that repeats one of these is dropped as a duplicate and wastes budget. Go after the gaps.\n`
+
+  // Breadth is spent: say what "more cards" means when every page is covered,
+  // or the model reasonably concludes the job is already done.
+  const depthBrief = opts.depthMode
+    ? `\nThis deck already covers the document end to end, so there is no breadth left to add — your budget buys depth. Depth means: the relations between concepts (how one causes, contrasts with, or builds on another), the sub-points and edge cases of pages that carry a single card, and questions that apply or compare rather than restate. A second card on a page is right when it teaches something the first one does not.\nIf you reach a point where another card would only rephrase one that exists, call finish_generation and say so — a short honest deck beats a padded one.\n`
+    : ''
+
   return (
     `Now build the deck for the document you just mapped. Work in batches: call submit_cards, read the review it returns — accepted/rejected verdicts with reasons plus a coverage ledger of pages, concepts, and relations still lacking cards — and let that drive the next batch. Rework rejected material rather than dropping it.\n` +
+    existingBrief +
+    depthBrief +
     `\nBudget: ${opts.totalCardCap} accepted cards total. Keep each submit_cards call to about ${opts.batchSize} cards; larger payloads risk truncation.\n` +
     `Coverage order: every high-importance concept first, then breadth across pages. Spend at most 2 cards on one slide while gaps remain elsewhere.\n` +
     (focus ? `User focus: "${focus}" — align card selection and style with it.\n` : '') +
@@ -231,9 +254,16 @@ export function reviewMissionPrompt(
     coverageGaps: string
     cardCap: number
     freeSlots: number
+    /** Extend runs: cards inherited from Anki, deliberately absent below. */
+    inheritedCount?: number
   },
 ): string {
   const focus = focusOf(ctx)
+  const inherited = opts.inheritedCount ?? 0
+  const inheritedNote =
+    inherited === 0
+      ? ''
+      : `\n${inherited} further card(s) from earlier runs are already in this deck. They are not listed below and are not yours to edit — the user is studying them. They do count toward the coverage ledger, so a gap the ledger does not show is not a gap.\n`
   return (
     'The deck is generated. Review it as a quality editor, working through the edit tools:\n' +
     '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back.\n' +
@@ -244,6 +274,7 @@ export function reviewMissionPrompt(
     'Leave strong cards untouched — edit only where you can name the defect. ' +
     `All content stays in ${ctx.language}.\n` +
     (focus ? `Check alignment with the user focus: "${focus}".\n` : '') +
+    inheritedNote +
     `\n${opts.coverageGaps}\n` +
     `\nDeck under review (card_id → content):\n${opts.deckListing}`
   )
