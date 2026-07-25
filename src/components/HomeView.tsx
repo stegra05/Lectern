@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useLectern } from '../state/store'
 import { MODEL_CHOICES } from '../engine/config'
 import { computeSizingPlan } from '../engine/pacing'
+import { MAX_FOCUS_PROMPT_LEN } from '../engine/prompts'
 
 /**
  * The deck-size slider is exponential: card-by-card precision for small decks,
@@ -149,14 +150,26 @@ export function HomeView() {
 
             {/* Focus */}
             <label className="block">
-              <span className="eyebrow">Focus · optional</span>
+              <span className="flex items-baseline justify-between">
+                <span className="eyebrow">Focus · optional</span>
+                {/* The counter stays out of the way until the field fills up. */}
+                {focusPrompt.length > MAX_FOCUS_PROMPT_LEN * 0.6 && (
+                  <span
+                    className={`font-data text-xs ${
+                      focusPrompt.length >= MAX_FOCUS_PROMPT_LEN ? 'text-lamp' : 'text-chalk-dim'
+                    }`}
+                  >
+                    {focusPrompt.length} / {MAX_FOCUS_PROMPT_LEN}
+                  </span>
+                )}
+              </span>
               <textarea
                 value={focusPrompt}
                 onChange={(e) => setFocusPrompt(e.target.value)}
-                rows={2}
-                maxLength={180}
-                placeholder={'e.g. "definitions and formulas for the exam"'}
-                className="field mt-1.5 resize-none"
+                rows={3}
+                maxLength={MAX_FOCUS_PROMPT_LEN}
+                placeholder={'e.g. "definitions and formulas for the exam — skip the case studies"'}
+                className="field mt-1.5 resize-y"
               />
             </label>
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MAX_REQUEST_PROMPT_LEN } from '../engine/prompts'
 import { renderNoteMarkdown } from '../lib/render'
 import type { LogLine } from '../state/store'
 import { useLectern } from '../state/store'
@@ -92,23 +93,32 @@ export function FollowUpComposer() {
 
   return (
     <div className="mt-2 shrink-0">
-      <input
+      {/* A textarea, not an input: requests run to a paragraph often enough
+          that a one-line box hid what people had typed. Enter still sends;
+          ⇧↩ breaks the line. */}
+      <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
             submit()
           }
           if (e.key === 'Escape') setDraft('')
         }}
-        maxLength={500}
+        rows={Math.min(6, Math.max(1, draft.split('\n').length))}
+        maxLength={MAX_REQUEST_PROMPT_LEN}
         disabled={busy}
         placeholder={busy ? 'Adding cards…' : 'Request more cards…'}
         aria-label="Request more cards"
-        title="Ask for cards on a missing topic or an emphasis — e.g. “add cards on the trolley problem”"
-        className="field w-full px-2.5 py-1.5 text-xs"
+        title="Ask for cards on a missing topic or an emphasis — e.g. “add cards on the trolley problem”. ↩ sends, ⇧↩ adds a line."
+        className="field w-full resize-none px-2.5 py-1.5 text-xs"
       />
+      {draft.length > MAX_REQUEST_PROMPT_LEN * 0.6 && (
+        <span className="font-data text-2xs text-chalk-dim mt-1 block text-right">
+          {draft.length} / {MAX_REQUEST_PROMPT_LEN}
+        </span>
+      )}
       {busy && (
         <div className="mt-1 flex items-baseline justify-between">
           <span className="font-data text-2xs text-chalk-dim animate-pulse">Working on it…</span>

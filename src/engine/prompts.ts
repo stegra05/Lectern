@@ -71,14 +71,22 @@ export const CARD_EXAMPLES =
 
 // --- Focus prompt sanitizing (prompt-injection hardening) -------------------
 
-const MAX_FOCUS_PROMPT_LEN = 180
-/** Follow-up chat requests get more room than the one-line focus field. */
-export const MAX_REQUEST_PROMPT_LEN = 500
+/** The focus note rides along in the system instructions of every call, so
+ *  its length is paid per round — but at ~150 tokens a full field that is
+ *  noise next to the document itself, and users write real briefs here
+ *  ("chapters 3-5, definitions and proofs, skip the historical asides"). */
+export const MAX_FOCUS_PROMPT_LEN = 600
+/** Follow-up chat requests are sent once, so they get more room still. */
+export const MAX_REQUEST_PROMPT_LEN = 1000
 const BLOCKED_FRAGMENTS = ['system:', 'assistant:', 'user:', 'ignore previous instructions']
 
 export function sanitizeFocusPrompt(value: string, maxLen: number = MAX_FOCUS_PROMPT_LEN): string {
   let s = (value ?? '')
-    .replace(/[\r\n]/g, ' ')
+    .trim()
+    // Line breaks stay out — they would let a pasted note fake a turn
+    // boundary. They become separators rather than plain spaces so a pasted
+    // list keeps its item boundaries ("definitions\nproofs" is two things).
+    .replace(/\s*[\r\n]+\s*/g, '; ')
     .replace(/`/g, '')
     .replace(/"/g, "'")
   s = s.split(/\s+/).join(' ')
