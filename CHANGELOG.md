@@ -1,5 +1,78 @@
 # Changelog
 
+## 2.11.0 (2026-07-25)
+
+### Fixed
+- **Tags keep the letters of every language.** Tag parts were filtered to
+  ASCII, so a German lecture filed itself under `K-nstliche-Intelligenz`,
+  `Übungsblatt` lost its first letter entirely, and a CJK topic cleaned to
+  nothing at all — which silently collapsed a level of the hierarchy for
+  every card in the run. Anki tags are Unicode; only whitespace and quotes
+  ever needed handling. A template with a literal space in it no longer
+  turns one tag into two, and Title Casing leaves `ReLU` and `kNN` alone.
+- **Cloze deletions that Anki would truncate are rejected.** Anki closes a
+  deletion at the first `}}`, so `{{c1::\(e^{-x^{2}}\)}}` — math inside a
+  deletion, which the prompt itself asks for — reached the student cut in
+  half. The gate now catches it, and the formatting rules say how to avoid
+  it.
+- **Re-sending a card updates its tags, not only its fields.** A renamed
+  deck, an edited topic or a changed tag template never reached a note that
+  was already in Anki. Clearing a cloze card's "Back Extra" now clears it in
+  Anki too, instead of leaving the old hint on the card forever.
+- **Editing a card that came from Anki keeps it a card that lives in Anki.**
+  The edit used to strip the flag that marks it, which unlocked a Remove
+  button that removed nothing from Anki and dropped the edit it was meant to
+  carry. Its provenance also stops being rewritten with the current
+  lecture's name and no pages.
+- **Duplicates are recognized before the send, not during it.** Cards Anki
+  already holds are left alone and reported as such, rather than attempted,
+  refused, and counted as failures — and every per-card outcome now appears
+  in the activity log the send bar points at.
+- **A hand edit passes the same gate as a model edit.** The quality badge
+  used to freeze at generation time, so a fixed card stayed flagged and a
+  card broken by an edit went out looking clean.
+
+### Changed
+- **Grounding is checked, not taken on trust.** Lectern already read the
+  PDF's text; it now keeps it, and flags a card whose source excerpt is
+  absent from the page it cites. Pages the document does not have are
+  rejected outright — cards citing page 900 of a 10-page lecture used to
+  pass and push page coverage above 100%.
+- **The gate checks what the renderer will show.** Markdown, `$…$` math,
+  more than two cloze deletions, and an answer that only repeats its
+  question are rejected; yes/no fronts and cards that point at the slide
+  ("as shown above") are flagged for a second look.
+- **The coverage ledger stopped believing the model about the document.** It
+  counts against the real page count, a high-importance concept needs a card
+  that claims it rather than one that merely cites its page, rephrased
+  duplicates are caught before they land, and the question mix is named back
+  to the model so a deck of forty definitions is visible while it is being
+  written. An extend run can now say it has nothing worth adding, which the
+  brief always invited and the gate always refused.
+- **The review shows what the student will see.** Cloze cards can be shown as
+  asked instead of only as answered, "Back Extra" is rendered, and tables,
+  code and ordered lists preview the way Anki renders them. Search reads the
+  card rather than its HTML.
+- **The deck field says what the name means in Anki** — an existing deck, an
+  empty one, a new one it will create, or that Anki cannot be reached to
+  answer. The tag template names its placeholders, flags unknown ones, and
+  shows the tags a card would carry.
+- **Note types survive their own upgrades.** A theme switch no longer
+  rewrites card templates, so a `{{Tags}}` line or type-in box added in Anki
+  stays; "Apply design to earlier synced cards" keeps fields it has no home
+  for instead of dropping them, refuses to make a cloze note out of a note
+  with no deletion, and leaves notes whose model makes more cards than the
+  target. Card size follows Anki's own styling knob again, and missing fonts
+  are re-uploaded rather than assumed.
+
+### Accessibility
+- The focus ring is visible on paper (it was 2.05:1), dimmed text on the desk
+  meets 4.5:1, error messages and the activity log can be selected and
+  copied, the card grid is a listbox that moves focus with the selection, the
+  concept sheet behaves like the modal it declares itself to be, the
+  filmstrip is one tab stop instead of seventy, and the update notice no
+  longer covers the slides it was sitting on.
+
 ## 2.10.0 (2026-07-25)
 
 ### Added

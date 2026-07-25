@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import { AnkiClient } from './anki'
-import { NOTE_TYPE_VERSION, noteTypeCss, styleMarker, type FontAsset } from './noteTypes'
+import {
+  FONT_FILES,
+  LECTERN_NOTE_TYPES,
+  NOTE_TYPE_VERSION,
+  noteTypeCss,
+  styleMarker,
+  type FontAsset,
+} from './noteTypes'
 import { ensureLecternModels, migrateNotesToLectern } from './noteTypeSync'
 
 // --- Compact mock: dispatch AnkiConnect actions to route functions -------------
@@ -50,6 +57,7 @@ describe('ensureLecternModels', () => {
   it('creates both note types (fonts first) when absent', async () => {
     const { client, calls } = mockAnki({
       modelNames: () => ['Basic', 'Cloze'],
+      getMediaFilesNames: () => [],
       storeMediaFile: () => '_LecternTest.woff2',
       createModel: () => ({}),
     })
@@ -61,6 +69,7 @@ describe('ensureLecternModels', () => {
       updated: [],
       userOwned: [],
       newerVersion: [],
+      fieldMismatch: [],
     })
     const actions = actionsOf(calls)
     expect(actions.indexOf('storeMediaFile')).toBeLessThan(actions.indexOf('createModel'))
@@ -81,12 +90,21 @@ describe('ensureLecternModels', () => {
   it('does nothing (not even font uploads) when both are current', async () => {
     const { client, calls } = mockAnki({
       modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      modelFieldNames: (params) =>
+        LECTERN_NOTE_TYPES.find((d) => d.name === params?.modelName)?.fields ?? [],
+      getMediaFilesNames: () => Object.values(FONT_FILES),
       modelStyling: () => ({ css: noteTypeCss('paper') }),
     })
 
     const result = await ensureLecternModels(client, 'paper', loadFonts)
 
-    expect(result).toEqual({ created: [], updated: [], userOwned: [], newerVersion: [] })
+    expect(result).toEqual({
+      created: [],
+      updated: [],
+      userOwned: [],
+      newerVersion: [],
+      fieldMismatch: [],
+    })
     expect(actionsOf(calls)).not.toContain('storeMediaFile')
     expect(actionsOf(calls)).not.toContain('updateModelStyling')
   })
@@ -95,6 +113,9 @@ describe('ensureLecternModels', () => {
     const oldCss = `${styleMarker('paper', NOTE_TYPE_VERSION - 1)}\n.card {}`
     const { client, calls } = mockAnki({
       modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      modelFieldNames: (params) =>
+        LECTERN_NOTE_TYPES.find((d) => d.name === params?.modelName)?.fields ?? [],
+      getMediaFilesNames: () => Object.values(FONT_FILES),
       modelStyling: () => ({ css: oldCss }),
       storeMediaFile: () => 'ok',
       updateModelStyling: () => ({}),
@@ -112,6 +133,9 @@ describe('ensureLecternModels', () => {
   it('switches themes in place', async () => {
     const { client, calls } = mockAnki({
       modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      modelFieldNames: (params) =>
+        LECTERN_NOTE_TYPES.find((d) => d.name === params?.modelName)?.fields ?? [],
+      getMediaFilesNames: () => Object.values(FONT_FILES),
       modelStyling: () => ({ css: noteTypeCss('paper') }),
       storeMediaFile: () => 'ok',
       updateModelStyling: () => ({}),
@@ -134,6 +158,9 @@ describe('ensureLecternModels', () => {
   it('writes templates before the marker that says they are current', async () => {
     const { client, calls } = mockAnki({
       modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      modelFieldNames: (params) =>
+        LECTERN_NOTE_TYPES.find((d) => d.name === params?.modelName)?.fields ?? [],
+      getMediaFilesNames: () => Object.values(FONT_FILES),
       modelStyling: () => ({ css: `${styleMarker('paper', NOTE_TYPE_VERSION - 1)}\n.card {}` }),
       storeMediaFile: () => 'ok',
       updateModelStyling: () => ({}),
@@ -168,6 +195,9 @@ describe('ensureLecternModels', () => {
     const newerCss = `${styleMarker('paper', NOTE_TYPE_VERSION + 1)}\n.card {}`
     const { client, calls } = mockAnki({
       modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      modelFieldNames: (params) =>
+        LECTERN_NOTE_TYPES.find((d) => d.name === params?.modelName)?.fields ?? [],
+      getMediaFilesNames: () => Object.values(FONT_FILES),
       modelStyling: () => ({ css: newerCss }),
     })
 
@@ -178,6 +208,7 @@ describe('ensureLecternModels', () => {
       updated: [],
       userOwned: [],
       newerVersion: ['Lectern Basic', 'Lectern Cloze'],
+      fieldMismatch: [],
     })
     expect(actionsOf(calls)).not.toContain('updateModelStyling')
   })
@@ -350,5 +381,43 @@ describe('migrateNotesToLectern', () => {
       failures: [],
     })
     expect(calls).toHaveLength(0)
+  })
+})
+
+describe('ensureLecternModels — collection surprises', () => {
+  it('re-uploads fonts a collection has lost, even with nothing else to do', async () => {
+    const { client, calls } = mockAnki({
+      modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      modelFieldNames: (params) =>
+        LECTERN_NOTE_TYPES.find((d) => d.name === params?.modelName)?.fields ?? [],
+      getMediaFilesNames: () => [],
+      modelStyling: () => ({ css: noteTypeCss('paper') }),
+      storeMediaFile: () => 'ok',
+    })
+
+    const result = await ensureLecternModels(client, 'paper', loadFonts)
+
+    expect(result.created).toEqual([])
+    expect(result.updated).toEqual([])
+    expect(actionsOf(calls)).toContain('storeMediaFile')
+  })
+
+  it('leaves a namesake note type with different fields alone, and says so', async () => {
+    const { client, calls } = mockAnki({
+      modelNames: () => ['Lectern Basic', 'Lectern Cloze'],
+      // Someone else's "Lectern Basic": no provenance fields.
+      modelFieldNames: (params) =>
+        params?.modelName === 'Lectern Basic'
+          ? ['Front', 'Back']
+          : (LECTERN_NOTE_TYPES.find((d) => d.name === params?.modelName)?.fields ?? []),
+      getMediaFilesNames: () => Object.values(FONT_FILES),
+      modelStyling: () => ({ css: noteTypeCss('paper') }),
+      updateModelStyling: () => ({}),
+    })
+
+    const result = await ensureLecternModels(client, 'paper', loadFonts)
+
+    expect(result.fieldMismatch).toEqual(['Lectern Basic'])
+    expect(actionsOf(calls)).not.toContain('updateModelStyling')
   })
 })

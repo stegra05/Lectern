@@ -331,6 +331,11 @@ export class AnkiClient {
     await this.invoke('updateModelTemplates', { model: { name: model, templates } })
   }
 
+  /** Media filenames matching a glob, e.g. "_Lectern*". */
+  async getMediaFilesNames(pattern: string): Promise<string[]> {
+    return toStringArray(await this.invoke('getMediaFilesNames', { pattern }))
+  }
+
   /** Store a file in Anki's media folder (base64 payload). Overwrites. */
   async storeMediaFile(filename: string, dataBase64: string): Promise<void> {
     await this.invoke('storeMediaFile', { filename, data: dataBase64 })

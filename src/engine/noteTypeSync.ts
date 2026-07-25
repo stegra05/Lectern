@@ -16,6 +16,7 @@ import {
   type AnkiNoteInfo,
 } from './anki'
 import {
+  FONT_FILES,
   LECTERN_BASIC_MODEL,
   LECTERN_CLOZE_MODEL,
   LECTERN_NOTE_TYPES,
@@ -36,6 +37,9 @@ export interface EnsureModelsResult {
   userOwned: string[]
   /** Installed by a newer Lectern than this one; left untouched. */
   newerVersion: string[]
+  /** A note type of the same name that is not ours — the provenance fields
+   *  it lacks would be dropped by AnkiConnect without a word. */
+  fieldMismatch: string[]
 }
 
 /**
@@ -49,7 +53,13 @@ export async function ensureLecternModels(
   loadFonts: () => Promise<FontAsset[]>,
 ): Promise<EnsureModelsResult> {
   const existing = new Set(await client.modelNames())
-  const result: EnsureModelsResult = { created: [], updated: [], userOwned: [], newerVersion: [] }
+  const result: EnsureModelsResult = {
+    created: [],
+    updated: [],
+    userOwned: [],
+    newerVersion: [],
+    fieldMismatch: [],
+  }
   const css = noteTypeCss(theme)
 
   const toCreate = LECTERN_NOTE_TYPES.filter((def) => !existing.has(def.name))
@@ -58,6 +68,14 @@ export async function ensureLecternModels(
   /** Restyle only, or restyle and rewrite the templates with it. */
   const toUpdate: Array<{ def: (typeof LECTERN_NOTE_TYPES)[number]; templates: boolean }> = []
   for (const def of toInspect) {
+    // Name is not identity: another add-on's "Lectern Basic" would take the
+    // sync and quietly drop Topic/Source/Excerpt, since AnkiConnect ignores
+    // field names a model does not have.
+    const fields = new Set(await client.modelFieldNames(def.name).catch(() => def.fields))
+    if (def.fields.some((name) => !fields.has(name))) {
+      result.fieldMismatch.push(def.name)
+      continue
+    }
     const marker = parseStyleMarker(await client.modelStyling(def.name))
     if (!marker) {
       result.userOwned.push(def.name)
@@ -74,8 +92,12 @@ export async function ensureLecternModels(
     }
   }
 
-  if (toCreate.length > 0 || toUpdate.length > 0) {
-    // Fonts first, so a card never renders against missing font files.
+  // Fonts first, so a card never renders against missing font files. They
+  // were only ever uploaded alongside a create or a restyle, so a collection
+  // that lost them (a media restore, a sync from a machine that never had
+  // them) rendered every Lectern card in the fallback serif with nothing
+  // saying why.
+  if (toCreate.length > 0 || toUpdate.length > 0 || (await fontsMissing(client))) {
     for (const font of await loadFonts()) {
       await client.storeMediaFile(font.filename, font.dataBase64)
     }
@@ -109,10 +131,15 @@ export async function ensureLecternModels(
   return result
 }
 
-/** True when both bundled note types exist in the collection. */
-export async function lecternModelsInstalled(client: AnkiClient): Promise<boolean> {
-  const models = new Set(await client.modelNames())
-  return models.has(LECTERN_BASIC_MODEL) && models.has(LECTERN_CLOZE_MODEL)
+/** Is any bundled font absent from the collection's media folder? Unknown
+ *  counts as present: a failed probe must not trigger an upload every run. */
+async function fontsMissing(client: AnkiClient): Promise<boolean> {
+  try {
+    const present = new Set(await client.getMediaFilesNames('_Lectern*'))
+    return Object.values(FONT_FILES).some((name) => !present.has(name))
+  } catch {
+    return false
+  }
 }
 
 // --- Migration of previously synced notes ----------------------------------------

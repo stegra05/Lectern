@@ -313,6 +313,13 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           `${result.newerVersion.join(' and ')} came from a newer Lectern — left untouched.`,
         )
       }
+      if (result.fieldMismatch.length > 0) {
+        pushLog(
+          'warn',
+          `${result.fieldMismatch.join(' and ')} in Anki has different fields from Lectern's, ` +
+            'so it is left alone — cards sent to it carry no Topic/Source/Excerpt.',
+        )
+      }
       if (!announce) return
       if (result.updated.length > 0) {
         get().toast('success', 'Card design applied — cards in Anki show it right away.')
