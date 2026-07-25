@@ -420,3 +420,72 @@ describe('stripMarkup / ankiCardCount / findNearDuplicate', () => {
     expect(findNearDuplicate('what is the batch size of the optimizer', existing)).toBeNull()
   })
 })
+
+describe('evaluateCard — checks that must not fire on real cards', () => {
+  it('leaves identifiers, counts and German definition fronts alone', () => {
+    const cases: Array<[string, string]> = [
+      ['What does __init__ do in Python?', 'It initializes the instance.'],
+      ['# of parameters in a dense layer?', 'inputs × outputs + outputs.'],
+      ['Was ist die Entropie einer Verteilung?', 'Der Erwartungswert des Informationsgehalts.'],
+      ['What did the deck cost?', 'Between $5 and $10.'],
+    ]
+    for (const [Front, Back] of cases) {
+      const verdict = evaluateCard(groundedCard({ fields: { Front, Back } }))
+      expect(verdict.failures, Front).toEqual([])
+      expect(verdict.issues, Front).not.toContain('yes_no_question')
+    }
+  })
+
+  it('still flags an excerpt that is not on the page it cites', () => {
+    const pageTexts = ['', 'Gradient descent updates the weights along the negative gradient.']
+    const wrong = evaluateCard(
+      groundedCard({
+        sourcePages: [2],
+        sourceExcerpt: 'Mitochondria generate chemical energy stored in adenosine triphosphate.',
+      }),
+      { pageTexts },
+    )
+    expect(wrong.pass).toBe(true)
+    expect(wrong.issues).toContain('excerpt_not_on_cited_page')
+
+    const right = evaluateCard(
+      groundedCard({
+        sourcePages: [2],
+        sourceExcerpt: 'Gradient descent updates the weights along the negative gradient.',
+      }),
+      { pageTexts },
+    )
+    expect(right.issues).not.toContain('excerpt_not_on_cited_page')
+
+    // An image-only slide cannot answer the question, so nothing is claimed.
+    const noText = evaluateCard(
+      groundedCard({
+        sourcePages: [1],
+        sourceExcerpt: 'Mitochondria generate chemical energy stored in adenosine triphosphate.',
+      }),
+      { pageTexts },
+    )
+    expect(noText.issues).not.toContain('excerpt_not_on_cited_page')
+  })
+})
+
+describe('evaluateCard — provenanceOptional', () => {
+  it('judges an imported card on its text, not on the paper trail it never had', () => {
+    const imported = makeCard({
+      fields: { Front: 'Earlier card, corrected', Back: 'Still fine.' },
+      sourcePages: [],
+      qualityScore: 100,
+    })
+    expect(evaluateCard(imported).pass).toBe(false)
+
+    const verdict = evaluateCard(imported, { provenanceOptional: true })
+    expect(verdict).toEqual({ pass: true, score: 100, failures: [], issues: [] })
+
+    // The renderer checks still apply — those are about the edit itself.
+    const broken = evaluateCard(
+      makeCard({ modelName: 'Cloze', fields: { Text: 'no deletion left' } }),
+      { provenanceOptional: true },
+    )
+    expect(broken.failures).toContain('cloze_without_deletion')
+  })
+})

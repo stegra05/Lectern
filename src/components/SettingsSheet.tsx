@@ -106,7 +106,7 @@ export function SettingsSheet() {
     topic: 'Backpropagation',
     defaultTag: draft.defaultTag,
     enableDefaultTag: draft.enableDefaultTag,
-  }).join('  ')
+  })
 
   const save = async () => {
     if (keyDraft.trim()) {
@@ -343,13 +343,17 @@ export function SettingsSheet() {
                   />
                 </label>
               </div>
-              <label className="block">
-                <span className="eyebrow">Tag template</span>
-                <input
-                  value={draft.tagTemplate}
-                  onChange={(e) => setDraft({ ...draft, tagTemplate: e.target.value })}
-                  className="field bg-desk font-data mt-1.5 text-sm"
-                />
+              {/* The help sits outside the label: inside it, every word of it
+                  became part of the input's accessible name. */}
+              <div>
+                <label className="block">
+                  <span className="eyebrow">Tag template</span>
+                  <input
+                    value={draft.tagTemplate}
+                    onChange={(e) => setDraft({ ...draft, tagTemplate: e.target.value })}
+                    className="field bg-desk font-data mt-1.5 text-sm"
+                  />
+                </label>
                 {/* The three placeholders were undiscoverable without reading
                     the source, and the result was invisible until the cards
                     were in Anki. */}
@@ -364,12 +368,25 @@ export function SettingsSheet() {
                     placeholder — it goes into the tag as written.
                   </p>
                 )}
-                <p className="text-chalk-dim mt-1 text-2xs">
-                  A card would be tagged{' '}
-                  <span className="font-data text-chalk">{tagPreview || '(no tag)'}</span>
-                </p>
-              </label>
-              <label className="block">
+                <div className="text-chalk-dim mt-1 text-2xs">
+                  {tagPreview.length === 0 ? (
+                    'This template produces no tag at all.'
+                  ) : (
+                    <>
+                      A card would carry{' '}
+                      {tagPreview.map((tag) => (
+                        <span
+                          key={tag}
+                          className="font-data text-chalk bg-desk mr-1 rounded-sm px-1 py-px"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+              <div>
                 <span className="eyebrow">Tag on every card</span>
                 <div className="mt-1.5 flex items-center gap-2">
                   <input
@@ -390,7 +407,7 @@ export function SettingsSheet() {
                 <p className="text-chalk-dim mt-1 text-2xs">
                   How Lectern finds its own cards later — the restyle button above searches for it.
                 </p>
-              </label>
+              </div>
             </div>
           )}
         </div>

@@ -149,7 +149,7 @@ export function HomeView() {
             </section>
 
             {/* Deck */}
-            <div className="block">
+            <div>
               <label className="block">
                 <span className="eyebrow">Anki deck</span>
                 <input
@@ -167,7 +167,7 @@ export function HomeView() {
               </datalist>
               {/* What this name means in Anki right now. A typo silently
                   created a second, near-identical deck at send time. */}
-              {!hasExistingCards && (
+              {!hasExistingCards && deckState !== 'unknown' && (
                 <p className="text-chalk-dim mt-1.5 text-2xs">
                   {deckState === 'new' ? (
                     <>
@@ -176,10 +176,8 @@ export function HomeView() {
                     </>
                   ) : deckState === 'empty' ? (
                     'This deck exists and holds no cards yet.'
-                  ) : deckState === 'offline' ? (
-                    'Anki is not reachable, so Lectern cannot tell whether this deck already exists.'
                   ) : (
-                    ''
+                    'Anki is not reachable, so Lectern cannot tell whether this deck already exists.'
                   )}
                 </p>
               )}

@@ -172,8 +172,11 @@ const CLOZE_FULL_RE = /\{\{c\d+::[\s\S]*?(?:::[^}]*)?\}\}/g
 // The prompt forbids all of these; nothing used to check, so the model kept
 // producing them and the user found them on the card.
 
-const MARKDOWN_BOLD_RE = /(\*\*|__)(?=\S)[\s\S]+?\1/
-const MARKDOWN_HEADING_RE = /^\s{0,3}#{1,6}\s+\S/m
+// `**` only: `__init__` and `snake__case` are identifiers a CS deck is
+// entitled to, and rejecting them would cost more than the markdown does.
+const MARKDOWN_BOLD_RE = /\*\*(?=\S)[\s\S]+?\*\*/
+// "# of samples" is a real thing to write at the start of a line.
+const MARKDOWN_HEADING_RE = /^\s{0,3}#{1,6}\s+(?!of\b)\S/m
 const MARKDOWN_BULLET_RE = /^\s*[-*+]\s+\S/gm
 /** `$…$` renders as literal dollars in Anki, which enables `\(…\)` instead.
  *  The body must look like TeX so prices ("between $5 and $10") stay clear. */
@@ -183,8 +186,10 @@ const hasMarkdownBullets = (value: string): boolean =>
   !/<\s*(ul|ol)\b/i.test(value) && (value.match(MARKDOWN_BULLET_RE) ?? []).length >= 2
 
 /** Fronts that can be answered "yes" — the prompt asks for open questions. */
+// German "Was ist …?" is the standard definition question, so "was" cannot
+// be a yes/no signal here; English "Was the …?" cards are rare enough to lose.
 const YES_NO_RE =
-  /^\s*(is|are|was|were|does|do|did|can|could|will|would|should|has|have|had|must|ist|sind|war|waren|hat|haben|kann|können|wird|werden|muss|müssen|gibt)\b/i
+  /^\s*(is|are|does|do|did|can|could|will|would|should|has|have|had|must|ist|sind|hat|haben|kann|können|wird|werden|muss|müssen|gibt)\b/i
 
 /** Phrases that point at the slide instead of naming the thing. */
 const DEIXIS_RE =
@@ -230,6 +235,14 @@ export interface EvaluateOptions {
   pageCount?: number
   /** Extracted page text, index 0 = page 1. Enables the excerpt check. */
   pageTexts?: string[]
+  /**
+   * Skip the paper-trail requirements (pages, rationale, excerpt, concept
+   * ids). Set for a card read back out of Anki: it never had a rationale to
+   * lose, so re-gating it after a hand edit must not report one missing. The
+   * renderer-truth checks still apply — those are about the card's text,
+   * which is exactly what the edit changed.
+   */
+  provenanceOptional?: boolean
 }
 
 // --- Excerpt grounding -----------------------------------------------------
@@ -296,10 +309,12 @@ export function evaluateCard(card: Card, opts: EvaluateOptions = {}): GateVerdic
   if (!answerText) failures.push('missing_answer_text')
   // A card declared outside the source has no pages or slide excerpt to
   // ground it — the outside_source flag replaces those two requirements.
-  if (sourcePages.length === 0 && !card.outsideSource) failures.push('missing_source_pages')
-  if (!stripMarkup(card.rationale ?? '')) failures.push('missing_rationale')
-  if (!stripMarkup(card.sourceExcerpt ?? '') && !card.outsideSource) {
-    failures.push('missing_source_excerpt')
+  if (!opts.provenanceOptional) {
+    if (sourcePages.length === 0 && !card.outsideSource) failures.push('missing_source_pages')
+    if (!stripMarkup(card.rationale ?? '')) failures.push('missing_rationale')
+    if (!stripMarkup(card.sourceExcerpt ?? '') && !card.outsideSource) {
+      failures.push('missing_source_excerpt')
+    }
   }
   // A page the document does not have is a hallucinated citation: it grounds
   // nothing, and the ledger would count it as coverage.
@@ -346,7 +361,11 @@ export function evaluateCard(card: Card, opts: EvaluateOptions = {}): GateVerdic
 
   const soft: string[] = []
   if (card.outsideSource) soft.push('outside_source')
-  if (normalizeStringList(card.conceptIds).length === 0 && !card.outsideSource) {
+  if (
+    normalizeStringList(card.conceptIds).length === 0 &&
+    !card.outsideSource &&
+    !opts.provenanceOptional
+  ) {
     soft.push('missing_concept_ids')
   }
   if (front.length > LONG_FRONT_THRESHOLD) soft.push('long_front')

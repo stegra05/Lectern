@@ -803,6 +803,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           const verdict = evaluateCard(edited, {
             pageCount: pdfInfo?.pageCount,
             pageTexts: pdfInfo?.pageTexts,
+            provenanceOptional: c.fromAnki === true,
           })
           edited.qualityScore = verdict.score
           edited.qualityIssues = verdict.issues

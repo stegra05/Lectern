@@ -23,7 +23,9 @@ export function SyncBar() {
   const syncable = cards.filter(isSyncable)
   // Two different reasons a card stays behind, and they read very differently
   // to the user: one is already in Anki, the other was deliberately withheld.
-  const inherited = cards.filter((c) => c.fromAnki).length
+  // Only the ones still untouched: an edited inherited card is in the send,
+  // as an update to the note it came from.
+  const inherited = cards.filter((c) => c.fromAnki && !c.edited).length
   const excluded = cards.length - syncable.length - inherited
   // Not while a card editor is open: ⌘↩ is advertised inside it as "saves",
   // and it used to also push the whole deck to Anki.

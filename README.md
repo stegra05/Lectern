@@ -24,9 +24,13 @@ gate before it enters your deck. Review, edit, and send to Anki in one click.
 Because you can't trust the output. At 400 cards a semester, nobody verifies
 every card by hand, so Lectern makes the checking visible instead:
 
-- **Grounded cards.** Every card carries provenance: source pages, the concept it
-  teaches, and a source excerpt. Cards without support are rejected, and the log
-  shows what was cut and why.
+- **Grounded cards, checked not trusted.** Every card carries provenance: source
+  pages, the concept it teaches, and a source excerpt. Lectern reads the PDF's
+  own text to verify that excerpt is on the page the card cites, rejects pages
+  the document does not have, and the log shows what was cut and why.
+- **Markup that survives the trip.** The gate catches what Anki would render
+  wrong before you see it on a card: Markdown printed as literal asterisks,
+  `$…$` math, and cloze deletions that Anki truncates mid-formula.
 - **Coverage you can see.** The filmstrip shows your actual slides and lights
   them up as cards cover them. Uncovered pages stay dim, so gaps are obvious.
 - **Check the source in place.** Click a card's page reference and the original
