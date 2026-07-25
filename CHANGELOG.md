@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.6.0 (2026-07-25)
+
+### Added
+- **Copy the concept map**: the map sheet gains a Copy button with two
+  formats. *Outline* produces Markdown with each concept's relations nested
+  beneath it, so RemNote, Notion, and Obsidian turn them into child items
+  rather than a flat wall of text. *Diagram* produces a Mermaid graph that
+  renders in the same apps without a plugin, with importance carried in the
+  node shape as well as the colour so the ranking survives renderers that
+  ignore styling.
+
+### Changed
+- **The concept list reads like the outline it exports**: section headings
+  stay put while their group scrolls and carry a count, each concept's
+  relations sit beneath it in the same wording the export uses, and
+  difficulty is a three-rung meter instead of the word "foundational"
+  repeated down every row.
+- Page references in the list no longer wrap mid-row: they read "p. 12, 13,
+  14" with the overflow collapsed into a "+2" and the full list in the
+  tooltip.
+
 ## 2.5.0 (2026-07-09)
 
 ### Added
