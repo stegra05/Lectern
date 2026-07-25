@@ -70,7 +70,9 @@ export interface FollowUpOutcome {
 
 export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcome> {
   const { emit, signal } = opts
-  const client = new GeminiClient(opts.apiKey, opts.fetchFn)
+  const client = new GeminiClient(opts.apiKey, opts.fetchFn, undefined, (notice) =>
+    emit({ type: 'log', level: 'warn', message: notice.message }),
+  )
   const usage: GeminiUsage = { inputTokens: 0, outputTokens: 0 }
   const track = (u: GeminiUsage) => {
     usage.inputTokens += u.inputTokens

@@ -94,11 +94,28 @@ export class GeminiError extends Error {
 // Client
 // ---------------------------------------------------------------------------
 
+/** A wait the client is about to take before trying a request again. */
+export interface RetryNotice {
+  /** HTTP status that caused it; 0 for a network-level failure. */
+  status: number
+  /** 1-based: the wait before attempt `attempt + 1`. */
+  attempt: number
+  maxAttempts: number
+  waitMs: number
+  /** Ready to show, e.g. "Gemini rate limit — waiting 32s (retry 2 of 5)." */
+  message: string
+}
+
+export type RetryListener = (notice: RetryNotice) => void
+
 export class GeminiClient {
   constructor(
     private readonly apiKey: string,
     private readonly fetchFn: typeof fetch,
     private readonly baseUrl: string = GEMINI_BASE_URL,
+    /** Called before each backoff wait. Silent retries make a stalled run
+     *  look like a hung one; the UI shows these in the activity log. */
+    private readonly onRetry?: RetryListener,
   ) {}
 
   /** Create one interaction turn, with rate-limit-aware retry. */
@@ -273,6 +290,7 @@ export class GeminiClient {
           'The connection to Gemini dropped. Lectern will retry.',
         )
         if (attempt === RATE_LIMIT_MAX_RETRIES) throw lastError
+        this.announceRetry(0, attempt, backoff)
         await sleep(backoff, signal)
         continue
       }
@@ -280,20 +298,74 @@ export class GeminiClient {
 
       const error = await toGeminiError(res)
       const retryable = res.status === 429 || res.status >= 500
-      if (!retryable || attempt === RATE_LIMIT_MAX_RETRIES) throw error
+      if (!retryable) throw error
+      if (attempt === RATE_LIMIT_MAX_RETRIES) {
+        // Out of retries. "Lectern will retry automatically" was true a
+        // moment ago and is a lie now — say what actually happened.
+        throw new GeminiError(error.message, error.status, exhaustedMessage(error))
+      }
       lastError = error
 
       const retryAfterHeader = res.headers.get('retry-after')
       const retryAfterMs = retryAfterHeader
         ? Number.parseFloat(retryAfterHeader) * 1000
         : extractRetryAfterMs(error.message)
-      await sleep(
-        Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : backoff,
-        signal,
-      )
+      const waitMs = Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : backoff
+      this.announceRetry(res.status, attempt, waitMs)
+      await sleep(waitMs, signal)
     }
     throw lastError ?? new GeminiError('request failed', 0, 'The Gemini request failed.')
   }
+
+  private announceRetry(status: number, attempt: number, waitMs: number): void {
+    if (!this.onRetry) return
+    const wait = formatWait(waitMs)
+    const nth = `retry ${attempt + 1} of ${RATE_LIMIT_MAX_RETRIES}`
+    const reason =
+      status === 429
+        ? 'Gemini rate limit reached'
+        : status === 0
+          ? 'Connection to Gemini dropped'
+          : `Gemini returned a server error (${status})`
+    this.onRetry({
+      status,
+      attempt: attempt + 1,
+      maxAttempts: RATE_LIMIT_MAX_RETRIES,
+      waitMs,
+      message: `${reason} — waiting ${wait} (${nth}).`,
+    })
+  }
+}
+
+const formatWait = (ms: number): string => {
+  const seconds = Math.max(1, Math.round(ms / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`
+}
+
+/** Quota errors name their window; a daily one will not clear by waiting. */
+const isDailyQuota = (message: string): boolean =>
+  /per\s*day|perday|daily/i.test(message) && /quota|limit/i.test(message)
+
+function exhaustedMessage(error: GeminiError): string {
+  if (error.status !== 429) {
+    return `Gemini kept failing (${RATE_LIMIT_MAX_RETRIES} retries): ${error.userMessage}`
+  }
+  if (isDailyQuota(error.message)) {
+    return (
+      'Your Gemini API key has hit its daily quota, so waiting will not help today. ' +
+      'Check the limits for your key at aistudio.google.com, or continue tomorrow. ' +
+      'Cards generated so far are kept.'
+    )
+  }
+  return (
+    `Gemini kept rate-limiting this request through ${RATE_LIMIT_MAX_RETRIES} retries. ` +
+    'That usually means the key is on the free tier and the per-minute limit is spent — ' +
+    'wait a few minutes and try again, or check your quota at aistudio.google.com. ' +
+    'Cards generated so far are kept.'
+  )
 }
 
 // ---------------------------------------------------------------------------

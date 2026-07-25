@@ -27,6 +27,11 @@ function trackFromCards(cards: number, max: number): number {
   return Math.log(clamped / SLIDER_MIN) / Math.log(max / SLIDER_MIN)
 }
 
+const formatTokens = (tokens: number): string =>
+  tokens >= 1_000_000
+    ? `${(tokens / 1_000_000).toFixed(1)}M`
+    : `${Math.max(1, Math.round(tokens / 1000))}k`
+
 export function HomeView() {
   const fileName = useLectern((s) => s.fileName)
   const pdfInfo = useLectern((s) => s.pdfInfo)
@@ -175,11 +180,23 @@ export function HomeView() {
 
             {/* Generate */}
             <div className="flex items-center justify-between pt-2">
-              <p className="font-data text-chalk-dim text-xs">
+              {/* Tokens sit next to the price because the limit people hit
+                  first is a token quota, not a bill. */}
+              <p
+                className="font-data text-chalk-dim text-xs"
+                title={
+                  estimate
+                    ? `Rough estimate: ~${estimate.inputTokens.toLocaleString()} input + ` +
+                      `~${estimate.outputTokens.toLocaleString()} output tokens. ` +
+                      'Compare against your key’s quota if you are on the free tier.'
+                    : undefined
+                }
+              >
                 {settings?.model &&
                   (MODEL_CHOICES.find((m) => m.id === settings.model)?.label.split(' — ')[0] ??
                     settings.model)}
-                {estimate && ` · ~$${estimate.costUsd.toFixed(2)}`}
+                {estimate &&
+                  ` · ~${formatTokens(estimate.inputTokens + estimate.outputTokens)} tokens · ~$${estimate.costUsd.toFixed(2)}`}
               </p>
               <button
                 onClick={() => void startGeneration()}
