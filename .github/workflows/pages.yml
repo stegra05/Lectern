@@ -3,7 +3,7 @@ name: Deploy website
 on:
   push:
     branches: [main]
-    paths: ["website/**"]
+    paths: ["website/**", "CHANGELOG.md", "scripts/build-changelog.mjs"]
   workflow_dispatch:
 
 permissions:
@@ -23,6 +23,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Render CHANGELOG.md into website/changelog.html so the deployed
+      # page always reflects the changelog on main.
+      - run: node scripts/build-changelog.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

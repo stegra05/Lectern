@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Changelog · Lectern</title>
+    <meta
+      name="description"
+      content="Every Lectern release, accounted for. Generated from the CHANGELOG in the repository."
+    />
+    <meta property="og:title" content="Lectern Changelog" />
+    <meta property="og:description" content="Every Lectern release, accounted for." />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --desk: #0c0a09; /* stone-950 */
+        --desk-raised: #1c1917; /* stone-900 */
+        --desk-edge: #443e38; /* wood edge border */
+        --desk-border: rgba(120, 113, 108, 0.12);
+
+        --chalk: #e7e5e4; /* stone-200 */
+        --chalk-dim: #a8a29e; /* stone-400 */
+        --chalk-muted: #78716c; /* stone-500 */
+
+        --lamp: #e8a33d;
+        --lamp-glow-intense: rgba(232, 163, 61, 0.22);
+
+        --sage: #8ab36a;
+
+        --sans: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
+        --serif: 'Source Serif 4', Georgia, serif;
+        --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+        --radius-sm: 6px;
+        --radius-md: 10px;
+
+        --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+        --dur-press: 120ms;
+        --dur-fast: 180ms;
+        --dur-base: 240ms;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background-color: var(--desk);
+        background-image: radial-gradient(
+          circle 800px at 50% -250px,
+          var(--lamp-glow-intense),
+          transparent 80%
+        );
+        color: var(--chalk);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.6;
+        font-optical-sizing: auto;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+
+      ::selection {
+        background: rgba(232, 163, 61, 0.32);
+        color: #fff;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      a:focus-visible {
+        outline: 2px solid var(--lamp);
+        outline-offset: 3px;
+        border-radius: var(--radius-sm);
+      }
+
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--lamp);
+        display: inline-block;
+        margin-bottom: 12px;
+      }
+
+      /* ---- header (translucent material with a scroll edge effect) ---- */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        padding: 16px 0;
+        background: transparent;
+        border-bottom: 1px solid transparent;
+        transition:
+          background var(--dur-base) ease,
+          border-color var(--dur-base) ease;
+      }
+      header.scrolled {
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        background: rgba(12, 10, 9, 0.72);
+        border-bottom-color: rgba(68, 62, 56, 0.25);
+      }
+
+      header .wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        transition: transform var(--dur-press) var(--ease-out);
+      }
+      .brand:active {
+        transform: scale(0.97);
+      }
+      .brand img {
+        width: 28px;
+        height: 28px;
+      }
+      .brand span {
+        font-family: var(--mono);
+        font-size: 14px;
+        letter-spacing: 0.25em;
+        color: var(--chalk);
+      }
+
+      nav {
+        display: flex;
+        gap: 28px;
+        align-items: center;
+      }
+      nav a {
+        font-size: 14px;
+        color: var(--chalk-dim);
+        text-decoration: none;
+        position: relative;
+        padding: 4px 0;
+        transition: color var(--dur-fast) ease;
+      }
+      nav a::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: var(--lamp);
+        border-radius: 2px;
+        transform: scaleX(0);
+        transition: transform var(--dur-fast) var(--ease-out);
+      }
+      nav a[aria-current='page'] {
+        color: var(--chalk);
+      }
+      nav a[aria-current='page']::after {
+        transform: scaleX(1);
+      }
+      @media (hover: hover) and (pointer: fine) {
+        nav a:hover {
+          color: var(--chalk);
+        }
+        nav a:hover::after {
+          transform: scaleX(1);
+        }
+      }
+
+      /* ---- page intro ---- */
+      .page-head {
+        padding: 72px 0 20px;
+      }
+      .page-head h1 {
+        font-family: var(--serif);
+        font-weight: 600;
+        font-size: clamp(34px, 4.8vw, 54px);
+        line-height: 1.08;
+        color: #fff;
+        letter-spacing: -0.02em;
+        margin: 8px 0 0;
+      }
+      .page-head p.sub {
+        max-width: 56ch;
+        margin: 18px 0 0;
+        color: var(--chalk-dim);
+        font-size: 17px;
+      }
+      .page-head p.sub a {
+        color: var(--chalk);
+        border-bottom: 1px solid var(--desk-edge);
+        transition: border-color var(--dur-fast) ease;
+      }
+      .page-head p.sub a:hover {
+        border-color: var(--lamp);
+      }
+
+      /* One-time entrance, matching the landing page. */
+      @keyframes rise-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .js .page-head > * {
+        animation: rise-in 640ms var(--ease-out) both;
+      }
+      .js .page-head > *:nth-child(2) {
+        animation-delay: 60ms;
+      }
+      .js .page-head > *:nth-child(3) {
+        animation-delay: 120ms;
+      }
+      .js .releases {
+        animation: rise-in 720ms var(--ease-out) 200ms both;
+      }
+
+      /* ---- releases: a ledger down the page margin ---- */
+      .releases {
+        padding: 28px 0 96px;
+      }
+
+      .release {
+        position: relative;
+        display: grid;
+        grid-template-columns: 148px 1fr;
+        gap: 0 32px;
+        padding: 40px 0;
+        border-top: 1px solid rgba(68, 62, 56, 0.25);
+      }
+      .release:first-child {
+        border-top: none;
+      }
+
+      .release-head {
+        text-align: right;
+      }
+      .release-head h2 {
+        font-family: var(--mono);
+        font-weight: 500;
+        font-size: 20px;
+        letter-spacing: 0.02em;
+        color: var(--chalk);
+        line-height: 1.3;
+      }
+      .release-head h2 a {
+        transition: color var(--dur-fast) ease;
+      }
+      .release-head h2 a:hover {
+        color: var(--lamp);
+      }
+      .release-head time {
+        display: block;
+        margin-top: 4px;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--chalk-muted);
+      }
+
+      /* Body column: everything after the version sidebar flows here. */
+      .release > *:not(.release-head) {
+        grid-column: 2;
+      }
+
+      .release-cat {
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--chalk-dim);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 26px 0 14px;
+      }
+      .release > .release-cat:first-of-type {
+        margin-top: 2px;
+      }
+      .release-cat::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--chalk-muted);
+        flex: none;
+      }
+      .release-cat[data-cat='added']::before {
+        background: var(--sage);
+      }
+      .release-cat[data-cat='fixed']::before {
+        background: var(--lamp);
+      }
+      .release-cat[data-cat='changed']::before {
+        background: var(--chalk-dim);
+      }
+
+      .release ul {
+        list-style: none;
+        display: grid;
+        gap: 12px;
+      }
+      .release li {
+        position: relative;
+        padding-left: 22px;
+        color: var(--chalk-dim);
+        font-size: 15.5px;
+        max-width: 68ch;
+      }
+      .release li::before {
+        content: '';
+        position: absolute;
+        left: 4px;
+        top: 0.65em;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--desk-edge);
+      }
+      .release li strong {
+        color: var(--chalk);
+        font-weight: 500;
+      }
+      .release-note {
+        color: var(--chalk-dim);
+        font-size: 15.5px;
+        max-width: 68ch;
+        margin: 14px 0 0;
+      }
+      .release code {
+        font-family: var(--mono);
+        font-size: 0.85em;
+        background: var(--desk-raised);
+        border: 1px solid var(--desk-border);
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: var(--chalk);
+        white-space: nowrap;
+      }
+      .release a {
+        color: var(--chalk);
+        border-bottom: 1px solid var(--desk-edge);
+        transition: border-color var(--dur-fast) ease;
+      }
+      .release a:hover {
+        border-color: var(--lamp);
+      }
+
+      /* ---- footer ---- */
+      footer {
+        border-top: 1px solid rgba(68, 62, 56, 0.25);
+        padding: 32px 0 48px;
+        font-size: 14px;
+        color: var(--chalk-muted);
+      }
+      footer .wrap {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      footer a {
+        color: var(--chalk-muted);
+        transition: color var(--dur-fast) ease;
+      }
+      footer a:hover {
+        color: var(--chalk);
+      }
+
+      /* ---- responsive ---- */
+      @media (max-width: 720px) {
+        .release {
+          grid-template-columns: 1fr;
+          gap: 18px;
+          padding: 32px 0;
+        }
+        .release-head {
+          text-align: left;
+          display: flex;
+          align-items: baseline;
+          gap: 12px;
+        }
+        .release-head time {
+          margin-top: 0;
+        }
+        .release > *:not(.release-head) {
+          grid-column: 1;
+        }
+      }
+
+      @media (max-width: 480px) {
+        header .wrap {
+          flex-direction: column;
+          gap: 12px;
+        }
+        footer .wrap {
+          flex-direction: column;
+          text-align: center;
+          gap: 10px;
+          align-items: center;
+        }
+      }
+
+      @media (prefers-reduced-transparency: reduce) {
+        header.scrolled {
+          background: var(--desk);
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        .js .page-head > *,
+        .js .releases {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <header>
+      <div class="wrap">
+        <a class="brand" href="index.html"
+          ><img src="assets/icon.png" alt="Lectern Logo" /><span>LECTERN</span></a
+        >
+        <nav>
+          <a href="index.html#how">How it works</a>
+          <a href="index.html#install">Install</a>
+          <a href="changelog.html" aria-current="page">Changelog</a>
+          <a href="https://github.com/stegra05/Lectern">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div class="page-head">
+        <p class="eyebrow">Every release, accounted for</p>
+        <h1>Changelog</h1>
+        <p class="sub">
+          Generated from the
+          <a href="https://github.com/stegra05/Lectern/blob/main/CHANGELOG.md">CHANGELOG</a>
+          in the repository — the same file every release is cut from.
+        </p>
+      </div>
+
+      <div class="releases">
+        <!-- CHANGELOG:START -->
+        <article class="release" id="v2.12.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.12.0">2.12.0</a></h2>
+            <time datetime="2026-07-25">July 25, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li><strong>Lectern runs on Gemini 3.6 Flash.</strong> The new Flash is cheaper per output token ($7.50 per million against 3.5's $9.00) and writes fewer of them — Google measures about 17% fewer — so a typical run costs roughly 5–7% less end to end. Most of a run's bill is the lecture PDF being re-read on each round, which is why the headline saving lands softer than the price drop. It also plans better: it reaches the same deck in fewer tool calls and fewer rounds, and edits during review with more precision, so the loop spends less time going in circles.</li>
+            <li><strong>A deck you already had keeps the model you already chose — unless that model is gone.</strong> A saved setting wins over the built-in default, so bumping the default alone would have left every existing install on 3.5 Flash, quietly paying the older rate forever. Settings now carry a retired model forward to the one that replaced it, and a model id Lectern no longer offers falls back to the default rather than being sent to the API and rejected. Choosing Gemini 3.1 Pro is still your choice to make, and it is left alone.</li>
+            <li>Gemini 3.6 retires the <code>temperature</code>, <code>top_p</code> and <code>top_k</code> sampling knobs. Lectern never used them — card tone and length come from the prompts and the quality gate — so nothing about the cards changes here.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.11.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.11.0">2.11.0</a></h2>
+            <time datetime="2026-07-25">July 25, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="fixed">Fixed</h3>
+          <ul>
+            <li><strong>Tags keep the letters of every language.</strong> Tag parts were filtered to ASCII, so a German lecture filed itself under <code>K-nstliche-Intelligenz</code>, <code>Übungsblatt</code> lost its first letter entirely, and a CJK topic cleaned to nothing at all — which silently collapsed a level of the hierarchy for every card in the run. Anki tags are Unicode; only whitespace and quotes ever needed handling. A template with a literal space in it no longer turns one tag into two, and Title Casing leaves <code>ReLU</code> and <code>kNN</code> alone.</li>
+            <li><strong>Cloze deletions that Anki would truncate are rejected.</strong> Anki closes a deletion at the first <code>}}</code>, so <code>{{c1::\(e^{-x^{2}}\)}}</code> — math inside a deletion, which the prompt itself asks for — reached the student cut in half. The gate now catches it, and the formatting rules say how to avoid it.</li>
+            <li><strong>Re-sending a card updates its tags, not only its fields.</strong> A renamed deck, an edited topic or a changed tag template never reached a note that was already in Anki. Clearing a cloze card's &quot;Back Extra&quot; now clears it in Anki too, instead of leaving the old hint on the card forever.</li>
+            <li><strong>Editing a card that came from Anki keeps it a card that lives in Anki.</strong> The edit used to strip the flag that marks it, which unlocked a Remove button that removed nothing from Anki and dropped the edit it was meant to carry. Its provenance also stops being rewritten with the current lecture's name and no pages.</li>
+            <li><strong>Duplicates are recognized before the send, not during it.</strong> Cards Anki already holds are left alone and reported as such, rather than attempted, refused, and counted as failures — and every per-card outcome now appears in the activity log the send bar points at.</li>
+            <li><strong>A hand edit passes the same gate as a model edit.</strong> The quality badge used to freeze at generation time, so a fixed card stayed flagged and a card broken by an edit went out looking clean.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li><strong>Grounding is checked, not taken on trust.</strong> Lectern already read the PDF's text; it now keeps it, and flags a card whose source excerpt is absent from the page it cites. Pages the document does not have are rejected outright — cards citing page 900 of a 10-page lecture used to pass and push page coverage above 100%.</li>
+            <li><strong>The gate checks what the renderer will show.</strong> Markdown, <code>$…$</code> math, more than two cloze deletions, and an answer that only repeats its question are rejected; yes/no fronts and cards that point at the slide (&quot;as shown above&quot;) are flagged for a second look.</li>
+            <li><strong>The coverage ledger stopped believing the model about the document.</strong> It counts against the real page count, a high-importance concept needs a card that claims it rather than one that merely cites its page, rephrased duplicates are caught before they land, and the question mix is named back to the model so a deck of forty definitions is visible while it is being written. An extend run can now say it has nothing worth adding, which the brief always invited and the gate always refused.</li>
+            <li><strong>The review shows what the student will see.</strong> Cloze cards can be shown as asked instead of only as answered, &quot;Back Extra&quot; is rendered, and tables, code and ordered lists preview the way Anki renders them. Search reads the card rather than its HTML.</li>
+            <li><strong>The deck field says what the name means in Anki</strong> — an existing deck, an empty one, a new one it will create, or that Anki cannot be reached to answer. The tag template names its placeholders, flags unknown ones, and shows the tags a card would carry.</li>
+            <li><strong>Note types survive their own upgrades.</strong> A theme switch no longer rewrites card templates, so a <code>{{Tags}}</code> line or type-in box added in Anki stays; &quot;Apply design to earlier synced cards&quot; keeps fields it has no home for instead of dropping them, refuses to make a cloze note out of a note with no deletion, and leaves notes whose model makes more cards than the target. Card size follows Anki's own styling knob again, and missing fonts are re-uploaded rather than assumed.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="accessibility">Accessibility</h3>
+          <ul>
+            <li>The focus ring is visible on paper (it was 2.05:1), dimmed text on the desk meets 4.5:1, error messages and the activity log can be selected and copied, the card grid is a listbox that moves focus with the selection, the concept sheet behaves like the modal it declares itself to be, the filmstrip is one tab stop instead of seventy, and the update notice no longer covers the slides it was sitting on.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.10.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.10.0">2.10.0</a></h2>
+            <time datetime="2026-07-25">July 25, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Extend a deck instead of replacing it</strong>: re-run a lecture into a deck that already holds cards and Lectern reads them back out of Anki first, then generates only what is missing. The deck field offers &quot;Don't repeat what this deck already covers&quot;, on by default, and the size slider becomes &quot;Cards to add&quot; — 40 on top of the 87 you already have, not 40 in total.</li>
+            <li>The cards already in the deck appear in the session, dimmed and labelled, so a short run explains itself. They are never rewritten or deleted by the quality pass — the model is not shown them at all — and they are not re-sent to Anki. Editing one by hand opts it back into the next send.</li>
+            <li><strong>Depth instead of a shrug</strong>: extending a deck that already covers the whole document used to be able to finish with nothing added, which is technically true and useless. Once there is no breadth left, the ledger switches to depth — the relations between concepts, pages carrying a single card, concepts no card names outright — and the run keeps going until it has added what you asked for or genuinely has nothing worth adding, which it will say.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="fixed">Fixed</h3>
+          <ul>
+            <li>A deck holding several lectures no longer confuses whose pages are whose. Page numbers only mean something next to their own document, so cards from another lecture keep their place in the duplicate check but do not mark this lecture's pages as covered. Matching survives the model rephrasing or abbreviating a title between runs, while treating the lecture number as decisive — titles within a course are identical apart from it.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.9.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.9.0">2.9.0</a></h2>
+            <time datetime="2026-07-25">July 25, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li>The home view shows the run's estimated token count next to the price. The ceiling most people meet first is a quota, not a bill.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li><strong>Rate limits are visible instead of silent</strong>: a throttled run used to look like a hung one. Every wait now appears in the activity log — &quot;Gemini rate limit reached — waiting 30s (retry 1 of 5)&quot; — and the server's own retry-after is honoured over Lectern's backoff.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="fixed">Fixed</h3>
+          <ul>
+            <li>When the retries run out, the error no longer promises a retry that is not coming. It tells apart a spent per-minute limit from an exhausted daily quota — waiting only helps for one of them — and says plainly that the cards generated so far are kept.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.8.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.8.0">2.8.0</a></h2>
+            <time datetime="2026-07-25">July 25, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Tells you when the deck is ready</strong>: a run that finishes raises a desktop notification and bounces the dock, so you can start it and go do something else. Only when Lectern is in the background — if you are watching the cards land, you already know. Failures notify too, since that is exactly what you walked away expecting not to happen. There is an off switch in Settings.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.7.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.7.0">2.7.0</a></h2>
+            <time datetime="2026-07-25">July 25, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li><strong>Room to write a real brief</strong>: the focus field holds 600 characters instead of 180, and the follow-up composer 1000 instead of 500. A counter appears once either is more than half full.</li>
+            <li>The follow-up composer is now a textarea that grows to fit what you typed — a one-line input was hiding requests that ran to a paragraph. Enter still sends; Shift+Enter breaks the line.</li>
+            <li>Line breaks in a focus note survive as separators instead of being flattened to spaces, so a pasted list keeps its item boundaries. They are still never sent as newlines, which is what stops a pasted note from impersonating an instruction.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.6.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.6.0">2.6.0</a></h2>
+            <time datetime="2026-07-25">July 25, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Copy the concept map</strong>: the map sheet gains a Copy button with two formats. <em>Outline</em> produces Markdown with each concept's relations nested beneath it, so RemNote, Notion, and Obsidian turn them into child items rather than a flat wall of text. <em>Diagram</em> produces a Mermaid graph that renders in the same apps without a plugin, with importance carried in the node shape as well as the colour so the ranking survives renderers that ignore styling.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li><strong>The concept list reads like the outline it exports</strong>: section headings stay put while their group scrolls and carry a count, each concept's relations sit beneath it in the same wording the export uses, and difficulty is a three-rung meter instead of the word &quot;foundational&quot; repeated down every row.</li>
+            <li>Page references in the list no longer wrap mid-row: they read &quot;p. 12, 13, 14&quot; with the overflow collapsed into a &quot;+2&quot; and the full list in the tooltip.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.5.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.5.0">2.5.0</a></h2>
+            <time datetime="2026-07-09">July 9, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Ask for more cards</strong>: once generation finishes, the activity log grows a small composer. Type a request in plain language — &quot;add cards on the trolley problem&quot;, &quot;emphasize the Rawls slides&quot; — and Lectern adds matching cards to the deck. Requests are additions only: cards you already reviewed are never edited or removed, new cards pass the same quality gate, and duplicates of existing cards are dropped. Your request and the model's reply become part of the session minutes.</li>
+            <li><strong>Outside-source cards, honestly labeled</strong>: if a request asks for material the lecture doesn't contain, the card is still written but carries an &quot;outside source&quot; label and stays out of the Anki send until you include it with one click. Page citations are never invented.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li>After the deck is complete, the sidebar counts the live deck size instead of the original generation budget, so follow-up additions show up immediately.</li>
+            <li>Batch feedback to the model now names duplicate submissions instead of only counting them, and announces truncated lists, so the agent loop stops resubmitting the same cards.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="fixed">Fixed</h3>
+          <ul>
+            <li>A network blip mid-generation no longer kills the run: dropped connections retry like server errors, while unrecoverable client errors (a rejected API key, a malformed request) stop immediately instead of retrying for minutes.</li>
+            <li>Tighter desktop shell: a strict content-security policy, and file read access scoped to PDF files.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.4.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.4.0">2.4.0</a></h2>
+            <time datetime="2026-07-08">July 8, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li><strong>Activity log redesigned as session minutes</strong>: every event is stamped with the elapsed session time, and the model's own words (the quality review summary, the front of a rejected card) appear as quoted excerpts you can expand instead of walls of text. Rejection reasons read as plain language.</li>
+            <li>The quality review summary can now use simple formatting (bold, italic, code, bullet lists) and the log renders it.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.3.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.3.0">2.3.0</a></h2>
+            <time datetime="2026-07-08">July 8, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Concept map graph</strong>: the extracted concepts are now drawn as an interactive map. Concepts are sized by importance, connected by the relations Gemini found in the lecture, and lit amber as cards cover them. Click a concept to see its relations, difficulty, and slides; scroll to zoom, drag to pan. The grouped list is still there as a toggle.</li>
+            <li><strong>Concept map card in the sidebar</strong>: a live miniature of the map replaces the bare coverage percentage and lights up while cards are generated. Click it to open the full map.</li>
+          </ul>
+        </article>
+
+        <article class="release" id="v2.2.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.2.0">2.2.0</a></h2>
+            <time datetime="2026-07-08">July 8, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Lectern card design in Anki</strong>: cards now sync to bundled &quot;Lectern Basic&quot; and &quot;Lectern Cloze&quot; note types that Lectern installs into your collection. Every card shows its topic, where it came from (&quot;ML Foundations · pp. 23-24&quot;), and the exact source excerpt it was graded against, one tap away. Two themes: Evening lecture hall (default) and Nord. Switching themes restyles every synced card at once.</li>
+            <li><strong>Restyle earlier decks</strong>: a one-click action in Settings moves cards from previous syncs onto the new note types without losing review progress.</li>
+            <li><strong>Your edits win</strong>: if you change the note type styling inside Anki, Lectern detects it and never overwrites your version.</li>
+            <li>Procedure cards: ordered lists where each step is its own cloze card.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li>Card tiles in the review list match the synced card anatomy (topic line, amber answer rule, source excerpt fold).</li>
+          </ul>
+          <p class="release-note">Prefer the plain Basic/Cloze note types? Turn the design off under Settings → Card design.</p>
+        </article>
+
+        <article class="release" id="v2.1.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.1.0">2.1.0</a></h2>
+            <time datetime="2026-07-08">July 8, 2026</time>
+          </div>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Automatic updates</strong>: Lectern now checks for new versions on launch and offers to install them in place. Update packages are cryptographically signed and verified before anything is replaced. On Linux this applies to the AppImage only.</li>
+          </ul>
+          <p class="release-note">Installs of 2.0.0 predate the updater, so this last hop is a manual download.</p>
+        </article>
+
+        <article class="release" id="v2.0.0">
+          <div class="release-head">
+            <h2><a href="https://github.com/stegra05/Lectern/releases/tag/v2.0.0">2.0.0</a></h2>
+            <time datetime="2026-07-08">July 8, 2026</time>
+          </div>
+          <p class="release-note">Complete from-scratch rebuild as a Tauri 2 desktop app.</p>
+          <h3 class="release-cat" data-cat="added">Added</h3>
+          <ul>
+            <li><strong>Agentic generation</strong>: Gemini plans its own batches through a tool loop (<code>submit_cards</code> / <code>finish_generation</code>) and receives an updated coverage ledger after every batch: which pages, concepts, and relations still lack cards.</li>
+            <li><strong>Grounding gate</strong>: every card must carry provenance (source pages, concepts, source excerpt) and pass a quality checklist before it enters the deck.</li>
+            <li><strong>Illuminated filmstrip</strong>: real page thumbnails light up as coverage arrives.</li>
+            <li><strong>Agentic quality pass</strong>: a whole-deck review loop (<code>update_card</code> / <code>add_cards</code> / <code>remove_cards</code>) with every edit re-gated.</li>
+            <li><strong>Slide peek</strong>: click a card's page reference to see the exact slide it came from.</li>
+            <li>Card review with inline editing, search, page filter, undoable delete.</li>
+            <li>Anki sync via AnkiConnect with dry-run preview (create/update/duplicate counts).</li>
+            <li>Cost estimation up front and live token/cost usage during generation.</li>
+            <li>Gemini API key stored in the OS keychain, never on disk.</li>
+          </ul>
+          <h3 class="release-cat" data-cat="changed">Changed</h3>
+          <ul>
+            <li>No backend: the entire pipeline is TypeScript running in-process. The Python/ FastAPI/PyWebView stack of v1 (~40k LOC) is replaced by ~6k LOC including tests.</li>
+            <li>Distribution is a ~10 MB native bundle instead of a PyInstaller archive.</li>
+          </ul>
+          <p class="release-note">The v1 app lives on the <a href="https://github.com/stegra05/Lectern/tree/v1" target="_blank" rel="noopener"><code>v1</code></a> branch.</p>
+        </article>
+        <!-- CHANGELOG:END -->
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+      <div class="wrap">
+        <span>© 2026 Steffen Grabert · MIT License</span>
+        <span>
+          <a href="https://github.com/stegra05/Lectern">GitHub</a> ·
+          <a href="https://github.com/stegra05/Lectern/issues">Issues</a> ·
+          <a href="https://github.com/stegra05/Lectern/blob/main/docs/history.md"
+            >The rebuild story</a
+          >
+        </span>
+      </div>
+    </footer>
+
+    <script>
+      document.documentElement.classList.add('js')
+
+      // Header scroll edge effect: the material only appears once content
+      // actually scrolls underneath the bar.
+      const header = document.querySelector('header')
+      const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 8)
+      window.addEventListener('scroll', onScroll, { passive: true })
+      onScroll()
+    </script>
+  </body>
+</html>

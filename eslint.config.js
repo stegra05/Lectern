@@ -39,8 +39,9 @@ export default tseslint.config(
     rules: { '@typescript-eslint/require-await': 'off' },
   },
   {
-    // Node-context config files are linted without type information.
-    files: ['*.config.js', '*.config.ts', 'vite.config.ts'],
+    // Node-context config files and build scripts are linted without type
+    // information.
+    files: ['*.config.js', '*.config.ts', 'vite.config.ts', 'scripts/**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
   },
