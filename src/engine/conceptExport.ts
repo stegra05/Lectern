@@ -15,9 +15,9 @@ import { formatPageRefs } from './noteTypes'
 import type { Concept, ConceptMap, Importance, Relation } from './types'
 import { relationKeyOf } from './types'
 
-const IMPORTANCE_ORDER: Importance[] = ['high', 'medium', 'low']
+export const IMPORTANCE_ORDER: Importance[] = ['high', 'medium', 'low']
 
-const SECTION_HEADING: Record<Importance, string> = {
+export const SECTION_HEADING: Record<Importance, string> = {
   high: 'Key concepts',
   medium: 'Supporting concepts',
   low: 'Background',
@@ -40,9 +40,9 @@ export function humanizeRelationType(type: string): string {
  * at the start of a line, so `-`, `#`, `>` and `.` are safe as written —
  * escaping those would put visible backslashes into "gradient-based".
  */
-const escapeMarkdown = (value: string): string => value.replace(/([\\`*_[\]])/g, '\\$1')
+export const escapeMarkdown = (value: string): string => value.replace(/([\\`*_[\]])/g, '\\$1')
 
-const pageSuffix = (pages: number[]): string => {
+export const pageSuffix = (pages: number[]): string => {
   const refs = formatPageRefs(pages)
   return refs === '' ? '' : ` · ${refs}`
 }
