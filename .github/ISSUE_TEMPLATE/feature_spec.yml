@@ -1,0 +1,46 @@
+name: Feature spec
+description: Planned feature with a worked-out design (internal roadmap)
+labels: [enhancement]
+title: "feat: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph — what ships when this is done.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: The study-workflow problem this solves.
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Design & integration
+      description: How it fits the existing app — pipeline, store, UI surfaces.
+    validations:
+      required: true
+  - type: textarea
+    id: touchpoints
+    attributes:
+      label: Touchpoints
+      description: Files / modules expected to change.
+  - type: input
+    id: difficulty
+    attributes:
+      label: Difficulty
+      description: small / medium / large, plus one line of rationale.
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Issues that must land first.
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Explicitly not part of this issue.
