@@ -84,12 +84,21 @@ export type LedgerCard = z.infer<typeof ledgerCardSchema>
 export type LedgerLecture = z.infer<typeof ledgerLectureSchema>
 export type DeckLedger = z.infer<typeof deckLedgerSchema>
 
-/** Validate a stored value. Anything that does not parse — corruption, a
- *  future version — reads as "no ledger": v1 has nothing to migrate, and
- *  overwriting beats guessing. */
+/** Validate a stored value. Corruption reads as "no ledger": v1 has nothing
+ *  to migrate, and overwriting garbage beats guessing. A *future* version is
+ *  the one exception — see `isNewerLedgerVersion`. */
 export function parseDeckLedger(value: unknown): DeckLedger | null {
   const result = deckLedgerSchema.safeParse(value)
   return result.success ? result.data : null
+}
+
+/** True when the stored value claims a version newer than this build knows.
+ *  Unlike corruption, that is real data a downgraded app must not destroy,
+ *  so the store refuses to read *or overwrite* such a file. */
+export function isNewerLedgerVersion(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const version = (value as { version?: unknown }).version
+  return typeof version === 'number' && version > LEDGER_VERSION
 }
 
 // --- Building an entry from a session -----------------------------------------
@@ -187,8 +196,8 @@ export function ledgerStoreFile(deckName: string): string {
   const slug = deckName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
     .slice(0, 40)
+    .replace(/^-+|-+$/g, '')
   let hash = 0x811c9dc5
   for (const char of deckName) {
     hash ^= char.codePointAt(0) ?? 0

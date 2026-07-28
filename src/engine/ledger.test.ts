@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   buildLedgerLecture,
+  isNewerLedgerVersion,
   LEDGER_VERSION,
   ledgerStoreFile,
   mergeLedger,
@@ -156,6 +157,21 @@ describe('parseDeckLedger', () => {
     expect(parseDeckLedger(null)).toBeNull()
     expect(parseDeckLedger({ ...ledger, lectures: [{}] })).toBeNull()
   })
+
+  it('persists exactly the ConceptMap shape — schema drift fails this file at typecheck', () => {
+    expectTypeOf<LedgerLecture['conceptMap']>().toEqualTypeOf<ConceptMap>()
+  })
+})
+
+describe('isNewerLedgerVersion', () => {
+  it('flags only values claiming a version beyond this build', () => {
+    const ledger = mergeLedger(null, 'ML', buildLedgerLecture(snapshot([])))
+    expect(isNewerLedgerVersion({ ...ledger, version: LEDGER_VERSION + 1 })).toBe(true)
+    expect(isNewerLedgerVersion(ledger)).toBe(false)
+    expect(isNewerLedgerVersion(null)).toBe(false)
+    expect(isNewerLedgerVersion('not a ledger')).toBe(false)
+    expect(isNewerLedgerVersion({ version: 'later' })).toBe(false)
+  })
 })
 
 describe('ledgerStoreFile', () => {
@@ -169,6 +185,10 @@ describe('ledgerStoreFile', () => {
 
   it('survives a name with no usable characters', () => {
     expect(ledgerStoreFile('!!!')).toMatch(/^deck-deck-[0-9a-f]{8}\.json$/)
+  })
+
+  it('does not leave a dangling dash when truncation cuts at a word break', () => {
+    expect(ledgerStoreFile('a'.repeat(39) + ' tail')).toMatch(/^deck-a{39}-[0-9a-f]{8}\.json$/)
   })
 })
 
