@@ -14,6 +14,8 @@ import {
   looksLikeSameSet,
   MAX_IMPORT_CARDS,
 } from '../engine/ankiImport'
+import { buildLedgerLecture, mergeLedger, sha256Hex } from '../engine/ledger'
+import { readDeckLedger, writeDeckLedger } from '../lib/ledgerStore'
 import { provenanceFieldValues } from '../engine/noteTypes'
 import { ensureLecternModels, migrateNotesToLectern } from '../engine/noteTypeSync'
 import { loadNoteTypeFonts } from '../lib/noteTypeFonts'
@@ -85,6 +87,10 @@ interface LecternState {
 
   // source document
   fileName: string | null
+  /** Where the PDF lives on disk; null when it arrived as bytes only
+   *  (browser mode). Recorded in the deck ledger so later features can
+   *  re-read the document. */
+  pdfPath: string | null
   pdfBytes: Uint8Array | null
   pdfInfo: PdfInfo | null
   pageThumbs: Record<number, string>
@@ -353,6 +359,32 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     return inherited?.sourceSetName ?? fromModel
   }
 
+  /**
+   * Write the session's provenance to the deck ledger after a send. Runs
+   * best-effort off the sync path: the cards are in Anki either way, and a
+   * ledger miss only costs future insights, so failure is a log line — never
+   * a sync error.
+   */
+  const recordSyncedDeck = async (): Promise<void> => {
+    const { conceptMap, cards, deckName, pdfPath, pdfBytes } = get()
+    if (!conceptMap || !deckName.trim()) return
+    try {
+      const lecture = buildLedgerLecture({
+        conceptMap,
+        cards,
+        slideSetName: slideSetName() || conceptMap.slideSetName,
+        pdfPath,
+        pdfSha256: pdfBytes ? await sha256Hex(pdfBytes) : null,
+        syncedAt: new Date().toISOString(),
+      })
+      if (lecture.cards.length === 0) return
+      const existing = await readDeckLedger(deckName)
+      await writeDeckLedger(mergeLedger(existing, deckName, lecture))
+    } catch (e) {
+      pushLog('warn', `Could not record the deck ledger: ${(e as Error).message}`)
+    }
+  }
+
   /** Topic/Source/Excerpt values for the Lectern note types. */
   const noteExtras = (card: Card): Record<string, string> => {
     const runSet = slideSetName()
@@ -375,6 +407,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     conceptsOpen: false,
 
     fileName: null,
+    pdfPath: null,
     pdfBytes: null,
     pdfInfo: null,
     pageThumbs: {},
@@ -494,6 +527,10 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       try {
         const bytes = await readFile(path)
         await get().loadPdfFromBytes(fileName, bytes)
+        // loadPdfFromBytes only knows bytes; the path is this caller's to
+        // record — but only if that load actually took (it toasts and leaves
+        // the previous document in place when the file is unreadable).
+        if (get().fileName === fileName && get().pdfBytes === bytes) set({ pdfPath: path })
       } catch (e) {
         get().toast('error', `Could not read ${fileName}: ${(e as Error).message}`)
       }
@@ -515,6 +552,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         const suggestedDeck = !previousDeck || wasSuggested ? suggestedFrom(fileName) : previousDeck
         set({
           fileName,
+          pdfPath: null,
           pdfBytes: bytes,
           pdfInfo,
           pageThumbs: {},
@@ -915,6 +953,9 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
             return noteId ? { ...c, ankiNoteId: noteId } : c
           }),
         }))
+        // Cards that made it now carry note ids — write their provenance down
+        // while the session still knows it (see the deck ledger).
+        void recordSyncedDeck()
         // "see Activity" used to point at a log that never heard about the
         // send: every per-card outcome was thrown away with the toast.
         for (const skipped of result.duplicates) {
