@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { conceptMapToMarkdown, conceptMapToMermaid, relationsFor } from '../engine/conceptExport'
-import type { Concept, ConceptMap, Difficulty, Importance } from '../engine/types'
+import { studyGuideFilename, studyGuideToMarkdown } from '../engine/studyGuideExport'
+import type { Concept, ConceptMap, CoverageData, Difficulty, Importance } from '../engine/types'
 import { copyText } from '../lib/clipboard'
+import { saveTextFile } from '../lib/saveText'
 import { useDialogFocus } from '../lib/useDialogFocus'
 import { useLectern } from '../state/store'
 import { ConceptGraph, humanizeRelation, type ConceptState } from './ConceptGraph'
@@ -93,7 +95,12 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
             {coverage && ` · ${Math.round(coverage.effectiveConceptCoveragePercent)}% covered`}
           </span>
           <div className="flex-1" />
-          <CopyMenu conceptMap={conceptMap} open={copyOpen} setOpen={setCopyOpen} />
+          <ExportMenu
+            conceptMap={conceptMap}
+            coverage={coverage}
+            open={copyOpen}
+            setOpen={setCopyOpen}
+          />
           <div
             className="border-desk-edge/60 flex overflow-hidden rounded-md border"
             role="group"
@@ -317,46 +324,71 @@ function ConceptRow({
 }
 
 /**
- * Take the map with you: the outline pastes into an outliner as nested
+ * Take the session with you: the outline pastes into an outliner as nested
  * bullets (RemNote, Notion, Obsidian), the Mermaid block renders as the graph
- * in the same places. Open state lives in the sheet so Esc unwinds the menu
- * before the sheet itself.
+ * in the same places, and the study guide folds in card counts and coverage
+ * gaps — copied, or saved as a Markdown file. Open state lives in the sheet
+ * so Esc unwinds the menu before the sheet itself.
  */
-function CopyMenu({
+function ExportMenu({
   conceptMap,
+  coverage,
   open,
   setOpen,
 }: {
   conceptMap: ConceptMap
+  coverage: CoverageData | null
   open: boolean
   setOpen: (open: boolean) => void
 }) {
   const toast = useLectern((s) => s.toast)
 
-  const copy = async (label: string, build: (map: ConceptMap) => string) => {
+  const copy = async (done: string, build: () => string) => {
     setOpen(false)
-    const ok = await copyText(build(conceptMap))
-    if (ok) toast('success', `Concept map copied as ${label}.`)
+    const ok = await copyText(build())
+    if (ok) toast('success', done)
     else toast('error', 'Could not reach the clipboard.')
+  }
+
+  // Cards are read at click time, not subscribed: the menu builds on demand,
+  // and a live subscription would re-render the whole sheet per card event.
+  const buildGuide = () => studyGuideToMarkdown(conceptMap, coverage, useLectern.getState().cards)
+
+  const saveGuide = async () => {
+    setOpen(false)
+    const outcome = await saveTextFile(studyGuideFilename(conceptMap), buildGuide())
+    if (outcome === 'saved') toast('success', 'Study guide saved.')
+    else if (outcome === 'failed') toast('error', 'Could not save the study guide.')
+    // 'cancelled' is the user closing the dialog — nothing to report.
   }
 
   const formats: Array<{
     key: string
     label: string
     hint: string
-    build: (m: ConceptMap) => string
+    done: string
+    build: () => string
   }> = [
     {
       key: 'outline',
       label: 'an outline',
       hint: 'Markdown · RemNote, Notion, Obsidian',
-      build: conceptMapToMarkdown,
+      done: 'Concept map copied as an outline.',
+      build: () => conceptMapToMarkdown(conceptMap),
     },
     {
       key: 'diagram',
       label: 'a diagram',
       hint: 'Mermaid · renders as the graph',
-      build: conceptMapToMermaid,
+      done: 'Concept map copied as a diagram.',
+      build: () => conceptMapToMermaid(conceptMap),
+    },
+    {
+      key: 'guide',
+      label: 'a study guide',
+      hint: 'Markdown · outline, card counts, gaps',
+      done: 'Study guide copied as Markdown.',
+      build: buildGuide,
     },
   ]
 
@@ -367,9 +399,9 @@ function CopyMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         className="btn-ghost px-2.5 py-1 text-xs"
-        title="Copy the concept map to paste elsewhere"
+        title="Copy or save the concept map and study guide"
       >
-        Copy
+        Export
       </button>
       {open && (
         <>
@@ -383,13 +415,24 @@ function CopyMenu({
               <button
                 key={format.key}
                 role="menuitem"
-                onClick={() => void copy(format.label, format.build)}
+                onClick={() => void copy(format.done, format.build)}
                 className="hover:bg-desk-hover block w-full rounded-sm px-2.5 py-1.5 text-left transition-colors duration-150"
               >
                 <span className="text-chalk block text-sm">Copy as {format.label}</span>
                 <span className="font-data text-chalk-dim block text-2xs">{format.hint}</span>
               </button>
             ))}
+            <div className="border-desk-edge/60 my-1 border-t" aria-hidden />
+            <button
+              role="menuitem"
+              onClick={() => void saveGuide()}
+              className="hover:bg-desk-hover block w-full rounded-sm px-2.5 py-1.5 text-left transition-colors duration-150"
+            >
+              <span className="text-chalk block text-sm">Save study guide…</span>
+              <span className="font-data text-chalk-dim block text-2xs">
+                Markdown file · outline, card counts, gaps
+              </span>
+            </button>
           </div>
         </>
       )}
