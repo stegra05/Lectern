@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { conceptMapToMarkdown, conceptMapToMermaid, relationsFor } from '../engine/conceptExport'
 import { studyGuideFilename, studyGuideToMarkdown } from '../engine/studyGuideExport'
-import type {
-  Card,
-  Concept,
-  ConceptMap,
-  CoverageData,
-  Difficulty,
-  Importance,
-} from '../engine/types'
+import type { Concept, ConceptMap, CoverageData, Difficulty, Importance } from '../engine/types'
 import { copyText } from '../lib/clipboard'
 import { saveTextFile } from '../lib/saveText'
 import { useDialogFocus } from '../lib/useDialogFocus'
@@ -32,7 +25,6 @@ const IMPORTANCE_LABEL: Record<Importance, string> = {
 export function ConceptSheet({ onClose }: { onClose: () => void }) {
   const conceptMap = useLectern((s) => s.conceptMap)
   const coverage = useLectern((s) => s.coverage)
-  const cards = useLectern((s) => s.cards)
   const peekSlide = useLectern((s) => s.peekSlide)
   const [view, setView] = useState<'graph' | 'list'>('graph')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -106,7 +98,6 @@ export function ConceptSheet({ onClose }: { onClose: () => void }) {
           <ExportMenu
             conceptMap={conceptMap}
             coverage={coverage}
-            cards={cards}
             open={copyOpen}
             setOpen={setCopyOpen}
           />
@@ -342,13 +333,11 @@ function ConceptRow({
 function ExportMenu({
   conceptMap,
   coverage,
-  cards,
   open,
   setOpen,
 }: {
   conceptMap: ConceptMap
   coverage: CoverageData | null
-  cards: Card[]
   open: boolean
   setOpen: (open: boolean) => void
 }) {
@@ -361,7 +350,9 @@ function ExportMenu({
     else toast('error', 'Could not reach the clipboard.')
   }
 
-  const buildGuide = () => studyGuideToMarkdown(conceptMap, coverage, cards)
+  // Cards are read at click time, not subscribed: the menu builds on demand,
+  // and a live subscription would re-render the whole sheet per card event.
+  const buildGuide = () => studyGuideToMarkdown(conceptMap, coverage, useLectern.getState().cards)
 
   const saveGuide = async () => {
     setOpen(false)

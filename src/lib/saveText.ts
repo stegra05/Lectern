@@ -18,7 +18,9 @@ export async function saveTextFile(defaultName: string, text: string): Promise<S
       anchor.href = url
       anchor.download = defaultName
       anchor.click()
-      URL.revokeObjectURL(url)
+      // Revoking synchronously can abort the download in some browsers;
+      // give the navigation a tick to commit first.
+      setTimeout(() => URL.revokeObjectURL(url), 0)
       return 'saved'
     } catch {
       return 'failed'
