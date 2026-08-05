@@ -5,4 +5,5 @@
  * lacks natively.
  */
 import './streamPolyfill'
+import './webkitPolyfills'
 import 'pdfjs-dist/build/pdf.worker.min.mjs'
