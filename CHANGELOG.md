@@ -1,6 +1,23 @@
 # Changelog
 
-## 2.12.0 (2026-07-25)
+## 2.13.0 (2026-08-05)
+
+### Added
+
+- **A session can leave as a study guide.** The concept sheet's Copy menu
+  becomes an Export menu: alongside the outline and Mermaid exports, you can
+  now take the whole session with you as Markdown, with objectives, concepts
+  with per-concept card counts, and a gap section naming the high-importance
+  concepts and pages no card covers. Copy it, or save it as a file.
+
+### Fixed
+
+- **PDFs open again on Intel Macs.** pdf.js 6 calls two JavaScript builtins
+  newer than the WebKit those machines can run (Intel Macs top out at
+  macOS Sequoia, whose Safari 18 lacks `Map.getOrInsertComputed`), so every
+  PDF failed with "getOrInsertComputed is not a function". Lectern now
+  installs the missing methods itself before pdf.js loads. Anything with
+  Safari 16.4 or newer works again.
 
 ### Changed
 
