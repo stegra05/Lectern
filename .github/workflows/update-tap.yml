@@ -1,0 +1,46 @@
+name: Update Homebrew tap
+
+# Rewrites Casks/lectern.rb in stegra05/homebrew-tap whenever a release is
+# published (drafts don't count — publishing is the manual review step).
+# Needs the TAP_GITHUB_TOKEN secret: a fine-grained PAT with contents:write
+# on stegra05/homebrew-tap.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  bump-cask:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dmgs and compute checksums
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          v="${TAG#v}"
+          base="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          curl -fsSL -o arm.dmg "${base}/Lectern_${v}_aarch64.dmg"
+          curl -fsSL -o intel.dmg "${base}/Lectern_${v}_x64.dmg"
+          {
+            echo "VERSION=${v}"
+            echo "SHA_ARM=$(sha256sum arm.dmg | cut -d' ' -f1)"
+            echo "SHA_INTEL=$(sha256sum intel.dmg | cut -d' ' -f1)"
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: stegra05/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Bump cask and push
+        run: |
+          cask=Casks/lectern.rb
+          sed -i "s/^  version \".*\"/  version \"${VERSION}\"/" "$cask"
+          sed -i "s/arm:   \"[0-9a-f]*\"/arm:   \"${SHA_ARM}\"/" "$cask"
+          sed -i "s/intel: \"[0-9a-f]*\"/intel: \"${SHA_INTEL}\"/" "$cask"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "lectern ${VERSION}"
+          git push
