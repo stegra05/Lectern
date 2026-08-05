@@ -5,6 +5,7 @@
  */
 
 import './streamPolyfill'
+import './webkitPolyfills'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { PdfInfo } from './types'
