@@ -4,8 +4,9 @@ import { migrateModel } from './settings'
 
 describe('migrateModel', () => {
   it('carries a retired model id forward to its replacement', () => {
-    expect(migrateModel('gemini-3.5-flash')).toBe('gemini-3.6-flash')
-    expect(migrateModel('gemini-3-flash')).toBe('gemini-3.6-flash')
+    expect(migrateModel('gemini-3.6-flash')).toBe('gemini-3.7-flash')
+    expect(migrateModel('gemini-3.5-flash')).toBe('gemini-3.7-flash')
+    expect(migrateModel('gemini-3-flash')).toBe('gemini-3.7-flash')
     expect(migrateModel('gemini-3-pro')).toBe('gemini-3.1-pro-preview')
   })
 

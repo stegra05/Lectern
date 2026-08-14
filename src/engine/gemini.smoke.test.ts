@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest'
 import { GeminiClient, parseJsonPayload } from './gemini'
 
 const apiKey = process.env.GEMINI_API_KEY
-const MODEL = 'gemini-3.6-flash'
+const MODEL = 'gemini-3.7-flash'
 
 describe.skipIf(!apiKey)('Gemini Interactions API (live)', () => {
   const client = new GeminiClient(apiKey ?? '', fetch)
