@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.14.0 (2026-08-14)
+
+### Added
+
+- **The cost estimate learns from your runs.** Every completed run now
+  writes down what was estimated and what Gemini actually billed, in both
+  tokens and dollars, and the activity log states the two side by side.
+  Future
+  estimates fold in the median correction from that history, per model once
+  a model has three runs of its own, so the number on the home screen
+  drifts toward what your lectures really cost instead of staying a fixed
+  guess. Follow-up requests and aborted runs stay out of the ledger: they
+  were never estimated, so they would only distort it.
+
+### Changed
+
+- **Lectern runs on Gemini 3.7 Flash.** At its introductory rate the new
+  Flash is half of 3.6's price per token ($0.75 in / $3.75 out per million,
+  against $1.50 / $7.50), so a typical run costs about half until the rate
+  doubles back at the end of 2026. A saved 3.6 setting moves forward
+  automatically, exactly as 3.5 did before it; Gemini 3.1 Pro remains your
+  choice to make and is left alone.
+
 ## 2.13.0 (2026-08-05)
 
 ### Added
