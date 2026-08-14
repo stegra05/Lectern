@@ -16,6 +16,12 @@ import {
 } from '../engine/ankiImport'
 import { buildLedgerLecture, mergeLedger, sha256Hex } from '../engine/ledger'
 import { readDeckLedger, writeDeckLedger } from '../lib/ledgerStore'
+import {
+  appendCalibrationRun,
+  calibrationFactors,
+  type CalibrationLog,
+} from '../engine/calibration'
+import { readCalibrationLog, writeCalibrationLog } from '../lib/calibrationStore'
 import { provenanceFieldValues } from '../engine/noteTypes'
 import { ensureLecternModels, migrateNotesToLectern } from '../engine/noteTypeSync'
 import { loadNoteTypeFonts } from '../lib/noteTypeFonts'
@@ -192,6 +198,9 @@ interface LecternActions {
 
 let abortController: AbortController | null = null
 let toastSeq = 1
+/** In-memory copy of the persisted estimate-vs-actual history. Loaded once at
+ *  init, updated after every completed run; estimates read it synchronously. */
+let calibrationLog: CalibrationLog | null = null
 /** Debounce + last-writer-wins guards for the deck probe, which fires on
  *  every keystroke in the deck field. */
 let deckProbeTimer: number | null = null
@@ -285,7 +294,46 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     const { pdfInfo, settings, targetCards } = get()
     if (!pdfInfo || !settings) return
     const sizing = computeSizingPlan(pdfInfo, { userTargetCards: targetCards ?? undefined })
-    set({ estimate: estimateCost(pdfInfo, sizing, settings.model), sizing })
+    const factors = calibrationFactors(calibrationLog, settings.model)
+    set({ estimate: estimateCost(pdfInfo, sizing, settings.model, factors), sizing })
+  }
+
+  /**
+   * Write a completed run's estimate-vs-actual pair to the calibration log,
+   * so future estimates learn from it. Best-effort like the deck ledger: a
+   * miss only costs calibration accuracy, never the run.
+   */
+  const recordCalibrationRun = async (
+    estimate: CostEstimate,
+    sizing: SizingPlan,
+    pdfInfo: PdfInfo,
+    model: string,
+    actual: { inputTokens: number; outputTokens: number; costUsd: number },
+    cardCount: number,
+  ): Promise<void> => {
+    pushLog(
+      'info',
+      `Cost: $${actual.costUsd.toFixed(2)} (estimated $${estimate.costUsd.toFixed(2)}) — ` +
+        `${Math.round(actual.inputTokens / 1000)}k in / ${Math.round(actual.outputTokens / 1000)}k out tokens ` +
+        `(estimated ${Math.round(estimate.inputTokens / 1000)}k / ${Math.round(estimate.outputTokens / 1000)}k).`,
+    )
+    try {
+      calibrationLog = appendCalibrationRun(calibrationLog ?? (await readCalibrationLog()), {
+        at: new Date().toISOString(),
+        model,
+        pageCount: pdfInfo.pageCount,
+        textChars: pdfInfo.textChars,
+        imageCount: pdfInfo.imageCount,
+        totalCardCap: sizing.totalCardCap,
+        batchSize: sizing.batchSize,
+        cardCount,
+        estimated: estimate,
+        actual,
+      })
+      await writeCalibrationLog(calibrationLog)
+    } catch (e) {
+      pushLog('warn', `Could not record the cost calibration log: ${(e as Error).message}`)
+    }
   }
 
   /** Best-effort install/upgrade of the bundled note types. Failure is not
@@ -453,6 +501,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     init: async () => {
       const settings = await loadSettings()
       const key = await getApiKey().catch(() => null)
+      calibrationLog = await readCalibrationLog()
       set({ settings, hasApiKey: Boolean(key) })
       void get().refreshAnki()
     },
@@ -626,6 +675,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         targetCards,
         extendDeck,
         existingDeckCount,
+        estimate,
+        sizing,
       } = get()
       if (!pdfBytes || !pdfInfo || !fileName || !settings) return
       const apiKey = await getApiKey().catch(() => null)
@@ -718,6 +769,16 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           signal: controller.signal,
         })
         set({ followUp: outcome.followUp })
+        if (estimate && sizing) {
+          void recordCalibrationRun(
+            estimate,
+            sizing,
+            pdfInfo,
+            settings.model,
+            outcome.usage,
+            outcome.cards.length - existingCards.length,
+          )
+        }
         void notifyRunFinished({
           enabled: settings.notifyOnFinish,
           title: `${deckName} is ready`,
