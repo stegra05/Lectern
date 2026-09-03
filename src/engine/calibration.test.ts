@@ -12,7 +12,7 @@ import {
 
 const run = (extra: Partial<CalibrationRun> = {}): CalibrationRun => ({
   at: '2026-08-14T10:00:00.000Z',
-  model: 'gemini-3.7-flash',
+  model: 'gemini-3.8-flash',
   pageCount: 30,
   textChars: 12000,
   imageCount: 5,
@@ -59,8 +59,8 @@ describe('appendCalibrationRun', () => {
 
 describe('calibrationFactors', () => {
   it('is uncalibrated with no log or too few runs', () => {
-    expect(calibrationFactors(null, 'gemini-3.7-flash')).toEqual(UNCALIBRATED)
-    expect(calibrationFactors(log([run(), run()]), 'gemini-3.7-flash')).toEqual(UNCALIBRATED)
+    expect(calibrationFactors(null, 'gemini-3.8-flash')).toEqual(UNCALIBRATED)
+    expect(calibrationFactors(log([run(), run()]), 'gemini-3.8-flash')).toEqual(UNCALIBRATED)
   })
 
   it('takes the median actual/estimated ratio per side', () => {
@@ -78,7 +78,7 @@ describe('calibrationFactors', () => {
         actual: { inputTokens: 300, outputTokens: 110, costUsd: 0 },
       }),
     ]
-    const factors = calibrationFactors(log(runs), 'gemini-3.7-flash')
+    const factors = calibrationFactors(log(runs), 'gemini-3.8-flash')
     expect(factors).toEqual({ input: 2, output: 0.8, sampleCount: 3 })
   })
 
@@ -89,7 +89,7 @@ describe('calibrationFactors', () => {
     })
     const runs = [other, other, other, run(), run(), run()]
     // Same-model runs all sit at ratio 2 (input) / 2 (output).
-    expect(calibrationFactors(log(runs), 'gemini-3.7-flash')).toEqual({
+    expect(calibrationFactors(log(runs), 'gemini-3.8-flash')).toEqual({
       input: 2,
       output: 2,
       sampleCount: 3,
@@ -115,7 +115,7 @@ describe('calibrationFactors', () => {
       actual: { inputTokens: 1_000_000, outputTokens: 0, costUsd: 0 },
     })
     const zero = run({ estimated: { inputTokens: 0, outputTokens: 0, costUsd: 0 } })
-    const factors = calibrationFactors(log([wild, wild, wild, zero]), 'gemini-3.7-flash')
+    const factors = calibrationFactors(log([wild, wild, wild, zero]), 'gemini-3.8-flash')
     expect(factors).toEqual({ input: 4, output: 0.25, sampleCount: 3 })
   })
 })

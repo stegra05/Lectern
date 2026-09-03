@@ -64,9 +64,9 @@ export const MAX_FOLLOWUP_ROUNDS = 6
 
 // --- Gemini ----------------------------------------------------------------
 
-export const DEFAULT_MODEL = 'gemini-3.7-flash'
+export const DEFAULT_MODEL = 'gemini-3.8-flash'
 export const MODEL_CHOICES = [
-  { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash — fast, agentic (recommended)' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — fast, agentic (recommended)' },
   { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro — deepest reasoning, slower' },
 ] as const
 
@@ -74,13 +74,14 @@ export const MODEL_CHOICES = [
  *  DEFAULT_MODEL on load, so without this an existing install would sit on a
  *  retired id forever — and keep paying the older, higher output rate. */
 export const MODEL_MIGRATIONS: Record<string, string> = {
-  'gemini-3.6-flash': 'gemini-3.7-flash',
-  'gemini-3.5-flash': 'gemini-3.7-flash',
-  'gemini-3-flash': 'gemini-3.7-flash',
+  'gemini-3.7-flash': 'gemini-3.8-flash',
+  'gemini-3.6-flash': 'gemini-3.8-flash',
+  'gemini-3.5-flash': 'gemini-3.8-flash',
+  'gemini-3-flash': 'gemini-3.8-flash',
   'gemini-3-pro': 'gemini-3.1-pro-preview',
 }
 
-/** 3.7 Flash accepts only these three; `minimal` (a 3.6-ism) now errors. */
+/** 3.8 Flash (like 3.7) accepts only these three; `minimal` (a 3.6-ism) errors. */
 export type ThinkingLevel = 'low' | 'medium' | 'high'
 /** Thinking effort per phase. `low` suits the agentic loops — few steps per
  *  decision; the one-shot document analysis gets `high`, and review edits sit
@@ -96,7 +97,7 @@ export const THINKING_BY_PHASE = {
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
 /** Pins the May-2026 Interactions API schema (`steps` timeline) — required
  *  when not going through an official SDK. Still the current revision for
- *  3.7 Flash; the model bump introduced no new one. */
+ *  3.8 Flash; the model bump introduced no new one. */
 export const GEMINI_API_REVISION = '2026-05-20'
 
 // --- Retry -----------------------------------------------------------------
@@ -116,6 +117,7 @@ export const FILE_ACTIVE_TIMEOUT_MS = 120_000
 
 export const GEMINI_PRICING: Record<string, [number, number]> = {
   // Introductory rate through 2026-12-31; doubles to [1.5, 7.5] on 2027-01-01.
+  'gemini-3.8-flash': [0.75, 3.75],
   'gemini-3.7-flash': [0.75, 3.75],
   'gemini-3.6-flash': [1.5, 7.5],
   'gemini-3.5-flash': [1.5, 9.0],
