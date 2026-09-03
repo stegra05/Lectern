@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.15.0 (2026-09-03)
+
+### Changed
+
+- **Lectern runs on Gemini 3.8 Flash.** Google's newest Flash, released on
+  2 September, is built on 3.7 and tuned for long-running agentic work,
+  which is exactly what the generation and review loops are. It costs the
+  same as 3.7 at the introductory rate ($0.75 in / $3.75 out per million
+  tokens until the end of 2026), so a typical run costs what it did before.
+  A saved 3.7 setting moves forward automatically, exactly as 3.6 did
+  before it; Gemini 3.1 Pro remains your choice to make and is left alone.
+  The cost calibration is per model, so the first three runs on 3.8 fall
+  back to the correction learned across all your runs.
+
 ## 2.14.0 (2026-08-14)
 
 ### Added
