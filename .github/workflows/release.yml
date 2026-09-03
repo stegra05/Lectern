@@ -2,7 +2,10 @@ name: Release
 
 # Builds and publishes desktop bundles when a version tag is pushed:
 #   git tag v2.0.0 && git push origin v2.0.0
-# Creates a draft GitHub Release — review the notes, then publish.
+# Creates one draft GitHub Release up front, with the tag's CHANGELOG section
+# as its notes, and every platform build uploads into it. (Letting each build
+# find-or-create the draft itself races: two builds can each create one, and
+# the tag ends up with two half-filled drafts.) Review the draft, then publish.
 
 on:
   push:
@@ -13,7 +16,34 @@ permissions:
   contents: write
 
 jobs:
+  draft:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract this version's CHANGELOG section
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '$0 ~ "^## " v " " {f=1; next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md for details." > notes.md
+      - uses: actions/github-script@v7
+        id: create
+        with:
+          script: |
+            const fs = require('fs')
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: process.env.GITHUB_REF_NAME,
+              name: `Lectern ${process.env.GITHUB_REF_NAME}`,
+              body: fs.readFileSync('notes.md', 'utf8'),
+              draft: true,
+            })
+            return data.id
+
   build:
+    needs: draft
     strategy:
       fail-fast: false
       matrix:
@@ -78,8 +108,5 @@ jobs:
           #   APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           #   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Lectern ${{ github.ref_name }}"
-          releaseBody: "See CHANGELOG.md for details."
-          releaseDraft: true
+          releaseId: ${{ needs.draft.outputs.release_id }}
           args: ${{ matrix.args }}
