@@ -1,5 +1,74 @@
 # Changelog
 
+## 2.16.0 (2026-09-24)
+
+### Added
+
+- **Errors name the fix.** Every failure is now described in one place and
+  says what happened and what to do about it. The banner leads with the fix
+  ("Open Settings", "Check Anki again"), offers "Try again" only when trying
+  again can work (a spent daily quota gets no retry button), and links to
+  where the fix lives: your key, your rate limits, Gemini's status page,
+  the AnkiConnect add-on. An error Lectern does not recognise comes with a
+  bug report already filled in with the version and what it showed.
+- **Links out of the app.** Get a key, get AnkiConnect, what's new and
+  report a problem are one click away where they are needed, and Settings
+  shows the version at its foot. After a send, "Open in Anki" opens Anki's
+  card browser on the deck.
+- **A setup checklist on the empty home screen.** The Gemini key and Anki
+  each get a row that says what they are needed for (generating needs only
+  the key, sending needs Anki), with a link and a button to fix each. It
+  disappears once both are in place.
+- **Waits are visible.** When Gemini rate-limits a run, a countdown sits
+  under the current step ("Rate limit · retry in 0:47") instead of a pulsing
+  dot with the reason buried in the log.
+
+### Changed
+
+- **A calmer review screen.** Once a run is done its steps fold into one
+  line ("Finished in 3:10") and the activity log gets the room. The sidebar
+  no longer repeats the page coverage the filmstrip shows or the card count
+  the send bar shows, and the concept map card carries the gaps in one line.
+  The card count above the list appears only while a filter hides cards,
+  the shortcut hints retire once you have used a shortcut (`?` brings them
+  back), and the send bar's second line keeps to the numbers that change
+  what a send does. A card's source quote now appears next to its slide,
+  opened from the page number, instead of behind a toggle on every card.
+- **A shorter activity log.** Rejected cards, cards Anki already had and
+  cards that failed to send each fold into one line that opens to show
+  every card and why. Routine progress lines, retry waits and the
+  cost-versus-estimate line from 2.14.0 are gone; the estimate still learns
+  from every run. Gemini's review notes are quoted under the quality-pass
+  line.
+- **Plain language throughout.** Quality flags are written out ("the quote
+  is not on the cited page"), the log talks about cards and lectures rather
+  than tools and rounds, counts have real plurals, and the title bar shows
+  Anki or Gemini only when something is wrong. The optional focus field
+  waits behind a link, and the one-time "Apply design to earlier synced
+  cards" moved under Advanced.
+- **Updates are noticed while the app stays open.** The update notice
+  checks again every six hours and when you return to the window, and links
+  to what's new.
+- **A spent daily quota or spending cap fails straight away.** Lectern used
+  to retry it five times first, which only made you wait for the same
+  answer.
+- **Exports read a little differently.** Concept lines in the copied outline
+  and the study guide read "**Gradient Descent**: foundational", and a
+  saved study guide is named "ML Lecture 2 - Study guide.md".
+
+### Fixed
+
+- "Try again" after a failed run asks before discarding cards that were
+  never sent to Anki. It used to start over silently, right under a banner
+  promising those cards were kept.
+- The error banner no longer says twice that your cards are kept.
+- "Sent 1 cards" and the other plural slips.
+- Error messages stay until you dismiss them instead of vanishing after
+  five seconds.
+- A malformed API key, which Gemini reports as a bad request rather than a
+  rejected one, is now recognised as a key problem and sends you to
+  Settings.
+
 ## 2.15.0 (2026-09-03)
 
 ### Changed
