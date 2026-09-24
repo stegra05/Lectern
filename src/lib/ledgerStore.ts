@@ -36,7 +36,9 @@ export async function readDeckLedger(deckName: string): Promise<DeckLedger | nul
     return null
   }
   if (isNewerLedgerVersion(value)) {
-    throw new Error('this deck’s ledger was written by a newer version of Lectern — left untouched')
+    throw new Error(
+      'this deck’s ledger was written by a newer version of Lectern, so it is left untouched',
+    )
   }
   return parseDeckLedger(value)
 }

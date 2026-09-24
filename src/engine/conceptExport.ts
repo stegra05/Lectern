@@ -12,6 +12,7 @@
  */
 
 import { formatPageRefs } from './noteTypes'
+import { count } from './plural'
 import type { Concept, ConceptMap, Importance, Relation } from './types'
 import { relationKeyOf } from './types'
 
@@ -57,7 +58,7 @@ export interface RelationLine {
 /**
  * Relations touching `concept`, phrased from its side: outgoing keep the
  * relation's direction, incoming are inverted so the line still reads
- * left-to-right ("← is a — Optimization"). Self-relations and relations
+ * left-to-right ("← is a · Optimization"). Self-relations and relations
  * pointing at concepts outside the map are dropped.
  */
 export function relationsFor(
@@ -80,7 +81,7 @@ export function relationsFor(
     const verb = humanizeRelationType(relation.type)
     lines.push({
       otherName,
-      text: isSource ? `${verb} → ${otherName}` : `← ${verb} — ${otherName}`,
+      text: isSource ? `${verb} → ${otherName}` : `← ${verb} · ${otherName}`,
     })
   }
   return lines
@@ -112,7 +113,7 @@ export function conceptMapToMarkdown(conceptMap: ConceptMap): string {
       const name = concept.name.trim()
       if (name === '') continue
       lines.push(
-        `- **${escapeMarkdown(name)}** — ${concept.difficulty}${pageSuffix(concept.pageReferences)}`,
+        `- **${escapeMarkdown(name)}**: ${concept.difficulty}${pageSuffix(concept.pageReferences)}`,
       )
       for (const relation of relationsFor(concept, conceptMap.relations, nameOf)) {
         lines.push(`  - ${escapeMarkdown(relation.text)}`)
@@ -121,14 +122,12 @@ export function conceptMapToMarkdown(conceptMap: ConceptMap): string {
     lines.push('')
   }
 
-  // This line ends up pasted into someone's notes, so it counts properly.
-  const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`
   lines.push(
     '---',
     '',
     `${count(conceptMap.concepts.length, 'concept')} · ` +
       `${count(conceptMap.relations.length, 'relation')} · ` +
-      `${count(conceptMap.pageCount, 'page')} — mapped by Lectern`,
+      `${count(conceptMap.pageCount, 'page')} · mapped by Lectern`,
   )
 
   return lines.join('\n')

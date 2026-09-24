@@ -43,7 +43,11 @@ import type {
   SyncResult,
 } from '../engine/types'
 import { computeSizingPlan } from '../engine/pacing'
-import { confirmDiscard } from '../lib/confirm'
+import { count } from '../engine/plural'
+import { confirmUnsentDiscard } from '../lib/confirm'
+import type { Link } from '../lib/links'
+import { describeProblem, describeSyncFailure, type Activity, type Problem } from '../lib/problems'
+import { describeReasons } from '../lib/qualityCopy'
 import { plainCardText } from '../lib/render'
 import { notifyRunFinished } from '../lib/notify'
 import { IS_TAURI } from '../lib/platform'
@@ -67,6 +71,11 @@ export interface LogLine {
   quote?: string
   /** 'user' marks a follow-up request typed into the activity log. */
   speaker?: 'user'
+  /** Consecutive events of one kind (rejected cards, cards Anki already
+   *  had, cards that failed to send) fold into a single line whose details
+   *  open on demand, instead of one line each. */
+  group?: 'rejected' | 'duplicate' | 'failed'
+  items?: Array<{ message: string; quote?: string }>
   at: number
 }
 
@@ -74,8 +83,13 @@ export interface Toast {
   id: number
   kind: 'info' | 'success' | 'error'
   message: string
-  undo?: () => void
+  /** A second, quieter line: the fix, when the message is a problem. */
+  detail?: string
+  action?: { label: string; run: () => void }
+  link?: Link
 }
+
+type ToastOptions = Pick<Toast, 'detail' | 'action' | 'link'>
 
 export type AppPhase =
   'idle' | 'uploading' | 'mapping' | 'generating' | 'reflecting' | 'complete' | 'error'
@@ -118,15 +132,20 @@ interface LecternState {
   cards: Card[]
   coverage: CoverageData | null
   logs: LogLine[]
-  rejectedCount: number
   progress: { produced: number; cap: number; round: number } | null
   usage: { inputTokens: number; outputTokens: number; costUsd: number } | null
   doneSummary: string | null
-  errorMessage: string | null
+  /** How long the finished run took, for the sidebar's closing line. */
+  runMs: number | null
+  /** Why the run stopped; null unless phase is 'error'. */
+  problem: Problem | null
   /** Conversation handle for post-completion card requests; null until the
    *  pipeline completes. */
   followUp: FollowUpSeed | null
   followUpBusy: boolean
+  /** A retry wait in progress: until when, and the HTTP status behind it.
+   *  Shown as a countdown, so a paused run does not look like a hung one. */
+  wait: { until: number; waitMs: number; status: number } | null
 
   // review
   editingUid: string | null
@@ -171,6 +190,9 @@ interface LecternActions {
 
   startGeneration: () => Promise<void>
   cancelGeneration: () => void
+  /** Start the run again after an error, asking first if that would discard
+   *  cards that never reached Anki. */
+  retryGeneration: () => Promise<void>
   backToHome: () => Promise<void>
   /** Post-completion chat: ask Gemini for additional cards. Additions only —
    *  the existing deck is never edited. */
@@ -187,12 +209,16 @@ interface LecternActions {
   peekSlide: (page: number | null) => void
 
   previewSyncNow: () => Promise<void>
+  /** Show the deck in Anki's card browser, where the sent cards now live. */
+  openDeckInAnki: () => Promise<void>
   syncNow: () => Promise<void>
   /** One-time action: move earlier plain Basic/Cloze syncs (found via the
    *  default tag) onto the Lectern note types. */
   migrateLegacyCards: () => Promise<void>
 
-  toast: (kind: Toast['kind'], message: string, undo?: () => void) => void
+  toast: (kind: Toast['kind'], message: string, options?: ToastOptions) => void
+  /** Describe an error and show it as a toast, with its fix attached. */
+  showProblem: (error: unknown, activity: Activity) => void
   dismissToast: (id: number) => void
 }
 
@@ -208,6 +234,10 @@ let deckProbeSeq = 0
 const DECK_PROBE_DEBOUNCE_MS = 400
 /** Last-writer-wins guard for the automatic send preview. */
 let syncPreviewSeq = 0
+/** When the current run began, for the finished run's duration. */
+let runStartedAt = 0
+
+const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
 export const useLectern = create<LecternState & LecternActions>()((set, get) => {
   const pushLog = (
@@ -220,13 +250,32 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       logs: [...s.logs.slice(-400), { level, message, quote, speaker, at: Date.now() }],
     }))
 
+  /** Add an item to the open group of this kind, or start one. */
+  const pushGrouped = (
+    group: NonNullable<LogLine['group']>,
+    level: LogLine['level'],
+    heading: (n: number) => string,
+    item: { message: string; quote?: string },
+  ) =>
+    set((s) => {
+      const last = s.logs.at(-1)
+      if (last?.group === group && last.items) {
+        const items = [...last.items, item]
+        return {
+          logs: [...s.logs.slice(0, -1), { ...last, message: heading(items.length), items }],
+        }
+      }
+      const line: LogLine = { level, message: heading(1), group, items: [item], at: Date.now() }
+      return { logs: [...s.logs.slice(-400), line] }
+    })
+
   const handlePipelineEvent = (event: PipelineEvent): void => {
     switch (event.type) {
       case 'phase':
         set({ phase: event.phase })
         break
       case 'log':
-        pushLog(event.level, event.message)
+        pushLog(event.level, event.message, event.quote)
         break
       case 'concept_map':
         set({ conceptMap: event.conceptMap, sizing: event.sizing })
@@ -235,16 +284,13 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         set((s) => ({ cards: [...s.cards, event.card] }))
         break
       case 'card_rejected':
-        set((s) => ({ rejectedCount: s.rejectedCount + 1 }))
-        pushLog(
-          'warn',
-          `Rejected: ${event.reasons.map((r) => r.replaceAll('_', ' ')).join(', ')}`,
-          plainCardText(event.front),
-        )
+        pushGrouped('rejected', 'warn', (n) => `${count(n, 'card')} rejected`, {
+          message: capitalize(describeReasons(event.reasons)),
+          quote: plainCardText(event.front),
+        })
         break
       case 'cards_replaced':
         set({ cards: event.cards })
-        if (event.reflectionNote) pushLog('info', 'Quality pass', event.reflectionNote)
         break
       case 'coverage':
         set({ coverage: event.coverage })
@@ -262,12 +308,14 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         })
         break
       case 'done':
-        set({ doneSummary: event.summary })
+        set({ doneSummary: event.summary, runMs: Date.now() - runStartedAt })
         pushLog('info', event.summary)
         break
-      case 'error':
-        pushLog('error', event.message)
-        if (event.fatal) set({ phase: 'error', errorMessage: event.message })
+      case 'waiting':
+        set({
+          wait: { until: Date.now() + event.waitMs, waitMs: event.waitMs, status: event.status },
+        })
+        // Said live by the countdown under the current step, not in the log.
         break
     }
   }
@@ -311,12 +359,6 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     actual: { inputTokens: number; outputTokens: number; costUsd: number },
     cardCount: number,
   ): Promise<void> => {
-    pushLog(
-      'info',
-      `Cost: $${actual.costUsd.toFixed(2)} (estimated $${estimate.costUsd.toFixed(2)}) — ` +
-        `${Math.round(actual.inputTokens / 1000)}k in / ${Math.round(actual.outputTokens / 1000)}k out tokens ` +
-        `(estimated ${Math.round(estimate.inputTokens / 1000)}k / ${Math.round(estimate.outputTokens / 1000)}k).`,
-    )
     try {
       calibrationLog = appendCalibrationRun(calibrationLog ?? (await readCalibrationLog()), {
         at: new Date().toISOString(),
@@ -332,7 +374,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       })
       await writeCalibrationLog(calibrationLog)
     } catch (e) {
-      pushLog('warn', `Could not record the cost calibration log: ${(e as Error).message}`)
+      // Bookkeeping the student never sees; a miss only blunts the next estimate.
+      console.warn('Could not record the cost calibration log:', e)
     }
   }
 
@@ -350,7 +393,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     try {
       const result = await ensureLecternModels(client, settings.noteTypeTheme, loadNoteTypeFonts)
       if (result.created.length > 0) {
-        pushLog('info', `Added the ${result.created.join(' and ')} note type(s) to Anki.`)
+        const noun = result.created.length === 1 ? 'note type' : 'note types'
+        pushLog('info', `Added the ${result.created.join(' and ')} ${noun} to Anki.`)
       }
       if (result.updated.length > 0) {
         pushLog('info', `Restyled ${result.updated.join(' and ')} in Anki.`)
@@ -364,32 +408,31 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       if (result.newerVersion.length > 0) {
         pushLog(
           'info',
-          `${result.newerVersion.join(' and ')} came from a newer Lectern — left untouched.`,
+          `${result.newerVersion.join(' and ')} came from a newer Lectern, so Lectern leaves it as is.`,
         )
       }
       if (result.fieldMismatch.length > 0) {
         pushLog(
           'warn',
           `${result.fieldMismatch.join(' and ')} in Anki has different fields from Lectern's, ` +
-            'so it is left alone — cards sent to it carry no Topic/Source/Excerpt.',
+            'so it is left alone. Cards sent to it carry no Topic, Source or Excerpt.',
         )
       }
       if (!announce) return
       if (result.updated.length > 0) {
-        get().toast('success', 'Card design applied — cards in Anki show it right away.')
+        get().toast('success', 'Card design applied. Cards in Anki show it right away.')
       } else if (result.userOwned.length > 0) {
         get().toast(
           'info',
           `Left as it is: you edited the styling of ${result.userOwned.join(' and ')} in Anki.`,
         )
       } else if (result.newerVersion.length > 0) {
-        get().toast('info', 'A newer Lectern installed these note types — left untouched.')
+        get().toast('info', 'A newer Lectern installed these note types, so they stay as they are.')
       }
     } catch (e) {
-      pushLog('warn', `Could not set up the Lectern note types: ${(e as Error).message}`)
-      if (announce) {
-        get().toast('error', `Could not apply the card design: ${(e as Error).message}`)
-      }
+      const problem = describeProblem(e, 'styling')
+      pushLog('warn', `${problem.title}. ${problem.body}`)
+      if (announce) get().showProblem(e, 'styling')
     }
   }
 
@@ -429,7 +472,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       const existing = await readDeckLedger(deckName)
       await writeDeckLedger(mergeLedger(existing, deckName, lecture))
     } catch (e) {
-      pushLog('warn', `Could not record the deck ledger: ${(e as Error).message}`)
+      // Bookkeeping the student never sees; the cards are in Anki either way.
+      console.warn('Could not record the deck ledger:', e)
     }
   }
 
@@ -475,13 +519,14 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     cards: [],
     coverage: null,
     logs: [],
-    rejectedCount: 0,
     progress: null,
     usage: null,
     doneSummary: null,
-    errorMessage: null,
+    runMs: null,
+    problem: null,
     followUp: null,
     followUpBusy: false,
+    wait: null,
 
     editingUid: null,
     selectedUid: null,
@@ -581,7 +626,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         // the previous document in place when the file is unreadable).
         if (get().fileName === fileName && get().pdfBytes === bytes) set({ pdfPath: path })
       } catch (e) {
-        get().toast('error', `Could not read ${fileName}: ${(e as Error).message}`)
+        get().showProblem(e, 'opening_pdf')
       }
     },
 
@@ -626,7 +671,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           }
         }
       } catch (e) {
-        get().toast('error', `Could not read ${fileName}: ${(e as Error).message}`)
+        get().showProblem(e, 'opening_pdf')
       }
     },
 
@@ -692,6 +737,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
       const controller = new AbortController()
       abortController = controller
+      runStartedAt = Date.now()
       set({
         view: 'session',
         phase: 'uploading',
@@ -699,11 +745,12 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         coverage: null,
         conceptMap: null,
         logs: [],
-        rejectedCount: 0,
         progress: null,
         usage: null,
         doneSummary: null,
-        errorMessage: null,
+        runMs: null,
+        problem: null,
+        wait: null,
         followUp: null,
         followUpBusy: false,
         syncState: 'idle',
@@ -729,7 +776,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           set({ cards: existingCards })
           pushLog(
             'info',
-            `Keeping ${imported.cards.length} card(s) already in “${deckName}” — this run adds to them.`,
+            `Keeping the ${count(imported.cards.length, 'card')} already in “${deckName}”. This run adds to them.`,
           )
           if (imported.truncated) {
             pushLog(
@@ -740,15 +787,21 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           }
           const unreadable = Math.min(imported.totalNotes, MAX_IMPORT_CARDS) - imported.cards.length
           if (unreadable > 0) {
-            pushLog('warn', `${unreadable} note(s) in the deck could not be read and are ignored.`)
+            pushLog(
+              'warn',
+              `${count(unreadable, 'note')} in the deck could not be read, so Lectern skips them.`,
+            )
           }
         } catch (e) {
-          const message = (e as Error).message
+          const problem = describeProblem(e, 'reading_deck')
           set({
             phase: 'error',
-            errorMessage:
-              `Could not read “${deckName}” from Anki: ${message}. ` +
-              'Nothing was generated — running without the existing cards would duplicate them.',
+            problem: {
+              ...problem,
+              body:
+                `${problem.body} Nothing was generated yet: without the cards already in ` +
+                `“${deckName}”, this run would repeat them.`,
+            },
           })
           return
         }
@@ -782,27 +835,27 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         void notifyRunFinished({
           enabled: settings.notifyOnFinish,
           title: `${deckName} is ready`,
-          body: get().doneSummary ?? `${get().cards.length} cards are waiting for review.`,
+          body: get().doneSummary ?? `${count(get().cards.length, 'card')} waiting for review.`,
         })
       } catch (e) {
         if ((e as Error).name === 'AbortError') {
           set({ view: 'home', phase: 'idle' })
           get().toast('info', 'Generation cancelled.')
         } else {
-          const message =
-            (e as { userMessage?: string }).userMessage ?? (e as Error).message ?? 'Unknown error'
-          set({ phase: 'error', errorMessage: message })
-          pushLog('error', message)
+          const problem = describeProblem(e, 'generating')
+          set({ phase: 'error', problem })
+          pushLog('error', problem.title)
           // Worth interrupting for: a failed run is exactly what you walked
           // away from the window expecting not to happen.
           void notifyRunFinished({
             enabled: settings.notifyOnFinish,
             title: 'Lectern stopped generating',
-            body: message,
+            body: problem.title,
           })
         }
       } finally {
         if (abortController === controller) abortController = null
+        set({ wait: null })
       }
     },
 
@@ -849,48 +902,53 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         }))
         const added = outcome.added.length
         const outside = outcome.outsideSourceCount
-        const optIn = `kept out of the Anki send until you include ${outside === 1 ? 'it' : 'them'}`
+        const optIn = `Lectern leaves ${outside === 1 ? 'it' : 'them'} out of the Anki send until you include ${outside === 1 ? 'it' : 'them'}`
         const outsideNote =
           outside === 0
             ? ''
             : outside === added
               ? outside === 1
-                ? ` It is outside the source — ${optIn}.`
-                : ` All are outside the source — ${optIn}.`
-              : ` ${outside} of them ${outside === 1 ? 'is' : 'are'} outside the source — ${optIn}.`
+                ? ` It is not from the lecture. ${optIn}.`
+                : ` None of them are from the lecture. ${optIn}.`
+              : ` ${outside} of them ${outside === 1 ? 'is' : 'are'} not from the lecture. ${optIn}.`
         pushLog(
           'info',
           added === 0
             ? 'No cards were added for this request.'
-            : `Added ${added === 1 ? '1 card' : `${added} cards`}.${outsideNote}`,
+            : `Added ${count(added, 'card')}.${outsideNote}`,
           outcome.note,
         )
       } catch (e) {
         if ((e as Error).name === 'AbortError') {
           pushLog('warn', 'Request stopped.')
         } else {
-          const message =
-            (e as { userMessage?: string }).userMessage ?? (e as Error).message ?? 'Unknown error'
-          pushLog('error', message)
-          get().toast('error', `Request failed: ${message}`)
+          pushLog('error', describeProblem(e, 'requesting').title)
+          get().showProblem(e, 'requesting')
         }
       } finally {
         if (abortController === controller) abortController = null
-        set({ followUpBusy: false })
+        set({ followUpBusy: false, wait: null })
       }
     },
 
+    retryGeneration: async () => {
+      // A new run starts from an empty deck, so the cards the error banner
+      // promised to keep would go with it.
+      const ok = await confirmUnsentDiscard(
+        get().cards,
+        'Starting over discards them.',
+        'Start over?',
+      )
+      if (ok) await get().startGeneration()
+    },
+
     backToHome: async () => {
-      const unsent = get().cards.filter((c) => !c.ankiNoteId).length
-      if (unsent > 0) {
-        const counted = unsent === 1 ? "1 card hasn't" : `${unsent} cards haven't`
-        const ok = await confirmDiscard(
-          `${counted} been sent to Anki. Leaving discards them.`,
-          'Discard this deck?',
-        )
-        if (!ok) return
-      }
-      set({ view: 'home', phase: 'idle' })
+      const ok = await confirmUnsentDiscard(
+        get().cards,
+        'Leaving discards them.',
+        'Discard this deck?',
+      )
+      if (ok) set({ view: 'home', phase: 'idle' })
     },
 
     updateCardFields: (uid, fields) => {
@@ -928,7 +986,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       const card = cards[index]
       if (card.fromAnki) {
         // Removing it here would suggest it left Anki, which it did not.
-        get().toast('info', 'This card is already in Anki — remove it there.')
+        get().toast('info', 'This card is already in Anki. Remove it there.')
         return
       }
       set((s) => ({ cards: s.cards.filter((c) => c.uid !== uid), ...staleSync(s) }))
@@ -938,7 +996,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           restored.splice(Math.min(index, restored.length), 0, card)
           return { cards: restored, ...staleSync(s) }
         })
-      get().toast('info', 'Card removed.', undo)
+      get().toast('info', 'Card removed.', { action: { label: 'Undo', run: undo } })
     },
 
     setCardSyncExcluded: (uid, excluded) =>
@@ -1020,14 +1078,21 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         // "see Activity" used to point at a log that never heard about the
         // send: every per-card outcome was thrown away with the toast.
         for (const skipped of result.duplicates) {
-          pushLog(
+          pushGrouped(
+            'duplicate',
             'info',
-            'Already in Anki — left as it is',
-            plainCardText(skipped.front).slice(0, 120),
+            (n) => `${count(n, 'card')} already in Anki, left as is`,
+            {
+              message: 'Already in Anki',
+              quote: plainCardText(skipped.front).slice(0, 120),
+            },
           )
         }
         for (const failure of result.failures) {
-          pushLog('error', `Not sent: ${failure.error}`, plainCardText(failure.front).slice(0, 120))
+          pushGrouped('failed', 'error', (n) => `${count(n, 'card')} not sent`, {
+            message: describeSyncFailure(failure.error),
+            quote: plainCardText(failure.front).slice(0, 120),
+          })
         }
         const sent = result.created + result.updated
         const extras = [
@@ -1035,15 +1100,31 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           result.failures.length > 0 ? `${result.failures.length} failed` : '',
         ].filter(Boolean)
         const suffix = extras.length > 0 ? ` (${extras.join(', ')})` : ''
-        pushLog('info', `Sent ${sent} card(s) to “${deckName}”${suffix}.`)
-        if (result.failures.length === 0) {
-          get().toast('success', `Sent ${sent} cards to Anki.${suffix}`)
-        } else {
-          get().toast('error', `Sent ${sent} cards; ${result.failures.length} failed.`)
+        pushLog('info', `Sent ${count(sent, 'card')} to “${deckName}”${suffix}.`)
+        // Success needs no toast: the send bar says it where the button was.
+        if (result.failures.length > 0) {
+          get().toast(
+            'error',
+            `Sent ${count(sent, 'card')}, but ${result.failures.length} failed.`,
+            {
+              detail: 'The activity log says why for each one.',
+            },
+          )
         }
       } catch (e) {
         set({ syncState: 'idle' })
-        get().toast('error', `Anki sync failed: ${(e as Error).message}`)
+        get().showProblem(e, 'sending')
+      }
+    },
+
+    openDeckInAnki: async () => {
+      const { settings, deckName } = get()
+      if (!settings) return
+      try {
+        const client = new AnkiClient(settings.ankiUrl, tauriFetch)
+        await client.guiBrowse(`deck:"${deckName.replaceAll('"', '\\"')}"`)
+      } catch (e) {
+        get().showProblem(e, 'opening_anki')
       }
     },
 
@@ -1058,27 +1139,42 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         if (result.migrated === 0 && result.failures.length === 0) {
           get().toast('info', 'No cards needed the new design.')
         } else if (result.failures.length === 0) {
-          get().toast('success', `Moved ${result.migrated} cards to the Lectern design.`)
+          get().toast('success', `Moved ${count(result.migrated, 'card')} to the Lectern design.`)
         } else {
           get().toast(
             'error',
-            `Moved ${result.migrated} cards; ${result.failures.length} failed (${result.failures[0].error}).`,
+            `Moved ${count(result.migrated, 'card')}, but ${result.failures.length} failed.`,
+            { detail: describeSyncFailure(result.failures[0].error) },
           )
         }
       } catch (e) {
-        get().toast('error', `Could not restyle existing cards: ${(e as Error).message}`)
+        get().showProblem(e, 'styling')
       } finally {
         set({ migratingCards: false })
       }
     },
 
-    toast: (kind, message, undo) => {
+    toast: (kind, message, options = {}) => {
       const id = toastSeq++
-      set((s) => ({ toasts: [...s.toasts, { id, kind, message, undo }] }))
+      set((s) => ({ toasts: [...s.toasts, { id, kind, message, ...options }] }))
+      // An error names a fix, and five seconds is not long enough to read
+      // one; it stays until dismissed.
+      if (kind === 'error') return
       window.setTimeout(
         () => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-        undo ? UNDO_WINDOW_MS : 5000,
+        options.action ? UNDO_WINDOW_MS : 5000,
       )
+    },
+
+    showProblem: (error, activity) => {
+      const problem = describeProblem(error, activity)
+      const action =
+        problem.fix === 'settings'
+          ? { label: 'Open Settings', run: () => get().openSettings(true) }
+          : problem.fix === 'check_anki'
+            ? { label: 'Check again', run: () => void get().refreshAnki() }
+            : undefined
+      get().toast('error', problem.title, { detail: problem.body, action, link: problem.link })
     },
 
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),

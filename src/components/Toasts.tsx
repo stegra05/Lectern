@@ -1,4 +1,5 @@
 import { useLectern } from '../state/store'
+import { ExternalLink } from './ExternalLink'
 
 /** Removing eight weak cards used to leave eight identical undo toasts
  *  stacked over the card list, each swallowing clicks for 30 seconds. */
@@ -26,7 +27,7 @@ export function Toasts() {
         <div
           key={t.id}
           role={t.kind === 'error' ? 'alert' : 'status'}
-          className={`rise-in pointer-events-auto flex items-center gap-3 rounded-md px-4 py-2.5 text-sm shadow-card ${
+          className={`rise-in pointer-events-auto flex max-w-lg items-center gap-3 rounded-md px-4 py-2.5 text-sm shadow-card ${
             t.kind === 'error'
               ? 'bg-brick text-paper'
               : t.kind === 'success'
@@ -34,16 +35,24 @@ export function Toasts() {
                 : 'bg-desk-raised text-chalk ring-desk-edge ring-1'
           }`}
         >
-          <span>{t.message}</span>
-          {t.undo && (
+          <span className="min-w-0">
+            <span className="block">{t.message}</span>
+            {t.detail && <span className="block text-xs opacity-85">{t.detail}</span>}
+            {t.link && (
+              <ExternalLink href={t.link.url} className="text-xs hover:opacity-80">
+                {t.link.label}
+              </ExternalLink>
+            )}
+          </span>
+          {t.action && (
             <button
               onClick={() => {
-                t.undo?.()
+                t.action?.run()
                 dismissToast(t.id)
               }}
-              className="rounded-sm font-semibold underline underline-offset-2 transition-opacity duration-150 hover:opacity-80"
+              className="shrink-0 rounded-sm font-semibold underline underline-offset-2 transition-opacity duration-150 hover:opacity-80"
             >
-              Undo
+              {t.action.label}
             </button>
           )}
           <button

@@ -723,7 +723,7 @@ describe('syncCards', () => {
     expect(result.created).toBe(1)
     expect(result.failures).toHaveLength(1)
     expect(result.failures[0].uid).toBe('u1')
-    expect(result.failures[0].error).toContain('Failed to reach AnkiConnect')
+    expect(result.failures[0].error.message).toContain('Failed to reach AnkiConnect')
     expect(progress).toEqual([
       { done: 1, total: 2 },
       { done: 2, total: 2 },

@@ -68,17 +68,17 @@ describe('studyGuideToMarkdown', () => {
   const md = studyGuideToMarkdown(map, coverage, cards)
 
   it('titles the guide with the slide set', () => {
-    expect(md.startsWith('# ML Lecture 2 — Study guide')).toBe(true)
+    expect(md.startsWith('# ML Lecture 2: Study guide')).toBe(true)
   })
 
   it('counts only cards that will reach Anki', () => {
     // 'x' is syncExcluded, so Gradient Descent holds 2 cards, not 3.
-    expect(md).toContain('**Gradient Descent** — foundational · pp. 12–13 · 2 cards')
-    expect(md).toContain('**Learning Rate** — intermediate · p. 14 · 1 card')
+    expect(md).toContain('**Gradient Descent**: foundational · pp. 12–13 · 2 cards')
+    expect(md).toContain('**Learning Rate**: intermediate · p. 14 · 1 card')
   })
 
   it('leaves zero counts unsaid', () => {
-    expect(md).toContain('**Momentum** — intermediate · pp. 20–21')
+    expect(md).toContain('**Momentum**: intermediate · pp. 20–21')
     expect(md).not.toContain('0 cards')
   })
 
@@ -89,13 +89,13 @@ describe('studyGuideToMarkdown', () => {
   })
 
   it('closes with the session stats', () => {
-    expect(md).toContain('3 concepts · 2 cards · 67% covered — study guide by Lectern')
+    expect(md).toContain('3 concepts · 2 cards · 67% covered · study guide by Lectern')
   })
 
   it('omits the gap section and coverage stat without coverage data', () => {
     const early = studyGuideToMarkdown(map, null, [])
     expect(early).not.toContain('## Review in the slides directly')
-    expect(early).toContain('3 concepts · 0 cards — study guide by Lectern')
+    expect(early).toContain('3 concepts · 0 cards · study guide by Lectern')
   })
 
   it('omits the gap section when nothing is missing', () => {
@@ -119,12 +119,12 @@ describe('studyGuideToMarkdown', () => {
 
 describe('studyGuideFilename', () => {
   it('names the file after the slide set', () => {
-    expect(studyGuideFilename(map)).toBe('ML Lecture 2 — Study guide.md')
+    expect(studyGuideFilename(map)).toBe('ML Lecture 2 - Study guide.md')
   })
 
   it('strips filesystem-hostile characters', () => {
     expect(studyGuideFilename({ ...map, slideSetName: 'ML: Intro / Part 2?' })).toBe(
-      'ML Intro Part 2 — Study guide.md',
+      'ML Intro Part 2 - Study guide.md',
     )
   })
 

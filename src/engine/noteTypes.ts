@@ -251,7 +251,7 @@ const THEME_TOKENS: Record<NoteTypeTheme, ThemeTokens> = {
 export function noteTypeCss(theme: NoteTypeTheme): string {
   const t = THEME_TOKENS[theme]
   return `${styleMarker(theme)}
-/* Lectern card design — edit freely; edits remove the marker's guarantees:
+/* Lectern card design. Edit freely; edits remove the marker's guarantees:
    once this file no longer carries the exact marker line above, the app
    stops touching this note type. */
 
@@ -290,8 +290,8 @@ export function noteTypeCss(theme: NoteTypeTheme): string {
   --rule: ${t.ruleLight};
   --quote-bg: ${t.quoteBgLight};
   --sheet-shadow: 0 1px 2px rgba(56, 46, 32, 0.08), 0 6px 18px rgba(56, 46, 32, 0.11);
-  /* Every size below is relative to this one, so changing it here — which is
-     what Anki's Fields → Styling editor is for — resizes the whole card. */
+  /* Every size below is relative to this one, so changing it here (which is
+     what Anki's Fields → Styling editor is for) resizes the whole card. */
   font-size: 16px;
   padding: 0.5em 0;
 }

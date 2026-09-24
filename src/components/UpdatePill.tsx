@@ -1,30 +1,52 @@
 import { useEffect, useState } from 'react'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
+import { LINKS } from '../lib/links'
 import { IS_TAURI } from '../lib/platform'
 import { useLectern } from '../state/store'
+import { ExternalLink } from './ExternalLink'
 
-// Checked once per launch, a few seconds in so it never competes with startup.
+// First check a few seconds in, so it never competes with startup.
 const CHECK_DELAY_MS = 5000
+// A check stays fresh this long. The app often stays open for days, and a
+// once-per-launch check never saw a release published while it was running.
+const RECHECK_AFTER_MS = 6 * 60 * 60 * 1000
 
 export function UpdatePill() {
   const [update, setUpdate] = useState<Update | null>(null)
   const [percent, setPercent] = useState<number | null>(null)
-  const toast = useLectern((s) => s.toast)
+  const showProblem = useLectern((s) => s.showProblem)
 
   useEffect(() => {
     if (!IS_TAURI) return
-    const timer = setTimeout(() => {
+    let lastCheck = 0
+    // Once a release is found (or dismissed), this launch has said its piece.
+    let found = false
+    const run = () => {
+      if (found) return
+      lastCheck = Date.now()
       check()
         .then((u) => {
-          if (u) setUpdate(u)
+          if (!u) return
+          found = true
+          setUpdate(u)
         })
         .catch((e) => {
           // Offline or endpoint unreachable is normal; never bother the user.
           console.warn('Update check failed:', e)
         })
-    }, CHECK_DELAY_MS)
-    return () => clearTimeout(timer)
+    }
+    const onFocus = () => {
+      if (lastCheck > 0 && Date.now() - lastCheck > RECHECK_AFTER_MS) run()
+    }
+    const first = setTimeout(run, CHECK_DELAY_MS)
+    const recheck = setInterval(run, RECHECK_AFTER_MS)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearTimeout(first)
+      clearInterval(recheck)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   if (!update) return null
@@ -48,7 +70,7 @@ export function UpdatePill() {
     } catch (e) {
       setUpdate(null)
       setPercent(null)
-      toast('error', `Update failed: ${(e as Error).message}`)
+      showProblem(e, 'updating')
     }
   }
 
@@ -62,7 +84,15 @@ export function UpdatePill() {
     >
       {percent === null ? (
         <>
-          <span className="text-chalk">Version {update.version} is available.</span>
+          <span className="text-chalk">
+            Version {update.version} is available.{' '}
+            <ExternalLink
+              href={LINKS.changelog}
+              className="text-chalk-dim hover:text-chalk text-xs"
+            >
+              What’s new
+            </ExternalLink>
+          </span>
           <button
             onClick={() => void install()}
             className="text-lamp rounded-sm font-semibold underline-offset-2 transition-opacity duration-150 hover:underline"

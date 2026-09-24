@@ -20,7 +20,7 @@ export interface Card {
   rationale?: string
   sourceExcerpt?: string
   qualityScore: number
-  qualityIssues: string[]
+  qualityIssues: QualityIssue[]
   /** The user asked for this card, but the document does not contain it
    *  (follow-up requests only). Rendered as an "outside source" label. */
   outsideSource?: boolean
@@ -145,14 +145,43 @@ export interface SizingPlan {
 // Quality gate
 // ---------------------------------------------------------------------------
 
+/** What the quality gate can say about a card. The first group rejects it;
+ *  the rest only flag it for a second look. */
+export type QualityIssue =
+  | 'missing_prompt_text'
+  | 'missing_answer_text'
+  | 'missing_source_pages'
+  | 'missing_rationale'
+  | 'missing_source_excerpt'
+  | 'page_out_of_range'
+  | 'cloze_without_deletion'
+  | 'cloze_markup_in_basic'
+  | 'cloze_unterminated'
+  | 'too_many_cloze_deletions'
+  | 'markdown_not_html'
+  | 'dollar_math_delimiters'
+  | 'answer_repeats_prompt'
+  | 'outside_source'
+  | 'missing_concept_ids'
+  | 'long_front'
+  | 'long_answer'
+  | 'broad_grounding'
+  | 'yes_no_question'
+  | 'points_at_source'
+  | 'excerpt_repeats_answer'
+  | 'excerpt_not_on_cited_page'
+
+/** Why a submitted card did not join the deck. */
+export type RejectionReason = QualityIssue | 'invalid_structure' | 'budget_exhausted'
+
 export interface GateVerdict {
   pass: boolean
   /** Display score: 100 minus a fixed penalty per issue. */
   score: number
-  /** Hard requirements not met — any entry rejects the card. */
-  failures: string[]
+  /** Hard requirements not met; any entry rejects the card. */
+  failures: QualityIssue[]
   /** All flags (failures + soft issues), for card annotation. */
-  issues: string[]
+  issues: QualityIssue[]
 }
 
 // ---------------------------------------------------------------------------
@@ -161,18 +190,34 @@ export interface GateVerdict {
 
 export type PipelinePhase = 'uploading' | 'mapping' | 'generating' | 'reflecting' | 'complete'
 
+/** A wait the Gemini client is about to take before trying a request again. */
+export interface RetryNotice {
+  /** HTTP status that caused it; 0 for a network-level failure. */
+  status: number
+  /** 1-based: the wait before attempt `attempt + 1`. */
+  attempt: number
+  maxAttempts: number
+  waitMs: number
+}
+
 export type PipelineEvent =
   | { type: 'phase'; phase: PipelinePhase }
-  | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string }
+  | {
+      type: 'log'
+      level: 'info' | 'warn' | 'error'
+      message: string
+      /** The model's own words, quoted under the message. */
+      quote?: string
+    }
+  | ({ type: 'waiting' } & RetryNotice)
   | { type: 'concept_map'; conceptMap: ConceptMap; sizing: SizingPlan }
   | { type: 'card_accepted'; card: Card }
-  | { type: 'card_rejected'; front: string; reasons: string[] }
-  | { type: 'cards_replaced'; cards: Card[]; reflectionNote?: string }
+  | { type: 'card_rejected'; front: string; reasons: RejectionReason[] }
+  | { type: 'cards_replaced'; cards: Card[] }
   | { type: 'coverage'; coverage: CoverageData }
   | { type: 'progress'; produced: number; cap: number; round: number }
   | { type: 'usage'; inputTokens: number; outputTokens: number; costUsd: number }
   | { type: 'done'; reason: string; summary: string }
-  | { type: 'error'; message: string; fatal: boolean }
 
 export type PipelineSink = (event: PipelineEvent) => void
 
@@ -215,7 +260,9 @@ export interface SyncPreview {
 export interface SyncFailure {
   uid: string
   front: string
-  error: string
+  /** Kept as the error itself, so the UI can tell an Anki that stopped
+   *  answering from one that refused this card. */
+  error: Error
 }
 
 /** A card the send deliberately left alone — not an error. */

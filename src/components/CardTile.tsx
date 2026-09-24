@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Card } from '../engine/types'
 import { confirmDiscard } from '../lib/confirm'
+import { describeReasons } from '../lib/qualityCopy'
 import { plainCardText, renderCardHtml } from '../lib/render'
 import { useLectern } from '../state/store'
 
@@ -89,12 +90,14 @@ export const CardTile = memo(function CardTile({
                       key={p}
                       onClick={(e) => {
                         e.stopPropagation()
-                        if (editable) setSelectedUid(card.uid)
+                        // Selected even mid-stream: the slide panel shows the
+                        // selected card's quote next to the slide.
+                        setSelectedUid(card.uid)
                         peekSlide(p)
                       }}
                       className="hover:text-lamp-ink rounded-sm underline-offset-2 transition-colors duration-150 hover:underline"
-                      aria-label={`View slide ${p}`}
-                      title={`View slide ${p}`}
+                      aria-label={`View slide ${p} and the quote this card is based on`}
+                      title={`View slide ${p} and the quote`}
                     >
                       {i > 0 && ', '}
                       {p}
@@ -105,7 +108,7 @@ export const CardTile = memo(function CardTile({
               {card.outsideSource && (
                 <span
                   className="bg-brick/10 text-brick rounded-sm px-1 py-px"
-                  title="You asked for this card, but it is not in the uploaded document — check it before sending."
+                  title="You asked for this card, but it is not in the uploaded document. Check it before sending."
                 >
                   outside source
                 </span>
@@ -113,7 +116,7 @@ export const CardTile = memo(function CardTile({
               {needsAttention && (
                 <span
                   className="bg-lamp/20 text-lamp-ink rounded-sm px-1 py-px"
-                  title={`${card.qualityIssues.map((i) => i.replaceAll('_', ' ')).join(', ')} — worth a read before sending`}
+                  title={`Worth a read before sending: ${describeReasons(card.qualityIssues)}.`}
                 >
                   {card.qualityIssues.includes('excerpt_not_on_cited_page')
                     ? 'check the source'
@@ -123,7 +126,7 @@ export const CardTile = memo(function CardTile({
               {card.fromAnki && !card.edited && (
                 <span
                   className="bg-ink/8 rounded-sm px-1 py-px"
-                  title="Already in this deck from an earlier run. This session generated around it — edit it to send an update."
+                  title="Already in this deck from an earlier run. This session generated around it. Edit it to send an update."
                 >
                   already in the deck
                 </span>
@@ -146,20 +149,10 @@ export const CardTile = memo(function CardTile({
                 className="font-data text-ink-soft hover:text-ink shrink-0 text-2xs underline underline-offset-2 transition-colors duration-150"
                 title="Outside-source cards stay out of the Anki send until you include them"
               >
-                {card.syncExcluded ? 'not sent to Anki — include' : 'sent to Anki — exclude'}
+                {card.syncExcluded ? 'left out of the send · include' : 'in the send · leave out'}
               </button>
             )}
           </footer>
-          {card.sourceExcerpt && (
-            <details className="mt-2" onClick={(e) => e.stopPropagation()}>
-              <summary className="font-data text-ink-soft hover:text-ink cursor-pointer text-2xs transition-colors duration-150">
-                Source excerpt
-              </summary>
-              <blockquote className="font-card text-ink-soft border-lamp-deep bg-paper-shade mt-1.5 rounded-r-sm border-l-2 px-3 py-2 text-sm italic">
-                {card.sourceExcerpt}
-              </blockquote>
-            </details>
-          )}
           {editable && (
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
               <button onClick={() => setEditingUid(card.uid)} className="btn-paper px-2 py-1">

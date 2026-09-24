@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { count } from '../engine/plural'
 import { useLectern } from '../state/store'
 
 /** True when the event originates in a place that owns its own keystrokes. */
@@ -26,6 +27,15 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   const coverage = useLectern((s) => s.coverage)
   const pageFilter = useLectern((s) => s.pageFilter)
   const setPageFilter = useLectern((s) => s.setPageFilter)
+  // The quote the selected card rests on, when it cites this page. It used to
+  // sit behind a "Source excerpt" toggle on every card; here it is read next
+  // to the slide it claims to come from.
+  const excerpt = useLectern((s) => {
+    const card = s.cards.find((c) => c.uid === s.selectedUid)
+    return card?.sourceExcerpt && page !== null && card.sourcePages.includes(page)
+      ? card.sourceExcerpt
+      : null
+  })
 
   const pageCount = pdfInfo?.pageCount ?? 0
 
@@ -64,7 +74,7 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
           Slide {page} / {pageCount}
         </span>
         <span className="font-data text-chalk-dim text-2xs">
-          · {cardsHere > 0 ? `${cardsHere} card${cardsHere === 1 ? '' : 's'}` : 'no cards yet'}
+          · {cardsHere > 0 ? count(cardsHere, 'card') : 'no cards yet'}
         </span>
         <div className="flex-1" />
         {/* aria-disabled rather than disabled: clicking to the first slide
@@ -107,6 +117,15 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
           )}
         </div>
 
+        {excerpt && (
+          <figure className="mt-3">
+            <figcaption className="eyebrow">The card quotes</figcaption>
+            <blockquote className="log-quote border-lamp-deep mt-1 border-l-2 pl-2">
+              {excerpt}
+            </blockquote>
+          </figure>
+        )}
+
         {interactive && (
           <button
             onClick={() => setPageFilter(filteredHere ? null : page)}
@@ -115,7 +134,7 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
               filteredHere ? 'btn-secondary border-lamp/60 text-lamp' : 'btn-secondary'
             }`}
           >
-            {filteredHere ? 'Showing only this page — show all' : 'Show only cards from this page'}
+            {filteredHere ? 'Showing only this page · show all' : 'Show only cards from this page'}
           </button>
         )}
       </div>

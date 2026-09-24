@@ -209,12 +209,17 @@ describe('runPipeline (scripted)', () => {
     )
     expect(updated?.uid).toBe(originalAccepted?.card.uid)
 
-    // The review outcome reaches the UI as one cards_replaced with the note.
+    // The review outcome reaches the UI as one cards_replaced, and the
+    // model's note is quoted under the quality-pass line.
     const replaced = events.find(
       (e): e is Extract<PipelineEvent, { type: 'cards_replaced' }> => e.type === 'cards_replaced',
     )
     expect(replaced?.cards).toHaveLength(4)
-    expect(replaced?.reflectionNote).toBe('Deck is sound.')
+    const reviewLine = events.find(
+      (e): e is Extract<PipelineEvent, { type: 'log' }> =>
+        e.type === 'log' && e.message.startsWith('Quality pass'),
+    )
+    expect(reviewLine?.quote).toBe('Deck is sound.')
 
     // Wire protocol: four interactions with the pinned API revision.
     expect(captured).toHaveLength(4)
@@ -422,7 +427,7 @@ describe('runPipeline (extend run)', () => {
     const done = events.find(
       (e): e is Extract<PipelineEvent, { type: 'done' }> => e.type === 'done',
     )
-    expect(done?.summary).toContain('1 new cards (3 in the deck)')
+    expect(done?.summary).toContain('1 new card (3 in the deck)')
   })
 })
 
@@ -503,7 +508,7 @@ describe('runPipeline (extend run, already covered)', () => {
     // The early finish was refused, with a reason the model can act on.
     const refusal = JSON.stringify(captured[2].body.input)
     expect(refusal).toContain('your budget is for depth')
-    expect(refusal).toContain('added 0 of 1 card(s)')
+    expect(refusal).toContain('added 0 of 1 card')
 
     // And the run ends having actually added something.
     expect(outcome.cards).toHaveLength(3)

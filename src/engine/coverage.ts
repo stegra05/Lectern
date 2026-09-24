@@ -341,7 +341,7 @@ export function buildGenerationGapText(
   const mix = summarizeQuestionMix(cards)
   if (mix !== null) {
     lines.push(
-      `  - Question mix so far: ${mix}. A deck that only asks for definitions tests recall, not understanding — weight the next batch toward why/how/compare/apply.`,
+      `  - Question mix so far: ${mix}. A deck that only asks for definitions tests recall, not understanding; weight the next batch toward why/how/compare/apply.`,
     )
   }
 
@@ -397,7 +397,7 @@ export function buildDepthGapText(catalog: CoverageCatalog, coverage: CoverageDa
   )
 
   const lines = [
-    '- DEPTH LEDGER (breadth is already complete — add depth, not repeats):',
+    '- DEPTH LEDGER (breadth is already complete; add depth, not repeats):',
     `  - Cards in the deck cover ${coverage.coveredPages.length}/${catalog.pageCount} pages.`,
   ]
 

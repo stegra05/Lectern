@@ -162,8 +162,7 @@ export const ADD_CARDS_TOOL = {
 export const REMOVE_CARDS_TOOL = {
   type: 'function' as const,
   name: 'remove_cards',
-  description:
-    'Delete cards from the deck by card_id — for redundant, ungrounded, or low-value cards.',
+  description: 'Delete cards from the deck by card_id: redundant, ungrounded, or low-value cards.',
   parameters: {
     type: 'object',
     properties: {

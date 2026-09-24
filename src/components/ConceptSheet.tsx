@@ -213,7 +213,7 @@ function DifficultyMeter({ difficulty }: { difficulty: Difficulty }) {
     <span
       role="img"
       className="flex shrink-0 items-end gap-px"
-      title={`${difficulty} — ${filled} of 3`}
+      title={`${difficulty}, ${filled} of 3`}
       aria-label={`Difficulty: ${difficulty}`}
     >
       {[1, 2, 3].map((step) => (
@@ -255,14 +255,14 @@ function ConceptRow({
             state === 'covered'
               ? 'Covered by a card'
               : state === 'inferred'
-                ? 'Likely covered — cards exist on its pages'
+                ? 'Probably covered: its pages have cards'
                 : 'No card yet'
           }
           title={
             state === 'covered'
               ? 'Covered by a card'
               : state === 'inferred'
-                ? 'Likely covered — cards exist on its pages'
+                ? 'Probably covered: its pages have cards'
                 : 'No card yet'
           }
           className={`size-1.5 shrink-0 self-center rounded-full ${

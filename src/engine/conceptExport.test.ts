@@ -67,16 +67,16 @@ describe('conceptMapToMarkdown', () => {
   })
 
   it('collapses consecutive pages into runs', () => {
-    expect(md).toContain('**Gradient Descent** — foundational · pp. 12–14, 18')
+    expect(md).toContain('**Gradient Descent**: foundational · pp. 12–14, 18')
   })
 
   it('omits the page suffix when a concept has no pages', () => {
-    expect(md).toContain('**Linear Algebra** — foundational\n')
+    expect(md).toContain('**Linear Algebra**: foundational\n')
   })
 
   it('nests relations under the concept, phrased from its side', () => {
     expect(md).toContain('  - depends on → Learning Rate')
-    expect(md).toContain('  - ← depends on — Gradient Descent')
+    expect(md).toContain('  - ← depends on · Gradient Descent')
   })
 
   it('drops relations pointing outside the map', () => {
@@ -105,7 +105,7 @@ describe('conceptMapToMarkdown', () => {
   })
 
   it('closes with a summary line', () => {
-    expect(md).toContain('3 concepts · 3 relations · 40 pages — mapped by Lectern')
+    expect(md).toContain('3 concepts · 3 relations · 40 pages · mapped by Lectern')
   })
 
   it('counts singulars properly in the summary line', () => {
@@ -115,7 +115,7 @@ describe('conceptMapToMarkdown', () => {
       relations: [map.relations[0]],
       pageCount: 1,
     })
-    expect(one).toContain('1 concept · 1 relation · 1 page — mapped by Lectern')
+    expect(one).toContain('1 concept · 1 relation · 1 page · mapped by Lectern')
   })
 })
 

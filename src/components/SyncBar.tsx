@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import { isSyncable } from '../engine/anki'
+import { count } from '../engine/plural'
 import { ankiCardCount } from '../engine/quality'
+import { LINKS } from '../lib/links'
 import { useLectern } from '../state/store'
+import { ExternalLink } from './ExternalLink'
 
 /** Settling time before re-asking Anki what the send would do, so removing a
  *  run of cards costs one round trip rather than one per keystroke. */
@@ -18,6 +21,7 @@ export function SyncBar() {
   const syncResult = useLectern((s) => s.syncResult)
   const previewSyncNow = useLectern((s) => s.previewSyncNow)
   const syncNow = useLectern((s) => s.syncNow)
+  const openDeckInAnki = useLectern((s) => s.openDeckInAnki)
   const editingUid = useLectern((s) => s.editingUid)
 
   const syncable = cards.filter(isSyncable)
@@ -69,27 +73,28 @@ export function SyncBar() {
 
   if (cards.length === 0) return null
 
-  // Only the parts the headline "N cards → deck" does not already say: a
-  // straight send of N brand-new cards needs no second line at all.
+  // The second line carries only counts that change what the send does,
+  // and only when there is one: a straight send of brand-new cards needs
+  // none. Why the numbers are what they are sits in the tooltip.
   const detail: string[] = []
   if (syncPreview && (syncPreview.toUpdate > 0 || syncPreview.duplicates > 0)) {
     detail.push(`${syncPreview.toCreate} new`)
     if (syncPreview.toUpdate > 0) detail.push(`${syncPreview.toUpdate} updated`)
     if (syncPreview.duplicates > 0) detail.push(`${syncPreview.duplicates} already in Anki`)
   }
-  // A cloze note with three deletions is three cards to study. The deck size
-  // the user chose counts notes, so the difference is worth saying once.
+  if (excluded > 0) detail.push(`${excluded} left out`)
+
+  const why: string[] = []
+  // A cloze note with three deletions is three cards to study, while the
+  // deck size the user chose counts notes.
   const ankiCards = syncable.reduce((total, card) => total + ankiCardCount(card), 0)
   if (ankiCards > syncable.length) {
-    detail.push(`${ankiCards} cards to study — clozes make one per deletion`)
+    why.push(`${ankiCards} cards to study, since a cloze makes one per blank.`)
   }
-  if (inherited > 0) detail.push(`${inherited} kept from the deck, unchanged`)
-  if (excluded > 0) {
-    detail.push(
-      `${excluded} outside-source card${excluded === 1 ? '' : 's'} ` +
-        `stay${excluded === 1 ? 's' : ''} behind`,
-    )
+  if (inherited > 0) {
+    why.push(`${count(inherited, 'card')} already in the deck stay as they are.`)
   }
+  if (excluded > 0) why.push('Cards not from the lecture stay out until you include them.')
 
   return (
     <div className="border-desk-edge/60 bg-desk/95 absolute inset-x-0 bottom-0 border-t px-6 py-3 backdrop-blur">
@@ -98,7 +103,10 @@ export function SyncBar() {
           <>
             <p className="text-chalk-dim flex-1 text-sm">
               Anki isn&apos;t reachable. Open Anki with the AnkiConnect add-on installed, then try
-              again.
+              again.{' '}
+              <ExternalLink href={LINKS.ankiConnect} className="hover:text-chalk">
+                Get AnkiConnect
+              </ExternalLink>
             </p>
             <button onClick={() => void refreshAnki()} className="btn-secondary px-3 py-2">
               Check again
@@ -129,7 +137,7 @@ export function SyncBar() {
         ) : syncState === 'done' && syncResult ? (
           <div aria-live="polite" className="flex flex-1 items-center gap-4">
             <p className="text-chalk flex-1 text-sm">
-              Sent {syncResult.created + syncResult.updated} cards to “{deckName}”.
+              Sent {count(syncResult.created + syncResult.updated, 'card')} to “{deckName}”.
               {syncResult.duplicates.length > 0 && (
                 <span className="text-chalk-dim">
                   {' '}
@@ -139,23 +147,30 @@ export function SyncBar() {
               {syncResult.failures.length > 0 && (
                 <span className="text-brick-soft">
                   {' '}
-                  {syncResult.failures.length} failed — see Activity.
+                  {syncResult.failures.length} failed. See Activity.
                 </span>
               )}
             </p>
-            <button onClick={() => void syncNow()} className="btn-secondary px-3 py-2">
+            {/* Where the cards went is the natural next step; Send again only
+                matters after an edit, which resets this bar anyway. */}
+            <button onClick={() => void openDeckInAnki()} className="btn-secondary px-3 py-2">
+              Open in Anki
+            </button>
+            <button onClick={() => void syncNow()} className="btn-ghost px-3 py-2">
               Send again
             </button>
           </div>
         ) : (
           <>
             <div className="min-w-0 flex-1">
-              <p className="text-chalk truncate text-sm">
-                {syncable.length} {syncable.length === 1 ? 'card' : 'cards'} →{' '}
-                <span className="font-medium">{deckName}</span>
+              <p
+                className="text-chalk truncate text-sm"
+                title={why.length > 0 ? why.join(' ') : undefined}
+              >
+                {count(syncable.length, 'card')} → <span className="font-medium">{deckName}</span>
               </p>
               {detail.length > 0 && (
-                <p className="font-data text-chalk-dim truncate text-xs" title={detail.join(' · ')}>
+                <p className="font-data text-chalk-dim truncate text-xs" title={why.join(' ')}>
                   {detail.join(' · ')}
                 </p>
               )}

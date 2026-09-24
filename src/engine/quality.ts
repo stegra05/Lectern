@@ -11,7 +11,7 @@
  * All functions are pure.
  */
 
-import type { Card, GateVerdict, NoteKind } from './types'
+import type { Card, GateVerdict, NoteKind, QualityIssue } from './types'
 
 // ---------------------------------------------------------------------------
 // Markup stripping (_strip_markup)
@@ -304,7 +304,7 @@ export function evaluateCard(card: Card, opts: EvaluateOptions = {}): GateVerdic
   const clozeBasis = `${fields['Text'] ?? ''}${fields['Front'] ?? ''}`
   const allMarkup = Object.values(fields).join('\n')
 
-  const failures: string[] = []
+  const failures: QualityIssue[] = []
   if (!front && !text) failures.push('missing_prompt_text')
   if (!answerText) failures.push('missing_answer_text')
   // A card declared outside the source has no pages or slide excerpt to
@@ -359,7 +359,7 @@ export function evaluateCard(card: Card, opts: EvaluateOptions = {}): GateVerdic
     failures.push('answer_repeats_prompt')
   }
 
-  const soft: string[] = []
+  const soft: QualityIssue[] = []
   if (card.outsideSource) soft.push('outside_source')
   if (
     normalizeStringList(card.conceptIds).length === 0 &&

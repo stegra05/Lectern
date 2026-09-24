@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useLectern } from '../state/store'
 import { MODEL_CHOICES } from '../engine/config'
 import { computeSizingPlan } from '../engine/pacing'
+import { count } from '../engine/plural'
 import { MAX_FOCUS_PROMPT_LEN } from '../engine/prompts'
+import { SetupChecklist } from './SetupChecklist'
 
 /**
  * The deck-size slider is exponential: card-by-card precision for small decks,
@@ -53,6 +55,8 @@ export function HomeView() {
   const extendDeck = useLectern((s) => s.extendDeck)
   const setExtendDeck = useLectern((s) => s.setExtendDeck)
   const ankiStatus = useLectern((s) => s.ankiStatus)
+  // Open from the start when a focus is already typed (Replace keeps it).
+  const [focusOpen, setFocusOpen] = useState(() => focusPrompt !== '')
 
   const missingDeck = !deckName.trim()
   const cannotGenerate = !hasApiKey || missingDeck
@@ -95,29 +99,7 @@ export function HomeView() {
             </button>
             <p className="eyebrow mt-10 text-center">PDF → concept map → flashcards → Anki</p>
 
-            {/* The one prerequisite, said before the first PDF rather than
-                after it: without a key the Generate button is dead, and a red
-                dot in the corner is not an explanation. */}
-            {!hasApiKey && (
-              <div className="border-desk-edge/60 bg-desk-raised/50 rise-in mx-auto mt-8 flex max-w-sm items-center gap-3 rounded-md border px-3 py-2.5">
-                <span
-                  aria-hidden
-                  className="bg-brick-soft mt-1 size-1.5 shrink-0 self-start rounded-full"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-chalk text-xs">Lectern needs a Gemini API key.</p>
-                  <p className="text-chalk-dim mt-0.5 text-2xs">
-                    Free from Google AI Studio · kept in your keychain
-                  </p>
-                </div>
-                <button
-                  onClick={() => openSettings(true)}
-                  className="btn-secondary shrink-0 px-2.5 py-1.5"
-                >
-                  Add key
-                </button>
-              </div>
-            )}
+            <SetupChecklist />
           </div>
         ) : (
           <div className="space-y-6">
@@ -132,7 +114,7 @@ export function HomeView() {
                 <p className="text-chalk truncate text-base font-medium">{fileName}</p>
                 {pdfInfo && (
                   <p className="font-data text-chalk-dim mt-0.5 text-xs">
-                    {pdfInfo.pageCount} pages · {Math.round(pdfInfo.textChars / 1000)}k chars
+                    {count(pdfInfo.pageCount, 'page')}
                   </p>
                 )}
               </div>
@@ -171,8 +153,8 @@ export function HomeView() {
                 <p className="text-chalk-dim mt-1.5 text-2xs">
                   {deckState === 'new' ? (
                     <>
-                      New deck — Lectern creates “<span className="font-data">{deckName}</span>”
-                      when you send.
+                      New deck: Lectern creates “<span className="font-data">{deckName}</span>” when
+                      you send.
                     </>
                   ) : deckState === 'empty' ? (
                     'This deck exists and holds no cards yet.'
@@ -239,30 +221,40 @@ export function HomeView() {
               )}
             </div>
 
-            {/* Focus */}
-            <label className="block">
-              <span className="flex items-baseline justify-between">
-                <span className="eyebrow">Focus · optional</span>
-                {/* The counter stays out of the way until the field fills up. */}
-                {focusPrompt.length > MAX_FOCUS_PROMPT_LEN * 0.6 && (
-                  <span
-                    className={`font-data text-xs ${
-                      focusPrompt.length >= MAX_FOCUS_PROMPT_LEN ? 'text-lamp' : 'text-chalk-dim'
-                    }`}
-                  >
-                    {focusPrompt.length} / {MAX_FOCUS_PROMPT_LEN}
-                  </span>
-                )}
-              </span>
-              <textarea
-                value={focusPrompt}
-                onChange={(e) => setFocusPrompt(e.target.value)}
-                rows={3}
-                maxLength={MAX_FOCUS_PROMPT_LEN}
-                placeholder={'e.g. "definitions and formulas for the exam — skip the case studies"'}
-                className="field mt-1.5 resize-y"
-              />
-            </label>
+            {/* Focus: optional, so it waits behind a link until wanted. */}
+            {!focusOpen ? (
+              <button
+                onClick={() => setFocusOpen(true)}
+                className="text-chalk-dim hover:text-chalk rounded-sm text-xs underline-offset-2 transition-colors duration-150 hover:underline"
+              >
+                + Add a focus, e.g. only what’s on the exam
+              </button>
+            ) : (
+              <label className="block">
+                <span className="flex items-baseline justify-between">
+                  <span className="eyebrow">Focus · optional</span>
+                  {/* The counter stays out of the way until the field fills up. */}
+                  {focusPrompt.length > MAX_FOCUS_PROMPT_LEN * 0.6 && (
+                    <span
+                      className={`font-data text-xs ${
+                        focusPrompt.length >= MAX_FOCUS_PROMPT_LEN ? 'text-lamp' : 'text-chalk-dim'
+                      }`}
+                    >
+                      {focusPrompt.length} / {MAX_FOCUS_PROMPT_LEN}
+                    </span>
+                  )}
+                </span>
+                <textarea
+                  value={focusPrompt}
+                  onChange={(e) => setFocusPrompt(e.target.value)}
+                  rows={3}
+                  autoFocus={focusPrompt === ''}
+                  maxLength={MAX_FOCUS_PROMPT_LEN}
+                  placeholder={'e.g. "definitions and formulas for the exam, not the case studies"'}
+                  className="field mt-1.5 resize-y"
+                />
+              </label>
+            )}
 
             {/* Generate */}
             <div className="flex items-center justify-between pt-2">
@@ -279,8 +271,7 @@ export function HomeView() {
                 }
               >
                 {settings?.model &&
-                  (MODEL_CHOICES.find((m) => m.id === settings.model)?.label.split(' — ')[0] ??
-                    settings.model)}
+                  (MODEL_CHOICES.find((m) => m.id === settings.model)?.label ?? settings.model)}
                 {estimate &&
                   ` · ~${formatTokens(estimate.inputTokens + estimate.outputTokens)} tokens · ~$${estimate.costUsd.toFixed(2)}`}
               </p>

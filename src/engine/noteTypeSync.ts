@@ -148,7 +148,7 @@ export interface MigrationResult {
   migrated: number
   /** Already on a Lectern note type, or an unrecognized field shape. */
   skipped: number
-  failures: Array<{ noteId: number; error: string }>
+  failures: Array<{ noteId: number; error: Error }>
 }
 
 const BACK_EXTRA_FIELD_NAMES = new Set(['back extra', 'extra'])
@@ -275,7 +275,7 @@ export async function migrateNotesToLectern(
     } catch (err) {
       result.failures.push({
         noteId,
-        error: err instanceof Error ? err.message : String(err),
+        error: err instanceof Error ? err : new Error(String(err)),
       })
     }
   }

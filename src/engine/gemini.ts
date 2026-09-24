@@ -18,6 +18,7 @@ import {
   UPLOAD_MAX_RETRIES,
   type ThinkingLevel,
 } from './config'
+import type { RetryNotice } from './types'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -78,12 +79,46 @@ export interface UploadedFile {
   mimeType: string
 }
 
+/**
+ * What went wrong, in terms the UI can act on. The engine only classifies;
+ * the words the student reads live in src/lib/problems.ts.
+ */
+export type GeminiErrorKind =
+  /** 401/403, or a 400 that names the key: fix it in Settings. */
+  | 'key_rejected'
+  /** A per-day quota: waiting will not help today. */
+  | 'quota_daily'
+  /** Per-minute rate limiting that outlasted every retry. */
+  | 'rate_limited'
+  /** A spending cap or billing problem on the key's project. */
+  | 'spending_cap'
+  /** 5xx that outlasted every retry. */
+  | 'server'
+  /** The connection dropped and kept dropping. */
+  | 'network'
+  /** Gemini answered, but not in a shape Lectern can use. */
+  | 'bad_response'
+  /** Gemini could not process the uploaded PDF. */
+  | 'pdf_rejected'
+  /** Gemini took too long to process the uploaded PDF. */
+  | 'pdf_timeout'
+  /** Any other refusal; the message carries Gemini's own words. */
+  | 'request_rejected'
+
+/** Failures that can clear up by themselves, and so are worth a retry. */
+const TRANSIENT_KINDS = new Set<GeminiErrorKind>([
+  'rate_limited',
+  'server',
+  'network',
+  'bad_response',
+  'pdf_timeout',
+])
+
 export class GeminiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    /** A short, user-presentable explanation. */
-    public readonly userMessage: string,
+    public readonly kind: GeminiErrorKind,
   ) {
     super(message)
     this.name = 'GeminiError'
@@ -93,18 +128,6 @@ export class GeminiError extends Error {
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
-
-/** A wait the client is about to take before trying a request again. */
-export interface RetryNotice {
-  /** HTTP status that caused it; 0 for a network-level failure. */
-  status: number
-  /** 1-based: the wait before attempt `attempt + 1`. */
-  attempt: number
-  maxAttempts: number
-  waitMs: number
-  /** Ready to show, e.g. "Gemini rate limit — waiting 32s (retry 2 of 5)." */
-  message: string
-}
 
 export type RetryListener = (notice: RetryNotice) => void
 
@@ -156,17 +179,20 @@ export class GeminiClient {
       } catch (e) {
         lastError = e
         if (signal?.aborted || isAbortError(e)) throw e
-        // Client errors other than rate limiting (e.g. a rejected API key)
-        // will not fix themselves — surface them instead of retrying.
-        if (e instanceof GeminiError && e.status >= 400 && e.status < 500 && e.status !== 429) {
-          throw e
-        }
+        // A rejected key, a spent quota or a refused PDF will not fix
+        // itself; surface it instead of retrying.
+        if (e instanceof GeminiError && !TRANSIENT_KINDS.has(e.kind)) throw e
         await sleep(RETRY_BASE_DELAY_MS * (attempt + 1), signal)
       }
     }
-    throw lastError instanceof Error
+    // A fetch that never got an answer rejects with a bare TypeError.
+    throw lastError instanceof GeminiError
       ? lastError
-      : new GeminiError('upload failed', 0, 'Uploading the PDF to Gemini failed.')
+      : new GeminiError(
+          lastError instanceof Error ? lastError.message : 'upload failed',
+          0,
+          'network',
+        )
   }
 
   private async uploadPdfOnce(
@@ -191,11 +217,7 @@ export class GeminiClient {
     if (!startRes.ok) throw await toGeminiError(startRes)
     const uploadUrl = startRes.headers.get('x-goog-upload-url')
     if (!uploadUrl) {
-      throw new GeminiError(
-        'missing x-goog-upload-url header',
-        startRes.status,
-        'Gemini did not accept the upload request.',
-      )
+      throw new GeminiError('missing x-goog-upload-url header', startRes.status, 'bad_response')
     }
 
     // Step 2: send the bytes and finalize.
@@ -215,11 +237,7 @@ export class GeminiClient {
     }
     const file = uploaded.file
     if (!file?.uri || !file.name) {
-      throw new GeminiError(
-        'upload response missing file uri',
-        uploadRes.status,
-        'Gemini returned an unexpected upload response.',
-      )
+      throw new GeminiError('upload response missing file uri', uploadRes.status, 'bad_response')
     }
 
     // Step 3: poll until the file is processed.
@@ -227,11 +245,7 @@ export class GeminiClient {
     let state = file.state ?? 'PROCESSING'
     while (state === 'PROCESSING') {
       if (Date.now() > deadline) {
-        throw new GeminiError(
-          'file processing timeout',
-          0,
-          'Gemini took too long to process the PDF. Try again.',
-        )
+        throw new GeminiError('file processing timeout', 0, 'pdf_timeout')
       }
       await sleep(1500, signal)
       const pollRes = await this.fetchFn(`${this.baseUrl}/v1beta/${file.name}`, {
@@ -243,11 +257,7 @@ export class GeminiClient {
       state = polled.state ?? 'ACTIVE'
     }
     if (state === 'FAILED') {
-      throw new GeminiError(
-        'file processing failed',
-        0,
-        'Gemini could not process this PDF. It may be corrupted or unsupported.',
-      )
+      throw new GeminiError('file processing failed', 0, 'pdf_rejected')
     }
     return {
       name: file.name,
@@ -284,11 +294,7 @@ export class GeminiClient {
         // Network-level failure (offline, DNS, connection reset) — retried
         // like a 5xx so a blip mid-generation does not kill the whole run.
         if (signal?.aborted || isAbortError(e)) throw e
-        lastError = new GeminiError(
-          e instanceof Error ? e.message : String(e),
-          0,
-          'The connection to Gemini dropped. Lectern will retry.',
-        )
+        lastError = new GeminiError(e instanceof Error ? e.message : String(e), 0, 'network')
         if (attempt === RATE_LIMIT_MAX_RETRIES) throw lastError
         this.announceRetry(0, attempt, backoff)
         await sleep(backoff, signal)
@@ -297,13 +303,10 @@ export class GeminiClient {
       if (res.ok) return res.json()
 
       const error = await toGeminiError(res)
-      const retryable = res.status === 429 || res.status >= 500
-      if (!retryable) throw error
-      if (attempt === RATE_LIMIT_MAX_RETRIES) {
-        // Out of retries. "Lectern will retry automatically" was true a
-        // moment ago and is a lie now — say what actually happened.
-        throw new GeminiError(error.message, error.status, exhaustedMessage(error))
-      }
+      // A daily quota or a spending cap will not clear in the next few
+      // minutes; retrying only made the student wait for the same answer.
+      if (!TRANSIENT_KINDS.has(error.kind)) throw error
+      if (attempt === RATE_LIMIT_MAX_RETRIES) throw error
       lastError = error
 
       const retryAfterHeader = res.headers.get('retry-after')
@@ -314,59 +317,17 @@ export class GeminiClient {
       this.announceRetry(res.status, attempt, waitMs)
       await sleep(waitMs, signal)
     }
-    throw lastError ?? new GeminiError('request failed', 0, 'The Gemini request failed.')
+    throw lastError ?? new GeminiError('request failed', 0, 'network')
   }
 
   private announceRetry(status: number, attempt: number, waitMs: number): void {
-    if (!this.onRetry) return
-    const wait = formatWait(waitMs)
-    const nth = `retry ${attempt + 1} of ${RATE_LIMIT_MAX_RETRIES}`
-    const reason =
-      status === 429
-        ? 'Gemini rate limit reached'
-        : status === 0
-          ? 'Connection to Gemini dropped'
-          : `Gemini returned a server error (${status})`
-    this.onRetry({
-      status,
-      attempt: attempt + 1,
-      maxAttempts: RATE_LIMIT_MAX_RETRIES,
-      waitMs,
-      message: `${reason} — waiting ${wait} (${nth}).`,
-    })
+    this.onRetry?.({ status, attempt: attempt + 1, maxAttempts: RATE_LIMIT_MAX_RETRIES, waitMs })
   }
-}
-
-const formatWait = (ms: number): string => {
-  const seconds = Math.max(1, Math.round(ms / 1000))
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
-  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`
 }
 
 /** Quota errors name their window; a daily one will not clear by waiting. */
 const isDailyQuota = (message: string): boolean =>
   /per\s*day|perday|daily/i.test(message) && /quota|limit/i.test(message)
-
-function exhaustedMessage(error: GeminiError): string {
-  if (error.status !== 429) {
-    return `Gemini kept failing (${RATE_LIMIT_MAX_RETRIES} retries): ${error.userMessage}`
-  }
-  if (isDailyQuota(error.message)) {
-    return (
-      'Your Gemini API key has hit its daily quota, so waiting will not help today. ' +
-      'Check the limits for your key at aistudio.google.com, or continue tomorrow. ' +
-      'Cards generated so far are kept.'
-    )
-  }
-  return (
-    `Gemini kept rate-limiting this request through ${RATE_LIMIT_MAX_RETRIES} retries. ` +
-    'That usually means the key is on the free tier and the per-minute limit is spent — ' +
-    'wait a few minutes and try again, or check your quota at aistudio.google.com. ' +
-    'Cards generated so far are kept.'
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Parsing helpers
@@ -421,11 +382,7 @@ export function parseJsonPayload(text: string): unknown {
     // Some models wrap JSON in fences despite instructions — salvage.
     const match = trimmed.match(/\{[\s\S]*\}/)
     if (match) return JSON.parse(match[0])
-    throw new GeminiError(
-      'response was not valid JSON',
-      0,
-      'Gemini returned malformed data. Retrying usually fixes this.',
-    )
+    throw new GeminiError('response was not valid JSON', 0, 'bad_response')
   }
 }
 
@@ -437,20 +394,19 @@ async function toGeminiError(res: Response): Promise<GeminiError> {
   } catch {
     // keep the HTTP status message
   }
-  return new GeminiError(message, res.status, userMessageFor(res.status, message))
+  return new GeminiError(message, res.status, kindFor(res.status, message))
 }
 
-function userMessageFor(status: number, message: string): string {
+function kindFor(status: number, message: string): GeminiErrorKind {
   const lower = message.toLowerCase()
-  if (lower.includes('spending') || lower.includes('billing') || lower.includes('quota exceeded')) {
-    return 'Your Gemini quota or spending cap was reached. Check your Google AI Studio billing settings.'
+  // A malformed key comes back as a 400, not a 401.
+  if (status === 401 || status === 403 || /api[ _]?key[ _]?(not valid|invalid)/i.test(message)) {
+    return 'key_rejected'
   }
-  if (status === 429) return 'Gemini is rate-limiting requests. Lectern will retry automatically.'
-  if (status === 401 || status === 403) {
-    return 'The Gemini API key was rejected. Check it in Settings.'
-  }
-  if (status >= 500) return 'Gemini had a temporary server problem. Lectern will retry.'
-  return message
+  if (lower.includes('spending') || lower.includes('billing')) return 'spending_cap'
+  if (status === 429) return isDailyQuota(message) ? 'quota_daily' : 'rate_limited'
+  if (status >= 500) return 'server'
+  return 'request_rejected'
 }
 
 function extractRetryAfterMs(message: string): number | undefined {

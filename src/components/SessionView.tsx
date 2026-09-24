@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { count } from '../engine/plural'
 import { plainCardText } from '../lib/render'
 import { prefersReducedMotion } from '../lib/motion'
 import type { Concept, ConceptMap, CoverageData } from '../engine/types'
@@ -8,9 +9,11 @@ import { ActivityLog, FollowUpComposer } from './ActivityLog'
 import { CardTile } from './CardTile'
 import { ConceptMapPreview } from './ConceptGraph'
 import { ConceptSheet } from './ConceptSheet'
+import { ExternalLink } from './ExternalLink'
 import { Filmstrip } from './Filmstrip'
 import { isTypingTarget, SlidePeek } from './SlidePeek'
 import { SyncBar } from './SyncBar'
+import { WaitNote } from './WaitNote'
 
 const PHASES: Array<{ id: AppPhase; label: string }> = [
   { id: 'uploading', label: 'Upload' },
@@ -19,6 +22,36 @@ const PHASES: Array<{ id: AppPhase; label: string }> = [
   { id: 'reflecting', label: 'Quality pass' },
   { id: 'complete', label: 'Review' },
 ]
+
+/** Set once the reviewer has used a card shortcut; the hint line retires. */
+const REVIEW_KEYS_LEARNED = 'lectern.reviewKeysLearned'
+
+// Per-viewer conveniences only: storage can be missing or blocked, and the
+// page must behave the same without it.
+function readFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeFlag(key: string): void {
+  try {
+    localStorage.setItem(key, '1')
+  } catch {
+    // Without storage the hints simply stay.
+  }
+}
+
+/** 3:10, or 1:02:05 for a very long run. */
+function formatDuration(ms: number): string {
+  const total = Math.round(ms / 1000)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const sec = String(total % 60).padStart(2, '0')
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`
+}
 
 export function SessionView() {
   const phase = useLectern((s) => s.phase)
@@ -52,7 +85,7 @@ function Sidebar() {
   const usage = useLectern((s) => s.usage)
   const cancelGeneration = useLectern((s) => s.cancelGeneration)
   const backToHome = useLectern((s) => s.backToHome)
-  const cardCount = useLectern((s) => s.cards.length)
+  const runMs = useLectern((s) => s.runMs)
   const followUpReady = useLectern((s) => s.followUp !== null)
   const conceptsOpen = useLectern((s) => s.conceptsOpen)
   const setConceptsOpen = useLectern((s) => s.openConcepts)
@@ -62,68 +95,65 @@ function Sidebar() {
 
   return (
     <aside className="border-desk-edge/60 flex w-64 shrink-0 flex-col gap-5 border-r p-4">
-      {/* Phase register */}
-      <ol className="space-y-1.5">
-        {PHASES.map((p, i) => {
-          const state = i < phaseIndex ? 'done' : i === phaseIndex ? 'now' : 'ahead'
-          return (
-            <li key={p.id} className="flex items-center gap-2.5">
-              <span
-                className={`size-1.5 rounded-full ${
-                  state === 'done'
-                    ? 'bg-lamp/60'
-                    : state === 'now'
-                      ? 'bg-lamp animate-pulse'
-                      : 'bg-desk-edge'
-                }`}
-              />
-              <span
-                className={`text-sm ${
-                  state === 'now'
-                    ? 'text-chalk font-medium'
-                    : state === 'done'
-                      ? 'text-chalk-dim'
-                      : 'text-chalk-faint'
-                }`}
-              >
-                {p.label}
-              </span>
-            </li>
-          )
-        })}
-      </ol>
+      {/* Phase register. Once the run is done its steps are history, so
+          they fold into one line and the activity log gets the room. */}
+      {phase === 'complete' ? (
+        <p className="flex items-center gap-2.5 text-sm">
+          <span aria-hidden className="bg-lamp/60 size-1.5 rounded-full" />
+          <span className="text-chalk-dim">
+            {runMs === null ? 'Finished' : `Finished in ${formatDuration(runMs)}`}
+          </span>
+        </p>
+      ) : (
+        <ol className="space-y-1.5">
+          {PHASES.map((p, i) => {
+            const state = i < phaseIndex ? 'done' : i === phaseIndex ? 'now' : 'ahead'
+            return (
+              <li key={p.id}>
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      state === 'done'
+                        ? 'bg-lamp/60'
+                        : state === 'now'
+                          ? 'bg-lamp animate-pulse'
+                          : 'bg-desk-edge'
+                    }`}
+                  />
+                  <span
+                    className={`flex-1 text-sm ${
+                      state === 'now'
+                        ? 'text-chalk font-medium'
+                        : state === 'done'
+                          ? 'text-chalk-dim'
+                          : 'text-chalk-faint'
+                    }`}
+                  >
+                    {p.label}
+                  </span>
+                  {/* Progress sits on the step it measures. */}
+                  {p.id === 'generating' && state === 'now' && progress && (
+                    <span className="font-data text-chalk-dim text-xs">
+                      {progress.produced} / {progress.cap}
+                    </span>
+                  )}
+                </div>
+                {state === 'now' && <WaitNote className="mt-0.5 pl-4" />}
+              </li>
+            )
+          })}
+        </ol>
+      )}
 
-      {/* The ledger: the concept constellation, then the numbers */}
-      {(conceptMap || coverage) && (
-        <div className="border-desk-edge/60 space-y-1.5 border-t pt-4">
-          {conceptMap && (
-            <ConceptMapCard
-              conceptMap={conceptMap}
-              coverage={coverage}
-              onOpen={() => setConceptsOpen(true)}
-            />
-          )}
-          {coverage && (
-            <Stat label="Pages covered" value={`${Math.round(coverage.pageCoveragePercent)}%`} />
-          )}
-          {conceptMap && coverage && coverage.missingHighPriority.length > 0 && (
-            <Stat
-              label="Key concepts open"
-              value={String(coverage.missingHighPriority.length)}
-              warn
-              onClick={() => setConceptsOpen(true)}
-            />
-          )}
-          {coverage && progress && (
-            <Stat
-              label="Cards"
-              // Follow-up requests can grow the deck past the original cap,
-              // so the finished session shows the live count alone.
-              value={
-                phase === 'complete' ? String(cardCount) : `${progress.produced} / ${progress.cap}`
-              }
-            />
-          )}
+      {/* The concept constellation. Page coverage is the filmstrip's to show
+          and the card count the send bar's, so neither is repeated here. */}
+      {conceptMap && (
+        <div className="border-desk-edge/60 border-t pt-4">
+          <ConceptMapCard
+            conceptMap={conceptMap}
+            coverage={coverage}
+            onOpen={() => setConceptsOpen(true)}
+          />
         </div>
       )}
 
@@ -185,12 +215,13 @@ function ConceptMapCard({
       : inferred.has(c.id)
         ? ('inferred' as const)
         : ('open' as const)
-  const openCount = conceptMap.concepts.filter((c) => stateOf(c) === 'open').length
+  const open = conceptMap.concepts.filter((c) => stateOf(c) === 'open')
+  const keyOpen = open.filter((c) => c.importance === 'high').length
 
   return (
     <button
       onClick={onOpen}
-      className="group border-desk-edge/60 hover:border-lamp/50 -mx-1 mb-2.5 block w-[calc(100%+0.5rem)] rounded-md border p-2 text-left transition-colors duration-150"
+      className="group border-desk-edge/60 hover:border-lamp/50 -mx-1 block w-[calc(100%+0.5rem)] rounded-md border p-2 text-left transition-colors duration-150"
       aria-label="Open the concept map"
     >
       <span className="flex items-baseline justify-between">
@@ -204,68 +235,66 @@ function ConceptMapCard({
       <ConceptMapPreview conceptMap={conceptMap} stateOf={stateOf} className="mt-1.5 h-16 w-full" />
       <span className="font-data text-chalk-dim group-hover:text-chalk mt-1 block text-2xs transition-colors duration-150">
         {conceptMap.concepts.length} concepts
-        {coverage && openCount > 0 && ` · ${openCount} without a card`}
+        {coverage && open.length > 0 && ` · ${open.length} without a card`}
+        {coverage && keyOpen > 0 && <span className="text-lamp">, {keyOpen} key</span>}
       </span>
     </button>
   )
 }
 
-function Stat({
-  label,
-  value,
-  warn,
-  onClick,
-}: {
-  label: string
-  value: string
-  warn?: boolean
-  onClick?: () => void
-}) {
-  const row = (
-    <>
-      <span className="text-chalk-dim text-xs">{label}</span>
-      <span className={`font-data text-xs ${warn ? 'text-lamp' : 'text-chalk'}`}>{value}</span>
-    </>
-  )
-  if (!onClick) return <div className="flex items-baseline justify-between">{row}</div>
-  return (
-    <button
-      onClick={onClick}
-      className="hover:bg-desk-raised/70 -mx-1 flex w-[calc(100%+0.5rem)] items-baseline justify-between rounded-sm px-1 transition-colors duration-150"
-      aria-label={`${label}: ${value} — show the extracted concepts`}
-      title="Show the extracted concepts"
-    >
-      {row}
-    </button>
-  )
-}
-
 function ErrorBanner() {
-  const errorMessage = useLectern((s) => s.errorMessage)
+  const problem = useLectern((s) => s.problem)
   const hasCards = useLectern((s) => s.cards.length > 0)
-  const startGeneration = useLectern((s) => s.startGeneration)
+  const retryGeneration = useLectern((s) => s.retryGeneration)
   const backToHome = useLectern((s) => s.backToHome)
+  const openSettings = useLectern((s) => s.openSettings)
+  const refreshAnki = useLectern((s) => s.refreshAnki)
+  if (!problem) return null
+
+  // The fix leads when there is one; "Try again" only follows when doing the
+  // same thing again can work. A spent daily quota gets no retry button.
+  const fix =
+    problem.fix === 'settings'
+      ? { label: 'Open Settings', run: () => openSettings(true) }
+      : problem.fix === 'check_anki'
+        ? { label: 'Check Anki again', run: () => void refreshAnki() }
+        : null
 
   return (
     <div
       role="alert"
       className="border-brick/40 bg-brick/15 rise-in mx-6 mt-4 shrink-0 rounded-md border px-4 py-3"
     >
-      <p className="text-chalk text-base font-medium">Generation stopped</p>
+      <p className="text-chalk text-base font-medium">{problem.title}</p>
       <p className="text-chalk-dim mt-0.5 text-sm">
-        {errorMessage ?? 'Something went wrong.'}
-        {hasCards && ' The cards below are kept — review them or send them to Anki.'}
+        {problem.body}
+        {hasCards && ' The cards below are kept, so you can review them or send them to Anki.'}
       </p>
-      <div className="mt-2.5 flex gap-2">
-        <button
-          onClick={() => void startGeneration()}
-          className="btn-primary px-3.5 py-1.5 text-sm"
-        >
-          Try again
-        </button>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        {fix && (
+          <button onClick={fix.run} className="btn-primary px-3.5 py-1.5 text-sm">
+            {fix.label}
+          </button>
+        )}
+        {problem.retry && (
+          <button
+            onClick={() => void retryGeneration()}
+            className={`${fix ? 'btn-secondary' : 'btn-primary'} px-3.5 py-1.5 text-sm`}
+          >
+            Try again
+          </button>
+        )}
         <button onClick={() => void backToHome()} className="btn-ghost px-3 py-1.5">
           Back to start
         </button>
+        {problem.link && (
+          <ExternalLink
+            href={problem.link.url}
+            className="text-chalk-dim hover:text-chalk ml-1 text-xs"
+          >
+            {problem.link.label}
+          </ExternalLink>
+        )}
       </div>
     </div>
   )
@@ -278,9 +307,10 @@ function CardColumn() {
   const setSearchQuery = useLectern((s) => s.setSearchQuery)
   const pageFilter = useLectern((s) => s.pageFilter)
   const setPageFilter = useLectern((s) => s.setPageFilter)
-  const rejectedCount = useLectern((s) => s.rejectedCount)
   const selectedUid = useLectern((s) => s.selectedUid)
   const listRef = useRef<HTMLDivElement>(null)
+  const [showKeys, setShowKeys] = useState(() => !readFlag(REVIEW_KEYS_LEARNED))
+  const filtered = searchQuery.trim() !== '' || pageFilter !== null
   const isDone = phase === 'complete'
   const isError = phase === 'error'
   const reviewable = isDone || isError
@@ -327,6 +357,7 @@ function CardColumn() {
       if (state.editingUid || state.settingsOpen || state.conceptsOpen) return
       const index = visible.findIndex((c) => c.uid === state.selectedUid)
       const select = (i: number) => state.setSelectedUid(visible[i]?.uid ?? null)
+      if ('jkesx'.includes(e.key) || e.key.startsWith('Arrow')) writeFlag(REVIEW_KEYS_LEARNED)
 
       switch (e.key) {
         case 'j':
@@ -364,6 +395,9 @@ function CardColumn() {
               state.peekSlide(state.slidePeek === page ? null : page)
             }
           }
+          break
+        case '?':
+          setShowKeys((open) => !open)
           break
         case 'Escape':
           // The slide peek's own Esc wins while it is open.
@@ -411,16 +445,27 @@ function CardColumn() {
             </button>
           )}
           <div className="ml-auto flex flex-row-reverse flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            {/* The total is the send bar's to say; a count here only earns its
+                place while a filter hides some cards. */}
             <span aria-live="polite" className="font-data text-chalk-dim text-xs whitespace-nowrap">
-              {visible.length} of {cards.length} cards
-              {rejectedCount > 0 && ` · ${rejectedCount} rejected by the quality gate`}
+              {filtered && `${visible.length} of ${count(cards.length, 'card')}`}
             </span>
-            <span
-              className="font-data text-chalk-faint text-2xs whitespace-nowrap"
-              title="Keyboard review: ↑↓ select a card, e edit, x remove, s show its slide, ⌘↩ send the deck to Anki"
-            >
-              ↑↓ select · e edit · x remove · s slide · ⌘↩ send
-            </span>
+            {/* The shortcuts are spelled out until someone has used one; after
+                that, ? brings them back. */}
+            {showKeys ? (
+              <span className="font-data text-chalk-faint text-2xs whitespace-nowrap">
+                ↑↓ select · e edit · x remove · s slide · ⌘↩ send
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowKeys(true)}
+                className="font-data text-chalk-faint hover:text-chalk text-2xs transition-colors duration-150"
+                aria-label="Show keyboard shortcuts (?)"
+                title="Keyboard shortcuts (?)"
+              >
+                ?
+              </button>
+            )}
           </div>
         </div>
       )}

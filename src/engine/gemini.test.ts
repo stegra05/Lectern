@@ -6,7 +6,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { GeminiClient, GeminiError, type RetryNotice } from './gemini'
+import { GeminiClient, GeminiError } from './gemini'
+import type { RetryNotice } from './types'
 
 const okInteraction = () =>
   new Response(JSON.stringify({ id: 'i-1', steps: [], output_text: 'ok', usage: {} }), {
@@ -97,7 +98,6 @@ describe('GeminiClient rate-limit visibility', () => {
 
     expect(notices).toHaveLength(1)
     expect(notices[0]).toMatchObject({ status: 429, attempt: 1, waitMs: 30_000 })
-    expect(notices[0].message).toBe('Gemini rate limit reached — waiting 30s (retry 1 of 5).')
   })
 
   it('honors the server’s retry-after over its own backoff', async () => {
@@ -113,7 +113,6 @@ describe('GeminiClient rate-limit visibility', () => {
     await promise
 
     expect(notices[0].waitMs).toBe(90_000)
-    expect(notices[0].message).toContain('waiting 1m 30s')
   })
 
   it('stops promising a retry once it has run out of them', async () => {
@@ -128,7 +127,7 @@ describe('GeminiClient rate-limit visibility', () => {
     const error = await settled
     expect(error).toBeInstanceOf(GeminiError)
     expect((error as GeminiError).status).toBe(429)
-    expect((error as GeminiError).userMessage).toContain('kept rate-limiting')
+    expect((error as GeminiError).kind).toBe('rate_limited')
     // The initial attempt plus every retry.
     expect(fetchFn).toHaveBeenCalledTimes(6)
   })
@@ -146,7 +145,27 @@ describe('GeminiClient rate-limit visibility', () => {
 
     const error = await settled
     expect(error).toBeInstanceOf(GeminiError)
-    expect((error as GeminiError).userMessage).toContain('daily quota')
+    expect((error as GeminiError).kind).toBe('quota_daily')
+    // Asked once: a retry would only have made the student wait for this.
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('knows a malformed key when Gemini reports it as a bad request', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: 'API key not valid. Please pass a valid API key.',
+            status: 'INVALID_ARGUMENT',
+          },
+        }),
+        { status: 400 },
+      ),
+    )
+    const client = new GeminiClient('key', fetchFn)
+
+    const error = await client.interact({ model: 'm', input: 'hello' }).catch((e: unknown) => e)
+    expect((error as GeminiError).kind).toBe('key_rejected')
   })
 
   it('reports a dropped connection as its own kind of wait', async () => {
@@ -162,6 +181,5 @@ describe('GeminiClient rate-limit visibility', () => {
     await promise
 
     expect(notices[0]).toMatchObject({ status: 0 })
-    expect(notices[0].message).toContain('Connection to Gemini dropped')
   })
 })

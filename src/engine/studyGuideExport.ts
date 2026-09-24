@@ -17,12 +17,11 @@ import {
   SECTION_HEADING,
 } from './conceptExport'
 import { formatPageRefs } from './noteTypes'
+import { count } from './plural'
 import type { Card, ConceptMap, CoverageData } from './types'
 
 /** Cards that will actually be studied: everything not held back from Anki. */
 const studiedCards = (cards: Card[]): Card[] => cards.filter((card) => !card.syncExcluded)
-
-const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`
 
 /**
  * The guide as Markdown: objectives, concepts grouped by importance — each
@@ -36,7 +35,7 @@ export function studyGuideToMarkdown(
   cards: Card[],
 ): string {
   const setName = conceptMap.slideSetName.trim()
-  const title = setName === '' ? 'Study guide' : `${setName} — Study guide`
+  const title = setName === '' ? 'Study guide' : `${setName}: Study guide`
   const nameOf = (id: string): string | undefined =>
     conceptMap.concepts.find((c) => c.id === id)?.name.trim()
 
@@ -69,7 +68,7 @@ export function studyGuideToMarkdown(
       // and "0 cards" down every background row reads like a reproach.
       const cardsNote = cardCount > 0 ? ` · ${count(cardCount, 'card')}` : ''
       lines.push(
-        `- **${escapeMarkdown(name)}** — ${concept.difficulty}` +
+        `- **${escapeMarkdown(name)}**: ${concept.difficulty}` +
           `${pageSuffix(concept.pageReferences)}${cardsNote}`,
       )
       for (const relation of relationsFor(concept, conceptMap.relations, nameOf)) {
@@ -87,7 +86,7 @@ export function studyGuideToMarkdown(
 
     if (missing.length > 0 || uncovered !== '') {
       lines.push('## Review in the slides directly', '')
-      lines.push('No cards cover these — go back to the source material:', '')
+      lines.push('No cards cover these. Go back to the source material:', '')
       for (const id of coverage.missingHighPriority) {
         const name = nameOf(id)
         if (name === undefined || name === '') continue
@@ -106,7 +105,7 @@ export function studyGuideToMarkdown(
     count(studied.length, 'card'),
     ...(coverage ? [`${Math.round(coverage.effectiveConceptCoveragePercent)}% covered`] : []),
   ]
-  lines.push('---', '', `${stats.join(' · ')} — study guide by Lectern`)
+  lines.push('---', '', `${stats.join(' · ')} · study guide by Lectern`)
 
   return lines.join('\n')
 }
@@ -118,5 +117,5 @@ export function studyGuideFilename(conceptMap: ConceptMap): string {
     .replace(/[/\\:*?"<>|]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return base === '' ? 'Study guide.md' : `${base} — Study guide.md`
+  return base === '' ? 'Study guide.md' : `${base} - Study guide.md`
 }

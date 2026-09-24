@@ -56,6 +56,7 @@ import {
 } from './geminiSchemas'
 import { looksLikeSameSet } from './ankiImport'
 import { computeSizingPlan } from './pacing'
+import { count } from './plural'
 import {
   buildReviewFeedback,
   buildSubmitFeedback,
@@ -82,6 +83,7 @@ import type {
   GateVerdict,
   PdfInfo,
   PipelineSink,
+  RejectionReason,
 } from './types'
 
 export interface PipelineOptions {
@@ -124,7 +126,7 @@ export interface PipelineOutcome {
 export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcome> {
   const { emit, signal } = opts
   const client = new GeminiClient(opts.apiKey, opts.fetchFn, undefined, (notice) =>
-    emit({ type: 'log', level: 'warn', message: notice.message }),
+    emit({ type: 'waiting', ...notice }),
   )
   const usage: GeminiUsage = { inputTokens: 0, outputTokens: 0 }
   const track = (u: GeminiUsage) => {
@@ -134,13 +136,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
   // --- Phase 0: upload ------------------------------------------------------
   emit({ type: 'phase', phase: 'uploading' })
-  emit({ type: 'log', level: 'info', message: `Uploading ${opts.fileName} to Gemini…` })
   const file = await client.uploadPdf(opts.pdfBytes, opts.fileName, signal)
   throwIfAborted(signal)
 
   // --- Phase 1: concept map -------------------------------------------------
   emit({ type: 'phase', phase: 'mapping' })
-  emit({ type: 'log', level: 'info', message: 'Building the global concept map…' })
 
   let ctx: PromptContext = { language: 'en', focusPrompt: opts.focusPrompt }
   const mapResult = await client.interact({
@@ -179,7 +179,10 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   emit({
     type: 'log',
     level: 'info',
-    message: `Mapped ${conceptMap.concepts.length} concepts, ${conceptMap.relations.length} relations · target ${sizing.totalCardCap} cards`,
+    message:
+      `Found ${count(conceptMap.concepts.length, 'concept')} and ` +
+      `${count(conceptMap.relations.length, 'link')} between them. ` +
+      `Aiming for ${count(sizing.totalCardCap, 'card')}.`,
   })
 
   // --- Phase 2: agentic generation loop -------------------------------------
@@ -199,16 +202,16 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       type: 'log',
       level: 'info',
       message:
-        `Carrying ${inheritedCount} card(s) already in the deck — ` +
-        `${Math.round(coverage.pageCoveragePercent)}% of pages start covered.`,
+        `The ${count(inheritedCount, 'card')} already in the deck cover ` +
+        `${Math.round(coverage.pageCoveragePercent)}% of the pages. This run starts from there.`,
     })
     if (existing.otherDocuments > 0) {
       emit({
         type: 'log',
         level: 'info',
         message:
-          `${existing.otherDocuments} of them came from other material in this deck — ` +
-          'they still prevent repeats, but their page numbers are not read as coverage here.',
+          `${existing.otherDocuments} of them come from other material in this deck. ` +
+          "They still prevent repeats, but don't count toward this lecture's pages.",
       })
     }
   }
@@ -273,7 +276,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
         emit({
           type: 'log',
           level: 'warn',
-          message: 'Model stopped calling tools; ending generation.',
+          message: 'Gemini stopped producing cards, so generation ends here.',
         })
         break
       }
@@ -310,14 +313,14 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           const assessment =
             typeof args.coverage_assessment === 'string' ? args.coverage_assessment.trim() : ''
           if (assessment) {
-            emit({ type: 'log', level: 'info', message: `Coverage assessment: ${assessment}` })
+            emit({ type: 'log', level: 'info', message: 'Gemini on coverage', quote: assessment })
           }
           results.push(functionResult(call, 'Accepted. Generation complete.'))
         } else {
           emit({
             type: 'log',
             level: 'warn',
-            message: 'Model tried to finish early — coverage gaps remain, continuing.',
+            message: 'Gemini wanted to stop, but key concepts still have no card. Continuing.',
           })
           results.push(functionResult(call, verdict.message))
         }
@@ -332,7 +335,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       }
 
       const rawCards = parseSubmitCardsArgs(call.arguments)
-      const rejected: Array<{ front: string; reasons: string[] }> = []
+      const rejected: Array<{ front: string; reasons: RejectionReason[] }> = []
       const duplicateFronts: string[] = []
       let unknownMetadataDropped = 0
 
@@ -413,7 +416,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       emit({
         type: 'log',
         level: 'warn',
-        message: 'Two rounds without accepted cards — stopping generation.',
+        message: 'Two batches in a row gave no usable cards, so generation stops here.',
       })
       break
     }
@@ -441,7 +444,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   if (cards.length > inheritedCount) {
     throwIfAborted(signal)
     emit({ type: 'phase', phase: 'reflecting' })
-    emit({ type: 'log', level: 'info', message: 'Reviewing the deck for quality and coverage…' })
     const review = await runReviewLoop({
       client,
       model: opts.model,
@@ -463,9 +465,10 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     emit({
       type: 'log',
       level: 'info',
-      message: `Review: ${review.updated} updated, ${review.added} added, ${review.removed} removed.`,
+      message: reviewSummary(review),
+      quote: review.note,
     })
-    emit({ type: 'cards_replaced', cards: [...cards], reflectionNote: review.note })
+    emit({ type: 'cards_replaced', cards: [...cards] })
     emit({ type: 'coverage', coverage })
   }
 
@@ -519,7 +522,7 @@ function handleFinishRequest(
     return {
       allowed: false,
       message:
-        `Rejected: coverage is not sufficient yet (${missing} high-importance concept(s) uncovered, ` +
+        `Rejected: coverage is not sufficient yet (${count(missing, 'high-importance concept')} uncovered, ` +
         `page coverage ${Math.round(coverage.pageCoveragePercent)}%). ` +
         'Continue with submit_cards targeting the remaining ledger gaps.',
     }
@@ -540,11 +543,11 @@ function handleFinishRequest(
       allowed: false,
       message:
         `Rejected: the deck already covered this material, so your budget is for depth. ` +
-        `You have added ${depth.newCards} of ${depth.newCardTarget} card(s). ` +
+        `You have added ${depth.newCards} of ${count(depth.newCardTarget, 'card')}. ` +
         'Go after the depth ledger: relations between concepts, pages carrying a single card, ' +
         'and concepts no existing card names outright. Prefer why/how/compare/apply over ' +
         'restating what is already asked. If, after looking, another card would only rephrase ' +
-        'one the deck already has, call finish_generation again and say so — it will be accepted.',
+        'one the deck already has, call finish_generation again and say so; it will be accepted.',
     }
   }
 
@@ -867,7 +870,11 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
     if (finished) break
     idleRounds = editsThisRound === 0 ? idleRounds + 1 : 0
     if (idleRounds >= NON_PROGRESS_MAX_ROUNDS) {
-      emit({ type: 'log', level: 'warn', message: 'Review made no progress — accepting the deck.' })
+      emit({
+        type: 'log',
+        level: 'warn',
+        message: 'The quality pass stalled, so the deck stays as it is.',
+      })
       break
     }
 
@@ -918,24 +925,36 @@ function summarize(
   coverage: CoverageData,
   inheritedCount: number,
 ): string {
-  const reasonText: Record<string, string> = {
-    coverage_sufficient_model_done: 'Coverage complete',
-    max_cap_reached: 'Card budget reached',
-    non_progress: 'Stopped after repeated empty rounds',
-    model_stalled: 'Model stopped producing cards',
-    max_rounds_reached: 'Round limit reached',
+  // Only an early stop is worth a second sentence; reaching the deck size or
+  // full coverage is what the first one already reports.
+  const earlyStop: Record<string, string> = {
+    non_progress: ' Gemini stopped finding new cards before the deck size was reached.',
+    model_stalled: ' Gemini stopped finding new cards before the deck size was reached.',
+    max_rounds_reached: ' Generation reached its round limit before the deck size.',
   }
   // An extend run reports what it added and what the deck now holds; the
   // coverage percentages always describe the whole deck.
   const cardText =
     inheritedCount > 0
-      ? `${cardCount} new cards (${cardCount + inheritedCount} in the deck)`
-      : `${cardCount} cards`
+      ? `${count(cardCount, 'new card')} (${cardCount + inheritedCount} in the deck)`
+      : count(cardCount, 'card')
   return (
-    `${reasonText[reason] ?? reason} — ${cardText}, ` +
-    `${Math.round(coverage.pageCoveragePercent)}% page coverage, ` +
-    `${Math.round(coverage.effectiveConceptCoveragePercent)}% concept coverage.`
+    `${cardText} ready, covering ${Math.round(coverage.pageCoveragePercent)}% of the pages ` +
+    `and ${Math.round(coverage.effectiveConceptCoveragePercent)}% of the concepts.` +
+    (earlyStop[reason] ?? '')
   )
+}
+
+/** "Quality pass: 2 cards rewritten, 1 removed." or "no changes needed". */
+function reviewSummary(review: { updated: number; added: number; removed: number }): string {
+  const changes = [
+    review.updated > 0 ? `${count(review.updated, 'card')} rewritten` : '',
+    review.added > 0 ? `${review.added} added` : '',
+    review.removed > 0 ? `${review.removed} removed` : '',
+  ].filter(Boolean)
+  return changes.length === 0
+    ? 'Quality pass: no changes needed.'
+    : `Quality pass: ${changes.join(', ')}.`
 }
 
 export interface AdoptedDeck {

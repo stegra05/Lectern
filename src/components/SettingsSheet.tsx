@@ -6,6 +6,8 @@ import type { Settings } from '../engine/types'
 import { confirmDiscard } from '../lib/confirm'
 import { deleteApiKey, setApiKey } from '../lib/settings'
 import { useLectern } from '../state/store'
+import { APP_VERSION, LINKS, reportIssueUrl } from '../lib/links'
+import { ExternalLink } from './ExternalLink'
 
 export function SettingsSheet() {
   const open = useLectern((s) => s.settingsOpen)
@@ -17,6 +19,7 @@ export function SettingsSheet() {
   const ankiStatus = useLectern((s) => s.ankiStatus)
   const refreshAnki = useLectern((s) => s.refreshAnki)
   const toast = useLectern((s) => s.toast)
+  const showProblem = useLectern((s) => s.showProblem)
   const migrateLegacyCards = useLectern((s) => s.migrateLegacyCards)
   const migratingCards = useLectern((s) => s.migratingCards)
   const deckName = useLectern((s) => s.deckName)
@@ -114,7 +117,7 @@ export function SettingsSheet() {
         await setApiKey(keyDraft.trim())
         setHasApiKey(true)
       } catch (e) {
-        toast('error', `Could not save the API key: ${(e as Error).message}`)
+        showProblem(e, 'saving_key')
         return
       }
     }
@@ -155,11 +158,19 @@ export function SettingsSheet() {
               onChange={(e) => setKeyDraft(e.target.value)}
               placeholder={
                 hasApiKey
-                  ? 'Saved in the system keychain — paste to replace'
-                  : 'Paste your key from aistudio.google.com'
+                  ? 'Saved in the system keychain. Paste a new key to replace it'
+                  : 'Paste your Gemini API key'
               }
               className="field bg-desk mt-1.5"
             />
+            {!hasApiKey && (
+              <p className="text-chalk-dim mt-1.5 text-xs">
+                No key yet?{' '}
+                <ExternalLink href={LINKS.geminiKey} className="hover:text-chalk">
+                  Get a free one from Google AI Studio
+                </ExternalLink>
+              </p>
+            )}
             {hasApiKey && (
               // Deleting the key means fetching a new one from Google to
               // generate again, so it asks first.
@@ -192,7 +203,7 @@ export function SettingsSheet() {
             >
               {MODEL_CHOICES.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.label}
+                  {m.label} · {m.note}
                 </option>
               ))}
             </select>
@@ -230,10 +241,18 @@ export function SettingsSheet() {
               />
               <span>
                 {ankiStatus === 'connected'
-                  ? 'Anki answered — cards can be sent.'
+                  ? 'Anki answered. Cards can be sent.'
                   : ankiStatus === 'checking'
                     ? 'Checking…'
-                    : 'No answer. Open Anki and install the AnkiConnect add-on (code 2055492159).'}
+                    : 'No answer. Open Anki with the AnkiConnect add-on (code 2055492159) installed.'}
+                {ankiStatus === 'offline' && (
+                  <>
+                    {' '}
+                    <ExternalLink href={LINKS.ankiConnect} className="hover:text-chalk">
+                      Get AnkiConnect
+                    </ExternalLink>
+                  </>
+                )}
               </span>
             </p>
           </label>
@@ -250,7 +269,7 @@ export function SettingsSheet() {
               <span className="text-chalk text-sm">Style synced cards with Lectern note types</span>
             </label>
             {draft.useLecternNoteTypes ? (
-              <div className="mt-3 space-y-3">
+              <div className="mt-3">
                 <select
                   value={draft.noteTypeTheme}
                   onChange={(e) =>
@@ -265,21 +284,6 @@ export function SettingsSheet() {
                     </option>
                   ))}
                 </select>
-                <div>
-                  <button
-                    onClick={() => void migrateLegacyCards()}
-                    disabled={migratingCards || ankiStatus !== 'connected' || dirty}
-                    className="btn-secondary px-3 py-1.5 text-sm"
-                  >
-                    {migratingCards ? 'Restyling…' : 'Apply design to earlier synced cards'}
-                  </button>
-                  <p className="text-chalk-dim mt-1 text-xs">
-                    Moves cards tagged “{settings?.defaultTag ?? draft.defaultTag}” from plain
-                    Basic/Cloze onto the Lectern note types. Review progress is kept; a note with
-                    fields Lectern does not use keeps them on its back.
-                    {dirty && ' Save your settings first — this acts on the saved ones.'}
-                  </p>
-                </div>
               </div>
             ) : (
               <p className="text-chalk-dim mt-1 text-xs">
@@ -300,7 +304,7 @@ export function SettingsSheet() {
               <span className="text-chalk text-sm">Notify me when a deck finishes</span>
             </label>
             <p className="text-chalk-dim mt-1 text-xs">
-              Only when Lectern is in the background — no notification if you are watching it work.
+              Only while Lectern is in the background. No notification if you are watching it work.
             </p>
           </div>
 
@@ -320,6 +324,25 @@ export function SettingsSheet() {
 
           {advancedOpen && (
             <div className="rise-in space-y-4">
+              {/* A one-time move for cards synced before the Lectern note
+                  types existed; it stays out of the everyday settings. */}
+              {draft.useLecternNoteTypes && (
+                <div>
+                  <button
+                    onClick={() => void migrateLegacyCards()}
+                    disabled={migratingCards || ankiStatus !== 'connected' || dirty}
+                    className="btn-secondary px-3 py-1.5 text-sm"
+                  >
+                    {migratingCards ? 'Restyling…' : 'Apply design to earlier synced cards'}
+                  </button>
+                  <p className="text-chalk-dim mt-1 text-xs">
+                    Moves cards tagged “{settings?.defaultTag ?? draft.defaultTag}” from plain
+                    Basic/Cloze onto the Lectern note types. Review progress is kept; a note with
+                    fields Lectern does not use keeps them on its back.
+                    {dirty && ' Save your settings first, since this acts on the saved ones.'}
+                  </p>
+                </div>
+              )}
               {draft.useLecternNoteTypes && (
                 <p className="text-chalk-dim text-xs">
                   The note type names below are used only while the Lectern card design is off.
@@ -365,7 +388,7 @@ export function SettingsSheet() {
                 {unknownPlaceholders.length > 0 && (
                   <p className="text-lamp mt-1 text-2xs">
                     {unknownPlaceholders.map((name) => `{{${name}}}`).join(', ')} is not a
-                    placeholder — it goes into the tag as written.
+                    placeholder, so it goes into the tag as written.
                   </p>
                 )}
                 <div className="text-chalk-dim mt-1 text-2xs">
@@ -405,11 +428,22 @@ export function SettingsSheet() {
                   />
                 </div>
                 <p className="text-chalk-dim mt-1 text-2xs">
-                  How Lectern finds its own cards later — the restyle button above searches for it.
+                  How Lectern finds its own cards later. The restyle button above searches for it.
                 </p>
               </div>
             </div>
           )}
+
+          <p className="font-data text-chalk-dim border-desk-edge/60 border-t pt-4 text-2xs">
+            Lectern {APP_VERSION} ·{' '}
+            <ExternalLink href={LINKS.changelog} className="hover:text-chalk">
+              What’s new
+            </ExternalLink>{' '}
+            ·{' '}
+            <ExternalLink href={reportIssueUrl()} className="hover:text-chalk">
+              Report a problem
+            </ExternalLink>
+          </p>
         </div>
 
         <div className="border-desk-edge/60 flex shrink-0 items-center justify-end gap-2 border-t px-6 py-4">

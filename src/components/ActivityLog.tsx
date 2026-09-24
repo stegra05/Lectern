@@ -3,6 +3,7 @@ import { MAX_REQUEST_PROMPT_LEN } from '../engine/prompts'
 import { renderNoteMarkdown } from '../lib/render'
 import type { LogLine } from '../state/store'
 import { useLectern } from '../state/store'
+import { WaitNote } from './WaitNote'
 
 /**
  * The session minutes: a mono elapsed-time gutter stamps each event, the
@@ -62,6 +63,8 @@ function Entry({ line, time }: { line: LogLine; time: string | null }) {
             <span className="eyebrow block">You</span>
             <p className="log-quote leading-snug break-words">{line.message}</p>
           </div>
+        ) : line.items ? (
+          <Group line={line} />
         ) : (
           <p className={`log-line text-xs leading-snug break-words ${MESSAGE_COLOR[line.level]}`}>
             {line.message}
@@ -70,6 +73,37 @@ function Entry({ line, time }: { line: LogLine; time: string | null }) {
         {line.quote && <Quote text={line.quote} />}
       </div>
     </div>
+  )
+}
+
+/**
+ * "3 cards rejected": one line for a run of like events, with each card and
+ * its reason one click away rather than a line apiece.
+ */
+function Group({ line }: { line: LogLine }) {
+  const [open, setOpen] = useState(false)
+  const items = line.items ?? []
+  return (
+    <>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`log-line text-left text-xs leading-snug break-words transition-opacity duration-150 hover:opacity-80 ${MESSAGE_COLOR[line.level]}`}
+      >
+        {line.message}
+        <span className="font-data text-2xs text-chalk-faint ml-1.5">{open ? 'hide' : 'show'}</span>
+      </button>
+      {open && (
+        <ul className="mt-1 space-y-1.5">
+          {items.map((item, i) => (
+            <li key={i} className="border-desk-edge border-l-2 pl-2">
+              <span className="text-chalk-dim block text-2xs">{item.message}</span>
+              {item.quote && <span className="log-quote block">{item.quote}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   )
 }
 
@@ -111,7 +145,7 @@ export function FollowUpComposer() {
         disabled={busy}
         placeholder={busy ? 'Adding cards…' : 'Request more cards…'}
         aria-label="Request more cards"
-        title="Ask for cards on a missing topic or an emphasis — e.g. “add cards on the trolley problem”. ↩ sends, ⇧↩ adds a line."
+        title="Ask for cards on a missing topic or an emphasis, e.g. “add cards on the trolley problem”. ↩ sends, ⇧↩ adds a line."
         className="field w-full resize-none px-2.5 py-1.5 text-xs"
       />
       {/* How to send only needs saying once you have started writing. */}
@@ -127,7 +161,13 @@ export function FollowUpComposer() {
       )}
       {busy && (
         <div className="mt-1 flex items-baseline justify-between">
-          <span className="font-data text-2xs text-chalk-dim animate-pulse">Working on it…</span>
+          <WaitNote
+            fallback={
+              <span className="font-data text-2xs text-chalk-dim animate-pulse">
+                Working on it…
+              </span>
+            }
+          />
           <button
             onClick={cancelGeneration}
             className="font-data text-2xs text-chalk-dim hover:text-brick-soft transition-colors duration-150"

@@ -215,6 +215,11 @@ export class AnkiClient {
     return result
   }
 
+  /** Open Anki's card browser on a search, e.g. `deck:"Biology"`. */
+  async guiBrowse(query: string): Promise<void> {
+    await this.invoke('guiBrowse', { query })
+  }
+
   async deckNames(): Promise<string[]> {
     return toStringArray(await this.invoke('deckNames'))
   }
@@ -727,7 +732,7 @@ export async function syncCards(
       failures.push({
         uid: card.uid,
         front: cardFrontText(card),
-        error: errorMessage(err),
+        error: err instanceof Error ? err : new Error(String(err)),
       })
     }
     onProgress({ done: i + 1, total })

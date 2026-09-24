@@ -202,7 +202,7 @@ export function ConceptGraph({
                 role="button"
                 tabIndex={0}
                 aria-pressed={c.id === selectedId}
-                aria-label={`${c.name} — ${STATE_LABEL[state]}`}
+                aria-label={`${c.name}: ${STATE_LABEL[state]}`}
                 className={`cursor-pointer transition-opacity duration-150 ${
                   dimmed ? 'opacity-30' : ''
                 }`}

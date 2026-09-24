@@ -1,7 +1,7 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEffect, useState } from 'react'
-import { confirmDiscard } from './lib/confirm'
+import { confirmUnsentDiscard } from './lib/confirm'
 import { IS_TAURI } from './lib/platform'
 import { HomeView } from './components/HomeView'
 import { SessionView } from './components/SessionView'
@@ -46,13 +46,8 @@ export default function App() {
     if (!IS_TAURI) return
     const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
       const { view: currentView, cards } = useLectern.getState()
-      const unsent = cards.filter((c) => !c.ankiNoteId).length
-      if (currentView !== 'session' || unsent === 0) return
-      const counted = unsent === 1 ? "1 card hasn't" : `${unsent} cards haven't`
-      const ok = await confirmDiscard(
-        `${counted} been sent to Anki. Quitting discards them.`,
-        'Quit Lectern?',
-      )
+      if (currentView !== 'session') return
+      const ok = await confirmUnsentDiscard(cards, 'Quitting discards them.', 'Quit Lectern?')
       if (!ok) event.preventDefault()
     })
     return () => {

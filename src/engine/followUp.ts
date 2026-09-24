@@ -40,7 +40,7 @@ import {
   type PromptContext,
 } from './prompts'
 import { cardKey, findNearDuplicate, normalizeCardPayload, type EvaluateOptions } from './quality'
-import type { Card, ConceptMap, PdfInfo, PipelineSink } from './types'
+import type { Card, ConceptMap, PdfInfo, PipelineSink, RejectionReason } from './types'
 
 export interface FollowUpOptions {
   /** The user's free-text request from the activity-log composer. */
@@ -74,7 +74,7 @@ export interface FollowUpOutcome {
 export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcome> {
   const { emit, signal } = opts
   const client = new GeminiClient(opts.apiKey, opts.fetchFn, undefined, (notice) =>
-    emit({ type: 'log', level: 'warn', message: notice.message }),
+    emit({ type: 'waiting', ...notice }),
   )
   const usage: GeminiUsage = { inputTokens: 0, outputTokens: 0 }
   const track = (u: GeminiUsage) => {
@@ -168,7 +168,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
         continue
       }
 
-      const rejected: Array<{ front: string; reasons: string[] }> = []
+      const rejected: Array<{ front: string; reasons: RejectionReason[] }> = []
       const duplicateFronts: string[] = []
 
       for (const raw of parseSubmitCardsArgs(call.arguments)) {

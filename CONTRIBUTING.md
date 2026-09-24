@@ -48,6 +48,26 @@ tokens in `src/index.css`; no arbitrary `text-[..px]` or ad-hoc shadows. Sans
 (Schibsted Grotesk) is for controls, serif (Source Serif 4) for study content,
 mono (IBM Plex Mono) for metadata/provenance.
 
+## Writing for users
+
+Every string a student can see (labels, toasts, banners, the activity log,
+exported Markdown) follows the same voice:
+
+- **Name the fix.** An error says what happened and what to do next, in that
+  order. "The Gemini API key was rejected. Check it in Settings." beats
+  "Request failed (403)."
+- **Speak the student's language, not the engine's.** No tools, rounds, gates,
+  ledgers, slugs or HTTP codes. Say "Gemini", "Anki", "cards", "the lecture".
+- **Say it once.** If the banner explains it, the toast doesn't repeat it.
+- **Real plurals.** Use `count(n, 'card')` from `src/engine/plural.ts`, never
+  "card(s)".
+- **No em-dashes.** Use a period, a comma, a colon or a `·` separator.
+- **Sentence case, no exclamation marks.**
+
+`src/copy.test.ts` enforces the plural and em-dash rules on every string
+literal, template and JSX text under `src/` (prompt text for the model in
+`engine/prompts.ts` is exempt).
+
 ## Commits
 
 Short conventional-style subjects (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`),

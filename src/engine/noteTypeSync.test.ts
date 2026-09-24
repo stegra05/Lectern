@@ -360,7 +360,7 @@ describe('migrateNotesToLectern', () => {
     expect(result.skipped).toBe(1)
     expect(result.failures).toHaveLength(1)
     expect(result.failures[0].noteId).toBe(2)
-    expect(result.failures[0].error).toContain('collection is not available')
+    expect(result.failures[0].error.message).toContain('collection is not available')
   })
 
   it('quotes tags containing spaces and no-ops on an empty tag', async () => {

@@ -66,8 +66,8 @@ export const MAX_FOLLOWUP_ROUNDS = 6
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash'
 export const MODEL_CHOICES = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — fast, agentic (recommended)' },
-  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro — deepest reasoning, slower' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'fast, agentic (recommended)' },
+  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', note: 'deepest reasoning, slower' },
 ] as const
 
 /** Models that were once offered and no longer are. A saved setting wins over

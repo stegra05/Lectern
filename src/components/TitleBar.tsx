@@ -38,30 +38,25 @@ export function TitleBar() {
       )}
       {!(view === 'session' && fileName) && <div data-tauri-drag-region className="flex-1" />}
 
-      {/* Both connections are prerequisites, so a broken one says what is
-          broken in words and takes you to where it is fixed. */}
-      <Status
-        label="Anki"
-        problem={
-          ankiStatus === 'connected' ? null : ankiStatus === 'checking' ? 'checking…' : 'offline'
-        }
-        tone={ankiStatus === 'connected' ? 'ok' : ankiStatus === 'checking' ? 'wait' : 'bad'}
-        title={
-          ankiStatus === 'connected'
-            ? 'Anki is connected — open Settings'
-            : ankiStatus === 'checking'
-              ? 'Checking Anki…'
-              : "Anki isn't reachable — open Anki with the AnkiConnect add-on, or change the URL in Settings"
-        }
-        onClick={() => openSettings(true)}
-      />
-      <Status
-        label="Gemini"
-        problem={hasApiKey ? null : 'no key'}
-        tone={hasApiKey ? 'ok' : 'bad'}
-        title={hasApiKey ? 'API key saved — open Settings' : 'No API key yet — add one in Settings'}
-        onClick={() => openSettings(true)}
-      />
+      {/* Both connections are prerequisites, but a healthy one needs no
+          chrome: a status only appears when something is wrong, says what in
+          words, and takes you to where it is fixed. */}
+      {ankiStatus === 'offline' && (
+        <Problem
+          label="Anki"
+          problem="offline"
+          title="Anki isn't reachable. Open Anki with the AnkiConnect add-on, or change the URL in Settings"
+          onClick={() => openSettings(true)}
+        />
+      )}
+      {!hasApiKey && (
+        <Problem
+          label="Gemini"
+          problem="no key"
+          title="No API key yet. Add one in Settings"
+          onClick={() => openSettings(true)}
+        />
+      )}
 
       <button
         id="settings-trigger"
@@ -76,22 +71,19 @@ export function TitleBar() {
   )
 }
 
-function Status({
+function Problem({
   label,
   problem,
-  tone,
   title,
   onClick,
 }: {
   label: string
-  /** Short state word shown next to the label while something is off. */
-  problem: string | null
-  tone: 'ok' | 'bad' | 'wait'
+  /** Short state word, lowercase: the label is the register, the state is
+   *  the reading, and an uppercased "OFFLINE" shouts where a word will do. */
+  problem: string
   title: string
   onClick: () => void
 }) {
-  const dot =
-    tone === 'ok' ? 'bg-sage' : tone === 'wait' ? 'bg-chalk-dim animate-pulse' : 'bg-brick-soft'
   return (
     <button
       onClick={onClick}
@@ -99,17 +91,9 @@ function Status({
       title={title}
       aria-label={title}
     >
-      <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
+      <span aria-hidden className="bg-brick-soft size-1.5 shrink-0 rounded-full" />
       <span className="eyebrow">{label}</span>
-      {/* Lowercase on purpose: the label is the register, the state is the
-          reading — an uppercased "OFFLINE" shouts where a word will do. */}
-      {problem && (
-        <span
-          className={`font-data text-2xs ${tone === 'bad' ? 'text-brick-soft' : 'text-chalk-dim'}`}
-        >
-          · {problem}
-        </span>
-      )}
+      <span className="font-data text-brick-soft text-2xs">· {problem}</span>
     </button>
   )
 }
