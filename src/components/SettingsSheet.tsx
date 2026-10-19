@@ -159,7 +159,12 @@ export function SettingsSheet() {
             <span className="eyebrow">Model</span>
             <select
               value={draft.model}
-              onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+              onChange={(e) => {
+                const model = e.target.value
+                // A typed key belongs to the provider it was typed for.
+                if (providerOf(model) !== provider) setKeyDraft('')
+                setDraft({ ...draft, model })
+              }}
               className="field bg-desk mt-1.5 cursor-pointer"
             >
               {(Object.keys(PROVIDERS) as ProviderId[]).map((p) => (

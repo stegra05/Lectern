@@ -304,7 +304,7 @@ export function followUpRequestPrompt(
       : '(the deck is currently empty)'
   return (
     `The user reviewed the finished deck and asks for additional cards:\n"${opts.request}"\n\n` +
-    `Additions only — the existing deck stays untouched. Call add_requested_cards with the new cards, read the verdicts, and call finish_request with a short summary once the request is served (immediately if it needs no new cards). Add only what the request asks for, up to ${opts.cardBudget} card(s) — no filler.\n` +
+    `Additions only: the existing deck stays untouched. Call add_requested_cards with the new cards, read the verdicts, and call finish_request with a short summary once the request is served (immediately if it needs no new cards). Add only what the request asks for, up to ${opts.cardBudget} card(s), no filler.\n` +
     `Every card meets the same quality bar and metadata requirements as before (source_pages, concept_ids copied from the concept map, rationale, source_excerpt).\n` +
     `Ground each card in the document. If the request needs material the document does not contain, still write the card: set in_source=false, leave source_pages empty, and put the knowledge the answer rests on in source_excerpt — the app labels such cards "outside source" for the user to check.\n` +
     `All content stays in ${ctx.language}.\n` +

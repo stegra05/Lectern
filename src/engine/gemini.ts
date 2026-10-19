@@ -18,8 +18,9 @@ import {
 import {
   LlmError,
   isAbortError,
-  isDailyQuota,
   isTransient,
+  rateLimitKind,
+  retryAfterFromHeaders,
   sleep,
   withRetry,
   type DocumentRef,
@@ -296,16 +297,12 @@ async function errorFromResponse(res: Response): Promise<LlmError> {
   } catch {
     // keep the HTTP status message
   }
-  const retryAfterHeader = res.headers.get('retry-after')
-  const retryAfterMs = retryAfterHeader
-    ? Number.parseFloat(retryAfterHeader) * 1000
-    : extractRetryAfterMs(message)
   return new LlmError(
     message,
     res.status,
     kindFor(res.status, message),
     'gemini',
-    retryAfterMs !== undefined && Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
+    retryAfterFromHeaders(res.headers) ?? extractRetryAfterMs(message),
   )
 }
 
@@ -316,7 +313,7 @@ function kindFor(status: number, message: string): LlmErrorKind {
     return 'key_rejected'
   }
   if (lower.includes('spending') || lower.includes('billing')) return 'spending_cap'
-  if (status === 429) return isDailyQuota(message) ? 'quota_daily' : 'rate_limited'
+  if (status === 429) return rateLimitKind(message)
   if (status >= 500) return 'server'
   return 'request_rejected'
 }

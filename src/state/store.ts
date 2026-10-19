@@ -78,7 +78,13 @@ async function removeUploads(uploads: Upload[]): Promise<void> {
  *  list is read before returning, so a run that starts right after keeps
  *  its own upload. */
 async function releaseUploads(): Promise<void> {
-  const uploads = await listUploads()
+  let uploads: Upload[]
+  try {
+    uploads = await listUploads()
+  } catch (e) {
+    console.warn('Could not read the list of uploaded PDFs:', e)
+    return
+  }
   void removeUploads(uploads)
 }
 
@@ -227,7 +233,7 @@ interface LecternActions {
    *  cards that never reached Anki. */
   retryGeneration: () => Promise<void>
   backToHome: () => Promise<void>
-  /** Post-completion chat: ask the model for additional cards. Additions only —
+  /** Post-completion chat: ask the model for additional cards. Additions only:
    *  the existing deck is never edited. */
   requestMoreCards: (text: string) => Promise<void>
 
@@ -351,7 +357,9 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         // Said live by the countdown under the current step, not in the log.
         break
       case 'document_uploaded':
-        void rememberUpload({ provider: event.provider, document: event.document })
+        rememberUpload({ provider: event.provider, document: event.document }).catch((e) =>
+          console.warn('Could not note an uploaded PDF for removal:', e),
+        )
         break
     }
   }
@@ -913,7 +921,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     cancelGeneration: () => abortController?.abort(),
 
     requestMoreCards: async (text) => {
-      const { settings, conceptMap, followUp, followUpBusy, cards, focusPrompt, pdfInfo } = get()
+      const { settings, conceptMap, followUp, followUpBusy, cards, pdfInfo } = get()
       const request = text.trim()
       if (!request || !settings || !conceptMap || !followUp || followUpBusy) return
       // The conversation stays with the model that started it, whatever
@@ -937,7 +945,6 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           deck: cards,
           conceptMap,
           seed: followUp,
-          focusPrompt: focusPrompt || undefined,
           pdfInfo: pdfInfo ?? undefined,
           apiKey,
           fetchFn: tauriFetch,

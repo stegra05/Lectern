@@ -22,14 +22,12 @@ const STORE_FILE = 'uploads.json'
 const STORE_KEY = 'uploads'
 const LS_KEY = 'lectern-uploads'
 
+/** Throws when the list cannot be read: an empty one written back over it
+ *  would lose every upload still on it. */
 async function read(): Promise<Upload[]> {
-  try {
-    if (!IS_TAURI) return JSON.parse(localStorage.getItem(LS_KEY) ?? '[]') as Upload[]
-    const store = await load(STORE_FILE, { autoSave: false, defaults: {} })
-    return (await store.get<Upload[]>(STORE_KEY)) ?? []
-  } catch {
-    return []
-  }
+  if (!IS_TAURI) return JSON.parse(localStorage.getItem(LS_KEY) ?? '[]') as Upload[]
+  const store = await load(STORE_FILE, { autoSave: false, defaults: {} })
+  return (await store.get<Upload[]>(STORE_KEY)) ?? []
 }
 
 async function write(uploads: Upload[]): Promise<void> {

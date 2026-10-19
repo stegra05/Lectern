@@ -1,10 +1,10 @@
 /**
- * Follow-up requests — the post-completion chat in the activity log.
+ * Follow-up requests: the post-completion chat in the activity log.
  *
  * After the pipeline completes, the user can ask for additional cards in
  * natural language ("add cards on X", "emphasize Y"). The request continues
- * the session's conversation — the model still holds the
- * document, the concept map, and the review history — as a small agentic
+ * the session's conversation (the model still holds the document, the
+ * concept map, and the review history) as a small agentic
  * loop: add_cards batches pass the same quality gate as generation and are
  * deduped against the existing deck. Additions only; existing cards are
  * never touched.
@@ -52,7 +52,6 @@ export interface FollowUpOptions {
   deck: Card[]
   conceptMap: ConceptMap
   seed: FollowUpSeed
-  focusPrompt?: string
   /** The document the deck was built from, so a follow-up card's citations
    *  face the same checks generation did. */
   pdfInfo?: PdfInfo
@@ -84,7 +83,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
 
   const ctx: PromptContext = {
     language: opts.conceptMap.language || 'en',
-    focusPrompt: opts.focusPrompt,
+    focusPrompt: opts.seed.focusPrompt,
   }
   const request = sanitizeFocusPrompt(opts.request, MAX_REQUEST_PROMPT_LEN)
   const catalog = buildCoverageCatalog(opts.conceptMap, opts.pdfInfo?.pageCount)
@@ -103,7 +102,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
   const requestTurn = (conversation: Conversation, input: InputPart[]) =>
     client.turn({
       model,
-      instructions: systemInstructions(opts.focusPrompt),
+      instructions: systemInstructions(opts.seed.focusPrompt),
       conversation,
       input,
       tools: SESSION_TOOLS,
@@ -228,7 +227,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
     outsideSourceCount: added.filter((card) => card.outsideSource).length,
     note,
     seed: {
-      model,
+      ...opts.seed,
       conversation: response.conversation,
       pendingInput: closeUnansweredCalls(response, pendingResults),
     },

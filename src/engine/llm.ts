@@ -182,8 +182,52 @@ export class LlmError extends Error {
 }
 
 /** Quota errors name their window; a daily one will not clear by waiting. */
-export const isDailyQuota = (message: string): boolean =>
+const isDailyQuota = (message: string): boolean =>
   /per\s*day|perday|daily/i.test(message) && /quota|limit/i.test(message)
+
+/** What a 429 that is not a billing problem means. */
+export const rateLimitKind = (message: string): LlmErrorKind =>
+  isDailyQuota(message) ? 'quota_daily' : 'rate_limited'
+
+/** The wait an HTTP response asked for; OpenAI also sends it in ms. */
+export function retryAfterFromHeaders(headers: Headers | undefined): number | undefined {
+  const ms = Number.parseFloat(headers?.get('retry-after-ms') ?? '')
+  if (Number.isFinite(ms)) return ms
+  const seconds = Number.parseFloat(headers?.get('retry-after') ?? '')
+  return Number.isFinite(seconds) ? seconds * 1000 : undefined
+}
+
+/** The error classes of the OpenAI and Anthropic SDKs. Both come from one
+ *  generator, so their errors share a shape. */
+export interface SdkErrorClasses {
+  APIError: abstract new (
+    ...args: never[]
+  ) => Error & { status?: number; headers?: Headers; code?: string | null }
+  APIConnectionError: abstract new (...args: never[]) => Error
+}
+
+/** Turn whatever an SDK call threw into an LlmError. */
+export function fromSdkError(
+  e: unknown,
+  provider: ProviderId,
+  sdk: SdkErrorClasses,
+  kindFor: (status: number, message: string, code: string) => LlmErrorKind,
+): LlmError {
+  if (e instanceof LlmError) return e
+  // A connection error is an APIError without a status.
+  if (e instanceof sdk.APIConnectionError) return new LlmError(e.message, 0, 'network', provider)
+  if (e instanceof sdk.APIError) {
+    const status = e.status ?? 0
+    return new LlmError(
+      e.message,
+      status,
+      kindFor(status, e.message, e.code ?? ''),
+      provider,
+      retryAfterFromHeaders(e.headers),
+    )
+  }
+  return new LlmError(e instanceof Error ? e.message : String(e), 0, 'network', provider)
+}
 
 // ---------------------------------------------------------------------------
 // Retry
@@ -216,6 +260,9 @@ export async function withRetry<T>(
       // A daily quota or a spending cap will not clear in the next few
       // minutes; retrying only made the student wait for the same answer.
       if (!isTransient(error.kind) || n === RATE_LIMIT_MAX_RETRIES) throw error
+      // A provider that asks for a longer wait than the cap is not having a
+      // blip; saying so now beats a run that looks hung.
+      if (error.retryAfterMs !== undefined && error.retryAfterMs > RETRY_MAX_DELAY_MS) throw error
       const backoff = Math.min(
         RETRY_BASE_DELAY_MS * 2 ** n * (1 + Math.random() * 0.1),
         RETRY_MAX_DELAY_MS,
@@ -260,9 +307,15 @@ export function parseJsonPayload(text: string, provider: ProviderId): unknown {
   try {
     return JSON.parse(trimmed)
   } catch {
-    // Some models wrap JSON in fences despite instructions — salvage.
+    // Some models wrap JSON in fences despite instructions; salvage.
     const match = trimmed.match(/\{[\s\S]*\}/)
-    if (match) return JSON.parse(match[0])
+    if (match) {
+      try {
+        return JSON.parse(match[0])
+      } catch {
+        // not salvageable either
+      }
+    }
     throw new LlmError('response was not valid JSON', 0, 'bad_response', provider)
   }
 }

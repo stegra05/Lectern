@@ -3,9 +3,9 @@
  * the tolerant zod parsers for what comes back.
  *
  * Two hard-won conventions carried over from the original app:
- *  - Card fields are a LIST of {name, value} pairs, not a map — structured
+ *  - Card fields are a LIST of {name, value} pairs, not a map: structured
  *    output is far more reliable with this shape.
- *  - Never write `additionalProperties` — Gemini rejects it. Adapters whose
+ *  - Never write `additionalProperties`: Gemini rejects it. Adapters whose
  *    provider wants it (Claude's structured output) add it on the way out.
  */
 

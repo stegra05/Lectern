@@ -104,9 +104,9 @@ export interface PipelineOptions {
    *  repeating work, and are never edited or removed by the model. */
   existingCards?: Card[]
   model: string
-  /** Overrides the model's effort per phase. For evaluation runs; the app
-   *  always uses the model's own plan. */
-  effort?: EffortPlan
+  /** Overrides the model's effort per pipeline phase. For evaluation runs;
+   *  the app always uses the model's own plan. */
+  effort?: Omit<EffortPlan, 'followUp'>
   apiKey: string
   fetchFn: typeof fetch
   emit: PipelineSink
@@ -114,12 +114,14 @@ export interface PipelineOptions {
 }
 
 /** Handle for continuing the session's conversation after the pipeline
- *  completes (follow-up requests). The model is the one the conversation
- *  started on: it cannot move to another provider mid-way. `pendingInput`
- *  answers any tool calls the last turn left open — the next request must
+ *  completes (follow-up requests). The model and the focus prompt are the
+ *  ones the conversation started on: the provider cannot change mid-way, and
+ *  the system prompt built from the focus must not either. `pendingInput`
+ *  answers any tool calls the last turn left open; the next request must
  *  lead with them. */
 export interface FollowUpSeed {
   model: string
+  focusPrompt?: string
   conversation: Conversation
   pendingInput: InputPart[]
 }
@@ -139,7 +141,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     emit({ type: 'waiting', ...notice }),
   )
   const voice = PROVIDERS[client.provider].voice
-  const effort = (phase: ThinkingPhase): ThinkingLevel =>
+  const effort = (phase: Exclude<ThinkingPhase, 'followUp'>): ThinkingLevel =>
     opts.effort?.[phase] ?? effortFor(opts.model, phase)
   const meter = new UsageMeter(opts.model)
   const track = (u: Usage) => meter.add(u)
@@ -148,11 +150,17 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
   // --- Phase 0: upload ------------------------------------------------------
   emit({ type: 'phase', phase: 'uploading' })
-  const document = await client.uploadPdf(opts.pdfBytes, opts.fileName, signal)
+  // Not aborted with the run: a request cut off mid-way can still land on
+  // the provider with an id nobody learns. A cancel stops waiting for it;
+  // the upload finishes on its own and is reported like any other.
+  const upload = client.uploadPdf(opts.pdfBytes, opts.fileName)
   // Reported at once: the upload outlives this run only until the session
   // ends, and whoever ends it has to know what to remove.
-  emit({ type: 'document_uploaded', provider: client.provider, document })
-  throwIfAborted(signal)
+  void upload.then(
+    (document) => emit({ type: 'document_uploaded', provider: client.provider, document }),
+    () => undefined,
+  )
+  const document = await untilAborted(upload, signal)
 
   // --- Phase 1: concept map -------------------------------------------------
   emit({ type: 'phase', phase: 'mapping' })
@@ -440,6 +448,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   pendingResults = closeUnansweredCalls(response, pendingResults)
   let followUpSeed: FollowUpSeed = {
     model: opts.model,
+    focusPrompt: opts.focusPrompt,
     conversation: response.conversation,
     pendingInput: pendingResults,
   }
@@ -468,6 +477,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     })
     followUpSeed = {
       model: opts.model,
+      focusPrompt: opts.focusPrompt,
       conversation: review.conversation,
       pendingInput: review.pendingInput,
     }
@@ -621,7 +631,7 @@ export function firstField(card: Card): string {
 /**
  * Answer any function calls of `response` that `built` does not already
  * answer. A loop can exit with calls it never processed (round budget
- * exhausted) — every provider requires each call answered before the
+ * exhausted). Every provider requires each call answered before the
  * conversation can continue, so the next phase or follow-up leads with these.
  */
 export function closeUnansweredCalls(response: TurnResult, built: InputPart[]): InputPart[] {
@@ -675,7 +685,7 @@ interface ReviewOutcome {
   updated: number
   added: number
   removed: number
-  /** Where the conversation ends — follow-up requests continue here. */
+  /** Where the conversation ends; follow-up requests continue here. */
   conversation: Conversation
   pendingInput: InputPart[]
 }
@@ -747,7 +757,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
 
   for (let round = 1; round <= MAX_REFLECTION_ROUNDS && !finished; round++) {
     throwIfAborted(signal)
-    if (response.toolCalls.length === 0) break // prose instead of tools — accept the deck
+    if (response.toolCalls.length === 0) break // prose instead of tools: accept the deck
 
     const results: InputPart[] = []
     let editsThisRound = 0
@@ -1026,4 +1036,16 @@ export function summarizeExistingDeck(
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError')
+}
+
+/** Wait for `task`, or stop waiting with an AbortError when the run is
+ *  cancelled. The task itself keeps going. */
+function untilAborted<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return task
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new DOMException('Generation cancelled', 'AbortError'))
+    if (signal.aborted) return onAbort()
+    signal.addEventListener('abort', onAbort, { once: true })
+    task.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
 }

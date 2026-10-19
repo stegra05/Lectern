@@ -17,6 +17,8 @@ import type {
 
 import {
   LlmError,
+  fromSdkError,
+  rateLimitKind,
   withRetry,
   type DocumentRef,
   type InputPart,
@@ -151,6 +153,13 @@ function toOpenAIInput(parts: InputPart[]): ResponseInputItem[] {
 }
 
 function parseResponse(response: OpenAIResponse): TurnResult {
+  if (response.status === 'incomplete') {
+    if (response.incomplete_details?.reason === 'content_filter') {
+      throw new LlmError('the answer was stopped by a content filter', 200, 'refused', 'openai')
+    }
+    // Retrying would only run into the same ceiling.
+    throw new LlmError('the answer ran past the output limit', 200, 'request_rejected', 'openai')
+  }
   const toolCalls: ToolCall[] = []
   let refusal = ''
   for (const item of response.output) {
@@ -195,38 +204,14 @@ function parseArguments(raw: string): unknown {
   }
 }
 
-function toLlmError(e: unknown): LlmError {
-  if (e instanceof LlmError) return e
-  if (e instanceof APIConnectionError) {
-    return new LlmError(e.message, 0, 'network', 'openai')
-  }
-  if (e instanceof APIError) {
-    // The class's type parameters widen to any under instanceof.
-    const error = e as APIError
-    const status = error.status ?? 0
-    return new LlmError(
-      error.message,
-      status,
-      kindFor(status, error.code ?? '', error.message),
-      'openai',
-      retryAfterMs(error.headers),
-    )
-  }
-  return new LlmError(e instanceof Error ? e.message : String(e), 0, 'network', 'openai')
-}
+const toLlmError = (e: unknown): LlmError =>
+  fromSdkError(e, 'openai', { APIError, APIConnectionError }, kindFor)
 
-function kindFor(status: number, code: string, message: string): LlmErrorKind {
+function kindFor(status: number, message: string, code: string): LlmErrorKind {
   if (status === 401 || code === 'invalid_api_key') return 'key_rejected'
   // OpenAI reports an empty balance as a 429, but waiting will not refill it.
   if (code === 'insufficient_quota' || /billing/i.test(message)) return 'spending_cap'
-  if (status === 429) return 'rate_limited'
+  if (status === 429) return rateLimitKind(message)
   if (status >= 500) return 'server'
   return 'request_rejected'
-}
-
-function retryAfterMs(headers: Headers | undefined): number | undefined {
-  const ms = Number.parseFloat(headers?.get('retry-after-ms') ?? '')
-  if (Number.isFinite(ms)) return ms
-  const seconds = Number.parseFloat(headers?.get('retry-after') ?? '')
-  return Number.isFinite(seconds) ? seconds * 1000 : undefined
 }

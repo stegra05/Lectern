@@ -191,6 +191,54 @@ describe('OpenAIClient', () => {
     expect(captured).toHaveLength(1)
   })
 
+  it('treats a per-day limit as a daily quota, not a rate limit to wait out', async () => {
+    const captured: Captured[] = []
+    const client = new OpenAIClient(
+      'key',
+      scriptedFetch(
+        [
+          json(
+            {
+              error: {
+                message: 'Rate limit reached for gpt-6-luna on requests per day (RPD).',
+                type: 'requests',
+                code: 'rate_limit_exceeded',
+              },
+            },
+            429,
+          ),
+        ],
+        captured,
+      ),
+    )
+    const error = await client
+      .turn({ model: 'gpt-6-luna', input: [{ type: 'text', text: 'x' }] })
+      .catch((e: unknown) => e)
+    expect((error as LlmError).kind).toBe('quota_daily')
+    expect(captured).toHaveLength(1)
+  })
+
+  it('reports an answer cut off at the output limit instead of parsing it', async () => {
+    const client = new OpenAIClient(
+      'key',
+      scriptedFetch(
+        [
+          json({
+            ...response('resp_1', []),
+            status: 'incomplete',
+            incomplete_details: { reason: 'max_output_tokens' },
+          }),
+        ],
+        [],
+      ),
+    )
+    const error = await client
+      .turn({ model: 'gpt-6-luna', input: [{ type: 'text', text: 'x' }] })
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(LlmError)
+    expect((error as LlmError).message).toBe('the answer ran past the output limit')
+  })
+
   it('deletes an upload, and takes a 404 as already gone', async () => {
     const captured: Captured[] = []
     const client = new OpenAIClient(

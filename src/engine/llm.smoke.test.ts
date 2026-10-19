@@ -8,7 +8,7 @@
  *  1. instructions + structured output
  *  2. agentic tool round-trip on the conversation value, with the whole tool
  *     set declared, one tool active, and an effort change between turns
- *  3. PDF upload + document input part (LECTERN_TEST_PDF overrides the file)
+ *  3. PDF upload + document input part, when LECTERN_TEST_PDF names a file
  */
 
 import { readFile } from 'node:fs/promises'
@@ -17,9 +17,7 @@ import { createClient } from './clients'
 import type { ProviderId } from './config'
 import { parseJsonPayload, type ToolDeclaration } from './llm'
 
-const PDF_PATH =
-  process.env.LECTERN_TEST_PDF ??
-  '/Users/stef/Archive/code/apps/lectern-v1/LecternApp/resources/test_slides.pdf'
+const PDF_PATH = process.env.LECTERN_TEST_PDF
 
 const PROVIDERS: Array<{ provider: ProviderId; model: string; key: string | undefined }> = [
   { provider: 'gemini', model: 'gemini-3.8-flash', key: process.env.GEMINI_API_KEY },
@@ -102,8 +100,8 @@ for (const { provider, model, key } of PROVIDERS) {
       expect(second.outputText.length).toBeGreaterThan(0)
     })
 
-    it('PDF upload + document turn', { timeout: 240_000 }, async () => {
-      const bytes = new Uint8Array(await readFile(PDF_PATH))
+    it.skipIf(!PDF_PATH)('PDF upload + document turn', { timeout: 240_000 }, async () => {
+      const bytes = new Uint8Array(await readFile(PDF_PATH!))
       const document = await client().uploadPdf(bytes, 'smoke-test-slides.pdf')
       expect(document.id).toBeTruthy()
       onTestFinished(() => client().deleteDocument(document))

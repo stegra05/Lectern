@@ -25,6 +25,8 @@ import type {
 import { ANTHROPIC_MAX_TOKENS, type ThinkingLevel } from './config'
 import {
   LlmError,
+  fromSdkError,
+  rateLimitKind,
   withRetry,
   type Conversation,
   type DocumentRef,
@@ -216,36 +218,14 @@ function parseMessage(message: BetaMessage, conversation: AnthropicConversation)
   }
 }
 
-function toLlmError(e: unknown): LlmError {
-  if (e instanceof LlmError) return e
-  if (e instanceof APIConnectionError) {
-    return new LlmError(e.message, 0, 'network', 'anthropic')
-  }
-  if (e instanceof APIError) {
-    // The class's type parameters widen to any under instanceof.
-    const error = e as APIError
-    const status = error.status ?? 0
-    return new LlmError(
-      error.message,
-      status,
-      kindFor(status, error.message),
-      'anthropic',
-      retryAfterMs(error.headers),
-    )
-  }
-  return new LlmError(e instanceof Error ? e.message : String(e), 0, 'network', 'anthropic')
-}
+const toLlmError = (e: unknown): LlmError =>
+  fromSdkError(e, 'anthropic', { APIError, APIConnectionError }, kindFor)
 
 function kindFor(status: number, message: string): LlmErrorKind {
   if (status === 401 || status === 403) return 'key_rejected'
   if (/credit balance|spend limit|billing/i.test(message)) return 'spending_cap'
-  if (status === 429) return 'rate_limited'
+  if (status === 429) return rateLimitKind(message)
   // 529 is "overloaded": a server-side condition like any 5xx.
   if (status >= 500) return 'server'
   return 'request_rejected'
-}
-
-function retryAfterMs(headers: Headers | undefined): number | undefined {
-  const seconds = Number.parseFloat(headers?.get('retry-after') ?? '')
-  return Number.isFinite(seconds) ? seconds * 1000 : undefined
 }

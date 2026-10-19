@@ -4,7 +4,8 @@
  * do not cover: coverage, cards the gate rejected and why, review edits,
  * cost and wall-clock time. Spends real money, so it runs only on request:
  *
- *   LECTERN_EVAL=1 GEMINI_API_KEY=... OPENAI_API_KEY=... ANTHROPIC_API_KEY=... \
+ *   LECTERN_EVAL=1 LECTERN_EVAL_PDFS=slides.pdf,script.pdf \
+ *     GEMINI_API_KEY=... OPENAI_API_KEY=... ANTHROPIC_API_KEY=... \
  *     pnpm vitest run src/engine/models.eval.test.ts
  *
  * LECTERN_EVAL_ONLY=luna,haiku limits the run to the named variants.
@@ -25,13 +26,9 @@ import { conceptTarget } from './pacing'
 import { runPipeline } from './pipeline'
 import type { Card, PdfInfo, PipelineEvent, RejectionReason } from './types'
 
-const RESOURCES = '/Users/stef/Archive/code/apps/lectern-v1/LecternApp/resources'
-const PDFS = (
-  process.env.LECTERN_EVAL_PDFS?.split(',') ?? [
-    join(RESOURCES, 'test_slides.pdf'),
-    join(RESOURCES, 'test_script.pdf'),
-  ]
-).map((path) => path.trim())
+const PDFS = (process.env.LECTERN_EVAL_PDFS?.split(',') ?? [])
+  .map((path) => path.trim())
+  .filter((path) => path !== '')
 
 interface Variant {
   name: string
@@ -41,7 +38,7 @@ interface Variant {
 
 /** The loops at one level up from the shared plan: medium to generate, high
  *  to review. Never above high, for the first-token latency. */
-const DEEPER_LOOPS: EffortPlan = { generating: 'medium', reflecting: 'high', followUp: 'medium' }
+const DEEPER_LOOPS: EffortPlan = { generating: 'medium', reflecting: 'high' }
 
 const VARIANTS: Variant[] = [
   { name: 'gemini-flash', model: 'gemini-3.8-flash' },
@@ -233,32 +230,35 @@ const variants = VARIANTS.filter(
   (v) => KEYS[providerOf(v.model)] && (!only || only.includes(v.name)),
 )
 
-describe.skipIf(!process.env.LECTERN_EVAL)('model evaluation (live, costs money)', () => {
-  it('runs every variant on every lecture', { timeout: 3_600_000 }, async () => {
-    // Variants run side by side; one variant's lectures run in turn.
-    const results = (
-      await Promise.all(
-        variants.map(async (variant) => {
-          const own: RunResult[] = []
-          for (const pdf of PDFS) own.push(await runOne(variant, pdf))
-          return own
-        }),
-      )
-    ).flat()
+describe.skipIf(!process.env.LECTERN_EVAL || PDFS.length === 0)(
+  'model evaluation (live, costs money)',
+  () => {
+    it('runs every variant on every lecture', { timeout: 3_600_000 }, async () => {
+      // Variants run side by side; one variant's lectures run in turn.
+      const results = (
+        await Promise.all(
+          variants.map(async (variant) => {
+            const own: RunResult[] = []
+            for (const pdf of PDFS) own.push(await runOne(variant, pdf))
+            return own
+          }),
+        )
+      ).flat()
 
-    const dir = join(process.cwd(), 'eval-results', new Date().toISOString().replaceAll(':', '-'))
-    await mkdir(dir, { recursive: true })
-    await writeFile(
-      join(dir, 'summary.md'),
-      `# Model eval ${new Date().toISOString()}\n\n${table(results)}\n`,
-    )
-    for (const r of results) {
+      const dir = join(process.cwd(), 'eval-results', new Date().toISOString().replaceAll(':', '-'))
+      await mkdir(dir, { recursive: true })
       await writeFile(
-        join(dir, `${r.variant}__${r.pdf.replace(/\.pdf$/, '')}.md`),
-        `# ${r.variant} on ${r.pdf}\n\n${r.error ?? ''}\n\n${r.transcript}`,
+        join(dir, 'summary.md'),
+        `# Model eval ${new Date().toISOString()}\n\n${table(results)}\n`,
       )
-    }
-    console.log(`${table(results)}\n\nwritten to ${dir}`)
-    expect(results.length).toBe(variants.length * PDFS.length)
-  })
-})
+      for (const r of results) {
+        await writeFile(
+          join(dir, `${r.variant}__${r.pdf.replace(/\.pdf$/, '')}.md`),
+          `# ${r.variant} on ${r.pdf}\n\n${r.error ?? ''}\n\n${r.transcript}`,
+        )
+      }
+      console.log(`${table(results)}\n\nwritten to ${dir}`)
+      expect(results.length).toBe(variants.length * PDFS.length)
+    })
+  },
+)

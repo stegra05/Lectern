@@ -111,15 +111,31 @@ describe('GeminiClient rate-limit visibility', () => {
     const notices: RetryNotice[] = []
     const fetchFn = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(rateLimited('slow down', { 'retry-after': '90' }))
+      .mockResolvedValueOnce(rateLimited('slow down', { 'retry-after': '45' }))
       .mockResolvedValueOnce(okInteraction())
     const client = new GeminiClient('key', fetchFn, (n) => notices.push(n))
 
     const promise = client.turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
-    await vi.advanceTimersByTimeAsync(120_000)
+    await vi.advanceTimersByTimeAsync(60_000)
     await promise
 
-    expect(notices[0].waitMs).toBe(90_000)
+    expect(notices[0].waitMs).toBe(45_000)
+  })
+
+  it('gives up at once when the server asks for a wait past the cap', async () => {
+    const notices: RetryNotice[] = []
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(rateLimited('slow down', { 'retry-after': '3600' }))
+    const client = new GeminiClient('key', fetchFn, (n) => notices.push(n))
+
+    const error = await client
+      .turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
+      .catch((e: unknown) => e)
+
+    expect((error as LlmError).kind).toBe('rate_limited')
+    expect(notices).toHaveLength(0)
+    expect(fetchFn).toHaveBeenCalledTimes(1)
   })
 
   it('stops promising a retry once it has run out of them', async () => {
