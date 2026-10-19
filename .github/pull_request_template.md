@@ -10,4 +10,5 @@
 
 - [ ] `pnpm typecheck` passes
 - [ ] `pnpm test` passes
-- [ ] UI changes follow the design tokens (no arbitrary sizes/colors) and were checked in both `pnpm tauri dev` and browser mode
+- [ ] UI changes were checked in browser mode (`pnpm dev`)
+- [ ] For a bigger feature: there is a spec issue, and this PR holds one feature

@@ -3,6 +3,16 @@
 Thanks for your interest! Lectern is a small, focused codebase (~6k LOC including
 tests). Bug reports, card-quality feedback, and PRs are all welcome.
 
+## Before you start
+
+Fixes and small improvements: open the PR directly.
+
+Anything bigger (a new view, a new workflow, a change to how cards are made):
+open a [feature spec](https://github.com/stegra05/Lectern/issues/new?template=feature_spec.yml)
+first, so we can agree on the shape before you spend an evening on it. Then
+send one feature per PR. Two small PRs get reviewed and merged faster than
+one large one, and a part that needs rework does not hold up the rest.
+
 ## Dev setup
 
 Prerequisites: [Node 22+](https://nodejs.org), [pnpm](https://pnpm.io),
@@ -30,9 +40,11 @@ pnpm format:check     # prettier check only (what CI runs)
 ```
 
 CI runs lint, format check, tests, the production build, and `cargo fmt`/`clippy`
-on every PR. A pre-commit hook (installed automatically by `pnpm install` via the
-`prepare` script, see `.githooks/`) checks formatting and lint on exactly the
-staged files; bypass a single commit with `git commit -n`.
+on every PR. For UI changes, checking them in browser mode (`pnpm dev`) is
+enough; we test the desktop build before release. A pre-commit hook (installed
+automatically by `pnpm install` via the `prepare` script, see `.githooks/`)
+checks formatting and lint on exactly the staged files; bypass a single commit
+with `git commit -n`.
 
 ## Code layout
 
@@ -44,7 +56,9 @@ src-tauri/     thin Rust shell: keychain, CORS-free fetch, dialogs
 ```
 
 Design rules for UI work: colors, type sizes, radii, and shadows come from the
-tokens in `src/index.css`; no arbitrary `text-[..px]` or ad-hoc shadows. Sans
+tokens in `src/index.css`; no hex or `rgb()` colors, no Tailwind default palette
+(`sky-500`, `gray-400`, ...), no arbitrary `text-[..px]` or ad-hoc shadows. If no
+token fits, add one to the `@theme` block rather than a one-off value. Sans
 (Schibsted Grotesk) is for controls, serif (Source Serif 4) for study content,
 mono (IBM Plex Mono) for metadata/provenance.
 
@@ -64,9 +78,9 @@ exported Markdown) follows the same voice:
 - **No em-dashes.** Use a period, a comma, a colon or a `·` separator.
 - **Sentence case, no exclamation marks.**
 
-`src/copy.test.ts` enforces the plural and em-dash rules on every string
+`src/houseRules.test.ts` enforces the plural and em-dash rules on every string
 literal, template and JSX text under `src/` (prompt text for the model in
-`engine/prompts.ts` is exempt).
+`engine/prompts.ts` is exempt), and the design-token rules above on the UI.
 
 ## Commits
 
