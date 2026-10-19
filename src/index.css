@@ -21,9 +21,10 @@
   --color-desk-hover: #322d28;
   --color-desk-edge: #3b362f;
 
-  /* Paper (light content) — base, inset/shade */
+  /* Paper (light content) — base, inset/shade, pressed shade */
   --color-paper: #faf9f5;
   --color-paper-shade: #f1efe9;
+  --color-paper-press: #e7e4da;
 
   /* Text on paper: high / low contrast */
   --color-ink: #211e1a;
@@ -236,7 +237,7 @@ article.bg-paper:focus-visible {
 
 /* Quiet actions that live on paper (card edit/remove). */
 @utility btn-paper {
-  @apply btn bg-paper-shade text-ink-soft text-xs hover:bg-[#e7e4da] hover:text-ink;
+  @apply btn bg-paper-shade text-ink-soft text-xs hover:bg-paper-press hover:text-ink;
 }
 
 /* Text inputs / textareas / selects on the desk. */
@@ -352,7 +353,7 @@ input[type='range']::-moz-range-thumb {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 14px 3px rgb(232 163 61 / 0.55);
+  box-shadow: 0 0 14px 3px color-mix(in srgb, var(--color-lamp) 55%, transparent);
   animation: lamp-flare 900ms ease-out both;
   pointer-events: none;
 }
