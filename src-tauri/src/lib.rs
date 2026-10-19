@@ -1,13 +1,22 @@
 use keyring::Entry;
 
-// Same service/account as the original Python app, so an existing key carries over.
+// One keychain entry per provider. Gemini's keeps the original Python app's
+// service/account, so an existing key carries over.
 const KEYCHAIN_SERVICE: &str = "Lectern";
-const KEYCHAIN_ACCOUNT: &str = "gemini_api_key";
+
+fn keychain_entry(provider: &str) -> Result<Entry, String> {
+    let account = match provider {
+        "gemini" => "gemini_api_key",
+        "openai" => "openai_api_key",
+        "anthropic" => "anthropic_api_key",
+        other => return Err(format!("unknown provider: {other}")),
+    };
+    Entry::new(KEYCHAIN_SERVICE, account).map_err(|e| e.to_string())
+}
 
 #[tauri::command]
-fn keychain_get() -> Result<Option<String>, String> {
-    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.get_password() {
+fn keychain_get(provider: String) -> Result<Option<String>, String> {
+    match keychain_entry(&provider)?.get_password() {
         Ok(password) => Ok(Some(password)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(e.to_string()),
@@ -15,15 +24,15 @@ fn keychain_get() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn keychain_set(value: String) -> Result<(), String> {
-    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
-    entry.set_password(&value).map_err(|e| e.to_string())
+fn keychain_set(provider: String, value: String) -> Result<(), String> {
+    keychain_entry(&provider)?
+        .set_password(&value)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn keychain_delete() -> Result<(), String> {
-    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
+fn keychain_delete(provider: String) -> Result<(), String> {
+    match keychain_entry(&provider)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
     }

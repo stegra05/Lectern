@@ -25,6 +25,7 @@ import { readCalibrationLog, writeCalibrationLog } from '../lib/calibrationStore
 import { provenanceFieldValues } from '../engine/noteTypes'
 import { ensureLecternModels, migrateNotesToLectern } from '../engine/noteTypeSync'
 import { loadNoteTypeFonts } from '../lib/noteTypeFonts'
+import { PROVIDERS, providerOf, type ProviderId } from '../engine/config'
 import { estimateCost, type CostEstimate } from '../engine/cost'
 import { evaluateCard } from '../engine/quality'
 import { extractPdfInfo, openPdf, renderPageThumbnail } from '../engine/pdf'
@@ -53,6 +54,39 @@ import { notifyRunFinished } from '../lib/notify'
 import { IS_TAURI } from '../lib/platform'
 import { getApiKey, loadSettings, saveSettings } from '../lib/settings'
 import { tauriFetch } from '../lib/tauriFetch'
+import { forgetUpload, listUploads, rememberUpload, type Upload } from '../lib/uploadStore'
+import { createClient } from '../engine/clients'
+
+/**
+ * Remove uploads from their providers. One that cannot go yet (no key
+ * saved, offline) stays on the list and is tried again at the next launch.
+ */
+async function removeUploads(uploads: Upload[]): Promise<void> {
+  for (const upload of uploads) {
+    const key = await getApiKey(upload.provider).catch(() => null)
+    if (!key) continue
+    try {
+      await createClient(upload.provider, key, tauriFetch).deleteDocument(upload.document)
+      await forgetUpload(upload)
+    } catch (e) {
+      console.warn('Could not remove an uploaded PDF yet:', e)
+    }
+  }
+}
+
+/** End the session's hold on its uploads: everything on the list goes. The
+ *  list is read before returning, so a run that starts right after keeps
+ *  its own upload. */
+async function releaseUploads(): Promise<void> {
+  let uploads: Upload[]
+  try {
+    uploads = await listUploads()
+  } catch (e) {
+    console.warn('Could not read the list of uploaded PDFs:', e)
+    return
+  }
+  void removeUploads(uploads)
+}
 
 const THUMBNAIL_PAGE_LIMIT = 150
 const UNDO_WINDOW_MS = 30_000
@@ -94,10 +128,15 @@ type ToastOptions = Pick<Toast, 'detail' | 'action' | 'link'>
 export type AppPhase =
   'idle' | 'uploading' | 'mapping' | 'generating' | 'reflecting' | 'complete' | 'error'
 
+/** Whether the key for the selected model's provider is saved. */
+export const selectHasApiKey = (s: LecternState): boolean =>
+  s.settings !== null && s.savedKeys[providerOf(s.settings.model)]
+
 interface LecternState {
   // boot + connections
   settings: Settings | null
-  hasApiKey: boolean
+  /** Which providers have a key in the keychain. */
+  savedKeys: Record<ProviderId, boolean>
   ankiStatus: 'unknown' | 'checking' | 'connected' | 'offline'
   ankiDecks: string[]
   settingsOpen: boolean
@@ -175,7 +214,7 @@ interface LecternActions {
   openSettings: (open: boolean) => void
   openConcepts: (open: boolean) => void
   applySettings: (settings: Settings) => Promise<void>
-  setHasApiKey: (has: boolean) => void
+  setKeySaved: (provider: ProviderId, saved: boolean) => void
 
   pickPdf: () => Promise<void>
   loadPdfFromPath: (path: string) => Promise<void>
@@ -194,7 +233,7 @@ interface LecternActions {
    *  cards that never reached Anki. */
   retryGeneration: () => Promise<void>
   backToHome: () => Promise<void>
-  /** Post-completion chat: ask Gemini for additional cards. Additions only —
+  /** Post-completion chat: ask the model for additional cards. Additions only:
    *  the existing deck is never edited. */
   requestMoreCards: (text: string) => Promise<void>
 
@@ -316,6 +355,11 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           wait: { until: Date.now() + event.waitMs, waitMs: event.waitMs, status: event.status },
         })
         // Said live by the countdown under the current step, not in the log.
+        break
+      case 'document_uploaded':
+        rememberUpload({ provider: event.provider, document: event.document }).catch((e) =>
+          console.warn('Could not note an uploaded PDF for removal:', e),
+        )
         break
     }
   }
@@ -492,7 +536,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
   return {
     settings: null,
-    hasApiKey: false,
+    savedKeys: { gemini: false, openai: false, anthropic: false },
     ankiStatus: 'unknown',
     ankiDecks: [],
     settingsOpen: false,
@@ -545,9 +589,16 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     init: async () => {
       const settings = await loadSettings()
-      const key = await getApiKey().catch(() => null)
+      const providers = Object.keys(PROVIDERS) as ProviderId[]
+      const keys = await Promise.all(providers.map((p) => getApiKey(p).catch(() => null)))
+      const savedKeys = Object.fromEntries(
+        providers.map((p, i) => [p, Boolean(keys[i])]),
+      ) as Record<ProviderId, boolean>
       calibrationLog = await readCalibrationLog()
-      set({ settings, hasApiKey: Boolean(key) })
+      set({ settings, savedKeys })
+      // No session survives a restart: anything still listed was left
+      // behind by a crash or a quit.
+      void releaseUploads()
       void get().refreshAnki()
     },
 
@@ -588,7 +639,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       }
     },
 
-    setHasApiKey: (has) => set({ hasApiKey: has }),
+    setKeySaved: (provider, saved) =>
+      set((s) => ({ savedKeys: { ...s.savedKeys, [provider]: saved } })),
 
     pickPdf: async () => {
       if (!IS_TAURI) {
@@ -724,10 +776,14 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         sizing,
       } = get()
       if (!pdfBytes || !pdfInfo || !fileName || !settings) return
-      const apiKey = await getApiKey().catch(() => null)
+      const provider = providerOf(settings.model)
+      const apiKey = await getApiKey(provider).catch(() => null)
       if (!apiKey) {
         set({ settingsOpen: true })
-        get().toast('error', 'Add your Gemini API key in Settings to generate cards.')
+        get().toast(
+          'error',
+          `Add your ${PROVIDERS[provider].label} API key in Settings to generate cards.`,
+        )
         return
       }
       if (!deckName.trim()) {
@@ -735,6 +791,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         return
       }
 
+      // The last session ends here; its upload is not needed any more.
+      await releaseUploads()
       const controller = new AbortController()
       abortController = controller
       runStartedAt = Date.now()
@@ -840,6 +898,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       } catch (e) {
         if ((e as Error).name === 'AbortError') {
           set({ view: 'home', phase: 'idle' })
+          void releaseUploads()
           get().toast('info', 'Generation cancelled.')
         } else {
           const problem = describeProblem(e, 'generating')
@@ -862,13 +921,16 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     cancelGeneration: () => abortController?.abort(),
 
     requestMoreCards: async (text) => {
-      const { settings, conceptMap, followUp, followUpBusy, cards, focusPrompt, pdfInfo } = get()
+      const { settings, conceptMap, followUp, followUpBusy, cards, pdfInfo } = get()
       const request = text.trim()
       if (!request || !settings || !conceptMap || !followUp || followUpBusy) return
-      const apiKey = await getApiKey().catch(() => null)
+      // The conversation stays with the model that started it, whatever
+      // Settings say now.
+      const provider = providerOf(followUp.model)
+      const apiKey = await getApiKey(provider).catch(() => null)
       if (!apiKey) {
         set({ settingsOpen: true })
-        get().toast('error', 'Add your Gemini API key in Settings first.')
+        get().toast('error', `Add your ${PROVIDERS[provider].label} API key in Settings first.`)
         return
       }
 
@@ -883,9 +945,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           deck: cards,
           conceptMap,
           seed: followUp,
-          focusPrompt: focusPrompt || undefined,
           pdfInfo: pdfInfo ?? undefined,
-          model: settings.model,
           apiKey,
           fetchFn: tauriFetch,
           emit: handlePipelineEvent,
@@ -948,7 +1008,10 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         'Leaving discards them.',
         'Discard this deck?',
       )
-      if (ok) set({ view: 'home', phase: 'idle' })
+      if (ok) {
+        set({ view: 'home', phase: 'idle', followUp: null })
+        void releaseUploads()
+      }
     },
 
     updateCardFields: (uid, fields) => {

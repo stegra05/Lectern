@@ -4,7 +4,7 @@
  *
  * The up-front estimate (cost.ts) is a heuristic with no ground truth in the
  * loop. Every completed pipeline run *has* the ground truth: the usage totals
- * Gemini reported. This module writes both sides down and turns the history
+ * the provider reported. This module writes both sides down and turns the history
  * into per-model correction factors the next estimate multiplies in, so the
  * estimator converges on real behaviour instead of staying wrong forever.
  *
@@ -56,7 +56,7 @@ const calibrationRunSchema = z.object({
   cardCount: z.number(),
   /** What the user was shown before the run. */
   estimated: tokensAndCostSchema,
-  /** What Gemini's usage accounting reported after the run. */
+  /** What the provider's usage accounting reported after the run. */
   actual: tokensAndCostSchema,
 })
 

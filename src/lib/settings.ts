@@ -1,20 +1,26 @@
 /**
- * User settings (Tauri store plugin, JSON in app data dir) and the Gemini API
- * key (OS keychain via Rust commands — same entry the original Lectern used,
- * so existing keys carry over).
+ * User settings (Tauri store plugin, JSON in app data dir) and one API key
+ * per provider (OS keychain via Rust commands; Gemini's is the entry the
+ * original Lectern used, so existing keys carry over).
  *
  * In plain-browser dev mode both fall back to localStorage.
  */
 
 import { invoke } from '@tauri-apps/api/core'
 import { load, type Store } from '@tauri-apps/plugin-store'
-import { DEFAULT_MODEL, DEFAULT_SETTINGS, MODEL_CHOICES, MODEL_MIGRATIONS } from '../engine/config'
+import {
+  DEFAULT_MODEL,
+  DEFAULT_SETTINGS,
+  MODEL_CHOICES,
+  MODEL_MIGRATIONS,
+  type ProviderId,
+} from '../engine/config'
 import type { Settings } from '../engine/types'
 import { IS_TAURI } from './platform'
 
 const STORE_FILE = 'settings.json'
 const LS_SETTINGS = 'lectern-settings'
-const LS_DEV_KEY = 'lectern-dev-api-key'
+const devKeyName = (provider: ProviderId) => `lectern-dev-${provider}-key`
 
 let storePromise: Promise<Store> | null = null
 
@@ -56,25 +62,25 @@ export async function saveSettings(settings: Settings): Promise<void> {
   await store.set('settings', settings)
 }
 
-// --- API key (never in the JSON store) --------------------------------------
+// --- API keys (never in the JSON store) -------------------------------------
 
-export async function getApiKey(): Promise<string | null> {
-  if (!IS_TAURI) return localStorage.getItem(LS_DEV_KEY)
-  return invoke<string | null>('keychain_get')
+export async function getApiKey(provider: ProviderId): Promise<string | null> {
+  if (!IS_TAURI) return localStorage.getItem(devKeyName(provider))
+  return invoke<string | null>('keychain_get', { provider })
 }
 
-export async function setApiKey(value: string): Promise<void> {
+export async function setApiKey(provider: ProviderId, value: string): Promise<void> {
   if (!IS_TAURI) {
-    localStorage.setItem(LS_DEV_KEY, value)
+    localStorage.setItem(devKeyName(provider), value)
     return
   }
-  await invoke('keychain_set', { value })
+  await invoke('keychain_set', { provider, value })
 }
 
-export async function deleteApiKey(): Promise<void> {
+export async function deleteApiKey(provider: ProviderId): Promise<void> {
   if (!IS_TAURI) {
-    localStorage.removeItem(LS_DEV_KEY)
+    localStorage.removeItem(devKeyName(provider))
     return
   }
-  await invoke('keychain_delete')
+  await invoke('keychain_delete', { provider })
 }

@@ -1,158 +1,71 @@
 /**
- * Thin client for the Gemini Interactions API (v1beta) — the agentic surface
- * introduced for Gemini 3.5. Server-side conversation state via
- * `previous_interaction_id` replaces the old app's hand-rolled chat history,
- * pruning, and thought-signature bookkeeping.
+ * Gemini adapter over the Interactions API (v1beta). Server-side conversation
+ * state via `previous_interaction_id` replaces the old app's hand-rolled chat
+ * history, pruning, and thought-signature bookkeeping.
  *
- * All HTTP goes through an injected `fetchFn` so the app can pass Tauri's
- * CORS-free fetch while tests pass Node's fetch or mocks.
+ * Raw fetch rather than an SDK: the Interactions API is pinned by revision
+ * header, and all HTTP goes through an injected `fetchFn` so the app can pass
+ * Tauri's CORS-free fetch while tests pass Node's fetch or mocks.
  */
 
 import {
   FILE_ACTIVE_TIMEOUT_MS,
   GEMINI_API_REVISION,
   GEMINI_BASE_URL,
-  RATE_LIMIT_MAX_RETRIES,
   RETRY_BASE_DELAY_MS,
-  RETRY_MAX_DELAY_MS,
   UPLOAD_MAX_RETRIES,
-  type ThinkingLevel,
 } from './config'
-import type { RetryNotice } from './types'
+import {
+  LlmError,
+  isAbortError,
+  isTransient,
+  rateLimitKind,
+  retryAfterFromHeaders,
+  sleep,
+  withRetry,
+  type DocumentRef,
+  type InputPart,
+  type LlmClient,
+  type LlmErrorKind,
+  type RetryListener,
+  type ToolCall,
+  type TurnRequest,
+  type TurnResult,
+  type Usage,
+} from './llm'
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
+export class GeminiClient implements LlmClient {
+  readonly provider = 'gemini'
 
-export interface GeminiUsage {
-  inputTokens: number
-  outputTokens: number
-}
-
-export interface FunctionCallStep {
-  /** Call id — must be echoed back in the function_result. */
-  id: string
-  name: string
-  arguments: unknown
-}
-
-export interface InteractionResult {
-  id: string
-  outputText: string
-  functionCalls: FunctionCallStep[]
-  usage: GeminiUsage
-}
-
-export interface ToolDeclaration {
-  type: 'function'
-  name: string
-  description: string
-  parameters: Record<string, unknown>
-}
-
-export type InputPart =
-  | { type: 'text'; text: string }
-  | { type: 'document'; uri: string; mime_type: string }
-  | {
-      type: 'function_result'
-      name: string
-      call_id: string
-      result: Array<{ type: 'text'; text: string }>
-    }
-
-export interface InteractionRequest {
-  model: string
-  input: InputPart[] | string
-  /** System prompt for the conversation. */
-  instructions?: string
-  previousInteractionId?: string
-  tools?: ToolDeclaration[]
-  toolChoice?: 'auto' | 'any' | 'none'
-  thinkingLevel?: ThinkingLevel
-  responseSchema?: Record<string, unknown>
-  signal?: AbortSignal
-}
-
-export interface UploadedFile {
-  name: string
-  uri: string
-  mimeType: string
-}
-
-/**
- * What went wrong, in terms the UI can act on. The engine only classifies;
- * the words the student reads live in src/lib/problems.ts.
- */
-export type GeminiErrorKind =
-  /** 401/403, or a 400 that names the key: fix it in Settings. */
-  | 'key_rejected'
-  /** A per-day quota: waiting will not help today. */
-  | 'quota_daily'
-  /** Per-minute rate limiting that outlasted every retry. */
-  | 'rate_limited'
-  /** A spending cap or billing problem on the key's project. */
-  | 'spending_cap'
-  /** 5xx that outlasted every retry. */
-  | 'server'
-  /** The connection dropped and kept dropping. */
-  | 'network'
-  /** Gemini answered, but not in a shape Lectern can use. */
-  | 'bad_response'
-  /** Gemini could not process the uploaded PDF. */
-  | 'pdf_rejected'
-  /** Gemini took too long to process the uploaded PDF. */
-  | 'pdf_timeout'
-  /** Any other refusal; the message carries Gemini's own words. */
-  | 'request_rejected'
-
-/** Failures that can clear up by themselves, and so are worth a retry. */
-const TRANSIENT_KINDS = new Set<GeminiErrorKind>([
-  'rate_limited',
-  'server',
-  'network',
-  'bad_response',
-  'pdf_timeout',
-])
-
-export class GeminiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly kind: GeminiErrorKind,
-  ) {
-    super(message)
-    this.name = 'GeminiError'
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Client
-// ---------------------------------------------------------------------------
-
-export type RetryListener = (notice: RetryNotice) => void
-
-export class GeminiClient {
   constructor(
     private readonly apiKey: string,
     private readonly fetchFn: typeof fetch,
-    private readonly baseUrl: string = GEMINI_BASE_URL,
-    /** Called before each backoff wait. Silent retries make a stalled run
-     *  look like a hung one; the UI shows these in the activity log. */
     private readonly onRetry?: RetryListener,
+    private readonly baseUrl: string = GEMINI_BASE_URL,
   ) {}
 
-  /** Create one interaction turn, with rate-limit-aware retry. */
-  async interact(req: InteractionRequest): Promise<InteractionResult> {
+  async turn(req: TurnRequest): Promise<TurnResult> {
+    if (req.conversation && req.conversation.provider !== 'gemini') {
+      throw new LlmError(
+        'conversation belongs to another provider',
+        0,
+        'request_rejected',
+        'gemini',
+      )
+    }
     const body: Record<string, unknown> = {
       model: req.model,
-      input: req.input,
+      input: req.input.map(toGeminiPart),
     }
     if (req.instructions) body.system_instruction = req.instructions
-    if (req.previousInteractionId) body.previous_interaction_id = req.previousInteractionId
-    if (req.tools) body.tools = req.tools
+    if (req.conversation) body.previous_interaction_id = req.conversation.interactionId
+    // Gemini keys no reasoning to the tool set, so each turn declares only
+    // the tools the phase may call.
+    const active = (req.tools ?? []).filter((tool) => req.activeTools?.includes(tool.name))
+    if (active.length > 0) body.tools = active.map((tool) => ({ type: 'function', ...tool }))
     const generationConfig: Record<string, unknown> = {}
-    if (req.toolChoice) generationConfig.tool_choice = req.toolChoice
-    if (req.thinkingLevel) generationConfig.thinking_level = req.thinkingLevel
+    if (active.length > 0) generationConfig.tool_choice = req.requireTool ? 'any' : 'auto'
+    if (req.effort) generationConfig.thinking_level = req.effort
     if (Object.keys(generationConfig).length > 0) body.generation_config = generationConfig
     if (req.responseSchema) {
       body.response_format = {
@@ -162,7 +75,12 @@ export class GeminiClient {
       }
     }
 
-    const raw = await this.postWithRetry(`${this.baseUrl}/v1beta/interactions`, body, req.signal)
+    const raw = await withRetry(
+      () => this.post(`${this.baseUrl}/v1beta/interactions`, body, req.signal),
+      toLlmError,
+      this.onRetry,
+      req.signal,
+    )
     return parseInteraction(raw)
   }
 
@@ -171,7 +89,7 @@ export class GeminiClient {
     data: Uint8Array,
     displayName: string,
     signal?: AbortSignal,
-  ): Promise<UploadedFile> {
+  ): Promise<DocumentRef> {
     let lastError: unknown
     for (let attempt = 0; attempt < UPLOAD_MAX_RETRIES; attempt++) {
       try {
@@ -181,25 +99,29 @@ export class GeminiClient {
         if (signal?.aborted || isAbortError(e)) throw e
         // A rejected key, a spent quota or a refused PDF will not fix
         // itself; surface it instead of retrying.
-        if (e instanceof GeminiError && !TRANSIENT_KINDS.has(e.kind)) throw e
+        if (e instanceof LlmError && !isTransient(e.kind)) throw e
         await sleep(RETRY_BASE_DELAY_MS * (attempt + 1), signal)
       }
     }
-    // A fetch that never got an answer rejects with a bare TypeError.
-    throw lastError instanceof GeminiError
-      ? lastError
-      : new GeminiError(
-          lastError instanceof Error ? lastError.message : 'upload failed',
-          0,
-          'network',
-        )
+    throw toLlmError(lastError)
+  }
+
+  async deleteDocument(document: DocumentRef): Promise<void> {
+    // The uri is the file's resource URL; its path after the version is the
+    // file name the Files API deletes by.
+    const name = new URL(document.id).pathname.replace(/^\/v1beta\//, '')
+    const res = await this.fetchFn(`${this.baseUrl}/v1beta/${name}`, {
+      method: 'DELETE',
+      headers: { 'x-goog-api-key': this.apiKey },
+    })
+    if (!res.ok && res.status !== 404) throw await errorFromResponse(res)
   }
 
   private async uploadPdfOnce(
     data: Uint8Array,
     displayName: string,
     signal?: AbortSignal,
-  ): Promise<UploadedFile> {
+  ): Promise<DocumentRef> {
     // Step 1: start a resumable upload, receive the upload URL in a header.
     const startRes = await this.fetchFn(`${this.baseUrl}/upload/v1beta/files`, {
       method: 'POST',
@@ -214,10 +136,15 @@ export class GeminiClient {
       },
       body: JSON.stringify({ file: { display_name: displayName } }),
     })
-    if (!startRes.ok) throw await toGeminiError(startRes)
+    if (!startRes.ok) throw await errorFromResponse(startRes)
     const uploadUrl = startRes.headers.get('x-goog-upload-url')
     if (!uploadUrl) {
-      throw new GeminiError('missing x-goog-upload-url header', startRes.status, 'bad_response')
+      throw new LlmError(
+        'missing x-goog-upload-url header',
+        startRes.status,
+        'bad_response',
+        'gemini',
+      )
     }
 
     // Step 2: send the bytes and finalize.
@@ -231,13 +158,18 @@ export class GeminiClient {
       },
       body: data,
     })
-    if (!uploadRes.ok) throw await toGeminiError(uploadRes)
+    if (!uploadRes.ok) throw await errorFromResponse(uploadRes)
     const uploaded = (await uploadRes.json()) as {
       file?: { name?: string; uri?: string; mime_type?: string; mimeType?: string; state?: string }
     }
     const file = uploaded.file
     if (!file?.uri || !file.name) {
-      throw new GeminiError('upload response missing file uri', uploadRes.status, 'bad_response')
+      throw new LlmError(
+        'upload response missing file uri',
+        uploadRes.status,
+        'bad_response',
+        'gemini',
+      )
     }
 
     // Step 3: poll until the file is processed.
@@ -245,104 +177,73 @@ export class GeminiClient {
     let state = file.state ?? 'PROCESSING'
     while (state === 'PROCESSING') {
       if (Date.now() > deadline) {
-        throw new GeminiError('file processing timeout', 0, 'pdf_timeout')
+        throw new LlmError('file processing timeout', 0, 'pdf_timeout', 'gemini')
       }
       await sleep(1500, signal)
       const pollRes = await this.fetchFn(`${this.baseUrl}/v1beta/${file.name}`, {
         headers: { 'x-goog-api-key': this.apiKey },
         signal,
       })
-      if (!pollRes.ok) throw await toGeminiError(pollRes)
+      if (!pollRes.ok) throw await errorFromResponse(pollRes)
       const polled = (await pollRes.json()) as { state?: string }
       state = polled.state ?? 'ACTIVE'
     }
     if (state === 'FAILED') {
-      throw new GeminiError('file processing failed', 0, 'pdf_rejected')
+      throw new LlmError('file processing failed', 0, 'pdf_rejected', 'gemini')
     }
-    return {
-      name: file.name,
-      uri: file.uri,
-      mimeType: file.mime_type ?? file.mimeType ?? 'application/pdf',
-    }
+    return { id: file.uri, mimeType: file.mime_type ?? file.mimeType ?? 'application/pdf' }
   }
 
-  private async postWithRetry(
+  private async post(
     url: string,
     body: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
-    let lastError: GeminiError | undefined
-    for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt++) {
-      const backoff = Math.min(
-        RETRY_BASE_DELAY_MS * 2 ** attempt * (1 + Math.random() * 0.1),
-        RETRY_MAX_DELAY_MS,
-      )
-
-      let res: Response
-      try {
-        res = await this.fetchFn(url, {
-          method: 'POST',
-          signal,
-          headers: {
-            'x-goog-api-key': this.apiKey,
-            'Content-Type': 'application/json',
-            'Api-Revision': GEMINI_API_REVISION,
-          },
-          body: JSON.stringify(body),
-        })
-      } catch (e) {
-        // Network-level failure (offline, DNS, connection reset) — retried
-        // like a 5xx so a blip mid-generation does not kill the whole run.
-        if (signal?.aborted || isAbortError(e)) throw e
-        lastError = new GeminiError(e instanceof Error ? e.message : String(e), 0, 'network')
-        if (attempt === RATE_LIMIT_MAX_RETRIES) throw lastError
-        this.announceRetry(0, attempt, backoff)
-        await sleep(backoff, signal)
-        continue
-      }
-      if (res.ok) return res.json()
-
-      const error = await toGeminiError(res)
-      // A daily quota or a spending cap will not clear in the next few
-      // minutes; retrying only made the student wait for the same answer.
-      if (!TRANSIENT_KINDS.has(error.kind)) throw error
-      if (attempt === RATE_LIMIT_MAX_RETRIES) throw error
-      lastError = error
-
-      const retryAfterHeader = res.headers.get('retry-after')
-      const retryAfterMs = retryAfterHeader
-        ? Number.parseFloat(retryAfterHeader) * 1000
-        : extractRetryAfterMs(error.message)
-      const waitMs = Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : backoff
-      this.announceRetry(res.status, attempt, waitMs)
-      await sleep(waitMs, signal)
-    }
-    throw lastError ?? new GeminiError('request failed', 0, 'network')
-  }
-
-  private announceRetry(status: number, attempt: number, waitMs: number): void {
-    this.onRetry?.({ status, attempt: attempt + 1, maxAttempts: RATE_LIMIT_MAX_RETRIES, waitMs })
+    const res = await this.fetchFn(url, {
+      method: 'POST',
+      signal,
+      headers: {
+        'x-goog-api-key': this.apiKey,
+        'Content-Type': 'application/json',
+        'Api-Revision': GEMINI_API_REVISION,
+      },
+      body: JSON.stringify(body),
+    })
+    if (res.ok) return res.json()
+    throw await errorFromResponse(res)
   }
 }
 
-/** Quota errors name their window; a daily one will not clear by waiting. */
-const isDailyQuota = (message: string): boolean =>
-  /per\s*day|perday|daily/i.test(message) && /quota|limit/i.test(message)
+function toGeminiPart(part: InputPart): Record<string, unknown> {
+  switch (part.type) {
+    case 'text':
+      return part
+    case 'document':
+      return { type: 'document', uri: part.document.id, mime_type: part.document.mimeType }
+    case 'tool_result':
+      return {
+        type: 'function_result',
+        name: part.name,
+        call_id: part.callId,
+        result: [{ type: 'text', text: part.text }],
+      }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Parsing helpers
 // ---------------------------------------------------------------------------
 
-function parseInteraction(raw: unknown): InteractionResult {
+function parseInteraction(raw: unknown): TurnResult {
   const obj = (raw ?? {}) as Record<string, unknown>
   const id = typeof obj.id === 'string' ? obj.id : ''
 
-  const functionCalls: FunctionCallStep[] = []
+  const toolCalls: ToolCall[] = []
   const textParts: string[] = []
   const steps = Array.isArray(obj.steps) ? (obj.steps as Array<Record<string, unknown>>) : []
   for (const step of steps) {
     if (step.type === 'function_call') {
-      functionCalls.push({
+      toolCalls.push({
         id: typeof step.id === 'string' ? step.id : '',
         name: typeof step.name === 'string' ? step.name : '',
         arguments: step.arguments,
@@ -359,34 +260,36 @@ function parseInteraction(raw: unknown): InteractionResult {
       ? obj.output_text
       : textParts.join('')
 
-  return { id, outputText, functionCalls, usage: parseUsage(obj) }
+  return {
+    conversation: { provider: 'gemini', interactionId: id },
+    outputText,
+    toolCalls,
+    usage: parseUsage(obj),
+  }
 }
 
 /** Interactions API usage shape: total_input_tokens / total_output_tokens
  *  (+ total_thought_tokens, billed like output). */
-function parseUsage(obj: Record<string, unknown>): GeminiUsage {
+function parseUsage(obj: Record<string, unknown>): Usage {
   const usage = (obj.usage ?? {}) as Record<string, unknown>
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
   return {
     inputTokens: num(usage.total_input_tokens),
+    cachedInputTokens: 0,
+    cacheWriteTokens: 0,
     outputTokens: num(usage.total_output_tokens) + num(usage.total_thought_tokens),
   }
 }
 
-/** Parse a JSON object out of a structured-output text response. */
-export function parseJsonPayload(text: string): unknown {
-  const trimmed = text.trim()
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    // Some models wrap JSON in fences despite instructions — salvage.
-    const match = trimmed.match(/\{[\s\S]*\}/)
-    if (match) return JSON.parse(match[0])
-    throw new GeminiError('response was not valid JSON', 0, 'bad_response')
-  }
+/** A fetch that never got an answer rejects with a bare TypeError: that is a
+ *  network failure, retried like a 5xx so a blip mid-generation does not
+ *  kill the whole run. */
+function toLlmError(e: unknown): LlmError {
+  if (e instanceof LlmError) return e
+  return new LlmError(e instanceof Error ? e.message : String(e), 0, 'network', 'gemini')
 }
 
-async function toGeminiError(res: Response): Promise<GeminiError> {
+async function errorFromResponse(res: Response): Promise<LlmError> {
   let message = `HTTP ${res.status}`
   try {
     const data = (await res.json()) as { error?: { message?: string; status?: string } }
@@ -394,17 +297,23 @@ async function toGeminiError(res: Response): Promise<GeminiError> {
   } catch {
     // keep the HTTP status message
   }
-  return new GeminiError(message, res.status, kindFor(res.status, message))
+  return new LlmError(
+    message,
+    res.status,
+    kindFor(res.status, message),
+    'gemini',
+    retryAfterFromHeaders(res.headers) ?? extractRetryAfterMs(message),
+  )
 }
 
-function kindFor(status: number, message: string): GeminiErrorKind {
+function kindFor(status: number, message: string): LlmErrorKind {
   const lower = message.toLowerCase()
   // A malformed key comes back as a 400, not a 401.
   if (status === 401 || status === 403 || /api[ _]?key[ _]?(not valid|invalid)/i.test(message)) {
     return 'key_rejected'
   }
   if (lower.includes('spending') || lower.includes('billing')) return 'spending_cap'
-  if (status === 429) return isDailyQuota(message) ? 'quota_daily' : 'rate_limited'
+  if (status === 429) return rateLimitKind(message)
   if (status >= 500) return 'server'
   return 'request_rejected'
 }
@@ -416,21 +325,4 @@ function extractRetryAfterMs(message: string): number | undefined {
     if (m) return Number.parseFloat(m[1]) * 1000
   }
   return undefined
-}
-
-const isAbortError = (e: unknown): boolean => e instanceof Error && e.name === 'AbortError'
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(new DOMException('aborted', 'AbortError'))
-    const t = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-    const onAbort = () => {
-      clearTimeout(t)
-      reject(new DOMException('aborted', 'AbortError'))
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
-  })
 }

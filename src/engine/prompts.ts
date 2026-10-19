@@ -111,12 +111,14 @@ export interface PromptContext {
 const focusOf = (ctx: PromptContext): string =>
   ctx.focusPrompt ? sanitizeFocusPrompt(ctx.focusPrompt) : ''
 
-/** System instructions for the whole session. */
-export function systemInstructions(ctx: PromptContext): string {
-  const focus = focusOf(ctx)
+/** System instructions for the whole session. Fixed for the conversation's
+ *  lifetime (Claude binds its reasoning to it), so nothing learned from the
+ *  document, its language included, goes in here. */
+export function systemInstructions(focusPrompt?: string): string {
+  const focus = focusPrompt ? sanitizeFocusPrompt(focusPrompt) : ''
   return (
     `You are an expert educator turning lecture material into an Anki spaced-repetition deck.\n` +
-    `Write all card content in ${ctx.language}.\n` +
+    `Write all card content in the document's own language.\n` +
     (focus
       ? `The user asked to focus on: "${focus}". Weight concept selection and card style toward it.\n`
       : '') +
@@ -127,14 +129,15 @@ export function systemInstructions(ctx: PromptContext): string {
 }
 
 /** Phase 1 — global concept map over the whole document. */
-export function conceptMapPrompt(ctx: PromptContext): string {
+export function conceptMapPrompt(ctx: PromptContext, target: { min: number; max: number }): string {
   const focus = focusOf(ctx)
   return (
     'Analyze the attached lecture document and build its global concept map.\n' +
     (focus ? `Give extra depth to concepts related to the user focus: "${focus}".\n` : '') +
     'Return JSON with:\n' +
     '- objectives: explicit learning goals plus the implicit competency targets.\n' +
-    '- concepts: the core entities, theories, and definitions, fundamentals first. Each carries a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), and page_references (integer pages where it is taught or illustrated).\n' +
+    `- concepts: the core entities, theories, and definitions, fundamentals first. List ${target.min} to ${target.max} concepts: one per idea a student must master, with its sub-points, examples, and special cases folded into it rather than listed apart, and no concept as wide as a whole section. Mark high importance only for the concepts the objectives hinge on.` +
+    ' Each carries a name (a plain-text label of 2-6 words, never a sentence), a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), and page_references (integer pages where it is taught or illustrated).\n' +
     '- relations: the semantic structure between concepts (is_a, part_of, causes, contrasts_with, ...) with page_references.\n' +
     "- language: ISO 639-1 code of the document's primary language.\n" +
     '- slide_set_name: Title Case name for this set, max 8 words, keeping any lecture/week number.\n' +
@@ -194,6 +197,7 @@ export function generationMissionPrompt(
     `When grounding is weak, submit fewer cards.\n` +
     `\nCall finish_generation once the ledger shows the important material is covered or the budget is spent.\n` +
     `\n${opts.gapText}\n` +
+    `All content stays in ${ctx.language}.\n` +
     'Start with your first submit_cards call.'
   )
 }
@@ -300,7 +304,7 @@ export function followUpRequestPrompt(
       : '(the deck is currently empty)'
   return (
     `The user reviewed the finished deck and asks for additional cards:\n"${opts.request}"\n\n` +
-    `Additions only — the existing deck stays untouched. Call add_cards with the new cards, read the verdicts, and call finish_request with a short summary once the request is served (immediately if it needs no new cards). Add only what the request asks for, up to ${opts.cardBudget} card(s) — no filler.\n` +
+    `Additions only: the existing deck stays untouched. Call add_requested_cards with the new cards, read the verdicts, and call finish_request with a short summary once the request is served (immediately if it needs no new cards). Add only what the request asks for, up to ${opts.cardBudget} card(s), no filler.\n` +
     `Every card meets the same quality bar and metadata requirements as before (source_pages, concept_ids copied from the concept map, rationale, source_excerpt).\n` +
     `Ground each card in the document. If the request needs material the document does not contain, still write the card: set in_source=false, leave source_pages empty, and put the knowledge the answer rests on in source_excerpt — the app labels such cards "outside source" for the user to check.\n` +
     `All content stays in ${ctx.language}.\n` +
@@ -309,7 +313,7 @@ export function followUpRequestPrompt(
   )
 }
 
-/** Feedback payload returned to the model after each follow-up add_cards. */
+/** Feedback payload returned to the model after each add_requested_cards. */
 export function buildFollowUpFeedback(opts: {
   acceptedCount: number
   rejected: Array<{ front: string; reasons: string[] }>
@@ -336,7 +340,7 @@ export function buildFollowUpFeedback(opts: {
   }
   lines.push(`Remaining request budget: ${opts.cardsRemaining} card(s).`)
   lines.push(
-    'Continue with add_cards if the request is not yet served, otherwise call finish_request.',
+    'Continue with add_requested_cards if the request is not yet served, otherwise call finish_request.',
   )
   return lines.join('\n')
 }
