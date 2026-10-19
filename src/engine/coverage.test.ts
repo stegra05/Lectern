@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  budgetShortfall,
   buildCoverageCatalog,
   buildGenerationGapText,
   buildReflectionGapText,
@@ -22,6 +23,8 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       importance: 'high',
       difficulty: 'foundational',
       pageReferences: [1, 2],
+      facets: [],
+      cardBudget: 1,
     },
     {
       id: 'c2',
@@ -29,6 +32,8 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       importance: 'high',
       difficulty: 'intermediate',
       pageReferences: [3],
+      facets: [],
+      cardBudget: 1,
     },
     {
       id: 'c3',
@@ -36,6 +41,8 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       importance: 'medium',
       difficulty: 'intermediate',
       pageReferences: [4],
+      facets: [],
+      cardBudget: 1,
     },
     // Blank id — must be skipped entirely.
     {
@@ -44,6 +51,8 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       importance: 'low',
       difficulty: 'foundational',
       pageReferences: [5],
+      facets: [],
+      cardBudget: 1,
     },
   ],
   relations: [
@@ -85,6 +94,8 @@ const makeCoverage = (overrides: Partial<CoverageData> = {}): CoverageData => ({
   missingHighPriority: [],
   saturatedPages: [],
   cardsPerPage: {},
+  cardsByConcept: {},
+  underBudget: [],
   ...overrides,
 })
 
@@ -300,7 +311,7 @@ describe('buildGenerationGapText', () => {
 
     expect(text).toContain('- COVERAGE LEDGER:')
     expect(text).toContain('Pages covered: 2/8.')
-    expect(text).toContain('Concepts covered: 1/3 (1 explicit).')
+    expect(text).toContain('Concepts a card names: 1/3.')
     expect(text).toContain('Relations covered: 0/2.')
     expect(text).toContain('Prioritize uncovered pages: 3, 4, 5, 6, 7, 8')
     expect(text).toContain('Missing HIGH priority concepts: Backpropagation@3')
@@ -308,7 +319,7 @@ describe('buildGenerationGapText', () => {
     expect(text.endsWith('\n')).toBe(true)
   })
 
-  it('falls back to remaining concepts once all high-priority ones are covered', () => {
+  it('lists the concepts without a card once high-priority ones are covered', () => {
     const cards = [
       makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'] }),
       makeCard({ uid: 'b', sourcePages: [3], conceptIds: ['c2'] }),
@@ -317,7 +328,34 @@ describe('buildGenerationGapText', () => {
     const text = buildGenerationGapText(catalog, coverage)
 
     expect(text).not.toContain('Missing HIGH priority concepts')
-    expect(text).toContain('Remaining concepts: Overfitting@4')
+    expect(text).toContain('Concepts with no card yet (cover these first): Overfitting@4')
+  })
+
+  it('counts cards per concept and puts concepts without a card first', () => {
+    const budgeted = buildCoverageCatalog(
+      makeConceptMap(),
+      undefined,
+      new Map([
+        ['c1', 3],
+        ['c2', 1],
+        ['c3', 2],
+      ]),
+    )
+    const coverage = computeCoverageData(budgeted, [
+      makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'] }),
+      makeCard({ uid: 'b', sourcePages: [3], conceptIds: ['c2'] }),
+    ])
+    expect(coverage.cardsByConcept).toEqual({ c1: 1, c2: 1 })
+    // c3 has none, c1 has one of three: breadth before depth.
+    expect(coverage.underBudget).toEqual(['c3', 'c1'])
+    expect(budgetShortfall(budgeted, coverage)).toBe(4)
+  })
+
+  it('credits a card read back from Anki to the concepts on its pages', () => {
+    const coverage = computeCoverageData(catalog, [
+      makeCard({ uid: 'x', sourcePages: [1], conceptIds: [], fromAnki: true }),
+    ])
+    expect(coverage.cardsByConcept.c1).toBe(1)
   })
 
   it('lists saturated pages to deprioritize', () => {

@@ -59,7 +59,16 @@ export interface Concept {
   importance: Importance
   difficulty: Difficulty
   pageReferences: number[]
+  /** The distinct facts the material gives this concept to test, as short
+   *  labels. They are what the ledger names when the concept is short. */
+  facets: string[]
+  /** Cards the concept deserves at standard depth: its facets, 1-4. The
+   *  deck size is built from these. */
+  cardBudget: number
 }
+
+/** How deep a deck goes. Scales every concept's card budget. */
+export type CardDensity = 'overview' | 'standard' | 'thorough'
 
 export interface Relation {
   source: string
@@ -99,6 +108,10 @@ export interface CoverageCatalog {
   pagesByConcept: Map<string, number[]>
   conceptNames: Map<string, string>
   pageCount: number
+  /** concept id -> cards it should get at the run's density (0 = skip) */
+  budgets: Map<string, number>
+  /** concept id -> the facts it has to test */
+  facetsByConcept: Map<string, string[]>
 }
 
 export interface CoverageData {
@@ -119,6 +132,11 @@ export interface CoverageData {
   /** Pages with more than SATURATION_CARDS_PER_PAGE cards */
   saturatedPages: number[]
   cardsPerPage: Record<number, number>
+  /** concept id -> cards teaching it: claimed by id, or for cards read back
+   *  from Anki (which carry no ids) by page overlap */
+  cardsByConcept: Record<string, number>
+  /** Concepts with fewer cards than their budget, most important first */
+  underBudget: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +191,7 @@ export type QualityIssue =
   | 'points_at_source'
   | 'excerpt_repeats_answer'
   | 'excerpt_not_on_cited_page'
+  | 'answer_not_on_cited_page'
 
 /** Why a submitted card did not join the deck. */
 export type RejectionReason = QualityIssue | 'invalid_structure' | 'budget_exhausted'
@@ -230,6 +249,8 @@ export type PipelineSink = (event: PipelineEvent) => void
 // ---------------------------------------------------------------------------
 
 export interface Settings {
+  /** How deep decks go; chosen on the home screen and remembered. */
+  cardDensity: CardDensity
   /** Model id, e.g. "gemini-3.8-flash"; it also picks the provider. */
   model: string
   ankiUrl: string

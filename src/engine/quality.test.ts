@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ankiCardCount,
+  answerIsOnPages,
   cardKey,
   evaluateCard,
   findNearDuplicate,
@@ -487,5 +488,68 @@ describe('evaluateCard — provenanceOptional', () => {
       { provenanceOptional: true },
     )
     expect(broken.failures).toContain('cloze_without_deletion')
+  })
+})
+
+describe('answerIsOnPages', () => {
+  const pages = [
+    'Min-max normalization rescales every feature to the range zero to one using its minimum and maximum. ' +
+      'It keeps the shape of the distribution and suits features without heavy outliers, ' +
+      'which would otherwise squeeze every other value into a narrow band.',
+  ]
+
+  it('accepts an answer that paraphrases the page', () => {
+    expect(
+      answerIsOnPages(
+        'It rescales each feature into zero to one with its minimum and maximum.',
+        [1],
+        pages,
+      ),
+    ).toBe(true)
+  })
+
+  it('flags an answer that brings its own material', () => {
+    expect(
+      answerIsOnPages(
+        'Outliers compress the remaining values, so gradients explode during backpropagation.',
+        [1],
+        pages,
+      ),
+    ).toBe(false)
+  })
+
+  it('matches inflected and compound forms by their stem', () => {
+    expect(
+      answerIsOnPages(
+        'Schokoladenzysten entstehen bei Endometriose',
+        [1],
+        [
+          'Endometriose kann am Ovar Schokoladenzyste bilden, die bei Ruptur entstehen kann und weitere Befunde zeigt. ' +
+            'Sie betrifft Frauen im gebärfähigen Alter und verursacht zyklische Schmerzen sowie Sterilität.',
+        ],
+      ),
+    ).toBe(true)
+  })
+
+  it('stays silent without enough page text to compare against', () => {
+    expect(answerIsOnPages('A long enough answer here', [1], [''])).toBeNull()
+    // A diagram slide: a title and little else.
+    expect(
+      answerIsOnPages(
+        'The cake: unsupervised learning is the bulk',
+        [1],
+        ['LeCun’s cake analogy for learning'],
+      ),
+    ).toBeNull()
+  })
+
+  it('leaves formulas out of the comparison', () => {
+    expect(
+      answerIsOnPages(
+        String.raw`\(x' = \frac{x - \min}{\max - \min}\) rescales every feature to zero to one`,
+        [1],
+        pages,
+      ),
+    ).toBe(true)
   })
 })

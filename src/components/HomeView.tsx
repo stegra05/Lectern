@@ -1,33 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { selectHasApiKey, useLectern } from '../state/store'
 import { MODEL_CHOICES, PROVIDERS, providerOf } from '../engine/config'
-import { computeSizingPlan } from '../engine/pacing'
 import { count } from '../engine/plural'
+import type { CardDensity } from '../engine/types'
 import { MAX_FOCUS_PROMPT_LEN } from '../engine/prompts'
 import { SetupChecklist } from './SetupChecklist'
 
-/**
- * The deck-size slider is exponential: card-by-card precision for small decks,
- * coarser strides the higher it goes, up to genuinely large decks. The track
- * position t ∈ [0, 1] maps to MIN·(max/MIN)^t, snapped to friendly steps.
- */
-const SLIDER_MIN = 5
-const SLIDER_RESOLUTION = 500
-
-function snapCards(raw: number): number {
-  const step = raw < 30 ? 1 : raw < 100 ? 5 : 25
-  return Math.round(raw / step) * step
-}
-
-function cardsFromTrack(t: number, max: number): number {
-  const raw = SLIDER_MIN * Math.pow(max / SLIDER_MIN, t)
-  return Math.min(max, Math.max(SLIDER_MIN, snapCards(raw)))
-}
-
-function trackFromCards(cards: number, max: number): number {
-  const clamped = Math.min(max, Math.max(SLIDER_MIN, cards))
-  return Math.log(clamped / SLIDER_MIN) / Math.log(max / SLIDER_MIN)
-}
+/** Deck depth. The size itself comes from the concept map's card budgets,
+ *  so the student picks how deep, not how many. */
+const DENSITIES: Array<{ id: CardDensity; label: string; note: string }> = [
+  { id: 'overview', label: 'Overview', note: 'The essentials' },
+  { id: 'standard', label: 'Standard', note: 'Every concept' },
+  { id: 'thorough', label: 'Thorough', note: 'Every facet' },
+]
 
 const formatTokens = (tokens: number): string =>
   tokens >= 1_000_000
@@ -44,8 +29,8 @@ export function HomeView() {
   const ankiDecks = useLectern((s) => s.ankiDecks)
   const focusPrompt = useLectern((s) => s.focusPrompt)
   const setFocusPrompt = useLectern((s) => s.setFocusPrompt)
-  const targetCards = useLectern((s) => s.targetCards)
-  const setTargetCards = useLectern((s) => s.setTargetCards)
+  const expectedCards = useLectern((s) => s.expectedCards)
+  const setCardDensity = useLectern((s) => s.setCardDensity)
   const estimate = useLectern((s) => s.estimate)
   const settings = useLectern((s) => s.settings)
   const hasApiKey = useLectern(selectHasApiKey)
@@ -73,11 +58,7 @@ export function HomeView() {
           ? 'empty'
           : 'new'
 
-  // The slider scale anchors on what the document itself suggests — never on
-  // the user override (which feeds store.sizing), or the scale would stretch
-  // while dragging.
-  const autoCap = useMemo(() => (pdfInfo ? computeSizingPlan(pdfInfo).totalCardCap : 40), [pdfInfo])
-  const sliderMax = Math.min(1000, Math.max(200, autoCap * 5))
+  const density = settings?.cardDensity ?? 'standard'
 
   return (
     <main className="flex flex-1 items-start justify-center overflow-y-auto px-8 py-12">
@@ -186,40 +167,42 @@ export function HomeView() {
               )}
             </div>
 
-            {/* Deck size — on an extend run this buys new cards on top of
-                the ones already in the deck, so it is worded that way. */}
-            <div>
-              <div className="flex items-baseline justify-between">
-                <span className="eyebrow">{extending ? 'Cards to add' : 'Deck size'}</span>
-                <span className="font-data text-chalk-dim text-xs">
-                  {targetCards ?? `auto · ~${autoCap}`} {extending ? 'new cards' : 'cards'}
-                </span>
+            {/* Deck depth. The number follows from the lecture: it is
+                settled once the concept map has been read, so before the
+                run it is only ever "about". */}
+            <fieldset>
+              <legend className="eyebrow">{extending ? 'Depth to add' : 'Deck depth'}</legend>
+              <div className="border-desk-edge/70 bg-desk-raised mt-1.5 grid grid-cols-3 gap-1 rounded-md border p-1">
+                {DENSITIES.map((option) => (
+                  <label
+                    key={option.id}
+                    className={`has-focus-visible:ring-lamp cursor-pointer rounded-sm px-2 py-1.5 text-center transition-colors duration-150 has-focus-visible:ring-1 ${
+                      density === option.id
+                        ? 'bg-desk text-chalk'
+                        : 'text-chalk-dim hover:text-chalk'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="card-density"
+                      value={option.id}
+                      checked={density === option.id}
+                      onChange={() => setCardDensity(option.id)}
+                      className="sr-only"
+                    />
+                    <span className="block text-sm">{option.label}</span>
+                    <span className="block text-2xs opacity-80">{option.note}</span>
+                  </label>
+                ))}
               </div>
-              <input
-                type="range"
-                min={0}
-                max={SLIDER_RESOLUTION}
-                value={Math.round(
-                  trackFromCards(targetCards ?? autoCap, sliderMax) * SLIDER_RESOLUTION,
-                )}
-                onChange={(e) =>
-                  setTargetCards(
-                    cardsFromTrack(Number(e.target.value) / SLIDER_RESOLUTION, sliderMax),
-                  )
-                }
-                className="mt-2"
-                aria-label="Target number of cards"
-                aria-valuetext={`${targetCards ?? autoCap} cards`}
-              />
-              {targetCards !== null && (
-                <button
-                  onClick={() => setTargetCards(null)}
-                  className="text-chalk-dim hover:text-chalk mt-1 rounded-sm text-xs underline-offset-2 transition-colors duration-150 hover:underline"
-                >
-                  Size from the document instead
-                </button>
-              )}
-            </div>
+              <p className="text-chalk-dim mt-1.5 text-xs">
+                {extending
+                  ? 'Adds what the deck still lacks at this depth, concept by concept.'
+                  : expectedCards
+                    ? `Around ${expectedCards.min} to ${expectedCards.max} cards. The exact number is set once the lecture has been read.`
+                    : 'The number of cards is set once the lecture has been read.'}
+              </p>
+            </fieldset>
 
             {/* Focus: optional, so it waits behind a link until wanted. */}
             {!focusOpen ? (

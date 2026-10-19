@@ -55,7 +55,7 @@ describe.skipIf(!apiKey)('pipeline live E2E', () => {
         pdfBytes,
         pdfInfo,
         fileName: 'test_script.pdf',
-        userTargetCards: 6,
+        density: 'overview',
         model: MODEL,
         apiKey: apiKey ?? '',
         fetchFn: fetch,
@@ -74,7 +74,10 @@ describe.skipIf(!apiKey)('pipeline live E2E', () => {
 
       // The deck exists and is grounded.
       expect(outcome.cards.length).toBeGreaterThan(0)
-      expect(outcome.cards.length).toBeLessThanOrEqual(6)
+      const planned = events.find((e) => e.type === 'concept_map')
+      expect(outcome.cards.length).toBeLessThanOrEqual(
+        planned?.type === 'concept_map' ? planned.sizing.totalCardCap : 0,
+      )
       for (const card of outcome.cards) {
         expect(card.sourcePages.length).toBeGreaterThan(0)
         expect(card.rationale).toBeTruthy()

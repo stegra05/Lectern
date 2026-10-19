@@ -24,6 +24,7 @@ const REASON_LABEL: Record<RejectionReason, string> = {
   points_at_source: 'points at a slide the card will not show',
   excerpt_repeats_answer: 'the quote is just the answer again',
   excerpt_not_on_cited_page: 'the quote is not on the cited page',
+  answer_not_on_cited_page: 'the answer says more than the cited page',
   invalid_structure: 'The model sent it in a shape Lectern could not read',
   budget_exhausted: 'the deck was already full',
 }

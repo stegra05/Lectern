@@ -118,7 +118,8 @@ export const CardTile = memo(function CardTile({
                   className="bg-lamp/20 text-lamp-ink rounded-sm px-1 py-px"
                   title={`Worth a read before sending: ${describeReasons(card.qualityIssues)}.`}
                 >
-                  {card.qualityIssues.includes('excerpt_not_on_cited_page')
+                  {card.qualityIssues.includes('excerpt_not_on_cited_page') ||
+                  card.qualityIssues.includes('answer_not_on_cited_page')
                     ? 'check the source'
                     : 'check this one'}
                 </span>

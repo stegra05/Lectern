@@ -31,6 +31,10 @@ const conceptSchema = z.object({
   importance: z.enum(['high', 'medium', 'low']),
   difficulty: z.enum(['foundational', 'intermediate', 'advanced']),
   pageReferences: z.array(z.number()),
+  // Ledgers written before facets and card budgets existed hold neither; one
+  // card is what every concept got under the old sizing.
+  facets: z.array(z.string()).catch([]),
+  cardBudget: z.number().int().catch(1),
 })
 
 const relationSchema = z.object({

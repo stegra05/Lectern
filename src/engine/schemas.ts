@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod'
+import { CONCEPT_CARD_BUDGET_MAX } from './config'
 import type { ConceptMap } from './types'
 
 // ---------------------------------------------------------------------------
@@ -91,8 +92,14 @@ export const CONCEPT_MAP_RESPONSE_SCHEMA = {
             enum: ['foundational', 'intermediate', 'advanced'],
           },
           page_references: { type: 'array', items: { type: 'integer' } },
+          facets: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'The distinct facts the material gives this concept to test, each a 2-6 word label (e.g. "HPV 16/18 high-risk types", "E6/E7 inactivate p53/pRb"). One card tests one facet. Most concepts have one; list another only when the material holds a separate fact worth its own card, at most four.',
+          },
         },
-        required: ['id', 'name', 'importance', 'difficulty', 'page_references'],
+        required: ['id', 'name', 'importance', 'difficulty', 'page_references', 'facets'],
       },
     },
     relations: {
@@ -271,6 +278,7 @@ const conceptZ = z.object({
   importance: z.enum(['high', 'medium', 'low']).catch('medium'),
   difficulty: z.enum(['foundational', 'intermediate', 'advanced']).catch('intermediate'),
   page_references: z.array(int).catch([]),
+  facets: z.array(z.string()).catch([]),
 })
 
 const relationZ = z.object({
@@ -291,6 +299,15 @@ const conceptMapZ = z.object({
   document_type: z.enum(['slides', 'script', 'mixed']).catch('slides'),
 })
 
+/** A concept's facets, cleaned, and the card budget they amount to. */
+function withBudget(raw: string[]): { facets: string[]; cardBudget: number } {
+  const facets = raw
+    .map((facet) => facet.trim())
+    .filter((facet) => facet !== '')
+    .slice(0, CONCEPT_CARD_BUDGET_MAX)
+  return { facets, cardBudget: Math.max(1, facets.length) }
+}
+
 export function parseConceptMap(raw: unknown): ConceptMap {
   const data = conceptMapZ.parse(raw)
   return {
@@ -301,6 +318,7 @@ export function parseConceptMap(raw: unknown): ConceptMap {
       importance: c.importance,
       difficulty: c.difficulty,
       pageReferences: c.page_references,
+      ...withBudget(c.facets),
     })),
     relations: data.relations.map((r) => ({
       source: r.source,

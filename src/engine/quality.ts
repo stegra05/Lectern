@@ -290,6 +290,49 @@ export function excerptIsOnPage(
   return found / words.length >= EXCERPT_MATCH_RATIO
 }
 
+/** Below this share of its content words on the cited pages, an answer is
+ *  saying things the lecture does not. Paraphrase keeps most of a slide's
+ *  terms; tutor-style additions ("exploding gradients", "legal reasons")
+ *  bring their own. Measured on blind-reviewed decks before it was set. */
+export const ANSWER_MATCH_RATIO = 0.5
+/** Inflected and compound forms share a stem: Zyste/Zysten, normalize/normalizes. */
+const STEM_LEN = 6
+/** Cited pages with less extractable text than this carry their content in
+ *  images (a blind review caught the check firing on a diagram slide). */
+const ANSWER_MIN_PAGE_TEXT_CHARS = 200
+/** \( … \), \[ … \] and $ … $ math. */
+const MATH_RE = /\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$[^$]*\$/g
+
+/**
+ * Does the answer say what the cited pages say? Same honesty rule as
+ * excerptIsOnPage: null when there is nothing to compare against.
+ */
+export function answerIsOnPages(
+  answer: string,
+  pages: readonly number[],
+  pageTexts: readonly string[],
+): boolean | null {
+  // Formulas come out of pdf.js as loose symbols, never as the words a
+  // LaTeX answer uses, so they are left out of the comparison.
+  const words = wordsOf(stripMarkup(answer).replace(MATH_RE, ' '))
+  if (words.length < MIN_EXCERPT_WORDS) return null
+  const available = pages
+    .map((page) => pageTexts[page - 1] ?? '')
+    .filter((text) => text.length >= MIN_PAGE_TEXT_CHARS)
+  // A slide whose words live in a figure has too little text to judge by.
+  if (available.join(' ').length < ANSWER_MIN_PAGE_TEXT_CHARS) return null
+
+  const pageWords = wordsOf(available.join(' '))
+  const exact = new Set(pageWords)
+  const stems = new Set(
+    pageWords.filter((w) => w.length >= STEM_LEN).map((w) => w.slice(0, STEM_LEN)),
+  )
+  const found = words.filter(
+    (word) => exact.has(word) || (word.length >= STEM_LEN && stems.has(word.slice(0, STEM_LEN))),
+  ).length
+  return found / words.length >= ANSWER_MATCH_RATIO
+}
+
 /**
  * Evaluate a card in one pass. `failures` are hard requirements — any one of
  * them rejects the card. `issues` (failures + soft flags) annotate the card
@@ -381,6 +424,9 @@ export function evaluateCard(card: Card, opts: EvaluateOptions = {}): GateVerdic
   if (opts.pageTexts !== undefined && !card.outsideSource && card.sourceExcerpt) {
     const onPage = excerptIsOnPage(card.sourceExcerpt, sourcePages, opts.pageTexts)
     if (onPage === false) soft.push('excerpt_not_on_cited_page')
+    if (answerIsOnPages(answerText, sourcePages, opts.pageTexts) === false) {
+      soft.push('answer_not_on_cited_page')
+    }
   }
 
   const score = Math.max(

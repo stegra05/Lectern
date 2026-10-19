@@ -4,6 +4,24 @@
 
 ### Added
 
+- **Decks sized by the lecture, not by its page count.** While mapping the
+  lecture, the model now lists the distinct testable facts of every concept,
+  one card each, and the deck is their sum, held within sane bounds of what
+  the document's length suggests. The ledger names the facts no card tests
+  yet, so a run that stops early sees what it would leave out. Budgets are a
+  ceiling, not a quota: the run covers every concept with a first card
+  before any gets a second, and may stop early when the material runs out.
+  A short, dense script now gets the twenty-odd cards it carries instead of
+  five.
+- **Overview, Standard, Thorough.** The deck-size slider is replaced by three
+  depths that scale every concept's budget (an overview drops minor
+  concepts). The choice is remembered, and the start screen shows the size
+  to expect as a range that learns from past runs.
+- **A check on answers that say more than the lecture.** A card whose answer
+  is mostly words its cited pages never use is flagged "check the source",
+  and the quality pass is told to bring it back to the lecture. Extend runs
+  fill exactly what the deck lacks, concept by concept.
+
 - **OpenAI and Claude, next to Gemini.** Pick a GPT or Claude model in
   Settings and add a key for its provider; each provider's key has its own
   keychain entry, and the Gemini key you already saved stays where it is.

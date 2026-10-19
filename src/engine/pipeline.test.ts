@@ -20,6 +20,7 @@ const CONCEPT_MAP = {
       importance: 'high',
       difficulty: 'foundational',
       page_references: [1],
+      facets: ['what A is', 'where A applies', 'how A relates to B'],
     },
     {
       id: 'c-b',
@@ -27,6 +28,7 @@ const CONCEPT_MAP = {
       importance: 'medium',
       difficulty: 'intermediate',
       page_references: [2],
+      facets: ['what B is'],
     },
   ],
   relations: [{ source: 'c-a', type: 'relates_to', target: 'c-b', page_references: [1] }],
@@ -184,7 +186,7 @@ describe('runPipeline (scripted)', () => {
       pdfBytes: new Uint8Array([1, 2, 3]),
       pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
       fileName: 'test.pdf',
-      userTargetCards: 4,
+      density: 'standard',
       model: 'gemini-3.8-flash',
       apiKey: 'test-key',
       fetchFn: makeScriptedFetch(SCRIPT, captured),
@@ -320,8 +322,18 @@ describe('adoptExistingCards', () => {
   })
 })
 
+/** The same lecture, budgeted so the two inherited cards (one per page)
+ *  leave exactly one card missing: a second one on concept A. */
+const EXTEND_MAP = {
+  ...CONCEPT_MAP,
+  concepts: CONCEPT_MAP.concepts.map((c) => ({
+    ...c,
+    facets: c.id === 'c-a' ? ['what A is', 'where A applies'] : ['what B is'],
+  })),
+}
+
 const EXTEND_SCRIPT: ScriptedTurn[] = [
-  { id: 'i-map', output_text: JSON.stringify(CONCEPT_MAP) },
+  { id: 'i-map', output_text: JSON.stringify(EXTEND_MAP) },
   // The model submits one genuinely new card and one that repeats what the
   // deck already holds, then calls it done.
   {
@@ -385,7 +397,7 @@ describe('runPipeline (extend run)', () => {
       pdfBytes: new Uint8Array([1, 2, 3]),
       pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
       fileName: 'test.pdf',
-      userTargetCards: 1,
+      density: 'standard',
       existingCards: existing,
       model: 'gemini-3.8-flash',
       apiKey: 'test-key',
@@ -445,7 +457,7 @@ describe('runPipeline (extend run)', () => {
 /** The inherited deck already covers every page, so breadth is spent before
  *  the run starts — the only honest budget left is depth. */
 const DEPTH_SCRIPT: ScriptedTurn[] = [
-  { id: 'i-map', output_text: JSON.stringify(CONCEPT_MAP) },
+  { id: 'i-map', output_text: JSON.stringify(EXTEND_MAP) },
   // The model reads full coverage and tries to leave immediately.
   {
     id: 'i-gen-1',
@@ -500,7 +512,7 @@ describe('runPipeline (extend run, already covered)', () => {
       pdfBytes: new Uint8Array([1, 2, 3]),
       pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
       fileName: 'test.pdf',
-      userTargetCards: 1,
+      density: 'standard',
       existingCards: [
         inherited('anki-1', 'What is A?', [1]),
         inherited('anki-2', 'What is B?', [2]),
@@ -518,8 +530,8 @@ describe('runPipeline (extend run, already covered)', () => {
 
     // The early finish was refused, with a reason the model can act on.
     const refusal = JSON.stringify(captured[2].body.input)
-    expect(refusal).toContain('your budget is for depth')
-    expect(refusal).toContain('added 0 of 1 card')
+    expect(refusal).toContain('this run is for depth')
+    expect(refusal).toContain('Concept A')
 
     // And the run ends having actually added something.
     expect(outcome.cards).toHaveLength(3)

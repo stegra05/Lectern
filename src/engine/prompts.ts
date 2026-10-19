@@ -137,7 +137,7 @@ export function conceptMapPrompt(ctx: PromptContext, target: { min: number; max:
     'Return JSON with:\n' +
     '- objectives: explicit learning goals plus the implicit competency targets.\n' +
     `- concepts: the core entities, theories, and definitions, fundamentals first. List ${target.min} to ${target.max} concepts: one per idea a student must master, with its sub-points, examples, and special cases folded into it rather than listed apart, and no concept as wide as a whole section. Mark high importance only for the concepts the objectives hinge on.` +
-    ' Each carries a name (a plain-text label of 2-6 words, never a sentence), a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), and page_references (integer pages where it is taught or illustrated).\n' +
+    ' Each carries a name (a plain-text label of 2-6 words, never a sentence), a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), page_references (integer pages where it is taught or illustrated), and facets: the distinct facts the material gives it to test, as short labels, one card each. Most concepts have one facet; a concept taught on a single slide almost always does. Name every named entity, type, or rule the lecture lists under a concept as its own facet, so none goes without a card.\n' +
     '- relations: the semantic structure between concepts (is_a, part_of, causes, contrasts_with, ...) with page_references.\n' +
     "- language: ISO 639-1 code of the document's primary language.\n" +
     '- slide_set_name: Title Case name for this set, max 8 words, keeping any lecture/week number.\n' +
@@ -182,7 +182,7 @@ export function generationMissionPrompt(
     `Now build the deck for the document you just mapped. Work in batches: call submit_cards, read the review it returns — accepted/rejected verdicts with reasons plus a coverage ledger of pages, concepts, and relations still lacking cards — and let that drive the next batch. Rework rejected material rather than dropping it.\n` +
     existingBrief +
     depthBrief +
-    `\nBudget: ${opts.totalCardCap} accepted cards total. Keep each submit_cards call to about ${opts.batchSize} cards; larger payloads risk truncation.\n` +
+    `\nBudget: up to ${opts.totalCardCap} accepted cards. It is a ceiling, not a quota: stop when the material runs out. Keep each submit_cards call to about ${opts.batchSize} cards; larger payloads risk truncation.\n` +
     `Coverage order: every high-importance concept first, then breadth across pages. Spend at most 2 cards on one slide while gaps remain elsewhere.\n` +
     (focus ? `User focus: "${focus}" — align card selection and style with it.\n` : '') +
     `Quality bar: the front has exactly one defensible answer (open questions, never yes/no); the answer is verifiable against the card's source_excerpt; prefer why/how/compare/apply over restatement. Use Cloze for definitions and lists (with a {{c1::...}} deletion), Basic for open questions.\n` +
@@ -195,6 +195,7 @@ export function generationMissionPrompt(
     `- rationale: why the card matters, up to 140 chars.\n` +
     `- source_excerpt: the grounding slide wording or diagram content, up to 220 chars.\n` +
     `When grounding is weak, submit fewer cards.\n` +
+    `Your concept map gave every concept a card budget. Breadth first: give every concept its first card before any concept gets a second. A further card on a concept must test a fact its existing cards do not; never the same fact from another angle.\n` +
     `\nCall finish_generation once the ledger shows the important material is covered or the budget is spent.\n` +
     `\n${opts.gapText}\n` +
     `All content stays in ${ctx.language}.\n` +
@@ -273,8 +274,8 @@ export function reviewMissionPrompt(
       : `\n${inherited} further card(s) from earlier runs are already in this deck. They are not listed below and are not yours to edit — the user is studying them. They do count toward the coverage ledger, so a gap the ledger does not show is not a gap.\n`
   return (
     'The deck is generated. Review it as a quality editor, working through the edit tools:\n' +
-    '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back.\n' +
-    '- remove_cards: delete redundant or low-value cards. When two overlap, keep the stronger one or merge them via update_card.\n' +
+    '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back. A card flagged answer_not_on_cited_page says things its pages do not: bring the answer back to what the lecture says.\n' +
+    '- remove_cards: delete redundant or low-value cards. Two cards that test the same fact from different angles are redundant; so is filler a student gains nothing from (a term restated, a single number from an example). When two overlap, keep the stronger one or merge them via update_card. A smaller deck is fine.\n' +
     `- add_cards: close remaining coverage gaps. The deck budget stays ${opts.cardCap} cards (${opts.freeSlots} slot(s) currently free); removing a card frees a slot.\n` +
     '- finish_review: call when the deck is sound, with a short quality summary.\n' +
     '\nEvery edit passes the same quality gate as generation and returns a verdict plus an updated coverage ledger. ' +

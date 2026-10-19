@@ -134,6 +134,7 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
       pdfInfo,
       fileName: base.pdf,
       model: variant.model,
+      density: 'standard',
       effort: variant.effort,
       apiKey: key,
       fetchFn: fetch,
