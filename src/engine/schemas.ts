@@ -299,14 +299,11 @@ const conceptMapZ = z.object({
   document_type: z.enum(['slides', 'script', 'mixed']).catch('slides'),
 })
 
-/** A concept's facets, cleaned, and the card budget they amount to. */
-function withBudget(raw: string[]): { facets: string[]; cardBudget: number } {
-  const facets = raw
+const cleanFacets = (raw: string[]): string[] =>
+  raw
     .map((facet) => facet.trim())
     .filter((facet) => facet !== '')
     .slice(0, CONCEPT_CARD_BUDGET_MAX)
-  return { facets, cardBudget: Math.max(1, facets.length) }
-}
 
 export function parseConceptMap(raw: unknown): ConceptMap {
   const data = conceptMapZ.parse(raw)
@@ -318,7 +315,7 @@ export function parseConceptMap(raw: unknown): ConceptMap {
       importance: c.importance,
       difficulty: c.difficulty,
       pageReferences: c.page_references,
-      ...withBudget(c.facets),
+      facets: cleanFacets(c.facets),
     })),
     relations: data.relations.map((r) => ({
       source: r.source,

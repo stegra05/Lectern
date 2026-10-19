@@ -10,8 +10,8 @@ import { SetupChecklist } from './SetupChecklist'
  *  so the student picks how deep, not how many. */
 const DENSITIES: Array<{ id: CardDensity; label: string; note: string }> = [
   { id: 'overview', label: 'Overview', note: 'The essentials' },
-  { id: 'standard', label: 'Standard', note: 'Every concept' },
-  { id: 'thorough', label: 'Thorough', note: 'Every facet' },
+  { id: 'standard', label: 'Standard', note: 'Every facet' },
+  { id: 'thorough', label: 'Thorough', note: 'Plus why and how' },
 ]
 
 const formatTokens = (tokens: number): string =>

@@ -14,9 +14,11 @@
   A short, dense script now gets the twenty-odd cards it carries instead of
   five.
 - **Overview, Standard, Thorough.** The deck-size slider is replaced by three
-  depths that scale every concept's budget (an overview drops minor
-  concepts). The choice is remembered, and the start screen shows the size
-  to expect as a range that learns from past runs.
+  depths. Standard gives every facet its card, an overview halves that and
+  drops minor concepts, and Thorough adds why/how/compare/apply cards once
+  every facet has one, never a second card on the same fact. The choice is
+  remembered, and the start screen shows the size to expect as a range that
+  learns from past fresh runs.
 - **A check on answers that say more than the lecture.** A card whose answer
   is mostly words its cited pages never use is flagged "check the source",
   and the quality pass is told to bring it back to the lecture. Extend runs

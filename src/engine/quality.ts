@@ -300,8 +300,10 @@ const STEM_LEN = 6
 /** Cited pages with less extractable text than this carry their content in
  *  images (a blind review caught the check firing on a diagram slide). */
 const ANSWER_MIN_PAGE_TEXT_CHARS = 200
-/** \( … \), \[ … \] and $ … $ math. */
-const MATH_RE = /\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$[^$]*\$/g
+/** \( … \), \[ … \] and $ … $ math. Inline $ … $ follows Pandoc: no space
+ *  inside either dollar and no digit after the closing one, so "$5 and $10"
+ *  stays prose. */
+const MATH_RE = /\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$(?!\s)[^$]*?(?<!\s)\$(?!\d)/g
 
 /**
  * Does the answer say what the cited pages say? Same honesty rule as
@@ -316,13 +318,15 @@ export function answerIsOnPages(
   // LaTeX answer uses, so they are left out of the comparison.
   const words = wordsOf(stripMarkup(answer).replace(MATH_RE, ' '))
   if (words.length < MIN_EXCERPT_WORDS) return null
-  const available = pages
-    .map((page) => pageTexts[page - 1] ?? '')
-    .filter((text) => text.length >= MIN_PAGE_TEXT_CHARS)
-  // A slide whose words live in a figure has too little text to judge by.
-  if (available.join(' ').length < ANSWER_MIN_PAGE_TEXT_CHARS) return null
+  const texts = pages.map((page) => pageTexts[page - 1] ?? '')
+  // A slide whose words live in a figure has too little text to judge by,
+  // and judging the answer on its other cited pages alone would flag what
+  // the figure says.
+  if (texts.length === 0 || texts.some((text) => text.length < ANSWER_MIN_PAGE_TEXT_CHARS)) {
+    return null
+  }
 
-  const pageWords = wordsOf(available.join(' '))
+  const pageWords = wordsOf(texts.join(' '))
   const exact = new Set(pageWords)
   const stems = new Set(
     pageWords.filter((w) => w.length >= STEM_LEN).map((w) => w.slice(0, STEM_LEN)),

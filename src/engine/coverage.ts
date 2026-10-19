@@ -11,6 +11,7 @@ import {
   COVERAGE_MIN_RELATION_PERCENT,
   SATURATION_CARDS_PER_PAGE,
 } from './config'
+import { allocateBudgets } from './pacing'
 import { normalizeRelationKey } from './quality'
 import type { Card, ConceptMap, CoverageCatalog, CoverageData } from './types'
 import { relationKeyOf } from './types'
@@ -83,7 +84,7 @@ const cardRelationKeys = (card: Card): string[] =>
 export function buildCoverageCatalog(
   conceptMap: ConceptMap,
   pageCount?: number,
-  /** Cards per concept at the run's density; the map's own budgets if absent. */
+  /** Cards per concept at the run's density; standard depth if absent. */
   budgets?: Map<string, number>,
 ): EngineCoverageCatalog {
   const conceptIds = new Set<string>()
@@ -149,8 +150,7 @@ export function buildCoverageCatalog(
     conceptNames,
     pageCount: pageCount !== undefined && pageCount > 0 ? pageCount : conceptMap.pageCount,
     relationsByPage,
-    budgets:
-      budgets ?? new Map(conceptMap.concepts.map((c) => [c.id.trim(), c.cardBudget] as const)),
+    budgets: budgets ?? allocateBudgets(conceptMap, 'standard'),
     facetsByConcept: new Map(conceptMap.concepts.map((c) => [c.id.trim(), c.facets] as const)),
   }
 }
@@ -288,6 +288,19 @@ export function budgetShortfall(catalog: CoverageCatalog, coverage: CoverageData
 export const conceptsWithoutCards = (coverage: CoverageData): string[] =>
   coverage.underBudget.filter((id) => (coverage.cardsByConcept[id] ?? 0) === 0)
 
+/** Cards a concept needs before each of its facets has one: its facets,
+ *  within its budget (an overview budgets fewer). */
+const facetTarget = (catalog: CoverageCatalog, id: string): number =>
+  Math.min(catalog.budgets.get(id) ?? 0, Math.max(1, catalog.facetsByConcept.get(id)?.length ?? 0))
+
+/** Concepts with a facet no card tests yet. Past that point the rest of a
+ *  concept's budget (thorough only) is for depth, not for another fact. */
+export const conceptsWithUntestedFacets = (
+  catalog: CoverageCatalog,
+  coverage: CoverageData,
+): string[] =>
+  coverage.underBudget.filter((id) => (coverage.cardsByConcept[id] ?? 0) < facetTarget(catalog, id))
+
 // ---------------------------------------------------------------------------
 // Gap text (ports of build_generation_gap_text / build_reflection_gap_text)
 // ---------------------------------------------------------------------------
@@ -307,9 +320,11 @@ const describeShortConcept = (
   catalog: CoverageCatalog,
   coverage: CoverageData,
   id: string,
+  /** Cards the line counts toward: the facets, or the whole budget for depth. */
+  target: number,
 ): string => {
   const facets = catalog.facetsByConcept.get(id) ?? []
-  const counts = `${coverage.cardsByConcept[id] ?? 0}/${catalog.budgets.get(id) ?? 0} cards`
+  const counts = `${coverage.cardsByConcept[id] ?? 0}/${target} cards`
   return `${describeConcept(catalog, id)} (${facets.length > 0 ? `${counts}; facets: ${facets.join('; ')}` : counts})`
 }
 
@@ -405,12 +420,13 @@ export function buildGenerationGapText(
     )
   }
   const withoutCards = conceptsWithoutCards(coverage)
-  const partial = coverage.underBudget.filter((id) => !withoutCards.includes(id))
+  const untested = conceptsWithUntestedFacets(catalog, coverage)
+  const partial = untested.filter((id) => !withoutCards.includes(id))
+  const toFacets = (id: string) =>
+    describeShortConcept(catalog, coverage, id, facetTarget(catalog, id))
   if (withoutCards.length > 0) {
     lines.push(
-      `  - Concepts with no card yet (cover these first): ${preview(withoutCards, 10, (id) =>
-        describeShortConcept(catalog, coverage, id),
-      )}`,
+      `  - Concepts with no card yet (cover these first): ${preview(withoutCards, 10, toFacets)}`,
     )
   }
   if (partial.length > 0) {
@@ -418,7 +434,19 @@ export function buildGenerationGapText(
       `  - Concepts with facets still untested (one card per facet the deck does not ask yet; never a fact a card already tests): ${preview(
         partial,
         8,
-        (id) => describeShortConcept(catalog, coverage, id),
+        toFacets,
+      )}`,
+    )
+  }
+  // A thorough budget runs past the facets. Those slots open only once every
+  // facet has its card, and they buy depth: a further card on a tested fact
+  // is the repetition the review pass removes.
+  if (untested.length === 0 && coverage.underBudget.length > 0) {
+    lines.push(
+      `  - Every facet has its card. Room for depth (a why/how/compare/apply card that links the concept to another or puts it to use; never a facet a card already tests): ${preview(
+        coverage.underBudget,
+        8,
+        (id) => describeShortConcept(catalog, coverage, id, catalog.budgets.get(id) ?? 0),
       )}`,
     )
   }
@@ -512,7 +540,7 @@ export function buildReflectionGapText(catalog: CoverageCatalog, coverage: Cover
   if (withoutCards.length > 0) {
     lines.push(
       `- Concepts with no card (add_cards targets): ${preview(withoutCards, 10, (id) =>
-        describeShortConcept(catalog, coverage, id),
+        describeShortConcept(catalog, coverage, id, facetTarget(catalog, id)),
       )}`,
     )
   }

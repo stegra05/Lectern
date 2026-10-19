@@ -39,6 +39,7 @@ import {
   buildGenerationGapText,
   buildReflectionGapText,
   computeCoverageData,
+  conceptsWithUntestedFacets,
   isCoverageSufficient,
 } from './coverage'
 import {
@@ -557,12 +558,12 @@ function handleFinishRequest(
     }
   }
 
-  // A concept's budget is the facets the map listed for it, so a concept
-  // short of its budget has named facts no card tests yet. The run is sent
-  // back for them once. Once, because the brief invites an honest short
-  // deck: a second request means the model looked and found nothing worth a
-  // card there, and the budgets stay a ceiling, never a quota.
-  const short = coverage.underBudget
+  // A concept with fewer cards than facets has named facts no card tests
+  // yet. The run is sent back for them once. Once, because the brief invites
+  // an honest short deck: a second request means the model looked and found
+  // nothing worth a card there, and the budgets stay a ceiling, never a
+  // quota. Thorough's depth slots past the facets never hold a run back.
+  const short = conceptsWithUntestedFacets(catalog, coverage)
   if (short.length > 0 && attempts < EARLY_FINISH_ATTEMPTS) {
     const names = short
       .slice(0, 8)

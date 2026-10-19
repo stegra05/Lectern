@@ -6,6 +6,7 @@ import {
   buildGenerationGapText,
   buildReflectionGapText,
   computeCoverageData,
+  conceptsWithUntestedFacets,
   isCoverageSufficient,
 } from './coverage'
 import type { Card, ConceptMap, CoverageData } from './types'
@@ -24,7 +25,6 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       difficulty: 'foundational',
       pageReferences: [1, 2],
       facets: [],
-      cardBudget: 1,
     },
     {
       id: 'c2',
@@ -33,7 +33,6 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       difficulty: 'intermediate',
       pageReferences: [3],
       facets: [],
-      cardBudget: 1,
     },
     {
       id: 'c3',
@@ -42,7 +41,6 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       difficulty: 'intermediate',
       pageReferences: [4],
       facets: [],
-      cardBudget: 1,
     },
     // Blank id — must be skipped entirely.
     {
@@ -52,7 +50,6 @@ const makeConceptMap = (overrides: Partial<ConceptMap> = {}): ConceptMap => ({
       difficulty: 'foundational',
       pageReferences: [5],
       facets: [],
-      cardBudget: 1,
     },
   ],
   relations: [
@@ -349,6 +346,35 @@ describe('buildGenerationGapText', () => {
     // c3 has none, c1 has one of three: breadth before depth.
     expect(coverage.underBudget).toEqual(['c3', 'c1'])
     expect(budgetShortfall(budgeted, coverage)).toBe(4)
+  })
+
+  it('opens depth slots past the facets only once every facet has its card', () => {
+    const map = makeConceptMap()
+    map.concepts[0].facets = ['what a network computes']
+    // Thorough: one facet, two cards.
+    const thorough = buildCoverageCatalog(
+      map,
+      undefined,
+      new Map([
+        ['c1', 2],
+        ['c2', 1],
+        ['c3', 1],
+      ]),
+    )
+    const c1 = makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'] })
+    const c2 = makeCard({ uid: 'b', sourcePages: [3], conceptIds: ['c2'] })
+    const c3 = makeCard({ uid: 'c', sourcePages: [4], conceptIds: ['c3'] })
+
+    const breadth = computeCoverageData(thorough, [c1, c2])
+    expect(conceptsWithUntestedFacets(thorough, breadth)).toEqual(['c3'])
+    expect(buildGenerationGapText(thorough, breadth)).not.toContain('Room for depth')
+
+    const full = computeCoverageData(thorough, [c1, c2, c3])
+    expect(conceptsWithUntestedFacets(thorough, full)).toEqual([])
+    const text = buildGenerationGapText(thorough, full)
+    expect(text).not.toContain('facets still untested')
+    expect(text).toContain('Room for depth')
+    expect(text).toContain('Neural Network@1,2 (1/2 cards; facets: what a network computes)')
   })
 
   it('credits a card read back from Anki to the concepts on its pages', () => {

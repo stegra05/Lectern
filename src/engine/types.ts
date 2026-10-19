@@ -60,11 +60,9 @@ export interface Concept {
   difficulty: Difficulty
   pageReferences: number[]
   /** The distinct facts the material gives this concept to test, as short
-   *  labels. They are what the ledger names when the concept is short. */
+   *  labels, one card each at standard depth. The deck size is built from
+   *  them, and the ledger names them when the concept is short. */
   facets: string[]
-  /** Cards the concept deserves at standard depth: its facets, 1-4. The
-   *  deck size is built from these. */
-  cardBudget: number
 }
 
 /** How deep a deck goes. Scales every concept's card budget. */

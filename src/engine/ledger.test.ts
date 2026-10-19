@@ -21,7 +21,6 @@ const map: ConceptMap = {
       difficulty: 'foundational',
       pageReferences: [12, 13],
       facets: [],
-      cardBudget: 1,
     },
   ],
   relations: [{ source: 'gd', type: 'depends_on', target: 'lr', pageReferences: [14] }],

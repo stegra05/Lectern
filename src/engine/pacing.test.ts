@@ -132,13 +132,13 @@ describe('conceptTarget', () => {
 describe('allocateBudgets', () => {
   const map = {
     concepts: [
-      { id: 'a', importance: 'high', cardBudget: 3 },
-      { id: 'b', importance: 'medium', cardBudget: 1 },
-      { id: 'c', importance: 'low', cardBudget: 2 },
+      { id: 'a', importance: 'high', facets: ['x', 'y', 'z'] },
+      { id: 'b', importance: 'medium', facets: [] },
+      { id: 'c', importance: 'low', facets: ['x', 'y'] },
     ],
   } as unknown as ConceptMap
 
-  it('keeps the map’s budgets at standard depth', () => {
+  it('gives one card per facet at standard depth', () => {
     expect([...allocateBudgets(map, 'standard').values()]).toEqual([3, 1, 2])
   })
 

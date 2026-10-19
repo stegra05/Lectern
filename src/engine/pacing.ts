@@ -22,7 +22,7 @@ import {
   SCRIPT_BASE_CHARS,
   SCRIPT_CHARS_PER_CONCEPT,
 } from './config'
-import type { CardDensity, ConceptMap, ContentMode, PdfInfo, SizingPlan } from './types'
+import type { CardDensity, Concept, ConceptMap, ContentMode, PdfInfo, SizingPlan } from './types'
 
 export function detectContentMode(pdfInfo: PdfInfo): ContentMode {
   const charsPerPage = pdfInfo.pageCount > 0 ? pdfInfo.textChars / pdfInfo.pageCount : 0
@@ -85,9 +85,14 @@ export function computeSizingPlan(pdfInfo: PdfInfo, opts: SizingOptions = {}): S
   return { contentMode, totalCardCap, batchSize }
 }
 
+/** Cards a concept gets at standard depth: one per facet, at least one. */
+export const facetCount = (concept: Concept): number => Math.max(1, concept.facets.length)
+
 /**
  * Cards each concept should get at a density. Overview keeps the essentials:
  * low-importance concepts drop out and the rest are halved, never below one.
+ * Thorough goes past the facets: the extra cards are for depth (why, how,
+ * compare, apply), never a second card on a fact.
  */
 export function allocateBudgets(conceptMap: ConceptMap, density: CardDensity): Map<string, number> {
   const budgets = new Map<string, number>()
@@ -95,7 +100,7 @@ export function allocateBudgets(conceptMap: ConceptMap, density: CardDensity): M
     const skipped = density === 'overview' && concept.importance === 'low'
     budgets.set(
       concept.id.trim(),
-      skipped ? 0 : Math.max(1, Math.round(concept.cardBudget * DENSITY_FACTOR[density])),
+      skipped ? 0 : Math.max(1, Math.round(facetCount(concept) * DENSITY_FACTOR[density])),
     )
   }
   return budgets

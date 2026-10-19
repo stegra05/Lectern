@@ -92,7 +92,7 @@ async function releaseUploads(): Promise<void> {
 /** How far a run's deck tends to land around the expected size. Models stop
  *  early when the material runs out, or fill toward their budgets: 0.9-1.45
  *  of the heuristic across four models on the eval lectures (2026-10-19). */
-const EXPECTED_CARDS_SPREAD = { min: 0.9, max: 1.4 }
+const EXPECTED_CARDS_SPREAD = { min: 0.9, max: 1.45 }
 
 const THUMBNAIL_PAGE_LIMIT = 150
 const UNDO_WINDOW_MS = 30_000
@@ -900,14 +900,17 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           signal: controller.signal,
         })
         set({ followUp: outcome.followUp })
-        if (estimate && sizing) {
+        // Fresh runs only: the estimate sizes a whole deck, so an extend run
+        // that adds a handful would teach every factor that decks come out
+        // a fraction of their size.
+        if (estimate && sizing && existingCards.length === 0) {
           void recordCalibrationRun(
             estimate,
             sizing,
             pdfInfo,
             settings.model,
             outcome.usage,
-            outcome.cards.length - existingCards.length,
+            outcome.cards.length,
           )
         }
         void notifyRunFinished({

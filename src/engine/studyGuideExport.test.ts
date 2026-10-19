@@ -12,7 +12,6 @@ const map: ConceptMap = {
       difficulty: 'foundational',
       pageReferences: [12, 13],
       facets: [],
-      cardBudget: 1,
     },
     {
       id: 'mo',
@@ -21,7 +20,6 @@ const map: ConceptMap = {
       difficulty: 'intermediate',
       pageReferences: [20, 21],
       facets: [],
-      cardBudget: 1,
     },
     {
       id: 'lr',
@@ -30,7 +28,6 @@ const map: ConceptMap = {
       difficulty: 'intermediate',
       pageReferences: [14],
       facets: [],
-      cardBudget: 1,
     },
   ],
   relations: [{ source: 'gd', type: 'depends_on', target: 'lr', pageReferences: [14] }],

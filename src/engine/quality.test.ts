@@ -552,4 +552,24 @@ describe('answerIsOnPages', () => {
       ),
     ).toBe(true)
   })
+
+  it('reads prose between two dollar amounts as prose, not math', () => {
+    expect(
+      answerIsOnPages(
+        'Outliers cost $5 because gradients explode during backpropagation, not $10.',
+        [1],
+        pages,
+      ),
+    ).toBe(false)
+  })
+
+  it('stays silent when one cited page carries its content in a figure', () => {
+    expect(
+      answerIsOnPages(
+        'Outliers compress the remaining values, so gradients explode during backpropagation.',
+        [1, 2],
+        [...pages, 'Diagram: outliers'],
+      ),
+    ).toBeNull()
+  })
 })
