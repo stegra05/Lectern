@@ -19,6 +19,9 @@ export interface Card {
   slideNumber?: number
   sourcePages: number[]
   conceptIds: string[]
+  /** Concept-map facets the card tests ("c-a#2"). Each one's concept is in
+   *  conceptIds too. Cards read back from Anki have none. */
+  facetIds: string[]
   relationKeys: string[]
   rationale?: string
   sourceExcerpt?: string
@@ -78,6 +81,11 @@ export interface Relation {
 export const relationKeyOf = (r: Pick<Relation, 'source' | 'type' | 'target'>): string =>
   `${r.source}|${r.type}|${r.target}`
 
+/** A facet's id: its concept's id and its place in the concept's facet list,
+ *  counted from 1 ("c-a#2"). Derived rather than asked for, so the concept
+ *  map schema stays as it is. */
+export const facetIdOf = (conceptId: string, index: number): string => `${conceptId}#${index + 1}`
+
 export type DocumentType = 'slides' | 'script' | 'mixed'
 
 export interface ConceptMap {
@@ -110,6 +118,8 @@ export interface CoverageCatalog {
   budgets: Map<string, number>
   /** concept id -> the facts it has to test */
   facetsByConcept: Map<string, string[]>
+  /** facet id -> its concept and label */
+  facets: Map<string, { conceptId: string; label: string }>
 }
 
 export interface CoverageData {
@@ -135,6 +145,11 @@ export interface CoverageData {
   cardsByConcept: Record<string, number>
   /** Concepts with fewer cards than their budget, most important first */
   underBudget: string[]
+  /** facet id -> cards that declare it. Cards read back from Anki declare
+   *  none: they only ever count for concepts, by page. */
+  cardsByFacet: Record<string, number>
+  /** Facets of under-budget concepts that no card tests, in underBudget order */
+  untestedFacets: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +207,8 @@ export type QualityIssue =
   | 'answer_not_on_cited_page'
 
 /** Why a submitted card did not join the deck. */
-export type RejectionReason = QualityIssue | 'invalid_structure' | 'budget_exhausted'
+export type RejectionReason =
+  QualityIssue | 'invalid_structure' | 'budget_exhausted' | 'facet_already_tested'
 
 export interface GateVerdict {
   pass: boolean

@@ -459,6 +459,7 @@ export interface NormalizedCardPayload {
   slideNumber?: number
   sourcePages: number[]
   conceptIds: string[]
+  facetIds: string[]
   relationKeys: string[]
   rationale?: string
   sourceExcerpt?: string
@@ -554,6 +555,7 @@ export function normalizeCardPayload(raw: unknown): NormalizedCardPayload | null
     fields,
     sourcePages: normalizePageReferences(raw['source_pages'] ?? raw['sourcePages']),
     conceptIds: normalizeStringList(raw['concept_ids'] ?? raw['conceptIds']),
+    facetIds: normalizeStringList(raw['facet_ids'] ?? raw['facetIds']),
     relationKeys: normalizeStringList(raw['relation_keys'] ?? raw['relationKeys']),
   }
 

@@ -14,7 +14,7 @@ import {
 import { allocateBudgets } from './pacing'
 import { normalizeRelationKey } from './quality'
 import type { Card, ConceptMap, CoverageCatalog, CoverageData } from './types'
-import { relationKeyOf } from './types'
+import { facetIdOf, relationKeyOf } from './types'
 
 // ---------------------------------------------------------------------------
 // Local extension of the shared catalog type
@@ -141,6 +141,16 @@ export function buildCoverageCatalog(
     }
   }
 
+  const facetsByConcept = new Map(
+    conceptMap.concepts
+      .filter((c) => c.id.trim() !== '')
+      .map((c) => [c.id.trim(), c.facets] as const),
+  )
+  const facets = new Map<string, { conceptId: string; label: string }>()
+  for (const [conceptId, labels] of facetsByConcept) {
+    labels.forEach((label, i) => facets.set(facetIdOf(conceptId, i), { conceptId, label }))
+  }
+
   return {
     conceptIds,
     highPriorityIds,
@@ -151,8 +161,39 @@ export function buildCoverageCatalog(
     pageCount: pageCount !== undefined && pageCount > 0 ? pageCount : conceptMap.pageCount,
     relationsByPage,
     budgets: budgets ?? allocateBudgets(conceptMap, 'standard'),
-    facetsByConcept: new Map(conceptMap.concepts.map((c) => [c.id.trim(), c.facets] as const)),
+    facetsByConcept,
+    facets,
   }
+}
+
+/** The facets the model tags its cards with, one line per concept:
+ *  "c-a Concept A: #1 what A is; #2 where A applies". */
+export function buildFacetCatalogText(catalog: CoverageCatalog): string {
+  return [...catalog.facetsByConcept]
+    .filter(([, labels]) => labels.length > 0)
+    .map(
+      ([id, labels]) =>
+        `${id} ${catalog.conceptNames.get(id) || id}: ` +
+        labels.map((label, i) => `#${i + 1} ${label}`).join('; '),
+    )
+    .join('\n')
+}
+
+/**
+ * Would this card only re-test what the deck already tests? True when it
+ * claims at least one facet and every facet it claims already has
+ * `perFacet` cards in `deck`. A card that names no facet is never a repeat
+ * by this measure: there is nothing to compare it on.
+ */
+export function repeatsTestedFacets(
+  facetIds: readonly string[],
+  deck: readonly Card[],
+  perFacet: number,
+): boolean {
+  return (
+    facetIds.length > 0 &&
+    facetIds.every((id) => deck.filter((card) => card.facetIds.includes(id)).length >= perFacet)
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +221,7 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
   const relationsCoveredByPage = new Set<string>()
   const cardsPerPage = new Map<number, number>()
   const cardsByConcept = new Map<string, number>()
+  const cardsByFacet = new Map<string, number>()
   const countFor = (id: string) => cardsByConcept.set(id, (cardsByConcept.get(id) ?? 0) + 1)
 
   for (const card of cards) {
@@ -191,6 +233,12 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
         ? new Set(pages.flatMap((page) => catalog.conceptsByPage.get(page) ?? []))
         : new Set(cardConceptIds(card).filter((id) => catalog.conceptIds.has(id)))
     for (const id of taught) countFor(id)
+    // Like its concept ids, an inherited card's facet ids belonged to another
+    // concept map; it answers for concepts only, by page.
+    const facets = card.fromAnki === true ? [] : new Set(card.facetIds)
+    for (const id of facets) {
+      if (catalog.facets.has(id)) cardsByFacet.set(id, (cardsByFacet.get(id) ?? 0) + 1)
+    }
     for (const page of pages) {
       coveredPages.add(page)
       cardsPerPage.set(page, (cardsPerPage.get(page) ?? 0) + 1)
@@ -247,6 +295,14 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
         Number(catalog.highPriorityIds.has(b)) - Number(catalog.highPriorityIds.has(a)) ||
         deficit(b) - deficit(a),
     )
+  // A concept credited by inherited cards may be short with facets those
+  // cards already test; they cannot say which, so all of its facets show.
+  // One they fully satisfy is not short and shows none.
+  const untestedFacets = underBudget.flatMap((id) =>
+    (catalog.facetsByConcept.get(id) ?? [])
+      .map((_, i) => facetIdOf(id, i))
+      .filter((facetId) => !cardsByFacet.has(facetId)),
+  )
 
   const totalConcepts = catalog.conceptIds.size
   const totalRelations = catalog.relationKeys.size
@@ -273,6 +329,8 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
     cardsPerPage: cardsPerPageRecord,
     cardsByConcept: Object.fromEntries(cardsByConcept),
     underBudget,
+    cardsByFacet: Object.fromEntries(cardsByFacet),
+    untestedFacets,
   }
 }
 
@@ -305,8 +363,12 @@ export const conceptsWithUntestedFacets = (
 // Gap text (ports of build_generation_gap_text / build_reflection_gap_text)
 // ---------------------------------------------------------------------------
 
-const preview = <T>(items: readonly T[], limit: number, render: (item: T) => string): string =>
-  items.slice(0, limit).map(render).join(', ') + (items.length > limit ? '...' : '')
+const preview = <T>(
+  items: readonly T[],
+  limit: number,
+  render: (item: T) => string,
+  separator = ', ',
+): string => items.slice(0, limit).map(render).join(separator) + (items.length > limit ? '...' : '')
 
 const describeConcept = (catalog: CoverageCatalog, id: string): string => {
   const name = catalog.conceptNames.get(id)
@@ -315,18 +377,23 @@ const describeConcept = (catalog: CoverageCatalog, id: string): string => {
   return `${name !== undefined && name !== '' ? name : id}@${pageText}`
 }
 
-/** "Endometriose@3 (1/2 cards; facets: Schokoladenzysten; Leiomyom)" */
+/** "Endometriose@3 (1/2 cards)" */
 const describeShortConcept = (
   catalog: CoverageCatalog,
   coverage: CoverageData,
   id: string,
   /** Cards the line counts toward: the facets, or the whole budget for depth. */
   target: number,
-): string => {
-  const facets = catalog.facetsByConcept.get(id) ?? []
-  const counts = `${coverage.cardsByConcept[id] ?? 0}/${target} cards`
-  return `${describeConcept(catalog, id)} (${facets.length > 0 ? `${counts}; facets: ${facets.join('; ')}` : counts})`
-}
+): string => `${describeConcept(catalog, id)} (${coverage.cardsByConcept[id] ?? 0}/${target} cards)`
+
+/** "c-a#2 where A applies; c-b#1 what B is", cut at `limit`. Labels can hold
+ *  commas, so facets are kept apart by semicolons. */
+export const describeFacets = (
+  catalog: CoverageCatalog,
+  facetIds: readonly string[],
+  limit: number,
+): string =>
+  preview(facetIds, limit, (id) => `${id} ${catalog.facets.get(id)?.label ?? ''}`.trim(), '; ')
 
 interface GapSummary {
   /** Concepts a card names outright. Page overlap is not counted here: the
@@ -420,8 +487,6 @@ export function buildGenerationGapText(
     )
   }
   const withoutCards = conceptsWithoutCards(coverage)
-  const untested = conceptsWithUntestedFacets(catalog, coverage)
-  const partial = untested.filter((id) => !withoutCards.includes(id))
   const toFacets = (id: string) =>
     describeShortConcept(catalog, coverage, id, facetTarget(catalog, id))
   if (withoutCards.length > 0) {
@@ -429,19 +494,22 @@ export function buildGenerationGapText(
       `  - Concepts with no card yet (cover these first): ${preview(withoutCards, 10, toFacets)}`,
     )
   }
-  if (partial.length > 0) {
+  if (coverage.untestedFacets.length > 0) {
     lines.push(
-      `  - Concepts with facets still untested (one card per facet the deck does not ask yet; never a fact a card already tests): ${preview(
-        partial,
-        8,
-        toFacets,
+      `  - Facets no card tests yet (one card each, tagged with its facet id): ${describeFacets(
+        catalog,
+        coverage.untestedFacets,
+        12,
       )}`,
     )
   }
   // A thorough budget runs past the facets. Those slots open only once every
   // facet has its card, and they buy depth: a further card on a tested fact
   // is the repetition the review pass removes.
-  if (untested.length === 0 && coverage.underBudget.length > 0) {
+  const breadthDone =
+    coverage.untestedFacets.length === 0 &&
+    conceptsWithUntestedFacets(catalog, coverage).length === 0
+  if (breadthDone && coverage.underBudget.length > 0) {
     lines.push(
       `  - Every facet has its card. Room for depth (a why/how/compare/apply card that links the concept to another or puts it to use; never a facet a card already tests): ${preview(
         coverage.underBudget,
@@ -539,8 +607,17 @@ export function buildReflectionGapText(catalog: CoverageCatalog, coverage: Cover
   const withoutCards = conceptsWithoutCards(coverage)
   if (withoutCards.length > 0) {
     lines.push(
-      `- Concepts with no card (add_cards targets): ${preview(withoutCards, 10, (id) =>
+      `- Concepts with no card: ${preview(withoutCards, 10, (id) =>
         describeShortConcept(catalog, coverage, id, facetTarget(catalog, id)),
+      )}`,
+    )
+  }
+  if (coverage.untestedFacets.length > 0) {
+    lines.push(
+      `- Facets no card tests yet (add_cards targets): ${describeFacets(
+        catalog,
+        coverage.untestedFacets,
+        10,
       )}`,
     )
   }

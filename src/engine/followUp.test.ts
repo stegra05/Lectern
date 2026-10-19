@@ -44,6 +44,7 @@ const EXISTING: Card = {
   fields: { Front: 'What is A?', Back: 'A is the first concept.' },
   sourcePages: [1],
   conceptIds: ['c-a'],
+  facetIds: [],
   relationKeys: [],
   rationale: 'Covers a core concept.',
   sourceExcerpt: 'The slide defines A.',

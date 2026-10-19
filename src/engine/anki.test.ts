@@ -106,6 +106,7 @@ const makeCard = (overrides: Partial<Card> = {}): Card => ({
   fields: { Front: 'What is X?', Back: 'X is Y.' },
   sourcePages: [1],
   conceptIds: [],
+  facetIds: [],
   relationKeys: [],
   qualityScore: 80,
   qualityIssues: [],

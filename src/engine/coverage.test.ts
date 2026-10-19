@@ -3,13 +3,16 @@ import { describe, expect, it } from 'vitest'
 import {
   budgetShortfall,
   buildCoverageCatalog,
+  buildFacetCatalogText,
   buildGenerationGapText,
   buildReflectionGapText,
   computeCoverageData,
   conceptsWithUntestedFacets,
   isCoverageSufficient,
+  repeatsTestedFacets,
 } from './coverage'
 import type { Card, ConceptMap, CoverageData } from './types'
+import { facetIdOf } from './types'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -71,6 +74,7 @@ const makeCard = (overrides: Partial<Card> & { uid: string }): Card => ({
   fields: { Front: `Question ${overrides.uid}?`, Back: 'Answer.' },
   sourcePages: [],
   conceptIds: [],
+  facetIds: [],
   relationKeys: [],
   qualityScore: 70,
   qualityIssues: [],
@@ -93,6 +97,8 @@ const makeCoverage = (overrides: Partial<CoverageData> = {}): CoverageData => ({
   cardsPerPage: {},
   cardsByConcept: {},
   underBudget: [],
+  cardsByFacet: {},
+  untestedFacets: [],
   ...overrides,
 })
 
@@ -235,6 +241,124 @@ describe('computeCoverageData', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Facets
+// ---------------------------------------------------------------------------
+
+/** c1 has three facets, c2 one, c3 two; budgets follow (standard depth). */
+const facetedMap = (): ConceptMap => {
+  const facets: Record<string, string[]> = {
+    c1: ['layers of units', 'weights, biases', 'universal approximation'],
+    c2: ['chain rule backwards'],
+    c3: ['train vs test gap', 'regularization fixes'],
+  }
+  const base = makeConceptMap()
+  return {
+    ...base,
+    concepts: base.concepts.map((c) => ({
+      ...c,
+      facets: facets[c.id] ?? [],
+      cardBudget: Math.max(1, (facets[c.id] ?? []).length),
+    })),
+  }
+}
+
+describe('facet ids', () => {
+  const catalog = buildCoverageCatalog(facetedMap())
+
+  it("numbers a concept's facets from 1", () => {
+    expect(facetIdOf('c-a', 0)).toBe('c-a#1')
+    expect(facetIdOf('c-a', 1)).toBe('c-a#2')
+  })
+
+  it('indexes every facet by id, and none for a concept without an id', () => {
+    expect([...catalog.facets.keys()]).toEqual(['c1#1', 'c1#2', 'c1#3', 'c2#1', 'c3#1', 'c3#2'])
+    expect(catalog.facets.get('c3#2')).toEqual({ conceptId: 'c3', label: 'regularization fixes' })
+  })
+
+  it('renders the catalog the model tags its cards from', () => {
+    expect(buildFacetCatalogText(catalog)).toBe(
+      'c1 Neural Network: #1 layers of units; #2 weights, biases; #3 universal approximation\n' +
+        'c2 Backpropagation: #1 chain rule backwards\n' +
+        'c3 Overfitting: #1 train vs test gap; #2 regularization fixes',
+    )
+  })
+})
+
+describe('the facet ledger', () => {
+  const catalog = buildCoverageCatalog(facetedMap())
+
+  it('counts the cards that declare each facet, once per card', () => {
+    const coverage = computeCoverageData(catalog, [
+      makeCard({ uid: 'a', conceptIds: ['c1'], facetIds: ['c1#1', 'c1#1'] }),
+      makeCard({ uid: 'b', conceptIds: ['c1', 'c3'], facetIds: ['c1#1', 'c3#2', 'c9#1'] }),
+    ])
+    expect(coverage.cardsByFacet).toEqual({ 'c1#1': 2, 'c3#2': 1 })
+  })
+
+  it('lists the untested facets of short concepts, no-card concepts first', () => {
+    const coverage = computeCoverageData(catalog, [
+      makeCard({ uid: 'a', conceptIds: ['c1'], facetIds: ['c1#2'] }),
+    ])
+    // c2 and c3 have no card yet (high importance first), then c1.
+    expect(coverage.underBudget).toEqual(['c2', 'c3', 'c1'])
+    expect(coverage.untestedFacets).toEqual(['c2#1', 'c3#1', 'c3#2', 'c1#1', 'c1#3'])
+  })
+
+  it("drops a concept's facets once it meets its budget", () => {
+    const coverage = computeCoverageData(catalog, [
+      makeCard({ uid: 'a', conceptIds: ['c3'], facetIds: ['c3#1'] }),
+      makeCard({ uid: 'b', conceptIds: ['c3'] }),
+    ])
+    expect(coverage.untestedFacets).not.toContain('c3#2')
+  })
+
+  it('never attributes an inherited card to a facet', () => {
+    // Page 3 carries only c2, whose single card it is: c2 is satisfied and
+    // shows no facets. Page 4 gives c3 one of two cards, but which facet the
+    // card tests is unknown, so both stay listed.
+    const coverage = computeCoverageData(catalog, [
+      makeCard({ uid: 'x', sourcePages: [3], fromAnki: true, facetIds: ['c2#1'] }),
+      makeCard({ uid: 'y', sourcePages: [4], fromAnki: true }),
+    ])
+    expect(coverage.cardsByFacet).toEqual({})
+    expect(coverage.cardsByConcept).toMatchObject({ c2: 1, c3: 1 })
+    expect(coverage.untestedFacets).not.toContain('c2#1')
+    expect(coverage.untestedFacets).toEqual(expect.arrayContaining(['c3#1', 'c3#2']))
+  })
+})
+
+describe('repeatsTestedFacets', () => {
+  const deck = [
+    makeCard({ uid: 'a', facetIds: ['c1#1'] }),
+    makeCard({ uid: 'b', facetIds: ['c1#2'] }),
+  ]
+
+  it('rejects a card whose every facet already has its card', () => {
+    expect(repeatsTestedFacets(['c1#1'], deck, 1)).toBe(true)
+    expect(repeatsTestedFacets(['c1#1', 'c1#2'], deck, 1)).toBe(true)
+  })
+
+  it('lets a card through when one of its facets is still open', () => {
+    expect(repeatsTestedFacets(['c1#1', 'c1#3'], deck, 1)).toBe(false)
+  })
+
+  it('allows a second card per facet at thorough depth, not a third', () => {
+    expect(repeatsTestedFacets(['c1#1'], deck, 2)).toBe(false)
+    const twice = [...deck, makeCard({ uid: 'c', facetIds: ['c1#1'] })]
+    expect(repeatsTestedFacets(['c1#1'], twice, 2)).toBe(true)
+  })
+
+  it('does not count the card being replaced against itself', () => {
+    const others = deck.filter((card) => card.uid !== 'a')
+    expect(repeatsTestedFacets(['c1#1'], others, 1)).toBe(false)
+  })
+
+  it('never rejects a card that names no facet', () => {
+    expect(repeatsTestedFacets([], deck, 1)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // isCoverageSufficient
 // ---------------------------------------------------------------------------
 
@@ -361,7 +485,7 @@ describe('buildGenerationGapText', () => {
         ['c3', 1],
       ]),
     )
-    const c1 = makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'] })
+    const c1 = makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'], facetIds: ['c1#1'] })
     const c2 = makeCard({ uid: 'b', sourcePages: [3], conceptIds: ['c2'] })
     const c3 = makeCard({ uid: 'c', sourcePages: [4], conceptIds: ['c3'] })
 
@@ -374,7 +498,7 @@ describe('buildGenerationGapText', () => {
     const text = buildGenerationGapText(thorough, full)
     expect(text).not.toContain('facets still untested')
     expect(text).toContain('Room for depth')
-    expect(text).toContain('Neural Network@1,2 (1/2 cards; facets: what a network computes)')
+    expect(text).toContain('Neural Network@1,2 (1/2 cards)')
   })
 
   it('credits a card read back from Anki to the concepts on its pages', () => {
@@ -382,6 +506,62 @@ describe('buildGenerationGapText', () => {
       makeCard({ uid: 'x', sourcePages: [1], conceptIds: [], fromAnki: true }),
     ])
     expect(coverage.cardsByConcept.c1).toBe(1)
+  })
+
+  it('names the untested facets by id and label, no-card concepts first', () => {
+    const faceted = buildCoverageCatalog(facetedMap())
+    const coverage = computeCoverageData(faceted, [
+      makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'], facetIds: ['c1#2'] }),
+    ])
+    const text = buildGenerationGapText(faceted, coverage)
+
+    expect(text).toContain(
+      'Concepts with no card yet (cover these first): Backpropagation@3 (0/1 cards), Overfitting@4 (0/2 cards)',
+    )
+    expect(text).toContain(
+      'Facets no card tests yet (one card each, tagged with its facet id): ' +
+        'c2#1 chain rule backwards; c3#1 train vs test gap; c3#2 regularization fixes; ' +
+        'c1#1 layers of units; c1#3 universal approximation',
+    )
+    expect(text).not.toContain('weights, biases')
+  })
+
+  it('names a concept whose budget outruns its facets once each facet has a card', () => {
+    // Thorough depth: c2's one facet earns it two cards.
+    const thorough = buildCoverageCatalog(
+      facetedMap(),
+      undefined,
+      new Map([
+        ['c1', 0],
+        ['c2', 2],
+        ['c3', 0],
+      ]),
+    )
+    const coverage = computeCoverageData(thorough, [
+      makeCard({ uid: 'a', sourcePages: [3], conceptIds: ['c2'], facetIds: ['c2#1'] }),
+    ])
+    const text = buildGenerationGapText(thorough, coverage)
+    expect(text).not.toContain('Facets no card tests yet')
+    expect(text).toContain('Room for depth')
+    expect(text).toContain('Backpropagation@3 (1/2 cards)')
+  })
+
+  it('keeps a long facet list bounded', () => {
+    const many = makeConceptMap({
+      concepts: Array.from({ length: 6 }, (_, i) => ({
+        id: `k${i}`,
+        name: `Concept ${i}`,
+        importance: 'medium' as const,
+        difficulty: 'foundational' as const,
+        pageReferences: [1],
+        facets: ['one', 'two', 'three'],
+        cardBudget: 3,
+      })),
+    })
+    const catalog = buildCoverageCatalog(many)
+    const text = buildGenerationGapText(catalog, computeCoverageData(catalog, []))
+    expect(text).toContain('k3#3 three...')
+    expect(text).not.toContain('k4#1')
   })
 
   it('lists saturated pages to deprioritize', () => {
@@ -420,6 +600,19 @@ describe('buildReflectionGapText', () => {
     expect(text).toContain('Missing high-priority concepts: Backpropagation')
     expect(text).toContain('Missing relations: c1|uses|c2, c2|mitigates|c3')
     expect(text.endsWith('\n')).toBe(false)
+  })
+
+  it('names untested facets as add_cards targets', () => {
+    const faceted = buildCoverageCatalog(facetedMap())
+    const coverage = computeCoverageData(faceted, [
+      makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'], facetIds: ['c1#1'] }),
+    ])
+    const text = buildReflectionGapText(faceted, coverage)
+    expect(text).toContain('Concepts with no card: Backpropagation@3 (0/1 cards)')
+    expect(text).toContain(
+      'Facets no card tests yet (add_cards targets): c2#1 chain rule backwards; c3#1 train vs test gap',
+    )
+    expect(text).not.toContain('c1#1')
   })
 
   it('omits gap lines when coverage is complete', () => {

@@ -37,6 +37,12 @@ const CARD_JSON_SCHEMA = {
     slide_number: { type: 'integer' },
     source_pages: { type: 'array', items: { type: 'integer' } },
     concept_ids: { type: 'array', items: { type: 'string' } },
+    facet_ids: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Ids of the concept-map facets this card tests, from the facet catalog, e.g. c-a#2.',
+    },
     relation_keys: { type: 'array', items: { type: 'string' } },
     rationale: { type: 'string' },
     source_excerpt: { type: 'string' },

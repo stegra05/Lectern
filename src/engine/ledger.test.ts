@@ -37,6 +37,7 @@ const card = (uid: string, extra: Partial<Card> = {}): Card => ({
   fields: { Front: `Q ${uid}`, Back: `A ${uid}` },
   sourcePages: [12],
   conceptIds: ['gd'],
+  facetIds: [],
   relationKeys: [],
   qualityScore: 100,
   qualityIssues: [],

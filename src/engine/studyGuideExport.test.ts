@@ -44,6 +44,7 @@ const card = (uid: string, conceptIds: string[], syncExcluded = false): Card => 
   fields: { Front: `Q ${uid}`, Back: `A ${uid}` },
   sourcePages: [12],
   conceptIds,
+  facetIds: [],
   relationKeys: [],
   qualityScore: 100,
   qualityIssues: [],
@@ -66,6 +67,8 @@ const coverage: CoverageData = {
   cardsPerPage: { 12: 2, 13: 1 },
   cardsByConcept: {},
   underBudget: [],
+  cardsByFacet: {},
+  untestedFacets: [],
 }
 
 describe('studyGuideToMarkdown', () => {

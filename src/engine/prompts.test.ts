@@ -81,7 +81,29 @@ describe('feedback builders', () => {
       unknownMetadataDropped: 2,
       gapText: 'gaps',
     })
-    expect(text).toContain('2 concept_id/relation_key value(s)')
+    expect(text).toContain('2 concept_id/facet_id/relation_key value(s)')
+  })
+
+  it('tells the model what to do about a facet repeat, and only when there is one', () => {
+    const withRepeat = buildReviewFeedback({
+      applied: [],
+      rejected: [{ ref: 'What is A?', reasons: ['facet_already_tested'] }],
+      unknownMetadataDropped: 0,
+      gapText: 'gaps',
+    })
+    expect(withRepeat).toContain('What is A? → facet_already_tested')
+    expect(withRepeat).toContain('Test an untested facet from the ledger instead')
+
+    const without = buildSubmitFeedback({
+      acceptedCount: 0,
+      rejected: rejects(1),
+      duplicateFronts: [],
+      unknownMetadataDropped: 0,
+      cardsRemaining: 5,
+      gapText: 'gaps',
+      finishAllowed: false,
+    })
+    expect(without).not.toContain('facet_already_tested')
   })
 
   it('keeps the follow-up duplicate counter consistent with the listed fronts', () => {

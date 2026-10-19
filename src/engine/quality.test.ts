@@ -17,6 +17,7 @@ const makeCard = (overrides: Partial<Card> = {}): Card => ({
   fields: {},
   sourcePages: [],
   conceptIds: [],
+  facetIds: [],
   relationKeys: [],
   qualityScore: 0,
   qualityIssues: [],
@@ -170,6 +171,7 @@ describe('normalizeCardPayload', () => {
       slide_number: '12',
       source_pages: ['3', 3, 4.0, 0, -1, 'junk'],
       concept_ids: 'c1, c2, ,c3',
+      facet_ids: ['c1#1', ' c2#2 ', ''],
       relation_keys: ['a|b|c'],
       slide_topic: ' Enzymes ',
       rationale: 'Key concept.',
@@ -181,10 +183,21 @@ describe('normalizeCardPayload', () => {
     expect(result?.slideNumber).toBe(12)
     expect(result?.sourcePages).toEqual([3, 4])
     expect(result?.conceptIds).toEqual(['c1', 'c2', 'c3'])
+    expect(result?.facetIds).toEqual(['c1#1', 'c2#2'])
     expect(result?.relationKeys).toEqual(['a|b|c'])
     expect(result?.slideTopic).toBe('Enzymes')
     expect(result?.rationale).toBe('Key concept.')
     expect(result?.sourceExcerpt).toBe('From page 3.')
+  })
+
+  it('reads facet ids in either spelling, and none when absent or null', () => {
+    const base = { model_name: 'Basic', fields: { Front: 'Q?' } }
+    expect(normalizeCardPayload({ ...base, facetIds: 'c1#1, c1#2' })?.facetIds).toEqual([
+      'c1#1',
+      'c1#2',
+    ])
+    expect(normalizeCardPayload({ ...base, facet_ids: null })?.facetIds).toEqual([])
+    expect(normalizeCardPayload(base)?.facetIds).toEqual([])
   })
 
   it('accepts fields as a record, dropping null values', () => {

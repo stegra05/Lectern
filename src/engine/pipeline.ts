@@ -19,6 +19,7 @@
 
 import { createClient } from './clients'
 import {
+  CARDS_PER_FACET,
   EARLY_FINISH_ATTEMPTS,
   MAX_GENERATION_ROUNDS,
   MAX_REFLECTION_ROUNDS,
@@ -36,11 +37,14 @@ import {
   budgetShortfall,
   buildCoverageCatalog,
   buildDepthGapText,
+  buildFacetCatalogText,
   buildGenerationGapText,
   buildReflectionGapText,
   computeCoverageData,
   conceptsWithUntestedFacets,
+  describeFacets,
   isCoverageSufficient,
+  repeatsTestedFacets,
 } from './coverage'
 import {
   parseJsonPayload,
@@ -228,6 +232,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   const cards: Card[] = [...existing.cards]
   const seenKeys = new Set<string>(existing.cards.map((card) => cardKey(card)))
   const cardCap = sizing.totalCardCap + inheritedCount
+  const cardsPerFacet = CARDS_PER_FACET[opts.density]
   let coverage = computeCoverageData(catalog, cards)
   if (inheritedCount > 0) {
     emit({ type: 'coverage', coverage })
@@ -294,6 +299,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
         totalCardCap: sizing.totalCardCap,
         batchSize: sizing.batchSize,
         gapText: ledgerText(),
+        facetCatalog: buildFacetCatalogText(catalog),
         existingDeck: summarizeExistingDeck(existing.cards),
         depthMode: inDepthMode(),
       }),
@@ -389,6 +395,10 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: firstField(card), reasons: verdict.failures })
           continue
         }
+        if (repeatsTestedFacets(card.facetIds, cards, cardsPerFacet)) {
+          rejected.push({ front: firstField(card), reasons: ['facet_already_tested'] })
+          continue
+        }
         if (cards.length >= cardCap) {
           rejected.push({ front: firstField(card), reasons: ['budget_exhausted'] })
           continue
@@ -477,6 +487,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       seenKeys,
       catalog,
       cardCap,
+      cardsPerFacet,
       inheritedCount,
       gateOptions,
       emit,
@@ -565,22 +576,28 @@ function handleFinishRequest(
   // quota. Thorough's depth slots past the facets never hold a run back.
   const short = conceptsWithUntestedFacets(catalog, coverage)
   if (short.length > 0 && attempts < EARLY_FINISH_ATTEMPTS) {
-    const names = short
-      .slice(0, 8)
-      .map((id) => {
-        const facets = catalog.facetsByConcept.get(id) ?? []
-        const name = catalog.conceptNames.get(id) ?? id
-        return facets.length > 0 ? `${name} (${facets.join('; ')})` : name
-      })
-      .join(', ')
+    const untested = coverage.untestedFacets.filter((facetId) => {
+      const concept = catalog.facets.get(facetId)?.conceptId
+      return concept !== undefined && short.includes(concept)
+    })
+    // A budget above the facet count (thorough) can leave a concept short
+    // with every facet tested; then the concepts are all there is to name.
+    const gaps =
+      untested.length > 0
+        ? `${count(untested.length, 'facet')} from your concept map ${untested.length === 1 ? 'is' : 'are'} still untested: ${describeFacets(catalog, untested, 10)}. ` +
+          'Give each its card, tagged with its facet id, without re-asking a fact a card already tests. '
+        : `${count(short.length, 'concept')} ${short.length === 1 ? 'is' : 'are'} still below budget: ${short
+            .slice(0, 8)
+            .map((id) => catalog.conceptNames.get(id) || id)
+            .join(', ')}. Add a card only where it asks what the existing ones do not. `
     return {
       allowed: false,
       message:
         (depthMode
           ? 'Rejected: the deck already covers this material, so this run is for depth. '
           : 'Rejected: ') +
-        `${count(short.length, 'concept')} still ${short.length === 1 ? 'has' : 'have'} facets from your concept map that no card tests: ${names}. ` +
-        'Give each untested facet its card, without re-asking a fact a card already tests. If, after looking, a card would only rephrase one the deck already has, call finish_generation again and say so; it will be accepted.',
+        gaps +
+        'If, after looking, a card would only rephrase one the deck already has, call finish_generation again and say so; it will be accepted.',
     }
   }
 
@@ -588,9 +605,9 @@ function handleFinishRequest(
 }
 
 /**
- * Materialize a normalized model payload into a Card: concept ids and
- * relation keys are validated against the concept-map catalog (unknown ones
- * are dropped so the coverage ledger stays truthful), then the card is
+ * Materialize a normalized model payload into a Card: concept ids, facet ids
+ * and relation keys are validated against the concept-map catalog (unknown
+ * ones are dropped so the coverage ledger stays truthful), then the card is
  * annotated with its gate verdict.
  */
 export function buildCard(
@@ -603,13 +620,21 @@ export function buildCard(
   gateOptions: EvaluateOptions = {},
 ): { card: Card; verdict: GateVerdict; unknownMetadata: number } {
   const conceptIds = normalized.conceptIds.filter((id) => catalog.conceptIds.has(id))
+  const facetIds = normalized.facetIds.filter((id) => catalog.facets.has(id))
   const relationKeys = normalized.relationKeys
     .map((key) => normalizeRelationKey(key))
     .filter((key) => key !== '' && catalog.relationKeys.has(key))
   const unknownMetadata =
     normalized.conceptIds.length -
     conceptIds.length +
+    (normalized.facetIds.length - facetIds.length) +
     (normalized.relationKeys.length - relationKeys.length)
+  // A facet names its concept, so a card that tests one teaches the concept
+  // even when the model left it out of concept_ids.
+  for (const id of facetIds) {
+    const conceptId = catalog.facets.get(id)?.conceptId
+    if (conceptId !== undefined && !conceptIds.includes(conceptId)) conceptIds.push(conceptId)
+  }
 
   const card: Card = {
     uid: crypto.randomUUID(),
@@ -619,6 +644,7 @@ export function buildCard(
     slideNumber: normalized.slideNumber,
     sourcePages: normalized.sourcePages,
     conceptIds,
+    facetIds,
     relationKeys,
     rationale: normalized.rationale,
     sourceExcerpt: normalized.sourceExcerpt,
@@ -682,6 +708,8 @@ interface ReviewLoopOptions {
   catalog: CoverageCatalog
   /** The sizing cap — add_cards only fills slots below it. */
   cardCap: number
+  /** Cards one facet may hold at the run's density. */
+  cardsPerFacet: number
   /** Cards inherited from Anki. They sit in `cards` for coverage and dedupe
    *  but are withheld from the review: the model must not rewrite or delete
    *  cards the user has already been studying. */
@@ -806,8 +834,12 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           unknownMetadataDropped += unknownMetadata
           const oldKey = cardKey(cards[index])
           const newKey = cardKey(card)
+          // The card being replaced does not count against its own facets.
+          const others = cards.filter((_, i) => i !== index)
           if (!verdict.pass) {
             rejected.push({ ref: cardId, reasons: verdict.failures })
+          } else if (repeatsTestedFacets(card.facetIds, others, opts.cardsPerFacet)) {
+            rejected.push({ ref: cardId, reasons: ['facet_already_tested'] })
           } else if (newKey !== oldKey && seenKeys.has(newKey)) {
             rejected.push({ ref: cardId, reasons: ['duplicate'] })
           } else {
@@ -841,6 +873,10 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           const key = cardKey(card)
           if (seenKeys.has(key) || findNearDuplicate(key, seenKeys) !== null) {
             rejected.push({ ref: firstField(card), reasons: ['duplicate'] })
+            continue
+          }
+          if (repeatsTestedFacets(card.facetIds, cards, opts.cardsPerFacet)) {
+            rejected.push({ ref: firstField(card), reasons: ['facet_already_tested'] })
             continue
           }
           if (cards.length >= opts.cardCap) {
@@ -932,6 +968,7 @@ function toReviewShape(cardId: string, card: Card): Record<string, unknown> {
     slide_number: card.slideNumber,
     source_pages: card.sourcePages,
     concept_ids: card.conceptIds,
+    facet_ids: card.facetIds,
     relation_keys: card.relationKeys,
     rationale: card.rationale,
     source_excerpt: card.sourceExcerpt,

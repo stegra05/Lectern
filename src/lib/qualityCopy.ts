@@ -27,6 +27,7 @@ const REASON_LABEL: Record<RejectionReason, string> = {
   answer_not_on_cited_page: 'the answer says more than the cited page',
   invalid_structure: 'The model sent it in a shape Lectern could not read',
   budget_exhausted: 'the deck was already full',
+  facet_already_tested: 'another card already tests this fact',
 }
 
 /** "the answer is empty, no page cited" */

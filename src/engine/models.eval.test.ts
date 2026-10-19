@@ -78,7 +78,7 @@ interface RunResult {
 }
 
 /** The run as the student would read it: log lines in order, then every
- *  card with what it cites. */
+ *  card with what it cites and the facets it claims. */
 function transcriptOf(events: PipelineEvent[], cards: Card[], concepts: string[]): string {
   const log = events.flatMap((e) => {
     if (e.type === 'log') return [`- [${e.level}] ${e.message}${e.quote ? `\n  > ${e.quote}` : ''}`]
@@ -90,13 +90,14 @@ function transcriptOf(events: PipelineEvent[], cards: Card[], concepts: string[]
       .map(([name, value]) => `  - **${name}:** ${value}`)
       .join('\n')
     return (
-      `${i + 1}. ${card.modelName} · ${card.slideTopic ?? 'no topic'} · pages ${card.sourcePages.join(', ')}\n` +
+      `${i + 1}. ${card.modelName} · ${card.slideTopic ?? 'no topic'} · pages ${card.sourcePages.join(', ')}` +
+      ` · facets ${card.facetIds.length > 0 ? card.facetIds.join(', ') : 'none'}\n` +
       `${fields}\n  - *excerpt:* ${card.sourceExcerpt ?? ''}\n  - *rationale:* ${card.rationale ?? ''}` +
       (card.qualityIssues.length > 0 ? `\n  - *gate flags:* ${card.qualityIssues.join(', ')}` : '')
     )
   })
   return (
-    `## Concepts\n\n${concepts.join('; ')}\n\n## Activity log\n\n${log.join('\n')}\n\n` +
+    `## Concepts\n\n${concepts.map((c) => `- ${c}`).join('\n')}\n\n## Activity log\n\n${log.join('\n')}\n\n` +
     `## Deck\n\n${deck.join('\n\n')}\n`
   )
 }
@@ -175,7 +176,12 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
       transcript: transcriptOf(
         events,
         outcome.cards,
-        outcome.conceptMap.concepts.map((c) => `${c.name} (${c.importance})`),
+        // Facet ids only read against the facets they number.
+        outcome.conceptMap.concepts.map(
+          (c) =>
+            `${c.id} ${c.name} (${c.importance}): ` +
+            c.facets.map((facet, i) => `#${i + 1} ${facet}`).join('; '),
+        ),
       ),
     }
   } catch (e) {
