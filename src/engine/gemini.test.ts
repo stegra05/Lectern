@@ -196,3 +196,25 @@ describe('GeminiClient rate-limit visibility', () => {
     expect(notices[0]).toMatchObject({ status: 0 })
   })
 })
+
+describe('GeminiClient.deleteDocument', () => {
+  it('deletes by the file name inside the uri, and takes a 404 as already gone', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 404 }))
+    const client = new GeminiClient('key', fetchFn)
+    const document = {
+      id: 'https://generativelanguage.googleapis.com/v1beta/files/abc123',
+      mimeType: 'application/pdf',
+    }
+
+    await client.deleteDocument(document)
+    await client.deleteDocument(document)
+
+    expect(fetchFn.mock.calls[0][0]).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/files/abc123',
+    )
+    expect(fetchFn.mock.calls[0][1]?.method).toBe('DELETE')
+  })
+})

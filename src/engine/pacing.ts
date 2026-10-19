@@ -7,6 +7,9 @@
 
 import {
   CARDS_PER_SLIDE_TARGET,
+  CONCEPT_COUNT_CEILING,
+  CONCEPT_COUNT_FLOOR,
+  CONCEPT_TARGET_MIN_SHARE,
   DENSE_THRESHOLD_CHARS_PER_PAGE,
   DYNAMIC_BATCH_TARGET_RATIO,
   DYNAMIC_MAX_NOTES_PER_BATCH,
@@ -14,6 +17,7 @@ import {
   IMAGE_CARD_WEIGHT,
   MIN_TOTAL_CARDS,
   SCRIPT_BASE_CHARS,
+  SCRIPT_CHARS_PER_CONCEPT,
 } from './config'
 import type { ContentMode, PdfInfo, SizingPlan } from './types'
 
@@ -51,4 +55,21 @@ export function computeSizingPlan(pdfInfo: PdfInfo, opts: SizingOptions = {}): S
   )
 
   return { contentMode, totalCardCap, batchSize }
+}
+
+/**
+ * How many concepts the concept map should hold, from the amount of material,
+ * so a model that splits finely and one that groups broadly describe the same
+ * lecture at the same grain. Neither the deck size nor the user's own card
+ * target moves it: the map describes the document, and a small deck simply
+ * covers less of it.
+ */
+export function conceptTarget(pdfInfo: PdfInfo): { min: number; max: number } {
+  const natural =
+    detectContentMode(pdfInfo) === 'script'
+      ? pdfInfo.textChars / SCRIPT_CHARS_PER_CONCEPT
+      : pdfInfo.pageCount * CARDS_PER_SLIDE_TARGET
+  const clamp = (n: number) =>
+    Math.min(CONCEPT_COUNT_CEILING, Math.max(CONCEPT_COUNT_FLOOR, Math.round(n)))
+  return { min: clamp(natural * CONCEPT_TARGET_MIN_SHARE), max: clamp(natural) }
 }

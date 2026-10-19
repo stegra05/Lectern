@@ -225,7 +225,7 @@ export const FINISH_REVIEW_TOOL = {
       summary: {
         type: 'string',
         description:
-          'One-paragraph assessment of the final deck quality. Markdown is rendered: **bold**, *italic*, `code`, and "- " bullet lists.',
+          'One-paragraph assessment of the final deck quality, for the student. State coverage as the latest ledger reports it and name what is left out; never claim every concept is covered unless the ledger shows no gaps. Markdown is rendered: **bold**, *italic*, `code`, and "- " bullet lists.',
       },
     },
     required: ['summary'],

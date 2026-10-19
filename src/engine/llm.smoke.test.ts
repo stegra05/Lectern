@@ -12,7 +12,7 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { createClient } from './clients'
 import type { ProviderId } from './config'
 import { parseJsonPayload, type ToolDeclaration } from './llm'
@@ -46,7 +46,7 @@ for (const { provider, model, key } of PROVIDERS) {
   describe.skipIf(!key)(`${provider} adapter (live)`, () => {
     // Built lazily: the SDKs refuse to construct without a key, and a
     // skipped suite still runs its body.
-    const client = () => createClient(model, key ?? '', fetch)
+    const client = () => createClient(provider, key ?? '', fetch)
 
     it('structured output with instructions', { timeout: 120_000 }, async () => {
       const result = await client().turn({
@@ -106,6 +106,7 @@ for (const { provider, model, key } of PROVIDERS) {
       const bytes = new Uint8Array(await readFile(PDF_PATH))
       const document = await client().uploadPdf(bytes, 'smoke-test-slides.pdf')
       expect(document.id).toBeTruthy()
+      onTestFinished(() => client().deleteDocument(document))
 
       const result = await client().turn({
         model,

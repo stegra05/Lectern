@@ -23,6 +23,18 @@ export const DYNAMIC_MAX_NOTES_PER_BATCH = 25
 /** Minimum sensible deck size. */
 export const MIN_TOTAL_CARDS = 3
 
+/** Concept-map size. Without a target, models split the same lecture into
+ *  anywhere from about 30 to 75 concepts, and coverage is measured against
+ *  that count. The target follows the amount of material: about one concept
+ *  per slide that earns a card, or per this many characters of a script. A
+ *  blind review of a 3-page pathology script found 4-5 concepts (one per
+ *  section heading) too coarse to steer anything and asked for 12-18. */
+export const SCRIPT_CHARS_PER_CONCEPT = 300
+/** The target range runs from this share of the natural count up to it. */
+export const CONCEPT_TARGET_MIN_SHARE = 0.6
+export const CONCEPT_COUNT_FLOOR = 6
+export const CONCEPT_COUNT_CEILING = 40
+
 // --- Generation loop -------------------------------------------------------
 
 /** Rounds in a row with zero accepted cards before the loop aborts. */
@@ -136,6 +148,21 @@ export const THINKING_BY_PHASE = {
   followUp: 'low',
 } as const satisfies Record<string, ThinkingLevel>
 
+export type ThinkingPhase = keyof typeof THINKING_BY_PHASE
+export type EffortPlan = Partial<Record<ThinkingPhase, ThinkingLevel>>
+
+/** Where a model's own tuning beats the shared plan. Level names do not mean
+ *  the same amount of thinking across providers, and nothing above `high`
+ *  is used: xhigh/max wait minutes for a first token on a long prompt.
+ *  Empty on evidence (models.eval.test.ts, 2026-10-19): one level deeper in
+ *  the loops gave GPT-6 Luna nothing at +50% time, and Claude Haiku 5.5 two
+ *  points of page coverage at +30% time. */
+export const EFFORT_BY_MODEL: Record<string, EffortPlan> = {}
+
+export function effortFor(model: string, phase: ThinkingPhase): ThinkingLevel {
+  return EFFORT_BY_MODEL[model]?.[phase] ?? THINKING_BY_PHASE[phase]
+}
+
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
 /** Pins the May-2026 Interactions API schema (`steps` timeline) — required
  *  when not going through an official SDK. Still the current revision for
@@ -155,36 +182,54 @@ export const UPLOAD_MAX_RETRIES = 3
 /** How long to poll a freshly uploaded file for ACTIVE state. */
 export const FILE_ACTIVE_TIMEOUT_MS = 120_000
 
-// --- Pricing (USD per million tokens: [input, output]) ---------------------
+// --- Pricing (USD per million tokens) --------------------------------------
 // Approximate — shown to the user as an estimate only. Output prices include
 // thinking tokens, which every provider bills as output.
 // Retired ids stay listed so a saved run's recorded cost still resolves.
 
-export const MODEL_PRICING: Record<string, [number, number]> = {
-  // Introductory rate through 2026-12-31; doubles to [1.5, 7.5] on 2027-01-01.
-  'gemini-3.8-flash': [0.75, 3.75],
-  'gemini-3.7-flash': [0.75, 3.75],
-  'gemini-3.6-flash': [1.5, 7.5],
-  'gemini-3.5-flash': [1.5, 9.0],
-  'gemini-3.5-flash-lite': [0.3, 2.5],
-  'gemini-3.1-pro-preview': [2.0, 12.0],
-  'gemini-3-pro': [2.0, 12.0],
-  'gemini-3-flash': [0.5, 3.0],
-  'gemini-2.5-pro': [1.25, 10.0],
-  'gemini-2.5-flash': [0.3, 2.5],
-  // Twice the input rate above 272K prompt tokens, which a lecture rarely reaches.
-  'gpt-6-luna': [0.1, 0.5],
-  // [0.1, 0.5] up to 100K prompt tokens, then this rate for the whole request.
-  // A lecture PDF with its page images usually crosses 100K, so this is the
-  // rate a run actually pays.
-  'claude-haiku-5-5': [0.5, 2.5],
-  default: [0.5, 4.0],
+export interface ModelPrice {
+  input: number
+  output: number
+  /** Cache reads, as a fraction of the input rate. */
+  cacheRead?: number
+  /** Cache writes, as a fraction of the input rate. */
+  cacheWrite?: number
+  /** A request whose prompt is longer than `aboveTokens` pays these rates
+   *  on the whole request, not just the part above the line. */
+  longPrompt?: { aboveTokens: number; input: number; output: number }
 }
 
-/** Cache reads cost about a tenth of fresh input at OpenAI and Anthropic.
- *  Claude re-reads the whole transcript every turn, so without this the
- *  reported cost of a run would be several times the bill. */
-export const CACHED_INPUT_PRICE_RATIO = 0.1
+const gemini = (input: number, output: number): ModelPrice => ({ input, output })
+
+export const MODEL_PRICING: Record<string, ModelPrice> = {
+  // Introductory rate through 2026-12-31; doubles to 1.5/7.5 on 2027-01-01.
+  'gemini-3.8-flash': gemini(0.75, 3.75),
+  'gemini-3.7-flash': gemini(0.75, 3.75),
+  'gemini-3.6-flash': gemini(1.5, 7.5),
+  'gemini-3.5-flash': gemini(1.5, 9.0),
+  'gemini-3.5-flash-lite': gemini(0.3, 2.5),
+  'gemini-3.1-pro-preview': gemini(2.0, 12.0),
+  'gemini-3-pro': gemini(2.0, 12.0),
+  'gemini-3-flash': gemini(0.5, 3.0),
+  'gemini-2.5-pro': gemini(1.25, 10.0),
+  'gemini-2.5-flash': gemini(0.3, 2.5),
+  'gpt-6-luna': {
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.1,
+    longPrompt: { aboveTokens: 272_000, input: 0.2, output: 0.75 },
+  },
+  'claude-haiku-5-5': {
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.1,
+    cacheWrite: 1.25,
+    // A lecture PDF with its page images usually crosses this line.
+    longPrompt: { aboveTokens: 100_000, input: 0.5, output: 2.5 },
+  },
+  'claude-sonnet-5-5': { input: 2.0, output: 10.0, cacheRead: 0.1, cacheWrite: 1.25 },
+  default: { input: 0.5, output: 4.0, cacheRead: 0.1 },
+}
 
 export const ESTIMATION_TOKENS_PER_PDF_PAGE = 560
 export const ESTIMATION_TOKENS_PER_CARD = 100

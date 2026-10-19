@@ -141,7 +141,12 @@ describe('AnthropicClient', () => {
     })
     expect(first.toolCalls).toEqual([{ id: 'toolu_1', name: 'submit', arguments: { word: 'x' } }])
     // Cache writes and reads are input too; reads are reported apart.
-    expect(first.usage).toEqual({ inputTokens: 100, cachedInputTokens: 70, outputTokens: 30 })
+    expect(first.usage).toEqual({
+      inputTokens: 100,
+      cachedInputTokens: 70,
+      cacheWriteTokens: 20,
+      outputTokens: 30,
+    })
 
     const second = await client.turn({
       model: 'claude-haiku-5-5',
@@ -165,6 +170,7 @@ describe('AnthropicClient', () => {
     expect(b.system).toEqual(a.system)
     expect(b.tools).toEqual(a.tools)
     expect((a.tools as unknown[]).length).toBe(2)
+    expect((a.tools as Array<Record<string, unknown>>).some((t) => 'strict' in t)).toBe(false)
     // Effort: the top level stays at the first turn's, the change is a message.
     expect(a.output_config).toEqual({ effort: 'low' })
     expect(b.output_config).toEqual({ effort: 'low' })
@@ -296,5 +302,27 @@ describe('AnthropicClient', () => {
       expect((error as LlmError).provider).toBe('anthropic')
       expect(captured).toHaveLength(1)
     })
+  })
+
+  it('deletes an upload, and takes a 404 as already gone', async () => {
+    const captured: Captured[] = []
+    const fetchFn = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const request = new Request(input, init)
+      captured.push({ body: {}, headers: request.headers })
+      return captured.length === 1
+        ? new Response(JSON.stringify({ id: 'file_1', type: 'file_deleted' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        : new Response(
+            JSON.stringify({ type: 'error', error: { type: 'not_found_error', message: 'x' } }),
+            { status: 404, headers: { 'content-type': 'application/json' } },
+          )
+    })
+    const client = new AnthropicClient('key', fetchFn)
+    const document = { id: 'file_1', mimeType: 'application/pdf' }
+    await client.deleteDocument(document)
+    await client.deleteDocument(document)
+    expect(String(fetchFn.mock.calls[0][0])).toContain('/v1/files/file_1')
   })
 })

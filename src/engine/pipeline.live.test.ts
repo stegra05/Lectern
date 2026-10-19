@@ -12,8 +12,9 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { AnkiClient, checkConnection, resolveModelNames, syncCards } from './anki'
+import { createClient } from './clients'
 import { DEFAULT_SETTINGS, providerOf, type ProviderId } from './config'
 import { runPipeline } from './pipeline'
 import { buildCardTags } from './tags'
@@ -60,6 +61,11 @@ describe.skipIf(!apiKey)('pipeline live E2E', () => {
         fetchFn: fetch,
         emit: (e) => {
           events.push(e)
+          // The test must not leave the lecture in the provider account.
+          if (e.type === 'document_uploaded') {
+            const client = createClient(e.provider, apiKey ?? '', fetch)
+            onTestFinished(() => client.deleteDocument(e.document))
+          }
           if (e.type === 'log') console.log(`[${e.level}] ${e.message}`)
           if (e.type === 'phase') console.log(`--- phase: ${e.phase}`)
           if (e.type === 'done') console.log(`DONE: ${e.summary}`)

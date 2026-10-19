@@ -10,10 +10,9 @@ import {
   ESTIMATION_BASE_OUTPUT_RATIO,
   ESTIMATION_TOKENS_PER_CARD,
   ESTIMATION_TOKENS_PER_PDF_PAGE,
-  CACHED_INPUT_PRICE_RATIO,
   MODEL_PRICING,
 } from './config'
-import type { Usage } from './llm'
+import { ZERO_USAGE, addUsage, type Usage } from './llm'
 import type { PdfInfo, SizingPlan } from './types'
 
 export interface CostEstimate {
@@ -41,18 +40,46 @@ export function estimateCost(
       2 *
       factors.output,
   )
-  const costUsd = costOf(model, { inputTokens, cachedInputTokens: 0, outputTokens })
+  // Priced turn by turn, since a long prompt can move a turn into a
+  // provider's higher rate. Caching is left out: the estimate errs high.
+  const turns = Math.min(rounds, 4)
+  const perTurn: Usage = {
+    ...ZERO_USAGE,
+    inputTokens: Math.round(inputTokens / turns),
+    outputTokens: Math.round(outputTokens / turns),
+  }
+  const costUsd = turnCost(model, perTurn) * turns
   return { inputTokens, outputTokens, costUsd }
 }
 
-/** What a run's usage cost, in USD. */
-export function costOf(model: string, usage: Usage): number {
-  const [inPrice, outPrice] = MODEL_PRICING[model] ?? MODEL_PRICING.default
-  const freshInput = usage.inputTokens - usage.cachedInputTokens
+/** What one turn cost, in USD. Rates depend on the turn's own prompt size,
+ *  so a run's cost is the sum of its turns, never one sum priced at once. */
+export function turnCost(model: string, usage: Usage): number {
+  const price = MODEL_PRICING[model] ?? MODEL_PRICING.default
+  const long = price.longPrompt
+  const [inRate, outRate] =
+    long && usage.inputTokens > long.aboveTokens
+      ? [long.input, long.output]
+      : [price.input, price.output]
+  const fresh = usage.inputTokens - usage.cachedInputTokens - usage.cacheWriteTokens
   return (
-    (freshInput * inPrice +
-      usage.cachedInputTokens * inPrice * CACHED_INPUT_PRICE_RATIO +
-      usage.outputTokens * outPrice) /
+    (fresh * inRate +
+      usage.cachedInputTokens * inRate * (price.cacheRead ?? 1) +
+      usage.cacheWriteTokens * inRate * (price.cacheWrite ?? 1) +
+      usage.outputTokens * outRate) /
     1_000_000
   )
+}
+
+/** Running usage and cost of a run or a follow-up request. */
+export class UsageMeter {
+  usage: Usage = ZERO_USAGE
+  costUsd = 0
+
+  constructor(private readonly model: string) {}
+
+  add(turn: Usage): void {
+    this.usage = addUsage(this.usage, turn)
+    this.costUsd += turnCost(this.model, turn)
+  }
 }

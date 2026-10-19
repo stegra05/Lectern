@@ -19,11 +19,12 @@ import {
   FOLLOWUP_CARD_CAP,
   MAX_FOLLOWUP_ROUNDS,
   NON_PROGRESS_MAX_ROUNDS,
-  THINKING_BY_PHASE,
+  effortFor,
+  providerOf,
 } from './config'
-import { costOf } from './cost'
+import { UsageMeter } from './cost'
 import { buildCoverageCatalog, buildGenerationGapText, computeCoverageData } from './coverage'
-import { ZERO_USAGE, addUsage, type Conversation, type InputPart, type Usage } from './llm'
+import type { Conversation, InputPart, Usage } from './llm'
 import { FOLLOWUP_TOOLS, SESSION_TOOLS, parseSubmitCardsArgs } from './schemas'
 import {
   buildCard,
@@ -75,13 +76,11 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
   const { emit, signal } = opts
   // The conversation continues on the model it started with.
   const { model } = opts.seed
-  const client = createClient(model, opts.apiKey, opts.fetchFn, (notice) =>
+  const client = createClient(providerOf(model), opts.apiKey, opts.fetchFn, (notice) =>
     emit({ type: 'waiting', ...notice }),
   )
-  let usage: Usage = ZERO_USAGE
-  const track = (u: Usage) => {
-    usage = addUsage(usage, u)
-  }
+  const meter = new UsageMeter(model)
+  const track = (u: Usage) => meter.add(u)
 
   const ctx: PromptContext = {
     language: opts.conceptMap.language || 'en',
@@ -110,7 +109,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
       tools: SESSION_TOOLS,
       activeTools: FOLLOWUP_TOOLS,
       requireTool: true,
-      effort: THINKING_BY_PHASE.followUp,
+      effort: effortFor(model, 'followUp'),
       signal,
     })
   let response = await requestTurn(opts.seed.conversation, [
@@ -224,8 +223,6 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
     track(response.usage)
   }
 
-  const costUsd = costOf(model, usage)
-
   return {
     added,
     outsideSourceCount: added.filter((card) => card.outsideSource).length,
@@ -235,7 +232,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
       conversation: response.conversation,
       pendingInput: closeUnansweredCalls(response, pendingResults),
     },
-    usage: { ...usage, costUsd },
+    usage: { ...meter.usage, costUsd: meter.costUsd },
   }
 }
 

@@ -13,7 +13,7 @@
  * the document is billed at the cache-read rate after the first turn.
  */
 
-import Anthropic, { APIConnectionError, APIError, toFile } from '@anthropic-ai/sdk'
+import Anthropic, { APIConnectionError, APIError, NotFoundError, toFile } from '@anthropic-ai/sdk'
 import type {
   BetaContentBlockParam,
   BetaMessage,
@@ -36,6 +36,7 @@ import {
   type TurnRequest,
   type TurnResult,
 } from './llm'
+import { closeObjects } from './strictSchema'
 
 const BETAS = [
   // Re-run a policy decline on the model's default fallback instead of
@@ -84,6 +85,14 @@ export class AnthropicClient implements LlmClient {
     return { id: file.id, mimeType: 'application/pdf' }
   }
 
+  async deleteDocument(document: DocumentRef): Promise<void> {
+    try {
+      await this.sdk.files.delete(document.id)
+    } catch (e) {
+      if (!(e instanceof NotFoundError)) throw toLlmError(e)
+    }
+  }
+
   async turn(req: TurnRequest): Promise<TurnResult> {
     const previous = req.conversation
     if (previous && previous.provider !== 'anthropic') {
@@ -119,6 +128,10 @@ export class AnthropicClient implements LlmClient {
       params.tools = req.tools.map((tool): BetaToolUnion => ({
         name: tool.name,
         description: tool.description,
+        // Not strict: Claude compiles strict schemas into one grammar per
+        // request, and the session's eight card-carrying tools exceed its
+        // size limit ("compiled grammar is too large"). Strict cannot be set
+        // per phase either, since the tool set is fixed per conversation.
         input_schema: tool.parameters as Anthropic.Beta.BetaTool.InputSchema,
       }))
       params.tool_choice = req.activeTools?.length ? { type: 'auto' } : { type: 'none' }
@@ -188,31 +201,19 @@ function parseMessage(message: BetaMessage, conversation: AnthropicConversation)
   }
   const usage = message.usage
   const cacheRead = usage.cache_read_input_tokens ?? 0
+  const cacheWrite = usage.cache_creation_input_tokens ?? 0
   return {
     conversation,
     outputText,
     toolCalls,
     usage: {
-      inputTokens: usage.input_tokens + (usage.cache_creation_input_tokens ?? 0) + cacheRead,
+      inputTokens: usage.input_tokens + cacheWrite + cacheRead,
       cachedInputTokens: cacheRead,
+      cacheWriteTokens: cacheWrite,
       // Thinking tokens are already part of output_tokens.
       outputTokens: usage.output_tokens,
     },
   }
-}
-
-/** Claude's structured output requires every object to be closed; the shared
- *  schemas cannot say so because Gemini rejects the keyword. */
-function closeObjects(schema: unknown): Record<string, unknown> {
-  const visit = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map(visit)
-    if (node === null || typeof node !== 'object') return node
-    const out: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(node)) out[key] = visit(value)
-    if (out.type === 'object') out.additionalProperties = false
-    return out
-  }
-  return visit(schema) as Record<string, unknown>
 }
 
 function toLlmError(e: unknown): LlmError {

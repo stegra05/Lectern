@@ -4,6 +4,9 @@
  * speaks these types. There is deliberately no second "transport" event model.
  */
 
+import type { ProviderId } from './config'
+import type { DocumentRef } from './llm'
+
 export type NoteKind = 'Basic' | 'Cloze'
 
 /** A flashcard as it lives in the app. Fields hold the actual Anki note fields
@@ -210,6 +213,7 @@ export type PipelineEvent =
       quote?: string
     }
   | ({ type: 'waiting' } & RetryNotice)
+  | { type: 'document_uploaded'; provider: ProviderId; document: DocumentRef }
   | { type: 'concept_map'; conceptMap: ConceptMap; sizing: SizingPlan }
   | { type: 'card_accepted'; card: Card }
   | { type: 'card_rejected'; front: string; reasons: RejectionReason[] }

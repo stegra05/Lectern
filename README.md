@@ -129,6 +129,8 @@ pnpm typecheck
 GEMINI_API_KEY=... pnpm vitest run src/engine/pipeline.live.test.ts   # live E2E incl. Anki
 OPENAI_API_KEY=... ANTHROPIC_API_KEY=... pnpm vitest run src/engine/llm.smoke.test.ts  # adapters
 LECTERN_LIVE_MODEL=claude-haiku-5-5 ANTHROPIC_API_KEY=... pnpm vitest run src/engine/pipeline.live.test.ts
+LECTERN_EVAL=1 GEMINI_API_KEY=... OPENAI_API_KEY=... ANTHROPIC_API_KEY=... \
+  pnpm vitest run src/engine/models.eval.test.ts   # compare models on real lectures
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup details and code layout.

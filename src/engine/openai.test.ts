@@ -108,7 +108,12 @@ describe('OpenAIClient', () => {
       effort: 'low',
     })
     expect(first.toolCalls).toEqual([{ id: 'call_1', name: 'submit', arguments: { word: 'x' } }])
-    expect(first.usage).toEqual({ inputTokens: 100, cachedInputTokens: 40, outputTokens: 20 })
+    expect(first.usage).toEqual({
+      inputTokens: 100,
+      cachedInputTokens: 40,
+      cacheWriteTokens: 0,
+      outputTokens: 20,
+    })
 
     const second = await client.turn({
       model: 'gpt-6-luna',
@@ -133,6 +138,10 @@ describe('OpenAIClient', () => {
     expect(a.reasoning).toEqual({ effort: 'low' })
     // The whole tool set stays declared; allowed_tools picks the phase's.
     expect(b.tools).toEqual(a.tools)
+    expect(a.tools).toMatchObject([
+      { strict: true, parameters: { required: ['word'], additionalProperties: false } },
+      { strict: true },
+    ])
     expect(a.tool_choice).toEqual({
       type: 'allowed_tools',
       mode: 'required',
@@ -180,5 +189,24 @@ describe('OpenAIClient', () => {
     expect(error).toBeInstanceOf(LlmError)
     expect((error as LlmError).kind).toBe('spending_cap')
     expect(captured).toHaveLength(1)
+  })
+
+  it('deletes an upload, and takes a 404 as already gone', async () => {
+    const captured: Captured[] = []
+    const client = new OpenAIClient(
+      'key',
+      scriptedFetch(
+        [
+          json({ id: 'file-1', object: 'file', deleted: true }),
+          json({ error: { message: 'No such File object', type: 'invalid_request_error' } }, 404),
+        ],
+        captured,
+      ),
+    )
+    const document = { id: 'file-1', mimeType: 'application/pdf' }
+    await client.deleteDocument(document)
+    await client.deleteDocument(document)
+    expect(captured[0].request.method).toBe('DELETE')
+    expect(captured[0].url).toBe('https://api.openai.com/v1/files/file-1')
   })
 })

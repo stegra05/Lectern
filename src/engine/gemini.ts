@@ -105,6 +105,17 @@ export class GeminiClient implements LlmClient {
     throw toLlmError(lastError)
   }
 
+  async deleteDocument(document: DocumentRef): Promise<void> {
+    // The uri is the file's resource URL; its path after the version is the
+    // file name the Files API deletes by.
+    const name = new URL(document.id).pathname.replace(/^\/v1beta\//, '')
+    const res = await this.fetchFn(`${this.baseUrl}/v1beta/${name}`, {
+      method: 'DELETE',
+      headers: { 'x-goog-api-key': this.apiKey },
+    })
+    if (!res.ok && res.status !== 404) throw await errorFromResponse(res)
+  }
+
   private async uploadPdfOnce(
     data: Uint8Array,
     displayName: string,
@@ -264,6 +275,7 @@ function parseUsage(obj: Record<string, unknown>): Usage {
   return {
     inputTokens: num(usage.total_input_tokens),
     cachedInputTokens: 0,
+    cacheWriteTokens: 0,
     outputTokens: num(usage.total_output_tokens) + num(usage.total_thought_tokens),
   }
 }

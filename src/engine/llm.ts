@@ -26,16 +26,25 @@ export interface Usage {
   inputTokens: number
   /** The part of inputTokens served from the provider's prompt cache. */
   cachedInputTokens: number
+  /** The part of inputTokens written to the prompt cache (Claude bills a
+   *  premium for it; the others report none). */
+  cacheWriteTokens: number
   /** Output tokens, thinking included: every provider bills it as output. */
   outputTokens: number
 }
 
-export const ZERO_USAGE: Usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 }
+export const ZERO_USAGE: Usage = {
+  inputTokens: 0,
+  cachedInputTokens: 0,
+  cacheWriteTokens: 0,
+  outputTokens: 0,
+}
 
 export function addUsage(a: Usage, b: Usage): Usage {
   return {
     inputTokens: a.inputTokens + b.inputTokens,
     cachedInputTokens: a.cachedInputTokens + b.cachedInputTokens,
+    cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
     outputTokens: a.outputTokens + b.outputTokens,
   }
 }
@@ -110,6 +119,8 @@ export interface TurnResult {
 export interface LlmClient {
   readonly provider: ProviderId
   uploadPdf(data: Uint8Array, displayName: string, signal?: AbortSignal): Promise<DocumentRef>
+  /** Remove an upload from the provider. Gone already counts as done. */
+  deleteDocument(document: DocumentRef): Promise<void>
   turn(req: TurnRequest): Promise<TurnResult>
 }
 

@@ -1,18 +1,18 @@
-/** The client for whichever provider serves a model. */
+/** The client for a provider. */
 
 import { AnthropicClient } from './anthropic'
-import { providerOf } from './config'
+import type { ProviderId } from './config'
 import { GeminiClient } from './gemini'
 import type { LlmClient, RetryListener } from './llm'
 import { OpenAIClient } from './openai'
 
 export function createClient(
-  model: string,
+  provider: ProviderId,
   apiKey: string,
   fetchFn: typeof fetch,
   onRetry?: RetryListener,
 ): LlmClient {
-  switch (providerOf(model)) {
+  switch (provider) {
     case 'gemini':
       return new GeminiClient(apiKey, fetchFn, onRetry)
     case 'openai':

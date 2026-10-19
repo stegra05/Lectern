@@ -129,14 +129,15 @@ export function systemInstructions(focusPrompt?: string): string {
 }
 
 /** Phase 1 — global concept map over the whole document. */
-export function conceptMapPrompt(ctx: PromptContext): string {
+export function conceptMapPrompt(ctx: PromptContext, target: { min: number; max: number }): string {
   const focus = focusOf(ctx)
   return (
     'Analyze the attached lecture document and build its global concept map.\n' +
     (focus ? `Give extra depth to concepts related to the user focus: "${focus}".\n` : '') +
     'Return JSON with:\n' +
     '- objectives: explicit learning goals plus the implicit competency targets.\n' +
-    '- concepts: the core entities, theories, and definitions, fundamentals first. Each carries a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), and page_references (integer pages where it is taught or illustrated).\n' +
+    `- concepts: the core entities, theories, and definitions, fundamentals first. List ${target.min} to ${target.max} concepts: one per idea a student must master, with its sub-points, examples, and special cases folded into it rather than listed apart, and no concept as wide as a whole section. Mark high importance only for the concepts the objectives hinge on.` +
+    ' Each carries a name (a plain-text label of 2-6 words, never a sentence), a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), and page_references (integer pages where it is taught or illustrated).\n' +
     '- relations: the semantic structure between concepts (is_a, part_of, causes, contrasts_with, ...) with page_references.\n' +
     "- language: ISO 639-1 code of the document's primary language.\n" +
     '- slide_set_name: Title Case name for this set, max 8 words, keeping any lecture/week number.\n' +

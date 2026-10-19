@@ -25,9 +25,13 @@ import {
   NON_PROGRESS_MAX_ROUNDS,
   PROVIDERS,
   REFLECTION_MAX_REMOVAL_RATIO,
-  THINKING_BY_PHASE,
+  effortFor,
+  providerOf,
+  type EffortPlan,
+  type ThinkingLevel,
+  type ThinkingPhase,
 } from './config'
-import { costOf } from './cost'
+import { UsageMeter } from './cost'
 import {
   buildCoverageCatalog,
   buildDepthGapText,
@@ -37,8 +41,6 @@ import {
   isCoverageSufficient,
 } from './coverage'
 import {
-  ZERO_USAGE,
-  addUsage,
   parseJsonPayload,
   type Conversation,
   type InputPart,
@@ -58,7 +60,7 @@ import {
   parseUpdateCardArgs,
 } from './schemas'
 import { looksLikeSameSet } from './ankiImport'
-import { computeSizingPlan } from './pacing'
+import { computeSizingPlan, conceptTarget } from './pacing'
 import { count } from './plural'
 import {
   buildReviewFeedback,
@@ -102,6 +104,9 @@ export interface PipelineOptions {
    *  repeating work, and are never edited or removed by the model. */
   existingCards?: Card[]
   model: string
+  /** Overrides the model's effort per phase. For evaluation runs; the app
+   *  always uses the model's own plan. */
+  effort?: EffortPlan
   apiKey: string
   fetchFn: typeof fetch
   emit: PipelineSink
@@ -130,20 +135,23 @@ export interface PipelineOutcome {
 
 export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcome> {
   const { emit, signal } = opts
-  const client = createClient(opts.model, opts.apiKey, opts.fetchFn, (notice) =>
+  const client = createClient(providerOf(opts.model), opts.apiKey, opts.fetchFn, (notice) =>
     emit({ type: 'waiting', ...notice }),
   )
   const voice = PROVIDERS[client.provider].voice
-  let usage: Usage = ZERO_USAGE
-  const track = (u: Usage) => {
-    usage = addUsage(usage, u)
-  }
+  const effort = (phase: ThinkingPhase): ThinkingLevel =>
+    opts.effort?.[phase] ?? effortFor(opts.model, phase)
+  const meter = new UsageMeter(opts.model)
+  const track = (u: Usage) => meter.add(u)
   // Fixed for the whole conversation, follow-ups included.
   const instructions = systemInstructions(opts.focusPrompt)
 
   // --- Phase 0: upload ------------------------------------------------------
   emit({ type: 'phase', phase: 'uploading' })
   const document = await client.uploadPdf(opts.pdfBytes, opts.fileName, signal)
+  // Reported at once: the upload outlives this run only until the session
+  // ends, and whoever ends it has to know what to remove.
+  emit({ type: 'document_uploaded', provider: client.provider, document })
   throwIfAborted(signal)
 
   // --- Phase 1: concept map -------------------------------------------------
@@ -155,11 +163,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     instructions,
     input: [
       { type: 'document', document },
-      { type: 'text', text: conceptMapPrompt(ctx) },
+      { type: 'text', text: conceptMapPrompt(ctx, conceptTarget(opts.pdfInfo)) },
     ],
     tools: SESSION_TOOLS,
     responseSchema: CONCEPT_MAP_RESPONSE_SCHEMA,
-    effort: THINKING_BY_PHASE.mapping,
+    effort: effort('mapping'),
     signal,
   })
   track(mapResult.usage)
@@ -258,7 +266,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       tools: SESSION_TOOLS,
       activeTools: GENERATION_TOOLS,
       requireTool: true,
-      effort: THINKING_BY_PHASE.generating,
+      effort: effort('generating'),
       signal,
     })
   let response = await generationTurn(mapResult.conversation, [
@@ -443,6 +451,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     const review = await runReviewLoop({
       client,
       model: opts.model,
+      effort: effort('reflecting'),
       instructions,
       ctx,
       conversation: response.conversation,
@@ -474,7 +483,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   }
 
   // --- Complete ----------------------------------------------------------------
-  const costUsd = costOf(opts.model, usage)
+  const { usage, costUsd } = meter
   emit({ type: 'usage', inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costUsd })
   emit({ type: 'phase', phase: 'complete' })
   const summary = summarize(
@@ -637,6 +646,7 @@ export function closeUnansweredCalls(response: TurnResult, built: InputPart[]): 
 interface ReviewLoopOptions {
   client: LlmClient
   model: string
+  effort: ThinkingLevel
   instructions: string
   ctx: PromptContext
   conversation: Conversation
@@ -717,7 +727,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
       tools: SESSION_TOOLS,
       activeTools: REVIEW_TOOLS,
       requireTool: true,
-      effort: THINKING_BY_PHASE.reflecting,
+      effort: opts.effort,
       signal,
     })
   let response = await reviewTurn(opts.conversation, [

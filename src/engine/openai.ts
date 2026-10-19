@@ -7,7 +7,7 @@
  * in the activity log like Gemini's do.
  */
 
-import OpenAI, { APIConnectionError, APIError, toFile } from 'openai'
+import OpenAI, { APIConnectionError, APIError, NotFoundError, toFile } from 'openai'
 import type {
   FunctionTool,
   ResponseCreateParamsNonStreaming,
@@ -27,6 +27,7 @@ import {
   type TurnRequest,
   type TurnResult,
 } from './llm'
+import { requireAll } from './strictSchema'
 
 export class OpenAIClient implements LlmClient {
   readonly provider = 'openai'
@@ -63,6 +64,14 @@ export class OpenAIClient implements LlmClient {
     return { id: file.id, mimeType: 'application/pdf' }
   }
 
+  async deleteDocument(document: DocumentRef): Promise<void> {
+    try {
+      await this.sdk.files.delete(document.id)
+    } catch (e) {
+      if (!(e instanceof NotFoundError)) throw toLlmError(e)
+    }
+  }
+
   async turn(req: TurnRequest): Promise<TurnResult> {
     if (req.conversation && req.conversation.provider !== 'openai') {
       throw new LlmError(
@@ -85,10 +94,9 @@ export class OpenAIClient implements LlmClient {
         type: 'function',
         name: tool.name,
         description: tool.description,
-        parameters: tool.parameters,
-        // Strict mode would demand every property required and
-        // additionalProperties: false; the schemas are written for Gemini.
-        strict: false,
+        // Strict: the arguments always match the schema.
+        parameters: requireAll(tool.parameters),
+        strict: true,
       }))
       // The full set stays declared so the prompt cache holds; allowed_tools
       // narrows it to the phase.
@@ -106,8 +114,8 @@ export class OpenAIClient implements LlmClient {
         format: {
           type: 'json_schema',
           name: 'response',
-          schema: req.responseSchema,
-          strict: false,
+          schema: requireAll(req.responseSchema),
+          strict: true,
         },
       }
     }
@@ -169,6 +177,8 @@ function parseResponse(response: OpenAIResponse): TurnResult {
     usage: {
       inputTokens: usage?.input_tokens ?? 0,
       cachedInputTokens: usage?.input_tokens_details.cached_tokens ?? 0,
+      // OpenAI caches on its own and charges nothing extra for the write.
+      cacheWriteTokens: 0,
       // Reasoning tokens are already part of output_tokens.
       outputTokens: usage?.output_tokens ?? 0,
     },

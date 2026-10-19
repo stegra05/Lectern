@@ -54,6 +54,33 @@ import { notifyRunFinished } from '../lib/notify'
 import { IS_TAURI } from '../lib/platform'
 import { getApiKey, loadSettings, saveSettings } from '../lib/settings'
 import { tauriFetch } from '../lib/tauriFetch'
+import { forgetUpload, listUploads, rememberUpload, type Upload } from '../lib/uploadStore'
+import { createClient } from '../engine/clients'
+
+/**
+ * Remove uploads from their providers. One that cannot go yet (no key
+ * saved, offline) stays on the list and is tried again at the next launch.
+ */
+async function removeUploads(uploads: Upload[]): Promise<void> {
+  for (const upload of uploads) {
+    const key = await getApiKey(upload.provider).catch(() => null)
+    if (!key) continue
+    try {
+      await createClient(upload.provider, key, tauriFetch).deleteDocument(upload.document)
+      await forgetUpload(upload)
+    } catch (e) {
+      console.warn('Could not remove an uploaded PDF yet:', e)
+    }
+  }
+}
+
+/** End the session's hold on its uploads: everything on the list goes. The
+ *  list is read before returning, so a run that starts right after keeps
+ *  its own upload. */
+async function releaseUploads(): Promise<void> {
+  const uploads = await listUploads()
+  void removeUploads(uploads)
+}
 
 const THUMBNAIL_PAGE_LIMIT = 150
 const UNDO_WINDOW_MS = 30_000
@@ -323,6 +350,9 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         })
         // Said live by the countdown under the current step, not in the log.
         break
+      case 'document_uploaded':
+        void rememberUpload({ provider: event.provider, document: event.document })
+        break
     }
   }
 
@@ -558,6 +588,9 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       ) as Record<ProviderId, boolean>
       calibrationLog = await readCalibrationLog()
       set({ settings, savedKeys })
+      // No session survives a restart: anything still listed was left
+      // behind by a crash or a quit.
+      void releaseUploads()
       void get().refreshAnki()
     },
 
@@ -750,6 +783,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         return
       }
 
+      // The last session ends here; its upload is not needed any more.
+      await releaseUploads()
       const controller = new AbortController()
       abortController = controller
       runStartedAt = Date.now()
@@ -855,6 +890,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       } catch (e) {
         if ((e as Error).name === 'AbortError') {
           set({ view: 'home', phase: 'idle' })
+          void releaseUploads()
           get().toast('info', 'Generation cancelled.')
         } else {
           const problem = describeProblem(e, 'generating')
@@ -965,7 +1001,10 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         'Leaving discards them.',
         'Discard this deck?',
       )
-      if (ok) set({ view: 'home', phase: 'idle' })
+      if (ok) {
+        set({ view: 'home', phase: 'idle', followUp: null })
+        void releaseUploads()
+      }
     },
 
     updateCardFields: (uid, fields) => {
