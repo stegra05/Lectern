@@ -1,7 +1,8 @@
 /**
  * The generation pipeline — Lectern's brain.
  *
- * Three phases over one server-side Gemini conversation (Interactions API):
+ * Three phases over one model conversation (the provider is the model's; see
+ * llm.ts for the neutral surface the phases talk to):
  *   1. mapping     — whole PDF in, global concept map out (thinking: high)
  *   2. generating  — agentic tool loop: the model calls submit_cards, every
  *                    batch is quality-gated and deduped, and the tool result
@@ -16,15 +17,17 @@
  * callback, which the UI store consumes directly.
  */
 
+import { createClient } from './clients'
 import {
   DEPTH_FINISH_ATTEMPTS,
-  GEMINI_PRICING,
   MAX_GENERATION_ROUNDS,
   MAX_REFLECTION_ROUNDS,
   NON_PROGRESS_MAX_ROUNDS,
+  PROVIDERS,
   REFLECTION_MAX_REMOVAL_RATIO,
   THINKING_BY_PHASE,
 } from './config'
+import { costOf } from './cost'
 import {
   buildCoverageCatalog,
   buildDepthGapText,
@@ -34,26 +37,26 @@ import {
   isCoverageSufficient,
 } from './coverage'
 import {
-  GeminiClient,
+  ZERO_USAGE,
+  addUsage,
   parseJsonPayload,
-  type FunctionCallStep,
-  type GeminiUsage,
+  type Conversation,
   type InputPart,
-  type InteractionResult,
-} from './gemini'
+  type LlmClient,
+  type ToolCall,
+  type TurnResult,
+  type Usage,
+} from './llm'
 import {
-  ADD_CARDS_TOOL,
   CONCEPT_MAP_RESPONSE_SCHEMA,
-  FINISH_GENERATION_TOOL,
-  FINISH_REVIEW_TOOL,
-  REMOVE_CARDS_TOOL,
-  SUBMIT_CARDS_TOOL,
-  UPDATE_CARD_TOOL,
+  GENERATION_TOOLS,
+  REVIEW_TOOLS,
+  SESSION_TOOLS,
   parseConceptMap,
   parseRemoveCardsArgs,
   parseSubmitCardsArgs,
   parseUpdateCardArgs,
-} from './geminiSchemas'
+} from './schemas'
 import { looksLikeSameSet } from './ankiImport'
 import { computeSizingPlan } from './pacing'
 import { count } from './plural'
@@ -105,12 +108,14 @@ export interface PipelineOptions {
   signal?: AbortSignal
 }
 
-/** Handle for continuing the session's Gemini conversation after the
- *  pipeline completes (follow-up requests). `pendingInput` answers any
- *  function calls the last interaction left open — the next request must
+/** Handle for continuing the session's conversation after the pipeline
+ *  completes (follow-up requests). The model is the one the conversation
+ *  started on: it cannot move to another provider mid-way. `pendingInput`
+ *  answers any tool calls the last turn left open — the next request must
  *  lead with them. */
 export interface FollowUpSeed {
-  interactionId: string
+  model: string
+  conversation: Conversation
   pendingInput: InputPart[]
 }
 
@@ -118,44 +123,47 @@ export interface PipelineOutcome {
   cards: Card[]
   conceptMap: ConceptMap
   coverage: CoverageData
-  usage: GeminiUsage & { costUsd: number }
+  usage: Usage & { costUsd: number }
   terminationReason: string
   followUp: FollowUpSeed
 }
 
 export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcome> {
   const { emit, signal } = opts
-  const client = new GeminiClient(opts.apiKey, opts.fetchFn, undefined, (notice) =>
+  const client = createClient(opts.model, opts.apiKey, opts.fetchFn, (notice) =>
     emit({ type: 'waiting', ...notice }),
   )
-  const usage: GeminiUsage = { inputTokens: 0, outputTokens: 0 }
-  const track = (u: GeminiUsage) => {
-    usage.inputTokens += u.inputTokens
-    usage.outputTokens += u.outputTokens
+  const voice = PROVIDERS[client.provider].voice
+  let usage: Usage = ZERO_USAGE
+  const track = (u: Usage) => {
+    usage = addUsage(usage, u)
   }
+  // Fixed for the whole conversation, follow-ups included.
+  const instructions = systemInstructions(opts.focusPrompt)
 
   // --- Phase 0: upload ------------------------------------------------------
   emit({ type: 'phase', phase: 'uploading' })
-  const file = await client.uploadPdf(opts.pdfBytes, opts.fileName, signal)
+  const document = await client.uploadPdf(opts.pdfBytes, opts.fileName, signal)
   throwIfAborted(signal)
 
   // --- Phase 1: concept map -------------------------------------------------
   emit({ type: 'phase', phase: 'mapping' })
 
   let ctx: PromptContext = { language: 'en', focusPrompt: opts.focusPrompt }
-  const mapResult = await client.interact({
+  const mapResult = await client.turn({
     model: opts.model,
-    instructions: systemInstructions(ctx),
+    instructions,
     input: [
-      { type: 'document', uri: file.uri, mime_type: file.mimeType },
+      { type: 'document', document },
       { type: 'text', text: conceptMapPrompt(ctx) },
     ],
+    tools: SESSION_TOOLS,
     responseSchema: CONCEPT_MAP_RESPONSE_SCHEMA,
-    thinkingLevel: THINKING_BY_PHASE.mapping,
+    effort: THINKING_BY_PHASE.mapping,
     signal,
   })
   track(mapResult.usage)
-  const conceptMap = parseConceptMap(parseJsonPayload(mapResult.outputText))
+  const conceptMap = parseConceptMap(parseJsonPayload(mapResult.outputText, client.provider))
   ctx = { language: conceptMap.language || 'en', focusPrompt: opts.focusPrompt }
 
   const reconciled = reconcilePdfInfo(opts.pdfInfo, conceptMap)
@@ -241,34 +249,36 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       ? buildDepthGapText(catalog, coverage)
       : buildGenerationGapText(catalog, coverage, cards)
 
-  const tools = [SUBMIT_CARDS_TOOL, FINISH_GENERATION_TOOL]
-  let response = await client.interact({
-    model: opts.model,
-    instructions: systemInstructions(ctx),
-    previousInteractionId: mapResult.id,
-    input: [
-      {
-        type: 'text',
-        text: generationMissionPrompt(ctx, {
-          totalCardCap: sizing.totalCardCap,
-          batchSize: sizing.batchSize,
-          gapText: ledgerText(),
-          existingDeck: summarizeExistingDeck(existing.cards),
-          depthMode: inDepthMode(),
-        }),
-      },
-    ],
-    tools,
-    toolChoice: 'any',
-    thinkingLevel: THINKING_BY_PHASE.generating,
-    signal,
-  })
+  const generationTurn = (conversation: Conversation, input: InputPart[]) =>
+    client.turn({
+      model: opts.model,
+      instructions,
+      conversation,
+      input,
+      tools: SESSION_TOOLS,
+      activeTools: GENERATION_TOOLS,
+      requireTool: true,
+      effort: THINKING_BY_PHASE.generating,
+      signal,
+    })
+  let response = await generationTurn(mapResult.conversation, [
+    {
+      type: 'text',
+      text: generationMissionPrompt(ctx, {
+        totalCardCap: sizing.totalCardCap,
+        batchSize: sizing.batchSize,
+        gapText: ledgerText(),
+        existingDeck: summarizeExistingDeck(existing.cards),
+        depthMode: inDepthMode(),
+      }),
+    },
+  ])
   track(response.usage)
 
   for (let round = 1; round <= MAX_GENERATION_ROUNDS && !finished; round++) {
     throwIfAborted(signal)
 
-    if (response.functionCalls.length === 0) {
+    if (response.toolCalls.length === 0) {
       // Model answered in prose despite tool_choice — nudge once, then bail.
       nonProgressRounds++
       if (nonProgressRounds >= NON_PROGRESS_MAX_ROUNDS) {
@@ -276,25 +286,16 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
         emit({
           type: 'log',
           level: 'warn',
-          message: 'Gemini stopped producing cards, so generation ends here.',
+          message: `${voice} stopped producing cards, so generation ends here.`,
         })
         break
       }
-      response = await client.interact({
-        model: opts.model,
-        instructions: systemInstructions(ctx),
-        previousInteractionId: response.id,
-        input: [
-          {
-            type: 'text',
-            text: 'Continue: call submit_cards with the next batch, or finish_generation if coverage is complete.',
-          },
-        ],
-        tools,
-        toolChoice: 'any',
-        thinkingLevel: THINKING_BY_PHASE.generating,
-        signal,
-      })
+      response = await generationTurn(response.conversation, [
+        {
+          type: 'text',
+          text: 'Continue: call submit_cards with the next batch, or finish_generation if coverage is complete.',
+        },
+      ])
       track(response.usage)
       continue
     }
@@ -302,7 +303,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     const results: InputPart[] = []
     let acceptedThisRound = 0
 
-    for (const call of response.functionCalls) {
+    for (const call of response.toolCalls) {
       if (call.name === 'finish_generation') {
         const verdict = handleFinishRequest(coverage, cards.length, cardCap, depthGate())
         if (!verdict.allowed) depthFinishAttempts++
@@ -313,14 +314,14 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           const assessment =
             typeof args.coverage_assessment === 'string' ? args.coverage_assessment.trim() : ''
           if (assessment) {
-            emit({ type: 'log', level: 'info', message: 'Gemini on coverage', quote: assessment })
+            emit({ type: 'log', level: 'info', message: `${voice} on coverage`, quote: assessment })
           }
           results.push(functionResult(call, 'Accepted. Generation complete.'))
         } else {
           emit({
             type: 'log',
             level: 'warn',
-            message: 'Gemini wanted to stop, but key concepts still have no card. Continuing.',
+            message: `${voice} wanted to stop, but key concepts still have no card. Continuing.`,
           })
           results.push(functionResult(call, verdict.message))
         }
@@ -421,16 +422,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       break
     }
 
-    response = await client.interact({
-      model: opts.model,
-      instructions: systemInstructions(ctx),
-      previousInteractionId: response.id,
-      input: results,
-      tools,
-      toolChoice: 'any',
-      thinkingLevel: THINKING_BY_PHASE.generating,
-      signal,
-    })
+    response = await generationTurn(response.conversation, results)
     pendingResults = []
     track(response.usage)
   }
@@ -438,7 +430,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   // The loop may exit with function calls it never answered (round budget
   // exhausted); close them so the chain continues from a clean state.
   pendingResults = closeUnansweredCalls(response, pendingResults)
-  let followUpSeed: FollowUpSeed = { interactionId: response.id, pendingInput: pendingResults }
+  let followUpSeed: FollowUpSeed = {
+    model: opts.model,
+    conversation: response.conversation,
+    pendingInput: pendingResults,
+  }
 
   // --- Phase 3: agentic review loop over the deck -----------------------------
   if (cards.length > inheritedCount) {
@@ -447,8 +443,9 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     const review = await runReviewLoop({
       client,
       model: opts.model,
+      instructions,
       ctx,
-      previousInteractionId: response.id,
+      conversation: response.conversation,
       pendingInput: pendingResults,
       cards,
       seenKeys,
@@ -460,7 +457,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       signal,
       track,
     })
-    followUpSeed = { interactionId: review.interactionId, pendingInput: review.pendingInput }
+    followUpSeed = {
+      model: opts.model,
+      conversation: review.conversation,
+      pendingInput: review.pendingInput,
+    }
     coverage = computeCoverageData(catalog, cards)
     emit({
       type: 'log',
@@ -473,11 +474,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   }
 
   // --- Complete ----------------------------------------------------------------
-  const [inPrice, outPrice] = GEMINI_PRICING[opts.model] ?? GEMINI_PRICING.default
-  const costUsd = (usage.inputTokens * inPrice + usage.outputTokens * outPrice) / 1_000_000
+  const costUsd = costOf(opts.model, usage)
   emit({ type: 'usage', inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costUsd })
   emit({ type: 'phase', phase: 'complete' })
   const summary = summarize(
+    voice,
     terminationReason,
     cards.length - inheritedCount,
     coverage,
@@ -599,13 +600,8 @@ export function buildCard(
   return { card, verdict, unknownMetadata }
 }
 
-export function functionResult(call: FunctionCallStep, text: string): InputPart {
-  return {
-    type: 'function_result',
-    name: call.name,
-    call_id: call.id,
-    result: [{ type: 'text', text }],
-  }
+export function functionResult(call: ToolCall, text: string): InputPart {
+  return { type: 'tool_result', callId: call.id, name: call.name, text }
 }
 
 export function firstField(card: Card): string {
@@ -616,14 +612,14 @@ export function firstField(card: Card): string {
 /**
  * Answer any function calls of `response` that `built` does not already
  * answer. A loop can exit with calls it never processed (round budget
- * exhausted) — the Interactions API requires every call answered before the
+ * exhausted) — every provider requires each call answered before the
  * conversation can continue, so the next phase or follow-up leads with these.
  */
-export function closeUnansweredCalls(response: InteractionResult, built: InputPart[]): InputPart[] {
+export function closeUnansweredCalls(response: TurnResult, built: InputPart[]): InputPart[] {
   const answered = new Set(
-    built.filter((part) => part.type === 'function_result').map((part) => part.call_id),
+    built.flatMap((part) => (part.type === 'tool_result' ? [part.callId] : [])),
   )
-  const closures = response.functionCalls
+  const closures = response.toolCalls
     .filter((call) => !answered.has(call.id))
     .map((call) =>
       functionResult(
@@ -638,13 +634,12 @@ export function closeUnansweredCalls(response: InteractionResult, built: InputPa
 // Phase 3 — agentic review loop
 // ---------------------------------------------------------------------------
 
-const REVIEW_TOOLS = [UPDATE_CARD_TOOL, ADD_CARDS_TOOL, REMOVE_CARDS_TOOL, FINISH_REVIEW_TOOL]
-
 interface ReviewLoopOptions {
-  client: GeminiClient
+  client: LlmClient
   model: string
+  instructions: string
   ctx: PromptContext
-  previousInteractionId: string
+  conversation: Conversation
   /** Unanswered function results from the generation loop, sent first. */
   pendingInput: InputPart[]
   /** The deck — edited in place. */
@@ -662,7 +657,7 @@ interface ReviewLoopOptions {
   gateOptions: EvaluateOptions
   emit: PipelineSink
   signal?: AbortSignal
-  track: (u: GeminiUsage) => void
+  track: (u: Usage) => void
 }
 
 interface ReviewOutcome {
@@ -670,8 +665,8 @@ interface ReviewOutcome {
   updated: number
   added: number
   removed: number
-  /** Where the conversation chain ends — follow-up requests continue here. */
-  interactionId: string
+  /** Where the conversation ends — follow-up requests continue here. */
+  conversation: Conversation
   pendingInput: InputPart[]
 }
 
@@ -713,38 +708,41 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
     return uid === undefined ? -1 : cards.findIndex((c) => c.uid === uid)
   }
 
-  let response = await client.interact({
-    model: opts.model,
-    instructions: systemInstructions(opts.ctx),
-    previousInteractionId: opts.previousInteractionId,
-    input: [
-      ...opts.pendingInput,
-      {
-        type: 'text',
-        text: reviewMissionPrompt(opts.ctx, {
-          deckListing,
-          coverageGaps: buildReflectionGapText(catalog, coverage),
-          cardCap: opts.cardCap,
-          freeSlots: Math.max(0, opts.cardCap - cards.length),
-          inheritedCount: opts.inheritedCount,
-        }),
-      },
-    ],
-    tools: REVIEW_TOOLS,
-    toolChoice: 'any',
-    thinkingLevel: THINKING_BY_PHASE.reflecting,
-    signal,
-  })
+  const reviewTurn = (conversation: Conversation, input: InputPart[]) =>
+    client.turn({
+      model: opts.model,
+      instructions: opts.instructions,
+      conversation,
+      input,
+      tools: SESSION_TOOLS,
+      activeTools: REVIEW_TOOLS,
+      requireTool: true,
+      effort: THINKING_BY_PHASE.reflecting,
+      signal,
+    })
+  let response = await reviewTurn(opts.conversation, [
+    ...opts.pendingInput,
+    {
+      type: 'text',
+      text: reviewMissionPrompt(opts.ctx, {
+        deckListing,
+        coverageGaps: buildReflectionGapText(catalog, coverage),
+        cardCap: opts.cardCap,
+        freeSlots: Math.max(0, opts.cardCap - cards.length),
+        inheritedCount: opts.inheritedCount,
+      }),
+    },
+  ])
   opts.track(response.usage)
 
   for (let round = 1; round <= MAX_REFLECTION_ROUNDS && !finished; round++) {
     throwIfAborted(signal)
-    if (response.functionCalls.length === 0) break // prose instead of tools — accept the deck
+    if (response.toolCalls.length === 0) break // prose instead of tools — accept the deck
 
     const results: InputPart[] = []
     let editsThisRound = 0
 
-    for (const call of response.functionCalls) {
+    for (const call of response.toolCalls) {
       if (call.name === 'finish_review') {
         finished = true
         const args = (call.arguments ?? {}) as Record<string, unknown>
@@ -878,16 +876,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
       break
     }
 
-    response = await client.interact({
-      model: opts.model,
-      instructions: systemInstructions(opts.ctx),
-      previousInteractionId: response.id,
-      input: results,
-      tools: REVIEW_TOOLS,
-      toolChoice: 'any',
-      thinkingLevel: THINKING_BY_PHASE.reflecting,
-      signal,
-    })
+    response = await reviewTurn(response.conversation, results)
     pendingResults = []
     opts.track(response.usage)
   }
@@ -895,7 +884,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
   return {
     note,
     ...counts,
-    interactionId: response.id,
+    conversation: response.conversation,
     pendingInput: closeUnansweredCalls(response, pendingResults),
   }
 }
@@ -920,6 +909,7 @@ function toReviewShape(cardId: string, card: Card): Record<string, unknown> {
 }
 
 function summarize(
+  voice: string,
   reason: string,
   cardCount: number,
   coverage: CoverageData,
@@ -928,8 +918,8 @@ function summarize(
   // Only an early stop is worth a second sentence; reaching the deck size or
   // full coverage is what the first one already reports.
   const earlyStop: Record<string, string> = {
-    non_progress: ' Gemini stopped finding new cards before the deck size was reached.',
-    model_stalled: ' Gemini stopped finding new cards before the deck size was reached.',
+    non_progress: ` ${voice} stopped finding new cards before the deck size was reached.`,
+    model_stalled: ` ${voice} stopped finding new cards before the deck size was reached.`,
     max_rounds_reached: ' Generation reached its round limit before the deck size.',
   }
   // An extend run reports what it added and what the deck now holds; the

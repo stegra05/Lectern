@@ -62,13 +62,54 @@ export const FOLLOWUP_CARD_CAP = 10
 /** Absolute ceiling on agentic rounds per follow-up request. */
 export const MAX_FOLLOWUP_ROUNDS = 6
 
-// --- Gemini ----------------------------------------------------------------
+// --- Providers and models ------------------------------------------------
+
+export type ProviderId = 'gemini' | 'openai' | 'anthropic'
+
+export const PROVIDERS: Record<ProviderId, { label: string; voice: string }> = {
+  // label names the account and its key; voice names the model in the log.
+  gemini: { label: 'Gemini', voice: 'Gemini' },
+  openai: { label: 'OpenAI', voice: 'GPT' },
+  anthropic: { label: 'Claude', voice: 'Claude' },
+}
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash'
 export const MODEL_CHOICES = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'fast, agentic (recommended)' },
-  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', note: 'deepest reasoning, slower' },
-] as const
+  {
+    id: 'gemini-3.8-flash',
+    provider: 'gemini',
+    label: 'Gemini 3.8 Flash',
+    note: 'fast, agentic (recommended)',
+  },
+  {
+    id: 'gemini-3.1-pro-preview',
+    provider: 'gemini',
+    label: 'Gemini 3.1 Pro',
+    note: 'deepest reasoning, slower',
+  },
+  { id: 'gpt-6-luna', provider: 'openai', label: 'GPT-6 Luna', note: 'lowest cost' },
+  {
+    id: 'claude-haiku-5-5',
+    provider: 'anthropic',
+    label: 'Claude Haiku 5.5',
+    note: 'low cost, strong on charts',
+  },
+] as const satisfies ReadonlyArray<{
+  id: string
+  provider: ProviderId
+  label: string
+  note: string
+}>
+
+/** The provider that serves a model. Ids outside the picker (a saved run's
+ *  retired model) are told apart by their prefix. */
+export function providerOf(model: string): ProviderId {
+  const choice = MODEL_CHOICES.find((m) => m.id === model)
+  if (choice) return choice.provider
+  if (model.startsWith('claude-')) return 'anthropic'
+  if (model.startsWith('gpt-') || /^o\d/.test(model)) return 'openai'
+  return 'gemini'
+}
 
 /** Models that were once offered and no longer are. A saved setting wins over
  *  DEFAULT_MODEL on load, so without this an existing install would sit on a
@@ -81,12 +122,13 @@ export const MODEL_MIGRATIONS: Record<string, string> = {
   'gemini-3-pro': 'gemini-3.1-pro-preview',
 }
 
-/** 3.8 Flash (like 3.7) accepts only these three; `minimal` (a 3.6-ism) errors. */
+/** Thinking effort, in the three levels every provider understands: Gemini's
+ *  thinking_level, OpenAI's reasoning effort and Claude's output effort all
+ *  take low/medium/high. (`minimal`, a Gemini 3.6-ism, errors on 3.8.) */
 export type ThinkingLevel = 'low' | 'medium' | 'high'
 /** Thinking effort per phase. `low` suits the agentic loops — few steps per
  *  decision; the one-shot document analysis gets `high`, and review edits sit
- *  in between. The API default is `medium`, but every call here sets the
- *  level explicitly. */
+ *  in between. Provider defaults differ, so every call sets the level. */
 export const THINKING_BY_PHASE = {
   mapping: 'high',
   generating: 'low',
@@ -100,6 +142,10 @@ export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
  *  3.8 Flash; the model bump introduced no new one. */
 export const GEMINI_API_REVISION = '2026-05-20'
 
+/** Output ceiling per Claude turn. Generous because thinking counts against
+ *  it; the request streams, so a long turn cannot hit an HTTP timeout. */
+export const ANTHROPIC_MAX_TOKENS = 64_000
+
 // --- Retry -----------------------------------------------------------------
 
 export const RATE_LIMIT_MAX_RETRIES = 5
@@ -111,11 +157,10 @@ export const FILE_ACTIVE_TIMEOUT_MS = 120_000
 
 // --- Pricing (USD per million tokens: [input, output]) ---------------------
 // Approximate — shown to the user as an estimate only. Output prices include
-// thinking tokens, which Google bills as output; usage accounting adds
-// total_thought_tokens into outputTokens to match.
+// thinking tokens, which every provider bills as output.
 // Retired ids stay listed so a saved run's recorded cost still resolves.
 
-export const GEMINI_PRICING: Record<string, [number, number]> = {
+export const MODEL_PRICING: Record<string, [number, number]> = {
   // Introductory rate through 2026-12-31; doubles to [1.5, 7.5] on 2027-01-01.
   'gemini-3.8-flash': [0.75, 3.75],
   'gemini-3.7-flash': [0.75, 3.75],
@@ -127,8 +172,19 @@ export const GEMINI_PRICING: Record<string, [number, number]> = {
   'gemini-3-flash': [0.5, 3.0],
   'gemini-2.5-pro': [1.25, 10.0],
   'gemini-2.5-flash': [0.3, 2.5],
+  // Twice the input rate above 272K prompt tokens, which a lecture rarely reaches.
+  'gpt-6-luna': [0.1, 0.5],
+  // [0.1, 0.5] up to 100K prompt tokens, then this rate for the whole request.
+  // A lecture PDF with its page images usually crosses 100K, so this is the
+  // rate a run actually pays.
+  'claude-haiku-5-5': [0.5, 2.5],
   default: [0.5, 4.0],
 }
+
+/** Cache reads cost about a tenth of fresh input at OpenAI and Anthropic.
+ *  Claude re-reads the whole transcript every turn, so without this the
+ *  reported cost of a run would be several times the bill. */
+export const CACHED_INPUT_PRICE_RATIO = 0.1
 
 export const ESTIMATION_TOKENS_PER_PDF_PAGE = 560
 export const ESTIMATION_TOKENS_PER_CARD = 100

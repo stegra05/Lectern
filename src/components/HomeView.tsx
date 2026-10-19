@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useLectern } from '../state/store'
-import { MODEL_CHOICES } from '../engine/config'
+import { selectHasApiKey, useLectern } from '../state/store'
+import { MODEL_CHOICES, PROVIDERS, providerOf } from '../engine/config'
 import { computeSizingPlan } from '../engine/pacing'
 import { count } from '../engine/plural'
 import { MAX_FOCUS_PROMPT_LEN } from '../engine/prompts'
@@ -48,7 +48,7 @@ export function HomeView() {
   const setTargetCards = useLectern((s) => s.setTargetCards)
   const estimate = useLectern((s) => s.estimate)
   const settings = useLectern((s) => s.settings)
-  const hasApiKey = useLectern((s) => s.hasApiKey)
+  const hasApiKey = useLectern(selectHasApiKey)
   const openSettings = useLectern((s) => s.openSettings)
   const startGeneration = useLectern((s) => s.startGeneration)
   const existingDeckCount = useLectern((s) => s.existingDeckCount)
@@ -289,7 +289,7 @@ export function HomeView() {
                   onClick={() => openSettings(true)}
                   className="text-chalk-dim hover:text-chalk rounded-sm underline underline-offset-2 transition-colors duration-150"
                 >
-                  Add your Gemini API key in Settings
+                  Add your {PROVIDERS[providerOf(settings?.model ?? '')].label} API key in Settings
                 </button>{' '}
                 <span className="text-chalk-dim">to generate.</span>
               </p>

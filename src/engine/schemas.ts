@@ -1,19 +1,19 @@
 /**
- * JSON Schemas sent to Gemini (tool parameters + response_format) and the
- * tolerant zod parsers for what comes back.
+ * JSON Schemas sent to the model (tool parameters + structured output) and
+ * the tolerant zod parsers for what comes back.
  *
  * Two hard-won conventions carried over from the original app:
- *  - Card fields are a LIST of {name, value} pairs, not a map — Gemini's
- *    structured output is far more reliable with this shape.
- *  - Never send `additionalProperties` — Gemini rejects it, so schemas are
- *    written by hand without it.
+ *  - Card fields are a LIST of {name, value} pairs, not a map — structured
+ *    output is far more reliable with this shape.
+ *  - Never write `additionalProperties` — Gemini rejects it. Adapters whose
+ *    provider wants it (Claude's structured output) add it on the way out.
  */
 
 import { z } from 'zod'
 import type { ConceptMap } from './types'
 
 // ---------------------------------------------------------------------------
-// Schemas sent to Gemini
+// Schemas sent to the model
 // ---------------------------------------------------------------------------
 
 const CARD_JSON_SCHEMA = {
@@ -44,7 +44,6 @@ const CARD_JSON_SCHEMA = {
 } as const
 
 export const SUBMIT_CARDS_TOOL = {
-  type: 'function' as const,
   name: 'submit_cards',
   description:
     'Submit a batch of flashcards for review. Returns accepted/rejected verdicts with reasons and an updated coverage ledger to plan the next batch.',
@@ -58,7 +57,6 @@ export const SUBMIT_CARDS_TOOL = {
 }
 
 export const FINISH_GENERATION_TOOL = {
-  type: 'function' as const,
   name: 'finish_generation',
   description:
     'Declare card generation complete. Only call when the coverage ledger shows no important gaps remain or the card budget is spent.',
@@ -131,7 +129,6 @@ export const CONCEPT_MAP_RESPONSE_SCHEMA = {
 // --- Review-phase tools (agentic edit loop over the generated deck) ---------
 
 export const UPDATE_CARD_TOOL = {
-  type: 'function' as const,
   name: 'update_card',
   description:
     'Replace the content of one existing card, identified by its card_id from the deck listing. The replacement passes the same quality gate as new cards.',
@@ -146,7 +143,6 @@ export const UPDATE_CARD_TOOL = {
 }
 
 export const ADD_CARDS_TOOL = {
-  type: 'function' as const,
   name: 'add_cards',
   description:
     'Add new cards to the deck, e.g. to close coverage gaps or replace a merged pair. Same schema and quality gate as generation.',
@@ -160,7 +156,6 @@ export const ADD_CARDS_TOOL = {
 }
 
 export const REMOVE_CARDS_TOOL = {
-  type: 'function' as const,
   name: 'remove_cards',
   description: 'Delete cards from the deck by card_id: redundant, ungrounded, or low-value cards.',
   parameters: {
@@ -190,9 +185,8 @@ const FOLLOWUP_CARD_JSON_SCHEMA = {
   },
 } as const
 
-export const FOLLOWUP_ADD_CARDS_TOOL = {
-  type: 'function' as const,
-  name: 'add_cards',
+export const ADD_REQUESTED_CARDS_TOOL = {
+  name: 'add_requested_cards',
   description:
     'Add new cards fulfilling the user request. Same schema and quality gate as generation; declare in_source=false on any card whose content the document does not contain.',
   parameters: {
@@ -205,7 +199,6 @@ export const FOLLOWUP_ADD_CARDS_TOOL = {
 }
 
 export const FINISH_REQUEST_TOOL = {
-  type: 'function' as const,
   name: 'finish_request',
   description:
     'Declare the user request handled. Call once the requested cards are added, or immediately when the request needs no new cards.',
@@ -223,7 +216,6 @@ export const FINISH_REQUEST_TOOL = {
 }
 
 export const FINISH_REVIEW_TOOL = {
-  type: 'function' as const,
   name: 'finish_review',
   description:
     'Declare the quality review complete. Call once the deck is sound: no redundant, vague, or ungrounded cards remain and coverage gaps are closed or explicitly accepted.',
@@ -239,6 +231,33 @@ export const FINISH_REVIEW_TOOL = {
     required: ['summary'],
   },
 }
+
+// --- The session's tool set -----------------------------------------------
+// Declared whole on every turn of a conversation: Claude binds its reasoning
+// to the exact tool set and every provider's prompt cache keys on it. Each
+// phase names the subset it may call.
+
+export const SESSION_TOOLS = [
+  SUBMIT_CARDS_TOOL,
+  FINISH_GENERATION_TOOL,
+  UPDATE_CARD_TOOL,
+  ADD_CARDS_TOOL,
+  REMOVE_CARDS_TOOL,
+  FINISH_REVIEW_TOOL,
+  ADD_REQUESTED_CARDS_TOOL,
+  FINISH_REQUEST_TOOL,
+]
+
+const namesOf = (...tools: Array<{ name: string }>): string[] => tools.map((tool) => tool.name)
+
+export const GENERATION_TOOLS = namesOf(SUBMIT_CARDS_TOOL, FINISH_GENERATION_TOOL)
+export const REVIEW_TOOLS = namesOf(
+  UPDATE_CARD_TOOL,
+  ADD_CARDS_TOOL,
+  REMOVE_CARDS_TOOL,
+  FINISH_REVIEW_TOOL,
+)
+export const FOLLOWUP_TOOLS = namesOf(ADD_REQUESTED_CARDS_TOOL, FINISH_REQUEST_TOOL)
 
 // ---------------------------------------------------------------------------
 // Tolerant zod parsers for model output

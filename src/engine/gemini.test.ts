@@ -6,7 +6,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { GeminiClient, GeminiError } from './gemini'
+import { GeminiClient } from './gemini'
+import { LlmError } from './llm'
 import type { RetryNotice } from './types'
 
 const okInteraction = () =>
@@ -25,10 +26,10 @@ describe('GeminiClient retry behavior', () => {
       .mockResolvedValueOnce(okInteraction())
     const client = new GeminiClient('key', fetchFn)
 
-    const promise = client.interact({ model: 'm', input: 'hello' })
+    const promise = client.turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
     await vi.advanceTimersByTimeAsync(10_000)
 
-    expect((await promise).id).toBe('i-1')
+    expect((await promise).conversation).toEqual({ provider: 'gemini', interactionId: 'i-1' })
     expect(fetchFn).toHaveBeenCalledTimes(2)
   })
 
@@ -40,7 +41,9 @@ describe('GeminiClient retry behavior', () => {
       )
     const client = new GeminiClient('key', fetchFn)
 
-    await expect(client.interact({ model: 'm', input: 'hello' })).rejects.toMatchObject({
+    await expect(
+      client.turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] }),
+    ).rejects.toMatchObject({
       status: 403,
     })
     expect(fetchFn).toHaveBeenCalledTimes(1)
@@ -55,7 +58,11 @@ describe('GeminiClient retry behavior', () => {
     const client = new GeminiClient('key', fetchFn)
 
     await expect(
-      client.interact({ model: 'm', input: 'hello', signal: controller.signal }),
+      client.turn({
+        model: 'm',
+        input: [{ type: 'text', text: 'hello' }],
+        signal: controller.signal,
+      }),
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(fetchFn).toHaveBeenCalledTimes(1)
   })
@@ -68,7 +75,7 @@ describe('GeminiClient retry behavior', () => {
       )
     const client = new GeminiClient('key', fetchFn)
 
-    await expect(client.uploadPdf(new Uint8Array([1]), 'a.pdf')).rejects.toBeInstanceOf(GeminiError)
+    await expect(client.uploadPdf(new Uint8Array([1]), 'a.pdf')).rejects.toBeInstanceOf(LlmError)
     expect(fetchFn).toHaveBeenCalledTimes(1)
   })
 })
@@ -90,9 +97,9 @@ describe('GeminiClient rate-limit visibility', () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(rateLimited('quota exceeded', { 'retry-after': '30' }))
       .mockResolvedValueOnce(okInteraction())
-    const client = new GeminiClient('key', fetchFn, undefined, (n) => notices.push(n))
+    const client = new GeminiClient('key', fetchFn, (n) => notices.push(n))
 
-    const promise = client.interact({ model: 'm', input: 'hello' })
+    const promise = client.turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
     await vi.advanceTimersByTimeAsync(60_000)
     await promise
 
@@ -106,9 +113,9 @@ describe('GeminiClient rate-limit visibility', () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(rateLimited('slow down', { 'retry-after': '90' }))
       .mockResolvedValueOnce(okInteraction())
-    const client = new GeminiClient('key', fetchFn, undefined, (n) => notices.push(n))
+    const client = new GeminiClient('key', fetchFn, (n) => notices.push(n))
 
-    const promise = client.interact({ model: 'm', input: 'hello' })
+    const promise = client.turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
     await vi.advanceTimersByTimeAsync(120_000)
     await promise
 
@@ -121,13 +128,15 @@ describe('GeminiClient rate-limit visibility', () => {
     const client = new GeminiClient('key', fetchFn)
 
     // Catch first, then let the clock run, or the rejection goes unhandled.
-    const settled = client.interact({ model: 'm', input: 'hello' }).catch((e: unknown) => e)
+    const settled = client
+      .turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
+      .catch((e: unknown) => e)
     await vi.advanceTimersByTimeAsync(600_000)
 
     const error = await settled
-    expect(error).toBeInstanceOf(GeminiError)
-    expect((error as GeminiError).status).toBe(429)
-    expect((error as GeminiError).kind).toBe('rate_limited')
+    expect(error).toBeInstanceOf(LlmError)
+    expect((error as LlmError).status).toBe(429)
+    expect((error as LlmError).kind).toBe('rate_limited')
     // The initial attempt plus every retry.
     expect(fetchFn).toHaveBeenCalledTimes(6)
   })
@@ -140,12 +149,14 @@ describe('GeminiClient rate-limit visibility', () => {
       )
     const client = new GeminiClient('key', fetchFn)
 
-    const settled = client.interact({ model: 'm', input: 'hello' }).catch((e: unknown) => e)
+    const settled = client
+      .turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
+      .catch((e: unknown) => e)
     await vi.advanceTimersByTimeAsync(600_000)
 
     const error = await settled
-    expect(error).toBeInstanceOf(GeminiError)
-    expect((error as GeminiError).kind).toBe('quota_daily')
+    expect(error).toBeInstanceOf(LlmError)
+    expect((error as LlmError).kind).toBe('quota_daily')
     // Asked once: a retry would only have made the student wait for this.
     expect(fetchFn).toHaveBeenCalledTimes(1)
   })
@@ -164,8 +175,10 @@ describe('GeminiClient rate-limit visibility', () => {
     )
     const client = new GeminiClient('key', fetchFn)
 
-    const error = await client.interact({ model: 'm', input: 'hello' }).catch((e: unknown) => e)
-    expect((error as GeminiError).kind).toBe('key_rejected')
+    const error = await client
+      .turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
+      .catch((e: unknown) => e)
+    expect((error as LlmError).kind).toBe('key_rejected')
   })
 
   it('reports a dropped connection as its own kind of wait', async () => {
@@ -174,9 +187,9 @@ describe('GeminiClient rate-limit visibility', () => {
       .fn<typeof fetch>()
       .mockRejectedValueOnce(new TypeError('fetch failed'))
       .mockResolvedValueOnce(okInteraction())
-    const client = new GeminiClient('key', fetchFn, undefined, (n) => notices.push(n))
+    const client = new GeminiClient('key', fetchFn, (n) => notices.push(n))
 
-    const promise = client.interact({ model: 'm', input: 'hello' })
+    const promise = client.turn({ model: 'm', input: [{ type: 'text', text: 'hello' }] })
     await vi.advanceTimersByTimeAsync(10_000)
     await promise
 

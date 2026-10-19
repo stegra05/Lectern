@@ -240,10 +240,21 @@ describe('runPipeline (scripted)', () => {
 
     // The finished pipeline hands over a clean continuation seed: the last
     // interaction id, with the dangling finish_review call answered.
-    expect(outcome.followUp.interactionId).toBe('i-finish')
+    expect(outcome.followUp.model).toBe('gemini-3.8-flash')
+    expect(outcome.followUp.conversation).toEqual({ provider: 'gemini', interactionId: 'i-finish' })
     expect(outcome.followUp.pendingInput).toMatchObject([
-      { type: 'function_result', call_id: 'call-finish' },
+      { type: 'tool_result', callId: 'call-finish' },
     ])
+
+    // One system prompt for the whole conversation; each phase declares only
+    // the tools it may call.
+    const systems = new Set(captured.map((c) => c.body.system_instruction))
+    expect(systems.size).toBe(1)
+    const toolNames = (i: number) =>
+      ((captured[i].body.tools ?? []) as Array<{ name: string }>).map((t) => t.name)
+    expect(toolNames(0)).toEqual([])
+    expect(toolNames(1)).toEqual(['submit_cards', 'finish_generation'])
+    expect(toolNames(2)).toEqual(['update_card', 'add_cards', 'remove_cards', 'finish_review'])
 
     // Edit verdicts flow back as one function_result per tool call.
     const finishInput = captured[3].body.input as Array<Record<string, unknown>>

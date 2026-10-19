@@ -10,8 +10,10 @@ import {
   ESTIMATION_BASE_OUTPUT_RATIO,
   ESTIMATION_TOKENS_PER_CARD,
   ESTIMATION_TOKENS_PER_PDF_PAGE,
-  GEMINI_PRICING,
+  CACHED_INPUT_PRICE_RATIO,
+  MODEL_PRICING,
 } from './config'
+import type { Usage } from './llm'
 import type { PdfInfo, SizingPlan } from './types'
 
 export interface CostEstimate {
@@ -39,7 +41,18 @@ export function estimateCost(
       2 *
       factors.output,
   )
-  const [inPrice, outPrice] = GEMINI_PRICING[model] ?? GEMINI_PRICING.default
-  const costUsd = (inputTokens * inPrice + outputTokens * outPrice) / 1_000_000
+  const costUsd = costOf(model, { inputTokens, cachedInputTokens: 0, outputTokens })
   return { inputTokens, outputTokens, costUsd }
+}
+
+/** What a run's usage cost, in USD. */
+export function costOf(model: string, usage: Usage): number {
+  const [inPrice, outPrice] = MODEL_PRICING[model] ?? MODEL_PRICING.default
+  const freshInput = usage.inputTokens - usage.cachedInputTokens
+  return (
+    (freshInput * inPrice +
+      usage.cachedInputTokens * inPrice * CACHED_INPUT_PRICE_RATIO +
+      usage.outputTokens * outPrice) /
+    1_000_000
+  )
 }

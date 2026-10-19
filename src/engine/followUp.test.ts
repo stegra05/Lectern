@@ -72,7 +72,7 @@ const SCRIPT = [
       {
         type: 'function_call',
         id: 'call-add',
-        name: 'add_cards',
+        name: 'add_requested_cards',
         arguments: {
           cards: [
             rawCard('How does B extend A?', 'B builds on the invariants of A.'),
@@ -139,17 +139,17 @@ describe('runFollowUp (scripted)', () => {
       deck,
       conceptMap: CONCEPT_MAP,
       seed: {
-        interactionId: 'i-review',
+        model: 'gemini-3.8-flash',
+        conversation: { provider: 'gemini', interactionId: 'i-review' },
         pendingInput: [
           {
-            type: 'function_result',
+            type: 'tool_result',
             name: 'finish_review',
-            call_id: 'call-finish-review',
-            result: [{ type: 'text', text: 'Review complete.' }],
+            callId: 'call-finish-review',
+            text: 'Review complete.',
           },
         ],
       },
-      model: 'gemini-3.8-flash',
       apiKey: 'test-key',
       fetchFn: makeScriptedFetch(captured),
       emit: (e) => events.push(e),
@@ -192,18 +192,18 @@ describe('runFollowUp (scripted)', () => {
     expect(mission).toContain('add cards on B and on Kant')
     expect(mission).toContain('What is A?') // existing deck listed for dedupe
 
-    // The add_cards verdict reports the silent duplicate drop.
+    // The add_requested_cards verdict reports the silent duplicate drop.
     const secondInput = captured[1].body.input as Array<Record<string, unknown>>
     const feedback = JSON.stringify(secondInput.find((p) => p.type === 'function_result')?.result)
     expect(feedback).toContain('Accepted 2 card(s)')
     expect(feedback).toContain('Duplicates dropped: 1')
 
     // The outcome seed continues the chain: finish_request is answered.
-    expect(outcome.seed.interactionId).toBe('f-finish')
+    expect(outcome.seed.conversation).toEqual({ provider: 'gemini', interactionId: 'f-finish' })
     expect(outcome.seed.pendingInput).toHaveLength(1)
     expect(outcome.seed.pendingInput[0]).toMatchObject({
-      type: 'function_result',
-      call_id: 'call-finish',
+      type: 'tool_result',
+      callId: 'call-finish',
     })
 
     expect(outcome.usage.inputTokens).toBe(200)

@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **OpenAI and Claude, next to Gemini.** Pick a GPT or Claude model in
+  Settings and add a key for its provider; each provider's key has its own
+  keychain entry, and the Gemini key you already saved stays where it is.
+  Errors name the provider they came from and link to its console, rate
+  limits, billing and status pages. A request a model declines on safety
+  grounds now says so, instead of reading as a failed run.
+
+### Changed
+
+- **One engine, three providers.** The pipeline talks to a provider-neutral
+  client; Gemini keeps its server-side conversation, OpenAI chains responses
+  the same way, and Claude carries an append-only transcript whose system
+  prompt and tool set never change mid-run, so its prompt cache holds and the
+  document is billed at the cache-read rate after the first turn. Reported
+  costs count cached input at its discounted price.
+
 ## 2.16.0 (2026-09-24)
 
 ### Added

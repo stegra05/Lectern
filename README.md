@@ -13,7 +13,8 @@
 
 </div>
 
-Drop a lecture PDF on the desk. Lectern has Gemini read the whole document, build
+Drop a lecture PDF on the desk. Lectern has the model you pick (Gemini, GPT or
+Claude) read the whole document, build
 a concept map, and generate flashcards agentically: the model plans its own
 batches, and after each one it sees a coverage ledger of which pages and concepts
 still lack cards. Every card must cite the pages it came from and pass a quality
@@ -38,7 +39,7 @@ every card by hand, so Lectern makes the checking visible instead:
 - **A quality pass at the end.** The model reviews the whole deck and rewrites
   weak cards. Every edit passes the same gate.
 - **Your data, your key.** No account, no server, no subscription. The app calls
-  the Gemini API directly with your key, which lives in the OS keychain. A
+  Gemini, OpenAI or Claude API directly with your key, which lives in the OS keychain. A
   typical 70-page lecture costs between a few cents and about a dollar.
 
 <div align="center">
@@ -75,8 +76,11 @@ cd Lectern && pnpm install && pnpm tauri build
 1. Install [Anki](https://apps.ankiweb.net/) and the
    [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on, and keep Anki
    running.
-2. Get a free [Gemini API key](https://aistudio.google.com/apikey) and add it in
-   Lectern's settings (⌘,). It is stored in your OS keychain, never on disk.
+2. Pick a model in Lectern's settings (⌘,) and add a key for its provider: a free
+   [Gemini key](https://aistudio.google.com/apikey), an
+   [OpenAI key](https://platform.openai.com/api-keys) or a
+   [Claude key](https://platform.claude.com/settings/keys). Keys are stored in
+   your OS keychain, never on disk.
 3. Drop a lecture PDF on the desk, name the target deck, and hit **Generate deck**.
 4. Watch the filmstrip light up. When generation finishes, review and edit the
    cards. Each one shows the pages it came from.
@@ -87,7 +91,7 @@ cd Lectern && pnpm install && pnpm tauri build
 
 ```
 PDF ──▶ concept map ──▶ agentic generation ──▶ quality pass ──▶ your review ──▶ Anki
-        objectives,      Gemini submits card     whole-deck       edit, search,
+        objectives,      the model submits card  whole-deck       edit, search,
         concepts,        batches via tool        review loop;     filter by page,
         relations,       calls; each batch is    every edit       peek at slides
         per page         gated + answered with   re-gated
@@ -95,13 +99,16 @@ PDF ──▶ concept map ──▶ agentic generation ──▶ quality pass �
 ```
 
 The pipeline runs entirely in-process. There is no backend and no account, and
-nothing leaves your machine except the calls to the Gemini API and to your local
+nothing leaves your machine except the calls to the model provider's API and to your local
 Anki. The whole engine is about 6k lines of TypeScript including tests:
 
 ```
 src/engine/          the pipeline (pure TS, no UI imports)
   pipeline.ts        three phases: concept map → agentic generation → reflection
-  gemini.ts          Gemini Interactions API client (upload, tool loop, retry)
+  llm.ts             provider-neutral turn/tool/conversation surface + retry
+  gemini.ts          Gemini adapter (Interactions API, raw fetch)
+  openai.ts          OpenAI adapter (Responses API)
+  anthropic.ts       Claude adapter (Messages API, append-only transcript)
   coverage.ts        the coverage ledger the model steers by
   quality.ts         grounding gate: provenance + quality checklist
   anki.ts            AnkiConnect client, duplicate-safe sync
@@ -120,6 +127,8 @@ pnpm dev              # browser-only dev mode (Tauri APIs fall back to web equiv
 pnpm test             # unit tests (offline)
 pnpm typecheck
 GEMINI_API_KEY=... pnpm vitest run src/engine/pipeline.live.test.ts   # live E2E incl. Anki
+OPENAI_API_KEY=... ANTHROPIC_API_KEY=... pnpm vitest run src/engine/llm.smoke.test.ts  # adapters
+LECTERN_LIVE_MODEL=claude-haiku-5-5 ANTHROPIC_API_KEY=... pnpm vitest run src/engine/pipeline.live.test.ts
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup details and code layout.
