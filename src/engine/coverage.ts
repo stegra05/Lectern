@@ -63,6 +63,16 @@ const cardPageRefs = (card: Card): number[] => {
   return []
 }
 
+/** Cards per cited page, for a deck that has no coverage ledger (slides
+ *  opened without a generation run). */
+export function countCardsPerPage(cards: Card[]): Record<number, number> {
+  const counts: Record<number, number> = {}
+  for (const card of cards) {
+    for (const page of cardPageRefs(card)) counts[page] = (counts[page] ?? 0) + 1
+  }
+  return counts
+}
+
 const cardConceptIds = (card: Card): string[] =>
   card.conceptIds.map((id) => id.trim()).filter((id) => id !== '')
 
