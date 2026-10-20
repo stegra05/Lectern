@@ -99,13 +99,11 @@ const EXPECTED_CARDS_SPREAD = { min: 0.9, max: 1.45 }
 
 const THUMBNAIL_PAGE_LIMIT = 150
 const UNDO_WINDOW_MS = 30_000
-/** Render width for the slide peek panel (2x a ~550px panel). */
-const SLIDE_PEEK_RENDER_WIDTH = 1100
 
 // The open pdf.js document, kept out of the store (not serializable state).
-// Owned by loadPdfFromBytes; used by peekSlide for on-demand full renders.
+// Owned by loadPdfFromBytes; used by the slide peek for its full renders.
 let currentDoc: PDFDocumentProxy | null = null
-const slideRendersInFlight = new Set<number>()
+export const getCurrentPdfDoc = (): PDFDocumentProxy | null => currentDoc
 
 export interface CardComposerInitial {
   modelName?: NoteKind
@@ -225,10 +223,12 @@ interface LecternState {
   pageFilter: number | null
   /** Page shown in the slide peek panel, null when closed. */
   slidePeek: number | null
-  /** Full-size page renders for the peek panel, keyed by page number. */
-  slideRenders: Record<number, string>
   /** Active manual card composer, null when closed. */
   cardComposer: CardComposerInitial | null
+  /** Text currently selected on the peeked slide, '' when none. */
+  selectedSlideText: string
+  /** Slide text handed to the open composer as its answer, until it takes it. */
+  pendingComposerAnswer: string | null
 
   // sync
   syncState: 'idle' | 'syncing' | 'done'
@@ -279,6 +279,9 @@ interface LecternActions {
   openCardComposer: (initial?: Partial<CardComposerInitial>) => void
   closeCardComposer: () => void
   addCard: (draft: CardDraft) => string
+  setSelectedSlideText: (text: string) => void
+  insertIntoComposerAnswer: (text: string) => void
+  clearPendingComposerAnswer: () => void
   /** Open the lecture slides directly in study mode without running AI generation. */
   openPdfViewer: () => void
 
@@ -351,6 +354,7 @@ const freshSession = {
   searchQuery: '',
   pageFilter: null,
   cardComposer: null,
+  pendingComposerAnswer: null,
 } satisfies Partial<LecternState>
 
 export const useLectern = create<LecternState & LecternActions>()((set, get) => {
@@ -666,8 +670,9 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     searchQuery: '',
     pageFilter: null,
     slidePeek: null,
-    slideRenders: {},
     cardComposer: null,
+    selectedSlideText: '',
+    pendingComposerAnswer: null,
 
     syncState: 'idle',
     syncPreview: null,
@@ -778,7 +783,6 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         const pdfInfo = await extractPdfInfo(doc)
         void currentDoc?.loadingTask.destroy().catch(() => {})
         currentDoc = doc
-        slideRendersInFlight.clear()
         // A deck name the user typed survives swapping the PDF; one Lectern
         // suggested from the previous file name follows the new file, so
         // "Replace" doesn't leave last lecture's deck on this lecture.
@@ -793,7 +797,6 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           pdfInfo,
           pageThumbs: {},
           slidePeek: null,
-          slideRenders: {},
           deckName: suggestedDeck,
           existingDeckCount: null,
         })
@@ -1166,7 +1169,13 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         }
       }),
 
-    closeCardComposer: () => set({ cardComposer: null }),
+    closeCardComposer: () => set({ cardComposer: null, pendingComposerAnswer: null }),
+
+    setSelectedSlideText: (text) => set({ selectedSlideText: text }),
+
+    insertIntoComposerAnswer: (text) => set({ pendingComposerAnswer: text }),
+
+    clearPendingComposerAnswer: () => set({ pendingComposerAnswer: null }),
 
     addCard: (draft) => {
       const uid = crypto.randomUUID()
@@ -1230,16 +1239,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     setSearchQuery: (q) => set({ searchQuery: q }),
     setPageFilter: (page) => set({ pageFilter: page }),
 
-    peekSlide: (page) => {
-      set({ slidePeek: page })
-      if (page === null || !currentDoc) return
-      if (get().slideRenders[page] || slideRendersInFlight.has(page)) return
-      slideRendersInFlight.add(page)
-      renderPageThumbnail(currentDoc, page, SLIDE_PEEK_RENDER_WIDTH)
-        .then((url) => set((s) => ({ slideRenders: { ...s.slideRenders, [page]: url } })))
-        .catch(() => {}) // panel falls back to the filmstrip thumbnail
-        .finally(() => slideRendersInFlight.delete(page))
-    },
+    peekSlide: (page) => set({ slidePeek: page }),
 
     // Runs by itself whenever the send bar's card set changes, so the bar can
     // say what the send will actually do ("12 new · 2 updates") without the

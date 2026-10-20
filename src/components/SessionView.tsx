@@ -310,6 +310,7 @@ function CardColumn() {
   const setPageFilter = useLectern((s) => s.setPageFilter)
   const selectedUid = useLectern((s) => s.selectedUid)
   const slidePeek = useLectern((s) => s.slidePeek)
+  const selectedSlideText = useLectern((s) => s.selectedSlideText)
   const openCardComposer = useLectern((s) => s.openCardComposer)
   const listRef = useRef<HTMLDivElement>(null)
   const [showKeys, setShowKeys] = useState(() => !readFlag(REVIEW_KEYS_LEARNED))
@@ -365,7 +366,11 @@ function CardColumn() {
       switch (e.key) {
         case 'n':
           e.preventDefault()
-          state.openCardComposer({ sourcePage: state.slidePeek ?? undefined })
+          state.openCardComposer({
+            sourcePage: state.slidePeek ?? undefined,
+            front: state.selectedSlideText || undefined,
+            excerpt: state.selectedSlideText || undefined,
+          })
           break
         case 'j':
         case 'ArrowDown':
@@ -421,7 +426,13 @@ function CardColumn() {
       {reviewable && (
         <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-6 pt-4 pb-1">
           <button
-            onClick={() => openCardComposer({ sourcePage: pageFilter ?? slidePeek ?? undefined })}
+            onClick={() =>
+              openCardComposer({
+                sourcePage: pageFilter ?? slidePeek ?? undefined,
+                front: selectedSlideText || undefined,
+                excerpt: selectedSlideText || undefined,
+              })
+            }
             className="btn-secondary px-2.5 py-1.5 text-xs text-lamp border-lamp/40 hover:border-lamp"
             title="Create a new flashcard (n)"
           >

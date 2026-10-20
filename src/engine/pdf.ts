@@ -82,3 +82,65 @@ export async function renderPageThumbnail(
     page.cleanup()
   }
 }
+
+export interface PageRender {
+  cancel: () => void
+  /** Resolves with the page's size in PDF points, for its aspect ratio and
+   *  the text layer's `--total-scale-factor` (shown width / page width).
+   *  Rejects once cancelled. */
+  promise: Promise<{ width: number; height: number }>
+}
+
+/**
+ * Render a page once, at a fixed pixel width, and lay its text out as
+ * selectable spans in `textLayer`. Both then scale with CSS alone: the canvas
+ * by its displayed width, the text layer by `--total-scale-factor`, which
+ * pdf.js reads for every span position and font size. Resizing the panel
+ * never renders the page again.
+ */
+export function renderPageWithTextLayer(
+  doc: PDFDocumentProxy,
+  pageNumber: number,
+  canvas: HTMLCanvasElement,
+  textLayer: HTMLElement,
+  pixelWidth: number,
+): PageRender {
+  let cancelled = false
+  let renderTask: { cancel: () => void } | null = null
+  let layer: { cancel: () => void } | null = null
+
+  const promise = (async () => {
+    const page = await doc.getPage(pageNumber)
+    try {
+      const base = page.getViewport({ scale: 1 })
+      if (cancelled) throw new Error('page render cancelled')
+
+      const viewport = page.getViewport({ scale: pixelWidth / base.width })
+      canvas.width = Math.ceil(viewport.width)
+      canvas.height = Math.ceil(viewport.height)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('canvas 2d context unavailable')
+      const task = page.render({ canvas, canvasContext: ctx, viewport })
+      renderTask = task
+
+      textLayer.replaceChildren()
+      const text = new pdfjs.TextLayer({
+        textContentSource: await page.getTextContent(),
+        container: textLayer,
+        viewport: base,
+      })
+      layer = text
+      await Promise.all([task.promise, text.render()])
+      return { width: base.width, height: base.height }
+    } finally {
+      page.cleanup()
+    }
+  })()
+
+  const cancel = () => {
+    cancelled = true
+    renderTask?.cancel()
+    layer?.cancel()
+  }
+  return { cancel, promise }
+}
