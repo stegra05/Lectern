@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { countCardsPerPage } from '../engine/coverage'
 import { renderPageWithTextLayer } from '../engine/pdf'
 import { count } from '../engine/plural'
+import { findQuoteRanges } from '../lib/quoteMatch'
 import { getCurrentPdfDoc, useLectern } from '../state/store'
 
 /** Width the page is rendered at, in canvas pixels: sharp on a 2x display up
@@ -38,6 +39,8 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   const selectedText = useLectern((s) => s.selectedSlideText)
   const setSelectedText = useLectern((s) => s.setSelectedSlideText)
   const insertIntoComposerAnswer = useLectern((s) => s.insertIntoComposerAnswer)
+  const selectedUid = useLectern((s) => s.selectedUid)
+  const setSelectedUid = useLectern((s) => s.setSelectedUid)
   const slideRef = useRef<HTMLDivElement>(null)
   // Where the floating action sits, above the selection, in slide coordinates.
   const [pillAt, setPillAt] = useState<{ x: number; y: number } | null>(null)
@@ -52,6 +55,23 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   })
 
   const pageCount = pdfInfo?.pageCount ?? 0
+
+  // Every card that quotes this slide, so the wording it rests on can be
+  // marked on the slide and lead back to the card.
+  const quotes = useMemo(
+    () =>
+      page === null
+        ? []
+        : cards
+            .filter(
+              (c) =>
+                c.sourceExcerpt?.trim() &&
+                (c.sourcePages.includes(page) ||
+                  (c.sourcePages.length === 0 && c.slideNumber === page)),
+            )
+            .map((c) => ({ uid: c.uid, text: c.sourceExcerpt ?? '' })),
+    [cards, page],
+  )
 
   // ← → step through slides, Esc closes — unless focus is in a field.
   useEffect(() => {
@@ -192,7 +212,13 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         <div ref={slideRef} className="relative">
           <div className="bg-paper shadow-card overflow-hidden rounded-md">
-            <SlideCanvas page={page} fallback={image} />
+            <SlideCanvas
+              page={page}
+              fallback={image}
+              quotes={quotes}
+              activeUid={selectedUid}
+              onQuoteClick={setSelectedUid}
+            />
           </div>
           {selectedText && pillAt && (
             <button
@@ -234,20 +260,42 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   )
 }
 
+interface Quote {
+  uid: string
+  text: string
+}
+
 /**
  * The peeked page as a canvas with pdf.js's selectable text layer on top.
  * The page is rendered once; the text layer follows the shown width through
  * `--total-scale-factor`, so resizing never renders it again. Until the
  * render lands, the filmstrip thumbnail stands in.
  *
- * The selection is drawn here, under the text layer, as one box per line.
+ * The selection is drawn here as one box per line, and wording quoted by a
+ * card is marked in amber. Both sit under the text layer, so the text stays
+ * selectable. Hovering a mark strengthens that card's marks; clicking it
+ * selects the card, which scrolls it into view.
  */
-function SlideCanvas({ page, fallback }: { page: number; fallback?: string }) {
+function SlideCanvas({
+  page,
+  fallback,
+  quotes,
+  activeUid,
+  onQuoteClick,
+}: {
+  page: number
+  fallback?: string
+  quotes: Quote[]
+  activeUid: string | null
+  onQuoteClick: (uid: string) => void
+}) {
   const frameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
+  const marksRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<{ page: number; width: number; height: number } | null>(null)
   const [selection, setSelection] = useState<Box[]>([])
+  const [hoveredUid, setHoveredUid] = useState<string | null>(null)
 
   useEffect(() => {
     const doc = getCurrentPdfDoc()
@@ -300,11 +348,54 @@ function SlideCanvas({ page, fallback }: { page: number; fallback?: string }) {
   }, [])
 
   const ready = size?.page === page
+
+  // Marks are drawn like the text layer itself: outside React, once per
+  // render or change of quotes, in percent of the frame so they scale with it.
+  useEffect(() => {
+    const frame = frameRef.current
+    const text = textRef.current
+    const marks = marksRef.current
+    if (!frame || !text || !marks) return
+    marks.replaceChildren(...(ready ? quoteBoxes(frame, text, quotes) : []))
+  }, [ready, quotes])
+
+  useEffect(() => {
+    const marks = marksRef.current
+    if (!marks) return
+    for (const box of marks.querySelectorAll<HTMLElement>('[data-uid]')) {
+      const strong = box.dataset.uid === activeUid || box.dataset.uid === hoveredUid
+      box.classList.toggle('bg-lamp-deep/50', strong)
+      box.classList.toggle('bg-lamp-deep/25', !strong)
+    }
+  }, [activeUid, hoveredUid, ready, quotes])
+
+  const quoteAt = (e: React.MouseEvent): string | null => {
+    for (const box of marksRef.current?.children ?? []) {
+      const r = box.getBoundingClientRect()
+      if (
+        e.clientX >= r.left &&
+        e.clientX <= r.right &&
+        e.clientY >= r.top &&
+        e.clientY <= r.bottom
+      )
+        return (box as HTMLElement).dataset.uid ?? null
+    }
+    return null
+  }
+
   return (
     <div
       ref={frameRef}
       className="relative"
       style={ready ? { aspectRatio: `${size.width} / ${size.height}` } : undefined}
+      onMouseMove={(e) => setHoveredUid(quoteAt(e))}
+      onMouseLeave={() => setHoveredUid(null)}
+      onClick={(e) => {
+        const uid = quoteAt(e)
+        // A drag that selected text is a selection, not a click on the mark.
+        if (uid && window.getSelection()?.isCollapsed !== false) onQuoteClick(uid)
+      }}
+      title={hoveredUid ? 'Quoted by a card · click to show it' : undefined}
     >
       {!ready &&
         (fallback ? (
@@ -318,6 +409,7 @@ function SlideCanvas({ page, fallback }: { page: number; fallback?: string }) {
         aria-label={`Slide ${page}`}
         className={`absolute inset-0 h-full w-full ${ready ? '' : 'invisible'}`}
       />
+      <div ref={marksRef} aria-hidden className="pointer-events-none absolute inset-0" />
       {/* Solid boxes in one translucent layer: where two lines' boxes overlap,
           the colour stays even instead of doubling. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-40">
@@ -334,7 +426,11 @@ function SlideCanvas({ page, fallback }: { page: number; fallback?: string }) {
           />
         ))}
       </div>
-      <div ref={textRef} className={`textLayer ${ready ? '' : 'invisible'}`} />
+      <div
+        ref={textRef}
+        data-over-quote={hoveredUid ? '' : undefined}
+        className={`textLayer ${ready ? '' : 'invisible'}`}
+      />
     </div>
   )
 }
@@ -355,6 +451,57 @@ function frameBoxes(frame: HTMLElement, rects: DOMRect[]): Box[] {
     width: (r.width / f.width) * 100,
     height: (r.height / f.height) * 100,
   }))
+}
+
+const MARK_CLASS = 'absolute rounded-sm border-b-2 border-lamp-deep transition-colors'
+
+/**
+ * One box per line of each quote's match in the text layer, in percent of
+ * the frame, merged like the selection so the spaces are marked too.
+ */
+function quoteBoxes(frame: HTMLElement, textLayer: HTMLElement, quotes: Quote[]): HTMLElement[] {
+  // The slide's text as the layer shows it, with where each text node starts.
+  const nodes: { node: Text; start: number }[] = []
+  let slideText = ''
+  const walker = document.createTreeWalker(
+    textLayer,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+  )
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n instanceof HTMLBRElement) slideText += '\n'
+    else if (n instanceof Text && n.data) {
+      if (slideText && !slideText.endsWith('\n')) slideText += ' '
+      nodes.push({ node: n, start: slideText.length })
+      slideText += n.data
+    }
+  }
+  const position = (index: number) => {
+    let at = nodes[0]
+    for (const n of nodes) if (n.start <= index) at = n
+    return { node: at.node, offset: Math.min(index - at.start, at.node.data.length) }
+  }
+
+  const boxes: HTMLElement[] = []
+  for (const quote of quotes) {
+    for (const { start, end } of findQuoteRanges(slideText, quote.text)) {
+      const range = document.createRange()
+      const from = position(start)
+      const to = position(end - 1)
+      range.setStart(from.node, from.offset)
+      range.setEnd(to.node, to.offset + 1)
+      for (const line of frameBoxes(frame, mergeLines([...range.getClientRects()]))) {
+        const box = document.createElement('div')
+        box.dataset.uid = quote.uid
+        box.className = MARK_CLASS
+        box.style.left = `${line.left}%`
+        box.style.top = `${line.top}%`
+        box.style.width = `${line.width}%`
+        box.style.height = `${line.height}%`
+        boxes.push(box)
+      }
+    }
+  }
+  return boxes
 }
 
 /**
