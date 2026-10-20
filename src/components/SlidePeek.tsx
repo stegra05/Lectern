@@ -9,6 +9,34 @@ import { getCurrentPdfDoc, useLectern } from '../state/store'
  *  to a ~550px panel. CSS scales it to the panel from there. */
 const SLIDE_RENDER_WIDTH = 1100
 
+/** The panel's width, dragged or picked from the presets, kept per viewer. */
+const PEEK_WIDTH_KEY = 'lectern.slidePeekWidth'
+const DEFAULT_PEEK_WIDTH = 480
+const MIN_PEEK_WIDTH = 320
+/** Leaves the card column room to stay usable. */
+const MAX_PEEK_SHARE = 0.78
+
+const clampWidth = (width: number) =>
+  Math.round(Math.max(MIN_PEEK_WIDTH, Math.min(window.innerWidth * MAX_PEEK_SHARE, width)))
+
+// Storage can be missing or blocked; the panel then opens at its default.
+function readPeekWidth(): number {
+  try {
+    const stored = Number(localStorage.getItem(PEEK_WIDTH_KEY))
+    return stored >= MIN_PEEK_WIDTH ? clampWidth(stored) : DEFAULT_PEEK_WIDTH
+  } catch {
+    return DEFAULT_PEEK_WIDTH
+  }
+}
+
+function writePeekWidth(width: number): void {
+  try {
+    localStorage.setItem(PEEK_WIDTH_KEY, String(width))
+  } catch {
+    // The width just won't be remembered.
+  }
+}
+
 /** True when the event originates in a place that owns its own keystrokes. */
 export function isTypingTarget(target: EventTarget | null): boolean {
   return (
@@ -44,6 +72,12 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   const slideRef = useRef<HTMLDivElement>(null)
   // Where the floating action sits, above the selection, in slide coordinates.
   const [pillAt, setPillAt] = useState<{ x: number; y: number } | null>(null)
+  const [width, setWidth] = useState(readPeekWidth)
+  const [resizing, setResizing] = useState(false)
+  // The text of the rendered slide, tagged with its page so a slide that has
+  // not finished rendering never shows the previous one's text.
+  const [slideText, setSlideText] = useState<{ page: number; text: string } | null>(null)
+  const [showText, setShowText] = useState(false)
   // The quote the selected card rests on, when it cites this page. It used to
   // sit behind a "Source excerpt" toggle on every card; here it is read next
   // to the slide it claims to come from.
@@ -129,12 +163,36 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
     if (sel && slideRef.current?.contains(sel.anchorNode)) sel.removeAllRanges()
   }, [page])
 
+  // Dragging the left edge resizes the panel. The slide follows by CSS alone
+  // (see SlideCanvas), so this re-renders the panel, never the page.
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setResizing(true)
+    const widthAt = (x: number) => clampWidth(window.innerWidth - x)
+    const onMove = (move: MouseEvent) => setWidth(widthAt(move.clientX))
+    const onUp = (up: MouseEvent) => {
+      setResizing(false)
+      setWidth(widthAt(up.clientX))
+      writePeekWidth(widthAt(up.clientX))
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+  const pickWidth = (share: number) => {
+    const picked = clampWidth(window.innerWidth * share)
+    setWidth(picked)
+    writePeekWidth(picked)
+  }
+
   if (page === null || !pdfInfo) return null
 
   const image = pageThumbs[page]
   // Without a generation run there is no coverage ledger to count from.
   const cardsHere = (coverage?.cardsPerPage ?? countCardsPerPage(cards))[page] ?? 0
   const filteredHere = pageFilter === page
+  const text = slideText?.page === page ? slideText.text : null
 
   const consumeSelection = () => {
     window.getSelection()?.removeAllRanges()
@@ -161,8 +219,18 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   return (
     <aside
       aria-label={`Slide ${page} of ${pageCount}`}
-      className="border-desk-edge/60 rise-in flex w-[min(36vw,480px)] shrink-0 flex-col border-l"
+      style={{ width }}
+      className={`border-desk-edge/60 rise-in relative flex shrink-0 flex-col border-l ${
+        resizing ? 'select-none' : ''
+      }`}
     >
+      <div
+        onMouseDown={startResize}
+        className="group absolute inset-y-0 -left-1.5 z-30 w-3 cursor-col-resize"
+        title="Drag to resize"
+      >
+        <div className="group-hover:bg-lamp mx-auto h-full w-0.5 transition-colors" />
+      </div>
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
         <span className="eyebrow">
           Slide {page} / {pageCount}
@@ -171,6 +239,22 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
           · {cardsHere > 0 ? count(cardsHere, 'card') : 'no cards yet'}
         </span>
         <div className="flex-1" />
+        <div
+          className="border-desk-edge/70 flex rounded-sm border"
+          role="group"
+          aria-label="Panel width"
+        >
+          {[0.35, 0.5, 0.7].map((share) => (
+            <button
+              key={share}
+              onClick={() => pickWidth(share)}
+              className="font-data text-chalk-dim hover:text-chalk px-1.5 py-0.5 text-2xs"
+              title={`Panel at ${share * 100}% of the window`}
+            >
+              {share * 100}%
+            </button>
+          ))}
+        </div>
         <button
           onClick={newCard}
           className="btn-secondary px-2 py-0.5 text-xs text-lamp border-lamp/40 hover:border-lamp"
@@ -218,6 +302,7 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
               quotes={quotes}
               activeUid={selectedUid}
               onQuoteClick={setSelectedUid}
+              onText={setSlideText}
             />
           </div>
           {selectedText && pillAt && (
@@ -242,6 +327,27 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
               {excerpt}
             </blockquote>
           </figure>
+        )}
+
+        {text !== null && (
+          <section className="border-desk-edge/60 mt-3 overflow-hidden rounded-md border">
+            <button
+              onClick={() => setShowText((v) => !v)}
+              aria-expanded={showText}
+              className="font-data text-chalk-dim hover:text-chalk flex w-full justify-between px-3 py-1.5 text-xs"
+            >
+              <span>
+                Slide text ·{' '}
+                {text.trim() ? count(text.split(/\s+/).filter(Boolean).length, 'word') : 'none'}
+              </span>
+              <span>{showText ? 'Hide' : 'Read'}</span>
+            </button>
+            {showText && (
+              <div className="bg-paper text-ink font-card border-desk-edge/60 border-t p-3 text-sm leading-relaxed whitespace-pre-wrap">
+                <QuotedText text={text} quotes={quotes} onQuoteClick={setSelectedUid} />
+              </div>
+            )}
+          </section>
         )}
 
         {interactive && (
@@ -282,12 +388,14 @@ function SlideCanvas({
   quotes,
   activeUid,
   onQuoteClick,
+  onText,
 }: {
   page: number
   fallback?: string
   quotes: Quote[]
   activeUid: string | null
   onQuoteClick: (uid: string) => void
+  onText: (slide: { page: number; text: string }) => void
 }) {
   const frameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -306,12 +414,18 @@ function SlideCanvas({
     // A render overtaken by the next page (or by StrictMode's second mount)
     // must not report: its layer is empty or about to be replaced.
     let current = true
-    render.promise.then((dims) => current && setSize({ page, ...dims })).catch(() => {}) // thumbnail stays
+    render.promise
+      .then((dims) => {
+        if (!current) return
+        setSize({ page, ...dims })
+        onText({ page, text: readTextLayer(text).text })
+      })
+      .catch(() => {}) // thumbnail stays
     return () => {
       current = false
       render.cancel()
     }
-  }, [page])
+  }, [page, onText])
 
   useEffect(() => {
     const frame = frameRef.current
@@ -453,6 +567,31 @@ function frameBoxes(frame: HTMLElement, rects: DOMRect[]): Box[] {
   }))
 }
 
+/**
+ * The slide's text as its text layer shows it, line breaks included, with
+ * where each text node starts in it.
+ */
+function readTextLayer(textLayer: HTMLElement): {
+  text: string
+  nodes: { node: Text; start: number }[]
+} {
+  const nodes: { node: Text; start: number }[] = []
+  let text = ''
+  const walker = document.createTreeWalker(
+    textLayer,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+  )
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n instanceof HTMLBRElement) text += '\n'
+    else if (n instanceof Text && n.data) {
+      if (text && !text.endsWith('\n')) text += ' '
+      nodes.push({ node: n, start: text.length })
+      text += n.data
+    }
+  }
+  return { text, nodes }
+}
+
 const MARK_CLASS = 'absolute rounded-sm border-b-2 border-lamp-deep transition-colors'
 
 /**
@@ -460,21 +599,7 @@ const MARK_CLASS = 'absolute rounded-sm border-b-2 border-lamp-deep transition-c
  * the frame, merged like the selection so the spaces are marked too.
  */
 function quoteBoxes(frame: HTMLElement, textLayer: HTMLElement, quotes: Quote[]): HTMLElement[] {
-  // The slide's text as the layer shows it, with where each text node starts.
-  const nodes: { node: Text; start: number }[] = []
-  let slideText = ''
-  const walker = document.createTreeWalker(
-    textLayer,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-  )
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    if (n instanceof HTMLBRElement) slideText += '\n'
-    else if (n instanceof Text && n.data) {
-      if (slideText && !slideText.endsWith('\n')) slideText += ' '
-      nodes.push({ node: n, start: slideText.length })
-      slideText += n.data
-    }
-  }
+  const { text: slideText, nodes } = readTextLayer(textLayer)
   const position = (index: number) => {
     let at = nodes[0]
     for (const n of nodes) if (n.start <= index) at = n
@@ -527,4 +652,46 @@ function mergeLines(rects: DOMRect[]): DOMRect[] {
     line.y = top
   }
   return lines
+}
+
+/**
+ * The slide's text for reading, with the wording cards quote marked the same
+ * way as on the slide. Clicking a mark selects its card.
+ */
+function QuotedText({
+  text,
+  quotes,
+  onQuoteClick,
+}: {
+  text: string
+  quotes: Quote[]
+  onQuoteClick: (uid: string) => void
+}) {
+  if (!text.trim()) return <span className="text-ink-faint">This slide has no text.</span>
+
+  // Where two cards quote overlapping wording, the earlier mark wins.
+  const marks: { start: number; end: number; uid: string }[] = []
+  const found = quotes
+    .flatMap((q) => findQuoteRanges(text, q.text).map((r) => ({ ...r, uid: q.uid })))
+    .sort((a, b) => a.start - b.start)
+  for (const m of found) if (m.start >= (marks.at(-1)?.end ?? 0)) marks.push(m)
+
+  const parts: React.ReactNode[] = []
+  let at = 0
+  for (const m of marks) {
+    if (m.start > at) parts.push(text.slice(at, m.start))
+    parts.push(
+      <mark
+        key={m.start}
+        onClick={() => onQuoteClick(m.uid)}
+        className="bg-lamp/20 text-ink border-lamp-deep hover:bg-lamp/35 cursor-pointer rounded-sm border-b px-0.5 font-medium transition-colors"
+        title="Quoted by a card · click to show it"
+      >
+        {text.slice(m.start, m.end)}
+      </mark>,
+    )
+    at = m.end
+  }
+  parts.push(text.slice(at))
+  return <>{parts}</>
 }
