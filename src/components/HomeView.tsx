@@ -51,6 +51,7 @@ export function HomeView() {
   const hasApiKey = useLectern((s) => s.hasApiKey)
   const openSettings = useLectern((s) => s.openSettings)
   const startGeneration = useLectern((s) => s.startGeneration)
+  const openPdfViewer = useLectern((s) => s.openPdfViewer)
   const existingDeckCount = useLectern((s) => s.existingDeckCount)
   const extendDeck = useLectern((s) => s.extendDeck)
   const setExtendDeck = useLectern((s) => s.setExtendDeck)
@@ -275,13 +276,22 @@ export function HomeView() {
                 {estimate &&
                   ` · ~${formatTokens(estimate.inputTokens + estimate.outputTokens)} tokens · ~$${estimate.costUsd.toFixed(2)}`}
               </p>
-              <button
-                onClick={() => void startGeneration()}
-                disabled={cannotGenerate}
-                className="btn-primary px-5 py-2.5"
-              >
-                {extending ? 'Extend deck' : 'Generate deck'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => void openPdfViewer()}
+                  className="btn-secondary px-4 py-2.5"
+                  title="Open the lecture slides directly to study and create cards by hand"
+                >
+                  View slides
+                </button>
+                <button
+                  onClick={() => void startGeneration()}
+                  disabled={cannotGenerate}
+                  className="btn-primary px-5 py-2.5"
+                >
+                  {extending ? 'Extend deck' : 'Generate deck'}
+                </button>
+              </div>
             </div>
             {!hasApiKey ? (
               <p className="-mt-3 text-right text-xs">

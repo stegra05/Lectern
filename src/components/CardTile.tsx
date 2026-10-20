@@ -32,6 +32,7 @@ export const CardTile = memo(function CardTile({
   const removeCard = useLectern((s) => s.removeCard)
   const peekSlide = useLectern((s) => s.peekSlide)
   const setCardSyncExcluded = useLectern((s) => s.setCardSyncExcluded)
+  const conceptMap = useLectern((s) => s.conceptMap)
   const ref = useRef<HTMLElement>(null)
   const isEditing = editingUid === card.uid
   const needsAttention = card.qualityScore < QUALITY_ATTENTION_THRESHOLD
@@ -70,11 +71,17 @@ export const CardTile = memo(function CardTile({
         <CardEditorInline card={card} />
       ) : (
         <>
-          {card.slideTopic && (
+          {card.slideTopic ? (
             <div className="font-data text-ink-soft mb-2 text-2xs tracking-wide uppercase">
               {card.slideTopic}
             </div>
-          )}
+          ) : card.conceptIds.length > 0 && conceptMap ? (
+            <div className="font-data text-ink-soft mb-2 text-2xs tracking-wide uppercase">
+              {card.conceptIds
+                .map((id) => conceptMap.concepts.find((c) => c.id === id)?.name ?? id)
+                .join(' · ')}
+            </div>
+          ) : null}
           <CardBody
             card={card}
             showClozeAnswer={showClozeAnswer}
@@ -104,6 +111,14 @@ export const CardTile = memo(function CardTile({
                     </button>
                   ))}
                 </>
+              )}
+              {card.manual && (
+                <span
+                  className="bg-lamp/15 text-lamp-ink rounded-sm px-1.5 py-px border border-lamp/30"
+                  title="Created by hand during this session."
+                >
+                  manual card
+                </span>
               )}
               {card.outsideSource && (
                 <span
