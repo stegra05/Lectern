@@ -19,6 +19,9 @@ export interface Card {
   slideNumber?: number
   sourcePages: number[]
   conceptIds: string[]
+  /** Concept-map facets the card tests ("c-a#2"). Each one's concept is in
+   *  conceptIds too. Cards read back from Anki have none. */
+  facetIds: string[]
   relationKeys: string[]
   rationale?: string
   sourceExcerpt?: string
@@ -59,7 +62,14 @@ export interface Concept {
   importance: Importance
   difficulty: Difficulty
   pageReferences: number[]
+  /** The distinct facts the material gives this concept to test, as short
+   *  labels, one card each at standard depth. The deck size is built from
+   *  them, and the ledger names them when the concept is short. */
+  facets: string[]
 }
+
+/** How deep a deck goes. Scales every concept's card budget. */
+export type CardDensity = 'overview' | 'standard' | 'thorough'
 
 export interface Relation {
   source: string
@@ -70,6 +80,11 @@ export interface Relation {
 
 export const relationKeyOf = (r: Pick<Relation, 'source' | 'type' | 'target'>): string =>
   `${r.source}|${r.type}|${r.target}`
+
+/** A facet's id: its concept's id and its place in the concept's facet list,
+ *  counted from 1 ("c-a#2"). Derived rather than asked for, so the concept
+ *  map schema stays as it is. */
+export const facetIdOf = (conceptId: string, index: number): string => `${conceptId}#${index + 1}`
 
 export type DocumentType = 'slides' | 'script' | 'mixed'
 
@@ -99,6 +114,12 @@ export interface CoverageCatalog {
   pagesByConcept: Map<string, number[]>
   conceptNames: Map<string, string>
   pageCount: number
+  /** concept id -> cards it should get at the run's density (0 = skip) */
+  budgets: Map<string, number>
+  /** concept id -> the facts it has to test */
+  facetsByConcept: Map<string, string[]>
+  /** facet id -> its concept and label */
+  facets: Map<string, { conceptId: string; label: string }>
 }
 
 export interface CoverageData {
@@ -119,6 +140,16 @@ export interface CoverageData {
   /** Pages with more than SATURATION_CARDS_PER_PAGE cards */
   saturatedPages: number[]
   cardsPerPage: Record<number, number>
+  /** concept id -> cards teaching it: claimed by id, or for cards read back
+   *  from Anki (which carry no ids) by page overlap */
+  cardsByConcept: Record<string, number>
+  /** Concepts with fewer cards than their budget, most important first */
+  underBudget: string[]
+  /** facet id -> cards that declare it. Cards read back from Anki declare
+   *  none: they only ever count for concepts, by page. */
+  cardsByFacet: Record<string, number>
+  /** Facets of under-budget concepts that no card tests, in underBudget order */
+  untestedFacets: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -173,9 +204,11 @@ export type QualityIssue =
   | 'points_at_source'
   | 'excerpt_repeats_answer'
   | 'excerpt_not_on_cited_page'
+  | 'answer_not_on_cited_page'
 
 /** Why a submitted card did not join the deck. */
-export type RejectionReason = QualityIssue | 'invalid_structure' | 'budget_exhausted'
+export type RejectionReason =
+  QualityIssue | 'invalid_structure' | 'budget_exhausted' | 'facet_already_tested'
 
 export interface GateVerdict {
   pass: boolean
@@ -230,6 +263,8 @@ export type PipelineSink = (event: PipelineEvent) => void
 // ---------------------------------------------------------------------------
 
 export interface Settings {
+  /** How deep decks go; chosen on the home screen and remembered. */
+  cardDensity: CardDensity
   /** Model id, e.g. "gemini-3.8-flash"; it also picks the provider. */
   model: string
   ankiUrl: string

@@ -326,3 +326,26 @@ describe('AnthropicClient', () => {
     expect(String(fetchFn.mock.calls[0][0])).toContain('/v1/files/file_1')
   })
 })
+
+describe('AnthropicClient spend limits', () => {
+  it('reads a reached usage limit as a budget problem, not a refused request', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: 'error',
+          error: {
+            type: 'invalid_request_error',
+            message:
+              'You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.',
+          },
+        }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    const error = await new AnthropicClient('key', fetchFn)
+      .turn({ model: 'claude-haiku-5-5', input: [{ type: 'text', text: 'x' }] })
+      .catch((e: unknown) => e)
+    expect((error as LlmError).kind).toBe('spending_cap')
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+})

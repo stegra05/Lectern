@@ -223,7 +223,9 @@ const toLlmError = (e: unknown): LlmError =>
 
 function kindFor(status: number, message: string): LlmErrorKind {
   if (status === 401 || status === 403) return 'key_rejected'
-  if (/credit balance|spend limit|billing/i.test(message)) return 'spending_cap'
+  // A workspace spend limit comes back as a 400: "You have reached your
+  // specified API usage limits. You will regain access on …".
+  if (/credit balance|spend limit|usage limits?|billing/i.test(message)) return 'spending_cap'
   if (status === 429) return rateLimitKind(message)
   // 529 is "overloaded": a server-side condition like any 5xx.
   if (status >= 500) return 'server'

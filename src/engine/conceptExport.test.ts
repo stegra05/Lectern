@@ -11,6 +11,7 @@ const map: ConceptMap = {
       importance: 'high',
       difficulty: 'foundational',
       pageReferences: [12, 13, 14, 18],
+      facets: [],
     },
     {
       id: 'lr',
@@ -18,6 +19,7 @@ const map: ConceptMap = {
       importance: 'medium',
       difficulty: 'intermediate',
       pageReferences: [14],
+      facets: [],
     },
     {
       id: 'bg',
@@ -25,6 +27,7 @@ const map: ConceptMap = {
       importance: 'low',
       difficulty: 'foundational',
       pageReferences: [],
+      facets: [],
     },
   ],
   relations: [

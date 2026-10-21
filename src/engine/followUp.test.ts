@@ -19,6 +19,7 @@ const CONCEPT_MAP: ConceptMap = {
       importance: 'high',
       difficulty: 'foundational',
       pageReferences: [1],
+      facets: [],
     },
     {
       id: 'c-b',
@@ -26,6 +27,7 @@ const CONCEPT_MAP: ConceptMap = {
       importance: 'medium',
       difficulty: 'intermediate',
       pageReferences: [2],
+      facets: [],
     },
   ],
   relations: [{ source: 'c-a', type: 'relates_to', target: 'c-b', pageReferences: [1] }],
@@ -42,6 +44,7 @@ const EXISTING: Card = {
   fields: { Front: 'What is A?', Back: 'A is the first concept.' },
   sourcePages: [1],
   conceptIds: ['c-a'],
+  facetIds: [],
   relationKeys: [],
   rationale: 'Covers a core concept.',
   sourceExcerpt: 'The slide defines A.',

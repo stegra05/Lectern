@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ankiCardCount,
+  answerIsOnPages,
   cardKey,
   evaluateCard,
   findNearDuplicate,
@@ -16,6 +17,7 @@ const makeCard = (overrides: Partial<Card> = {}): Card => ({
   fields: {},
   sourcePages: [],
   conceptIds: [],
+  facetIds: [],
   relationKeys: [],
   qualityScore: 0,
   qualityIssues: [],
@@ -169,6 +171,7 @@ describe('normalizeCardPayload', () => {
       slide_number: '12',
       source_pages: ['3', 3, 4.0, 0, -1, 'junk'],
       concept_ids: 'c1, c2, ,c3',
+      facet_ids: ['c1#1', ' c2#2 ', ''],
       relation_keys: ['a|b|c'],
       slide_topic: ' Enzymes ',
       rationale: 'Key concept.',
@@ -180,10 +183,21 @@ describe('normalizeCardPayload', () => {
     expect(result?.slideNumber).toBe(12)
     expect(result?.sourcePages).toEqual([3, 4])
     expect(result?.conceptIds).toEqual(['c1', 'c2', 'c3'])
+    expect(result?.facetIds).toEqual(['c1#1', 'c2#2'])
     expect(result?.relationKeys).toEqual(['a|b|c'])
     expect(result?.slideTopic).toBe('Enzymes')
     expect(result?.rationale).toBe('Key concept.')
     expect(result?.sourceExcerpt).toBe('From page 3.')
+  })
+
+  it('reads facet ids in either spelling, and none when absent or null', () => {
+    const base = { model_name: 'Basic', fields: { Front: 'Q?' } }
+    expect(normalizeCardPayload({ ...base, facetIds: 'c1#1, c1#2' })?.facetIds).toEqual([
+      'c1#1',
+      'c1#2',
+    ])
+    expect(normalizeCardPayload({ ...base, facet_ids: null })?.facetIds).toEqual([])
+    expect(normalizeCardPayload(base)?.facetIds).toEqual([])
   })
 
   it('accepts fields as a record, dropping null values', () => {
@@ -487,5 +501,88 @@ describe('evaluateCard — provenanceOptional', () => {
       { provenanceOptional: true },
     )
     expect(broken.failures).toContain('cloze_without_deletion')
+  })
+})
+
+describe('answerIsOnPages', () => {
+  const pages = [
+    'Min-max normalization rescales every feature to the range zero to one using its minimum and maximum. ' +
+      'It keeps the shape of the distribution and suits features without heavy outliers, ' +
+      'which would otherwise squeeze every other value into a narrow band.',
+  ]
+
+  it('accepts an answer that paraphrases the page', () => {
+    expect(
+      answerIsOnPages(
+        'It rescales each feature into zero to one with its minimum and maximum.',
+        [1],
+        pages,
+      ),
+    ).toBe(true)
+  })
+
+  it('flags an answer that brings its own material', () => {
+    expect(
+      answerIsOnPages(
+        'Outliers compress the remaining values, so gradients explode during backpropagation.',
+        [1],
+        pages,
+      ),
+    ).toBe(false)
+  })
+
+  it('matches inflected and compound forms by their stem', () => {
+    expect(
+      answerIsOnPages(
+        'Schokoladenzysten entstehen bei Endometriose',
+        [1],
+        [
+          'Endometriose kann am Ovar Schokoladenzyste bilden, die bei Ruptur entstehen kann und weitere Befunde zeigt. ' +
+            'Sie betrifft Frauen im gebärfähigen Alter und verursacht zyklische Schmerzen sowie Sterilität.',
+        ],
+      ),
+    ).toBe(true)
+  })
+
+  it('stays silent without enough page text to compare against', () => {
+    expect(answerIsOnPages('A long enough answer here', [1], [''])).toBeNull()
+    // A diagram slide: a title and little else.
+    expect(
+      answerIsOnPages(
+        'The cake: unsupervised learning is the bulk',
+        [1],
+        ['LeCun’s cake analogy for learning'],
+      ),
+    ).toBeNull()
+  })
+
+  it('leaves formulas out of the comparison', () => {
+    expect(
+      answerIsOnPages(
+        String.raw`\(x' = \frac{x - \min}{\max - \min}\) rescales every feature to zero to one`,
+        [1],
+        pages,
+      ),
+    ).toBe(true)
+  })
+
+  it('reads prose between two dollar amounts as prose, not math', () => {
+    expect(
+      answerIsOnPages(
+        'Outliers cost $5 because gradients explode during backpropagation, not $10.',
+        [1],
+        pages,
+      ),
+    ).toBe(false)
+  })
+
+  it('stays silent when one cited page carries its content in a figure', () => {
+    expect(
+      answerIsOnPages(
+        'Outliers compress the remaining values, so gradients explode during backpropagation.',
+        [1, 2],
+        [...pages, 'Diagram: outliers'],
+      ),
+    ).toBeNull()
   })
 })

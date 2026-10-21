@@ -19,7 +19,7 @@
 
 import { createClient } from './clients'
 import {
-  DEPTH_FINISH_ATTEMPTS,
+  EARLY_FINISH_ATTEMPTS,
   MAX_GENERATION_ROUNDS,
   MAX_REFLECTION_ROUNDS,
   NON_PROGRESS_MAX_ROUNDS,
@@ -33,12 +33,17 @@ import {
 } from './config'
 import { UsageMeter } from './cost'
 import {
+  budgetShortfall,
   buildCoverageCatalog,
   buildDepthGapText,
+  buildFacetCatalogText,
   buildGenerationGapText,
   buildReflectionGapText,
   computeCoverageData,
+  conceptsWithUntestedFacets,
+  describeFacets,
   isCoverageSufficient,
+  repeatsTestedFacets,
 } from './coverage'
 import {
   parseJsonPayload,
@@ -60,7 +65,7 @@ import {
   parseUpdateCardArgs,
 } from './schemas'
 import { looksLikeSameSet } from './ankiImport'
-import { computeSizingPlan, conceptTarget } from './pacing'
+import { allocateBudgets, computeSizingPlan, conceptTarget } from './pacing'
 import { count } from './plural'
 import {
   buildReviewFeedback,
@@ -82,6 +87,7 @@ import {
 } from './quality'
 import type {
   Card,
+  CardDensity,
   ConceptMap,
   CoverageCatalog,
   CoverageData,
@@ -96,9 +102,9 @@ export interface PipelineOptions {
   pdfInfo: PdfInfo
   fileName: string
   focusPrompt?: string
-  /** User override for total deck size; otherwise sized from the document.
-   *  On an extend run this is the number of cards to *add*. */
-  userTargetCards?: number
+  /** How deep the deck goes. The size comes from the concept map's card
+   *  budgets at this density; on an extend run, from what the deck lacks. */
+  density: CardDensity
   /** Cards already in the target Anki deck (extend runs). They seed the
    *  dedupe set and the coverage ledger so the run fills gaps instead of
    *  repeating work, and are never edited or removed by the model. */
@@ -183,8 +189,22 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   ctx = { language: conceptMap.language || 'en', focusPrompt: opts.focusPrompt }
 
   const reconciled = reconcilePdfInfo(opts.pdfInfo, conceptMap)
+  // The ledger counts against the pages the file really has, not the page
+  // count the model reported for it.
+  const budgets = allocateBudgets(conceptMap, opts.density)
+  const catalog = buildCoverageCatalog(conceptMap, reconciled.pageCount, budgets)
+  // An extend run starts from the deck that is already in Anki: the run's
+  // target is what that deck still lacks against the budgets, on top of it.
+  const existing = adoptExistingCards(opts.existingCards ?? [], conceptMap.slideSetName)
+  const inheritedCount = existing.cards.length
+  const budgetSum =
+    inheritedCount > 0
+      ? budgetShortfall(catalog, computeCoverageData(catalog, existing.cards))
+      : [...budgets.values()].reduce((sum, n) => sum + n, 0)
   const sizing = computeSizingPlan(reconciled, {
-    userTargetCards: opts.userTargetCards,
+    density: opts.density,
+    budgetSum,
+    extending: inheritedCount > 0,
     forceMode:
       conceptMap.documentType === 'script'
         ? 'script'
@@ -192,9 +212,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           ? 'slides'
           : undefined,
   })
-  // The ledger counts against the pages the file really has, not the page
-  // count the model reported for it.
-  const catalog = buildCoverageCatalog(conceptMap, reconciled.pageCount)
   const gateOptions: EvaluateOptions = {
     pageCount: reconciled.pageCount,
     pageTexts: opts.pdfInfo.pageTexts,
@@ -211,11 +228,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
   // --- Phase 2: agentic generation loop -------------------------------------
   emit({ type: 'phase', phase: 'generating' })
-  // An extend run starts from the deck that is already in Anki: those cards
-  // count against nothing the user asked for, so the sizing target buys new
-  // cards on top of them.
-  const existing = adoptExistingCards(opts.existingCards ?? [], conceptMap.slideSetName)
-  const inheritedCount = existing.cards.length
   const cards: Card[] = [...existing.cards]
   const seenKeys = new Set<string>(existing.cards.map((card) => cardKey(card)))
   const cardCap = sizing.totalCardCap + inheritedCount
@@ -250,16 +262,17 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   // outward to, so the run's budget buys depth instead. Recomputed each round:
   // a run can start on breadth and cross into depth once the gaps close.
   const inDepthMode = (): boolean => inheritedCount > 0 && isCoverageSufficient(coverage)
-  /** How many times the model has asked to stop while short of the target. */
-  let depthFinishAttempts = 0
-  const depthGate = () =>
-    inheritedCount > 0
-      ? {
-          newCards: cards.length - inheritedCount,
-          newCardTarget: sizing.totalCardCap,
-          attempts: depthFinishAttempts,
-        }
-      : undefined
+  /** How many times the model has asked to stop while short of budget. */
+  let earlyFinishAttempts = 0
+  const finishVerdict = () =>
+    handleFinishRequest(
+      catalog,
+      coverage,
+      cards.length,
+      cardCap,
+      earlyFinishAttempts,
+      inDepthMode(),
+    )
   const ledgerText = () =>
     inDepthMode()
       ? buildDepthGapText(catalog, coverage)
@@ -284,6 +297,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
         totalCardCap: sizing.totalCardCap,
         batchSize: sizing.batchSize,
         gapText: ledgerText(),
+        facetCatalog: buildFacetCatalogText(catalog),
         existingDeck: summarizeExistingDeck(existing.cards),
         depthMode: inDepthMode(),
       }),
@@ -321,8 +335,8 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
     for (const call of response.toolCalls) {
       if (call.name === 'finish_generation') {
-        const verdict = handleFinishRequest(coverage, cards.length, cardCap, depthGate())
-        if (!verdict.allowed) depthFinishAttempts++
+        const verdict = finishVerdict()
+        if (!verdict.allowed) earlyFinishAttempts++
         if (verdict.allowed) {
           finished = true
           terminationReason = 'coverage_sufficient_model_done'
@@ -379,6 +393,10 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: firstField(card), reasons: verdict.failures })
           continue
         }
+        if (repeatsTestedFacets(card, cards, catalog)) {
+          rejected.push({ front: firstField(card), reasons: ['facet_already_tested'] })
+          continue
+        }
         if (cards.length >= cardCap) {
           rejected.push({ front: firstField(card), reasons: ['budget_exhausted'] })
           continue
@@ -412,9 +430,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
             unknownMetadataDropped,
             cardsRemaining: capacityLeft,
             gapText: ledgerText(),
-            finishAllowed:
-              capacityLeft <= 0 ||
-              handleFinishRequest(coverage, cards.length, cardCap, depthGate()).allowed,
+            finishAllowed: capacityLeft <= 0 || finishVerdict().allowed,
           }),
         ),
       )
@@ -528,12 +544,14 @@ function reconcilePdfInfo(pdfInfo: PdfInfo, conceptMap: ConceptMap): PdfInfo {
 }
 
 function handleFinishRequest(
+  catalog: CoverageCatalog,
   coverage: CoverageData,
   produced: number,
   cardCap: number,
-  /** Extend runs: how far this run has got toward the cards the user asked
-   *  for, which is the gate once breadth is already complete. */
-  depth?: { newCards: number; newCardTarget: number; attempts: number },
+  /** Times the model has already asked to stop while short of budget. */
+  attempts: number,
+  /** Extend runs past breadth: the deck already covered the material. */
+  depthMode: boolean,
 ): { allowed: boolean; message: string } {
   if (produced >= cardCap) return { allowed: true, message: 'ok' }
 
@@ -548,26 +566,35 @@ function handleFinishRequest(
     }
   }
 
-  // Breadth is done, but the user asked this run to add cards. Finishing at
-  // zero would be technically true and useless — send it after depth instead.
-  // Once, though: the brief invites an honest early finish ("a short honest
-  // deck beats a padded one"), so refusing every attempt until the quota is
-  // spent would be asking for the padding it warns against. A second call
-  // means the model has said twice that it has nothing worth adding.
-  if (
-    depth !== undefined &&
-    depth.newCards < depth.newCardTarget &&
-    depth.attempts < DEPTH_FINISH_ATTEMPTS
-  ) {
+  // A concept with fewer cards than facets has named facts no card tests
+  // yet. The run is sent back for them once. Once, because the brief invites
+  // an honest short deck: a second request means the model looked and found
+  // nothing worth a card there, and the budgets stay a ceiling, never a
+  // quota. Thorough's depth slots past the facets never hold a run back.
+  const short = conceptsWithUntestedFacets(catalog, coverage)
+  if (short.length > 0 && attempts < EARLY_FINISH_ATTEMPTS) {
+    const untested = coverage.untestedFacets.filter((facetId) => {
+      const concept = catalog.facets.get(facetId)?.conceptId
+      return concept !== undefined && short.includes(concept)
+    })
+    // A budget above the facet count (thorough) can leave a concept short
+    // with every facet tested; then the concepts are all there is to name.
+    const gaps =
+      untested.length > 0
+        ? `${count(untested.length, 'facet')} from your concept map ${untested.length === 1 ? 'is' : 'are'} still untested: ${describeFacets(catalog, untested, 10)}. ` +
+          'Give each its card, tagged with its facet id, without re-asking a fact a card already tests. '
+        : `${count(short.length, 'concept')} ${short.length === 1 ? 'is' : 'are'} still below budget: ${short
+            .slice(0, 8)
+            .map((id) => catalog.conceptNames.get(id) || id)
+            .join(', ')}. Add a card only where it asks what the existing ones do not. `
     return {
       allowed: false,
       message:
-        `Rejected: the deck already covered this material, so your budget is for depth. ` +
-        `You have added ${depth.newCards} of ${count(depth.newCardTarget, 'card')}. ` +
-        'Go after the depth ledger: relations between concepts, pages carrying a single card, ' +
-        'and concepts no existing card names outright. Prefer why/how/compare/apply over ' +
-        'restating what is already asked. If, after looking, another card would only rephrase ' +
-        'one the deck already has, call finish_generation again and say so; it will be accepted.',
+        (depthMode
+          ? 'Rejected: the deck already covers this material, so this run is for depth. '
+          : 'Rejected: ') +
+        gaps +
+        'If, after looking, a card would only rephrase one the deck already has, call finish_generation again and say so; it will be accepted.',
     }
   }
 
@@ -575,9 +602,9 @@ function handleFinishRequest(
 }
 
 /**
- * Materialize a normalized model payload into a Card: concept ids and
- * relation keys are validated against the concept-map catalog (unknown ones
- * are dropped so the coverage ledger stays truthful), then the card is
+ * Materialize a normalized model payload into a Card: concept ids, facet ids
+ * and relation keys are validated against the concept-map catalog (unknown
+ * ones are dropped so the coverage ledger stays truthful), then the card is
  * annotated with its gate verdict.
  */
 export function buildCard(
@@ -590,13 +617,21 @@ export function buildCard(
   gateOptions: EvaluateOptions = {},
 ): { card: Card; verdict: GateVerdict; unknownMetadata: number } {
   const conceptIds = normalized.conceptIds.filter((id) => catalog.conceptIds.has(id))
+  const facetIds = normalized.facetIds.filter((id) => catalog.facets.has(id))
   const relationKeys = normalized.relationKeys
     .map((key) => normalizeRelationKey(key))
     .filter((key) => key !== '' && catalog.relationKeys.has(key))
   const unknownMetadata =
     normalized.conceptIds.length -
     conceptIds.length +
+    (normalized.facetIds.length - facetIds.length) +
     (normalized.relationKeys.length - relationKeys.length)
+  // A facet names its concept, so a card that tests one teaches the concept
+  // even when the model left it out of concept_ids.
+  for (const id of facetIds) {
+    const conceptId = catalog.facets.get(id)?.conceptId
+    if (conceptId !== undefined && !conceptIds.includes(conceptId)) conceptIds.push(conceptId)
+  }
 
   const card: Card = {
     uid: crypto.randomUUID(),
@@ -606,6 +641,7 @@ export function buildCard(
     slideNumber: normalized.slideNumber,
     sourcePages: normalized.sourcePages,
     conceptIds,
+    facetIds,
     relationKeys,
     rationale: normalized.rationale,
     sourceExcerpt: normalized.sourceExcerpt,
@@ -793,8 +829,12 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           unknownMetadataDropped += unknownMetadata
           const oldKey = cardKey(cards[index])
           const newKey = cardKey(card)
+          // The card being replaced does not count against its own facets.
+          const others = cards.filter((_, i) => i !== index)
           if (!verdict.pass) {
             rejected.push({ ref: cardId, reasons: verdict.failures })
+          } else if (repeatsTestedFacets(card, others, catalog)) {
+            rejected.push({ ref: cardId, reasons: ['facet_already_tested'] })
           } else if (newKey !== oldKey && seenKeys.has(newKey)) {
             rejected.push({ ref: cardId, reasons: ['duplicate'] })
           } else {
@@ -828,6 +868,10 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           const key = cardKey(card)
           if (seenKeys.has(key) || findNearDuplicate(key, seenKeys) !== null) {
             rejected.push({ ref: firstField(card), reasons: ['duplicate'] })
+            continue
+          }
+          if (repeatsTestedFacets(card, cards, catalog)) {
+            rejected.push({ ref: firstField(card), reasons: ['facet_already_tested'] })
             continue
           }
           if (cards.length >= opts.cardCap) {
@@ -919,6 +963,7 @@ function toReviewShape(cardId: string, card: Card): Record<string, unknown> {
     slide_number: card.slideNumber,
     source_pages: card.sourcePages,
     concept_ids: card.conceptIds,
+    facet_ids: card.facetIds,
     relation_keys: card.relationKeys,
     rationale: card.rationale,
     source_excerpt: card.sourceExcerpt,

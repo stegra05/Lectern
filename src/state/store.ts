@@ -33,6 +33,7 @@ import { runFollowUp } from '../engine/followUp'
 import { runPipeline, type FollowUpSeed } from '../engine/pipeline'
 import type {
   Card,
+  CardDensity,
   ConceptMap,
   CoverageData,
   PdfInfo,
@@ -87,6 +88,11 @@ async function releaseUploads(): Promise<void> {
   }
   void removeUploads(uploads)
 }
+
+/** How far a run's deck tends to land around the expected size. Models stop
+ *  early when the material runs out, or fill toward their budgets: 0.9-1.45
+ *  of the heuristic across four models on the eval lectures (2026-10-19). */
+const EXPECTED_CARDS_SPREAD = { min: 0.9, max: 1.45 }
 
 const THUMBNAIL_PAGE_LIMIT = 150
 const UNDO_WINDOW_MS = 30_000
@@ -154,6 +160,8 @@ interface LecternState {
   pdfInfo: PdfInfo | null
   pageThumbs: Record<number, string>
   estimate: CostEstimate | null
+  /** The deck size to expect, before the model has read the lecture. */
+  expectedCards: { min: number; max: number } | null
 
   // session
   view: 'home' | 'session'
@@ -165,7 +173,6 @@ interface LecternState {
   /** Keep those cards and generate around them, rather than starting over. */
   extendDeck: boolean
   focusPrompt: string
-  targetCards: number | null
   conceptMap: ConceptMap | null
   sizing: SizingPlan | null
   cards: Card[]
@@ -225,7 +232,9 @@ interface LecternActions {
    *  them. Debounced by setDeckName; safe to call directly. */
   probeExistingDeck: () => Promise<void>
   setFocusPrompt: (focus: string) => void
-  setTargetCards: (target: number | null) => void
+  /** Remembered in Settings: a student who wants thorough decks wants them
+   *  for every lecture. */
+  setCardDensity: (density: CardDensity) => void
 
   startGeneration: () => Promise<void>
   cancelGeneration: () => void
@@ -383,11 +392,19 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
   }
 
   const refreshEstimate = () => {
-    const { pdfInfo, settings, targetCards } = get()
+    const { pdfInfo, settings } = get()
     if (!pdfInfo || !settings) return
-    const sizing = computeSizingPlan(pdfInfo, { userTargetCards: targetCards ?? undefined })
+    const sizing = computeSizingPlan(pdfInfo, { density: settings.cardDensity })
     const factors = calibrationFactors(calibrationLog, settings.model)
-    set({ estimate: estimateCost(pdfInfo, sizing, settings.model, factors), sizing })
+    const expected = sizing.totalCardCap * factors.cards
+    set({
+      estimate: estimateCost(pdfInfo, sizing, settings.model, factors),
+      sizing,
+      expectedCards: {
+        min: Math.round(expected * EXPECTED_CARDS_SPREAD.min),
+        max: Math.round(expected * EXPECTED_CARDS_SPREAD.max),
+      },
+    })
   }
 
   /**
@@ -548,6 +565,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     pdfInfo: null,
     pageThumbs: {},
     estimate: null,
+    expectedCards: null,
 
     view: 'home',
     phase: 'idle',
@@ -557,7 +575,6 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     // once a probe finds cards in the named deck.
     extendDeck: true,
     focusPrompt: '',
-    targetCards: null,
     conceptMap: null,
     sizing: null,
     cards: [],
@@ -756,9 +773,13 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     },
 
     setFocusPrompt: (focus) => set({ focusPrompt: focus }),
-    setTargetCards: (target) => {
-      set({ targetCards: target })
+    setCardDensity: (density) => {
+      const settings = get().settings
+      if (!settings) return
+      const next = { ...settings, cardDensity: density }
+      set({ settings: next })
       refreshEstimate()
+      void saveSettings(next)
     },
 
     startGeneration: async () => {
@@ -769,7 +790,6 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         settings,
         deckName,
         focusPrompt,
-        targetCards,
         extendDeck,
         existingDeckCount,
         estimate,
@@ -871,7 +891,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           pdfInfo,
           fileName,
           focusPrompt: focusPrompt || undefined,
-          userTargetCards: targetCards ?? undefined,
+          density: settings.cardDensity,
           existingCards,
           model: settings.model,
           apiKey,
@@ -880,14 +900,17 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           signal: controller.signal,
         })
         set({ followUp: outcome.followUp })
-        if (estimate && sizing) {
+        // Fresh runs only: the estimate sizes a whole deck, so an extend run
+        // that adds a handful would teach every factor that decks come out
+        // a fraction of their size.
+        if (estimate && sizing && existingCards.length === 0) {
           void recordCalibrationRun(
             estimate,
             sizing,
             pdfInfo,
             settings.model,
             outcome.usage,
-            outcome.cards.length - existingCards.length,
+            outcome.cards.length,
           )
         }
         void notifyRunFinished({

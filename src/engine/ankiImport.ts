@@ -248,6 +248,7 @@ export function noteToCard(info: AnkiNoteInfo): Card | null {
     sourceSetName: parseSourceSetName(fieldValue(info, 'Source')),
     // A previous run's concept ids mean nothing to this run's concept map.
     conceptIds: [],
+    facetIds: [],
     relationKeys: [],
     sourceExcerpt: excerpt === '' ? undefined : excerpt,
     // These cards already passed the gate once and are not re-judged here.

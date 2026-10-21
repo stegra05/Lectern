@@ -79,7 +79,7 @@ describe('calibrationFactors', () => {
       }),
     ]
     const factors = calibrationFactors(log(runs), 'gemini-3.8-flash')
-    expect(factors).toEqual({ input: 2, output: 0.8, sampleCount: 3 })
+    expect(factors).toEqual({ input: 2, output: 0.8, cards: 0.9, sampleCount: 3 })
   })
 
   it('prefers same-model runs once they reach the minimum sample', () => {
@@ -92,12 +92,14 @@ describe('calibrationFactors', () => {
     expect(calibrationFactors(log(runs), 'gemini-3.8-flash')).toEqual({
       input: 2,
       output: 2,
+      cards: 0.9,
       sampleCount: 3,
     })
     // The pro model has its own three runs at ratio 4 — clamped to 4.
     expect(calibrationFactors(log(runs), 'gemini-3.1-pro-preview')).toEqual({
       input: 4,
       output: 4,
+      cards: 0.9,
       sampleCount: 3,
     })
   })
@@ -116,6 +118,15 @@ describe('calibrationFactors', () => {
     })
     const zero = run({ estimated: { inputTokens: 0, outputTokens: 0, costUsd: 0 } })
     const factors = calibrationFactors(log([wild, wild, wild, zero]), 'gemini-3.8-flash')
-    expect(factors).toEqual({ input: 4, output: 0.25, sampleCount: 3 })
+    expect(factors).toEqual({ input: 4, output: 0.25, cards: 0.9, sampleCount: 3 })
+  })
+
+  it('learns how a model’s decks land against the size shown before the run', () => {
+    const runs = [
+      run({ totalCardCap: 40, cardCount: 56 }),
+      run({ totalCardCap: 40, cardCount: 60 }),
+      run({ totalCardCap: 40, cardCount: 52 }),
+    ]
+    expect(calibrationFactors(log(runs), 'gemini-3.8-flash').cards).toBe(1.4)
   })
 })

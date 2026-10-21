@@ -11,6 +11,7 @@ const map: ConceptMap = {
       importance: 'high',
       difficulty: 'foundational',
       pageReferences: [12, 13],
+      facets: [],
     },
     {
       id: 'mo',
@@ -18,6 +19,7 @@ const map: ConceptMap = {
       importance: 'high',
       difficulty: 'intermediate',
       pageReferences: [20, 21],
+      facets: [],
     },
     {
       id: 'lr',
@@ -25,6 +27,7 @@ const map: ConceptMap = {
       importance: 'medium',
       difficulty: 'intermediate',
       pageReferences: [14],
+      facets: [],
     },
   ],
   relations: [{ source: 'gd', type: 'depends_on', target: 'lr', pageReferences: [14] }],
@@ -41,6 +44,7 @@ const card = (uid: string, conceptIds: string[], syncExcluded = false): Card => 
   fields: { Front: `Q ${uid}`, Back: `A ${uid}` },
   sourcePages: [12],
   conceptIds,
+  facetIds: [],
   relationKeys: [],
   qualityScore: 100,
   qualityIssues: [],
@@ -61,6 +65,10 @@ const coverage: CoverageData = {
   missingHighPriority: ['mo'],
   saturatedPages: [],
   cardsPerPage: { 12: 2, 13: 1 },
+  cardsByConcept: {},
+  underBudget: [],
+  cardsByFacet: {},
+  untestedFacets: [],
 }
 
 describe('studyGuideToMarkdown', () => {

@@ -93,11 +93,15 @@ export interface CalibrationFactors {
   input: number
   /** Multiplier for estimated output tokens. */
   output: number
-  /** Runs the factors were derived from; 0 means uncalibrated (both 1). */
+  /** Multiplier for the deck size shown before a run. The model settles the
+   *  real size from its card budgets, so only history says how a model tends
+   *  to land against the heuristic. */
+  cards: number
+  /** Runs the factors were derived from; 0 means uncalibrated (all 1). */
   sampleCount: number
 }
 
-export const UNCALIBRATED: CalibrationFactors = { input: 1, output: 1, sampleCount: 0 }
+export const UNCALIBRATED: CalibrationFactors = { input: 1, output: 1, cards: 1, sampleCount: 0 }
 
 /**
  * Correction factors for the next estimate. Same-model history wins once it
@@ -116,6 +120,7 @@ export function calibrationFactors(log: CalibrationLog | null, model: string): C
   return {
     input: median(sample.map((r) => ratio(r.actual.inputTokens, r.estimated.inputTokens))),
     output: median(sample.map((r) => ratio(r.actual.outputTokens, r.estimated.outputTokens))),
+    cards: median(sample.map((r) => ratio(r.cardCount, Math.max(1, r.totalCardCap)))),
     sampleCount: sample.length,
   }
 }
