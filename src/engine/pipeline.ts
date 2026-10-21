@@ -19,7 +19,6 @@
 
 import { createClient } from './clients'
 import {
-  CARDS_PER_FACET,
   EARLY_FINISH_ATTEMPTS,
   MAX_GENERATION_ROUNDS,
   MAX_REFLECTION_ROUNDS,
@@ -232,7 +231,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   const cards: Card[] = [...existing.cards]
   const seenKeys = new Set<string>(existing.cards.map((card) => cardKey(card)))
   const cardCap = sizing.totalCardCap + inheritedCount
-  const cardsPerFacet = CARDS_PER_FACET[opts.density]
   let coverage = computeCoverageData(catalog, cards)
   if (inheritedCount > 0) {
     emit({ type: 'coverage', coverage })
@@ -395,7 +393,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: firstField(card), reasons: verdict.failures })
           continue
         }
-        if (repeatsTestedFacets(card.facetIds, cards, cardsPerFacet)) {
+        if (repeatsTestedFacets(card, cards, catalog)) {
           rejected.push({ front: firstField(card), reasons: ['facet_already_tested'] })
           continue
         }
@@ -487,7 +485,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       seenKeys,
       catalog,
       cardCap,
-      cardsPerFacet,
       inheritedCount,
       gateOptions,
       emit,
@@ -708,8 +705,6 @@ interface ReviewLoopOptions {
   catalog: CoverageCatalog
   /** The sizing cap — add_cards only fills slots below it. */
   cardCap: number
-  /** Cards one facet may hold at the run's density. */
-  cardsPerFacet: number
   /** Cards inherited from Anki. They sit in `cards` for coverage and dedupe
    *  but are withheld from the review: the model must not rewrite or delete
    *  cards the user has already been studying. */
@@ -838,7 +833,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           const others = cards.filter((_, i) => i !== index)
           if (!verdict.pass) {
             rejected.push({ ref: cardId, reasons: verdict.failures })
-          } else if (repeatsTestedFacets(card.facetIds, others, opts.cardsPerFacet)) {
+          } else if (repeatsTestedFacets(card, others, catalog)) {
             rejected.push({ ref: cardId, reasons: ['facet_already_tested'] })
           } else if (newKey !== oldKey && seenKeys.has(newKey)) {
             rejected.push({ ref: cardId, reasons: ['duplicate'] })
@@ -875,7 +870,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
             rejected.push({ ref: firstField(card), reasons: ['duplicate'] })
             continue
           }
-          if (repeatsTestedFacets(card.facetIds, cards, opts.cardsPerFacet)) {
+          if (repeatsTestedFacets(card, cards, catalog)) {
             rejected.push({ ref: firstField(card), reasons: ['facet_already_tested'] })
             continue
           }

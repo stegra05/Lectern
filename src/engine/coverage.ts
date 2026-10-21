@@ -181,19 +181,23 @@ export function buildFacetCatalogText(catalog: CoverageCatalog): string {
 
 /**
  * Would this card only re-test what the deck already tests? True when it
- * claims at least one facet and every facet it claims already has
- * `perFacet` cards in `deck`. A card that names no facet is never a repeat
- * by this measure: there is nothing to compare it on.
+ * claims at least one facet and every facet it claims already has a card in
+ * `deck`, at every depth: Thorough's extra slots buy depth, never a second
+ * card on one fact. A card that names no facet is never a repeat by this
+ * measure, there is nothing to compare it on. Neither is a connection: a
+ * card that spans facets of two concepts, or teaches a mapped relation, asks
+ * what neither facet's own card does. That is the why/how/compare card the
+ * depth ledger asks for.
  */
 export function repeatsTestedFacets(
-  facetIds: readonly string[],
+  card: Pick<Card, 'facetIds' | 'relationKeys'>,
   deck: readonly Card[],
-  perFacet: number,
+  catalog: CoverageCatalog,
 ): boolean {
-  return (
-    facetIds.length > 0 &&
-    facetIds.every((id) => deck.filter((card) => card.facetIds.includes(id)).length >= perFacet)
-  )
+  if (card.facetIds.length === 0 || card.relationKeys.length > 0) return false
+  const concepts = new Set(card.facetIds.map((id) => catalog.facets.get(id)?.conceptId))
+  if (concepts.size > 1) return false
+  return card.facetIds.every((id) => deck.some((other) => other.facetIds.includes(id)))
 }
 
 // ---------------------------------------------------------------------------
@@ -298,10 +302,13 @@ export function computeCoverageData(catalog: CoverageCatalog, cards: Card[]): Co
   // A concept credited by inherited cards may be short with facets those
   // cards already test; they cannot say which, so all of its facets show.
   // One they fully satisfy is not short and shows none.
+  // Never more than the budget still has room for: an overview that wants
+  // one more card of a four-facet concept lists one facet, not three.
   const untestedFacets = underBudget.flatMap((id) =>
     (catalog.facetsByConcept.get(id) ?? [])
       .map((_, i) => facetIdOf(id, i))
-      .filter((facetId) => !cardsByFacet.has(facetId)),
+      .filter((facetId) => !cardsByFacet.has(facetId))
+      .slice(0, Math.max(0, (catalog.budgets.get(id) ?? 0) - (cardsByConcept.get(id) ?? 0))),
   )
 
   const totalConcepts = catalog.conceptIds.size

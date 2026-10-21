@@ -257,7 +257,6 @@ const facetedMap = (): ConceptMap => {
     concepts: base.concepts.map((c) => ({
       ...c,
       facets: facets[c.id] ?? [],
-      cardBudget: Math.max(1, (facets[c.id] ?? []).length),
     })),
   }
 }
@@ -314,8 +313,8 @@ describe('the facet ledger', () => {
 
   it('never attributes an inherited card to a facet', () => {
     // Page 3 carries only c2, whose single card it is: c2 is satisfied and
-    // shows no facets. Page 4 gives c3 one of two cards, but which facet the
-    // card tests is unknown, so both stay listed.
+    // shows no facets. Page 4 gives c3 one of two cards; which facet that card
+    // tests is unknown, so one of the two is listed, as many as c3 has room for.
     const coverage = computeCoverageData(catalog, [
       makeCard({ uid: 'x', sourcePages: [3], fromAnki: true, facetIds: ['c2#1'] }),
       makeCard({ uid: 'y', sourcePages: [4], fromAnki: true }),
@@ -323,38 +322,64 @@ describe('the facet ledger', () => {
     expect(coverage.cardsByFacet).toEqual({})
     expect(coverage.cardsByConcept).toMatchObject({ c2: 1, c3: 1 })
     expect(coverage.untestedFacets).not.toContain('c2#1')
-    expect(coverage.untestedFacets).toEqual(expect.arrayContaining(['c3#1', 'c3#2']))
+    expect(coverage.untestedFacets.filter((id) => id.startsWith('c3#'))).toHaveLength(1)
   })
 })
 
 describe('repeatsTestedFacets', () => {
+  const catalog = buildCoverageCatalog(facetedMap())
   const deck = [
     makeCard({ uid: 'a', facetIds: ['c1#1'] }),
     makeCard({ uid: 'b', facetIds: ['c1#2'] }),
+    makeCard({ uid: 'c', facetIds: ['c2#1'] }),
   ]
+  const asks = (facetIds: string[], relationKeys: string[] = []) => ({ facetIds, relationKeys })
 
   it('rejects a card whose every facet already has its card', () => {
-    expect(repeatsTestedFacets(['c1#1'], deck, 1)).toBe(true)
-    expect(repeatsTestedFacets(['c1#1', 'c1#2'], deck, 1)).toBe(true)
+    expect(repeatsTestedFacets(asks(['c1#1']), deck, catalog)).toBe(true)
+    expect(repeatsTestedFacets(asks(['c1#1', 'c1#2']), deck, catalog)).toBe(true)
   })
 
   it('lets a card through when one of its facets is still open', () => {
-    expect(repeatsTestedFacets(['c1#1', 'c1#3'], deck, 1)).toBe(false)
+    expect(repeatsTestedFacets(asks(['c1#1', 'c1#3']), deck, catalog)).toBe(false)
   })
 
-  it('allows a second card per facet at thorough depth, not a third', () => {
-    expect(repeatsTestedFacets(['c1#1'], deck, 2)).toBe(false)
-    const twice = [...deck, makeCard({ uid: 'c', facetIds: ['c1#1'] })]
-    expect(repeatsTestedFacets(['c1#1'], twice, 2)).toBe(true)
+  it('takes a card that connects two concepts as depth, not a repeat', () => {
+    // Both facets are tested, but the comparison asks what neither card does.
+    expect(repeatsTestedFacets(asks(['c1#1', 'c2#1']), deck, catalog)).toBe(false)
+  })
+
+  it('takes a card that teaches a mapped relation as depth, not a repeat', () => {
+    expect(repeatsTestedFacets(asks(['c1#1'], ['c1|uses|c2']), deck, catalog)).toBe(false)
   })
 
   it('does not count the card being replaced against itself', () => {
     const others = deck.filter((card) => card.uid !== 'a')
-    expect(repeatsTestedFacets(['c1#1'], others, 1)).toBe(false)
+    expect(repeatsTestedFacets(asks(['c1#1']), others, catalog)).toBe(false)
   })
 
   it('never rejects a card that names no facet', () => {
-    expect(repeatsTestedFacets([], deck, 1)).toBe(false)
+    expect(repeatsTestedFacets(asks([]), deck, catalog)).toBe(false)
+  })
+})
+
+describe('the facet ledger at a small budget', () => {
+  it('lists no more untested facets than the budget still has room for', () => {
+    // Overview: c1 has three facets but a budget of two, and one card.
+    const overview = buildCoverageCatalog(
+      facetedMap(),
+      undefined,
+      new Map([
+        ['c1', 2],
+        ['c2', 1],
+        ['c3', 0],
+      ]),
+    )
+    const coverage = computeCoverageData(overview, [
+      makeCard({ uid: 'a', sourcePages: [1], conceptIds: ['c1'], facetIds: ['c1#1'] }),
+    ])
+    // c2 has no card yet, so it leads.
+    expect(coverage.untestedFacets).toEqual(['c2#1', 'c1#2'])
   })
 })
 

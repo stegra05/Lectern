@@ -453,13 +453,15 @@ describe('runPipeline (facet repeats)', () => {
     expect(reviewFeedback).toContain('facet_already_tested')
   })
 
-  it('lets a thorough deck test a facet twice', async () => {
+  it('rejects the repeat at thorough depth too', async () => {
+    // Thorough's extra slots buy depth, never a second card on one fact.
     const { outcome, events } = await runFacetScript('thorough')
 
-    expect(events.some((e) => e.type === 'card_rejected')).toBe(false)
-    // Generation took the cloze as A's second card; the review's copy of it
-    // is then an exact duplicate, caught by the dedupe set.
-    expect(outcome.cards.map((c) => c.facetIds)).toEqual([['c-a#1'], ['c-a#1'], []])
+    const rejections = events.filter(
+      (e): e is Extract<PipelineEvent, { type: 'card_rejected' }> => e.type === 'card_rejected',
+    )
+    expect(rejections.map((e) => e.reasons)).toEqual([['facet_already_tested']])
+    expect(outcome.cards.map((c) => c.facetIds)).not.toContainEqual(['c-a#1', 'c-a#1'])
   })
 })
 
@@ -734,7 +736,9 @@ describe('runPipeline (extend run, already covered)', () => {
     // which facets they test, so both of A's show.
     const refusal = JSON.stringify(captured[2].body.input)
     expect(refusal).toContain('this run is for depth')
-    expect(refusal).toContain('c-a#1 what A is; c-a#2 where A applies')
+    // Concept A has one card of two, so one facet is named.
+    expect(refusal).toContain('c-a#1 what A is')
+    expect(refusal).not.toContain('c-a#2')
 
     // And the run ends having actually added something.
     expect(outcome.cards).toHaveLength(3)

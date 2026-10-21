@@ -198,7 +198,7 @@ export function generationMissionPrompt(
     `- rationale: why the card matters, up to 140 chars.\n` +
     `- source_excerpt: the grounding slide wording or diagram content, up to 220 chars.\n` +
     `When grounding is weak, submit fewer cards.\n` +
-    `Your concept map gave every concept a card budget. Breadth first: give every concept its first card before any concept gets a second. A further card on a concept must test a facet its existing cards do not; never the same fact from another angle (a Cloze and a Basic on one fact are one fact twice). A card whose facets all have their cards already is rejected as facet_already_tested.\n` +
+    `Your concept map gave every concept a card budget. Breadth first: give every concept its first card before any concept gets a second. A further card on a concept must test a facet its existing cards do not; never the same fact from another angle (a Cloze and a Basic on one fact are one fact twice). A card whose facets all have their cards already is rejected as facet_already_tested, unless it connects facets of two concepts or teaches a mapped relation: that is depth, not a repeat.\n` +
     (opts.facetCatalog
       ? `\nFacet catalog. A facet's id is its concept id, "#", and its number: c-a#2 is the second facet of c-a.\n${opts.facetCatalog}\n`
       : '') +

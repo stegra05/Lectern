@@ -34,9 +34,6 @@ export const MIN_TOTAL_CARDS = 3
 export const CONCEPT_CARD_BUDGET_MAX = 4
 /** How each density scales the budgets (and the heuristic's guardrails). */
 export const DENSITY_FACTOR = { overview: 0.5, standard: 1, thorough: 1.5 } as const
-/** Cards one facet may hold before another is a repeat. A thorough deck may
- *  ask a fact a second time from another angle; the others ask it once. */
-export const CARDS_PER_FACET = { overview: 1, standard: 1, thorough: 2 } as const
 /** The budget sum may go this far below or above the heuristic deck. */
 export const BUDGET_GUARD_MIN = 0.5
 export const BUDGET_GUARD_MAX = 2
