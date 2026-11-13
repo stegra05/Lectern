@@ -70,6 +70,10 @@ interface RunResult {
   accepted: number
   rejected: number
   rejectReasons: Partial<Record<RejectionReason, number>>
+  /** Cards sent back for answers off their cited pages, and how many in the
+   *  finished deck still carry the flag. */
+  offSourceSentBack: number
+  offSourceShipped: number
   review: string
   rounds: number
   termination: string
@@ -170,6 +174,11 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
       accepted: events.filter((e) => e.type === 'card_accepted').length,
       rejected,
       rejectReasons,
+      // The flag only ever rejects as a send-back, so its count is theirs.
+      offSourceSentBack: rejectReasons.answer_not_on_cited_page ?? 0,
+      offSourceShipped: outcome.cards.filter((c) =>
+        c.qualityIssues.includes('answer_not_on_cited_page'),
+      ).length,
       review: review.replace('Quality pass: ', ''),
       rounds,
       termination: outcome.terminationReason,
@@ -198,6 +207,8 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
       accepted: 0,
       rejected: 0,
       rejectReasons: {},
+      offSourceSentBack: 0,
+      offSourceShipped: 0,
       review: '',
       rounds: 0,
       termination: 'error',
@@ -213,7 +224,7 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
 function table(results: RunResult[]): string {
   const header =
     '| variant | pdf | s | $ | concepts (target) | cards/cap | pages % | concepts % | ' +
-    'accepted | rejected (reasons) | review | rounds | end |'
+    'accepted | rejected (reasons) | off-source sent back/shipped | review | rounds | end |'
   const rule = `|${header
     .split('|')
     .slice(1, -1)
@@ -221,13 +232,14 @@ function table(results: RunResult[]): string {
     .join('|')}|`
   const rows = results.map((r) =>
     r.error
-      ? `| ${r.variant} | ${r.pdf} | ${r.seconds} | | | | | | | | ${r.error.replaceAll('|', '/')} | | error |`
+      ? `| ${r.variant} | ${r.pdf} | ${r.seconds} | | | | | | | | | ${r.error.replaceAll('|', '/')} | | error |`
       : `| ${r.variant} | ${r.pdf} | ${r.seconds} | ${r.costUsd.toFixed(3)} | ` +
         `${r.concepts} (${r.conceptTarget}) | ${r.cards}/${r.cap} | ${r.pageCoverage} | ` +
         `${r.conceptCoverage} | ${r.accepted} | ${r.rejected} ` +
         `(${Object.entries(r.rejectReasons)
           .map(([k, v]) => `${k} ${v}`)
-          .join(', ')}) | ${r.review} | ${r.rounds} | ${r.termination} |`,
+          .join(', ')}) | ${r.offSourceSentBack}/${r.offSourceShipped} | ` +
+        `${r.review} | ${r.rounds} | ${r.termination} |`,
   )
   return [header, rule, ...rows].join('\n')
 }
