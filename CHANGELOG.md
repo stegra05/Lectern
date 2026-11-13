@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- An OpenAI request that gets no answer now gives up after five minutes and
+  is tried once more, instead of waiting ten minutes and being tried five
+  more times. A run could sit for most of an hour on one stuck request. The
+  countdown says "No answer in time" rather than "Connection lost", and the
+  error names the hang instead of your internet connection.
+
 ## 2.17.0 (2026-11-13)
 
 ### Added
