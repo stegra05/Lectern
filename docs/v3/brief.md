@@ -53,6 +53,9 @@ that fits your semester.
 Later in the semester the student adds a lecture. Only new cards are created and the plan is
 recomputed.
 
+This flow is the full picture. The base product asks only for the goal and has no quiz and no
+study plan. See Scope.
+
 ## Decisions
 
 | Topic | Decision |
@@ -67,6 +70,7 @@ recomputed.
 | Other inputs | Past exams and exercise sheets are accepted, detected automatically, confirmed by the student |
 | Scope of courses | Lecture-based courses. Language courses are out |
 | Codebase | Rewritten from scratch, plumbing included, using the learnings from v1 and v2 |
+| Stack | Electron shell, headless TypeScript engine, one API-shaped boundary, a course as a folder of plain files |
 | Kept from v2 | Seeing the slide a card belongs to, the concept map, easy Anki export |
 
 ## Card system
@@ -103,13 +107,45 @@ is added, from what is still unseen in Anki.
 | Presets | Card roles, exam-format profiles, goal-to-depth mapping, card designs |
 | Cheap model | Reading documents into the concept map, classifying uploads, extracting past exam questions, writing cards into a chosen role, writing the quiz |
 
-## Build order
+## Architecture
 
-1. A course with several PDFs, atomic cards with hard limits and roles, subdecks and tags,
-   sent through the add-on.
-2. The three questions, the inferred exam format, past papers driving exam weight.
-3. The schedule, written on approval and recomputed when a lecture is added.
-4. The quiz.
+- **A headless engine.** Everything that makes cards (reading documents, gates, card roles,
+  deck building, schedule maths) is a plain TypeScript package with no interface code. It runs
+  in the eval harness, from a command line, inside the app, and later on a server.
+- **One API-shaped boundary.** The interface talks to the engine only through one narrow
+  boundary. Moving to a website later means swapping the in-app channel for HTTP. Storage,
+  network, PDF and Anki access are passed into the engine from outside.
+- **Electron as the shell.** The engine runs in Node, the same runtime as the evals, and
+  Playwright can drive both the interface in a browser and the packaged app.
+- **A course is a folder of plain files**: the PDFs, the concept map, the cards. No database.
+- **TypeScript throughout.**
+
+## Scope
+
+The base holds everything every later expansion depends on, and nothing that only one
+expansion needs.
+
+**Base product (v3.0)**
+
+- A persistent course with several lecture PDFs, and adding a lecture later without duplicates.
+- One question: the goal, which sets the depth.
+- Atomic cards with hard limits and roles, a subdeck per lecture, tags, the slide behind
+  every card.
+- The result view: summary, concept map, decisions taken.
+- Sending through the add-on.
+- The headless engine with evals against the reference deck.
+
+**Done when** an 11-lecture course goes end to end into Anki, a cheap model holds up in a
+blind comparison against the reference deck, and adding lecture 12 creates only new cards.
+
+**Expansions, in order**
+
+1. The study plan, which brings the other two questions (ready-by date, minutes per day).
+2. Past exams and exercise sheets: inferred exam format and exam weight.
+3. The quiz.
+4. Several card designs, and smart cards for every type of lecture.
+
+**Vision, not planned**: reading progress back from Anki, hosted keys and payment, a website.
 
 ## Quality reference
 
@@ -117,14 +153,13 @@ Steffen's Entrepreneurship deck (636 vetted notes for 11 slide decks, made with 
 model) is the reference from layer 1: run v3 on the same decks and compare blind. Its atomic
 pass took 178 cards to 636 and the average answer from 59 words to 11.6.
 
-## Out of scope for now
+## Not in v3
 
-Hosted keys and payment, delivery as a double-click file, language courses, revising delivered
-cards, a progress dashboard, the Gemini decision model as a dependency.
+Delivery as a double-click file, language courses, revising delivered cards, a progress
+dashboard, the Gemini decision model as a dependency.
 
 ## Open questions
 
-- Stack and local persistence for courses. Default until decided: Tauri 2, TypeScript, React.
 - The exact quiz format.
 - Which card design ships, and how far the visual identity of the app changes.
 - The model line-up per provider.
