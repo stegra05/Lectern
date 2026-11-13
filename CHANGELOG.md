@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.17.0 (2026-11-13)
 
 ### Added
 
@@ -28,7 +28,13 @@
   is mostly words its cited pages never use is flagged "check the source",
   and the quality pass is told to bring it back to the lecture. Extend runs
   fill exactly what the deck lacks, concept by concept.
-
+- **Write cards by hand, next to the slides.** "+ New card" or `n` opens a
+  composer above the deck: question and answer, or fill in the blank with a
+  live preview. A hand-made card carries a "manual card" badge, takes its
+  place after the last card from the same slide, and counts toward coverage
+  for the concepts it links. "View slides" on the start screen opens a
+  lecture without a generation run, so cards can be written before a key is
+  saved or after a limit is hit. Contributed by @leonhardmuehlmeyer (#82).
 - **OpenAI and Claude, next to Gemini.** Pick a GPT or Claude model in
   Settings and add a key for its provider; each provider's key has its own
   keychain entry, and the Gemini key you already saved stays where it is.
