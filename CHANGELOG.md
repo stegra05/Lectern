@@ -49,6 +49,12 @@
 
 ### Changed
 
+- **Two downloads: Mac and Windows.** One Mac build now runs on Apple
+  Silicon and Intel alike, Windows ships as a single installer, and both
+  keep the same file name from release to release, so the website links
+  straight to them. Lectern no longer publishes Linux packages or the
+  Windows `.msi`. An installed Linux copy stays on its current version; to
+  go further on Linux, build from source.
 - **One engine, three providers.** The pipeline talks to a provider-neutral
   client; Gemini keeps its server-side conversation, OpenAI chains responses
   the same way, and Claude carries an append-only transcript whose system

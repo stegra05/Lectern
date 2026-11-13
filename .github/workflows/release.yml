@@ -6,6 +6,11 @@ name: Release
 # as its notes, and every platform build uploads into it. (Letting each build
 # find-or-create the draft itself races: two builds can each create one, and
 # the tag ends up with two half-filled drafts.) Review the draft, then publish.
+#
+# A release holds two downloads, Lectern-macOS.dmg and
+# Lectern-Windows-Setup.exe, plus what the updater reads (latest.json and
+# Lectern-macOS.app.tar.gz). The names carry no version, so the website and
+# README link straight to releases/latest/download/<name>.
 
 on:
   push:
@@ -25,8 +30,17 @@ jobs:
       - name: Extract this version's CHANGELOG section
         run: |
           v="${GITHUB_REF_NAME#v}"
-          awk -v v="$v" '$0 ~ "^## " v " " {f=1; next} /^## /{f=0} f' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "See CHANGELOG.md for details." > notes.md
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          # The two downloads lead the notes: someone new to GitHub should not
+          # have to pick a file out of the asset list.
+          {
+            echo "**Download:** [Mac](${base}/Lectern-macOS.dmg) · [Windows](${base}/Lectern-Windows-Setup.exe)"
+            echo
+            echo "Already have Lectern? It updates itself."
+          } > notes.md
+          awk -v v="$v" '$0 ~ "^## " v " " {f=1; next} /^## /{f=0} f' CHANGELOG.md > changes.md
+          [ -s changes.md ] || echo "See CHANGELOG.md for details." > changes.md
+          cat changes.md >> notes.md
       - uses: actions/github-script@v7
         id: create
         with:
@@ -48,25 +62,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest # Apple Silicon
-            args: --target aarch64-apple-darwin
-          - platform: macos-latest # Intel
-            args: --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
+          - platform: macos-latest # one build for Apple Silicon and Intel
+            args: --target universal-apple-darwin
+            asset: Lectern-macOS[ext]
           - platform: windows-latest
             args: ""
+            asset: Lectern-Windows-Setup[ext]
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Tauri system dependencies (Linux)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libgtk-3-dev
 
       - uses: pnpm/action-setup@v4
         with:
@@ -90,11 +95,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Updater artifact signing (minisign). tauri-action also generates and
-          # uploads latest.json to the release when these are set.
+          # uploads latest.json to the release when these are set. latest.json
+          # carries the signatures, so the .sig files stay out of the release.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS signing + notarization: once the Apple Developer secrets exist,
@@ -110,3 +116,29 @@ jobs:
         with:
           releaseId: ${{ needs.draft.outputs.release_id }}
           args: ${{ matrix.args }}
+          releaseAssetNamePattern: ${{ matrix.asset }}
+          uploadUpdaterSignatures: false
+
+  # tauri-action writes api.github.com asset URLs into latest.json. Anonymous
+  # API calls are limited to 60 an hour per IP address, which a campus network
+  # shares, so updates there would fail at random. The plain download URLs
+  # have no such limit.
+  updater-urls:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Point latest.json at the download URLs
+        run: |
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          gh release download "$GITHUB_REF_NAME" --pattern latest.json
+          gh release view "$GITHUB_REF_NAME" --json assets \
+            --jq '.assets | map({key: .apiUrl, value: .name}) | from_entries' > names.json
+          jq --slurpfile names names.json --arg base "$base" '
+            .platforms |= map_values(
+              .url = "\($base)/\($names[0][.url] // error("no asset for \(.url)"))"
+            )' latest.json > rewritten.json
+          mv rewritten.json latest.json
+          gh release upload "$GITHUB_REF_NAME" latest.json --clobber

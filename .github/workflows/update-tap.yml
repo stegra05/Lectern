@@ -20,18 +20,16 @@ jobs:
   bump-cask:
     runs-on: ubuntu-latest
     steps:
-      - name: Download dmgs and compute checksums
+      - name: Download the dmg and compute its checksum
         env:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           v="${TAG#v}"
           base="https://github.com/${{ github.repository }}/releases/download/${TAG}"
-          curl -fsSL -o arm.dmg "${base}/Lectern_${v}_aarch64.dmg"
-          curl -fsSL -o intel.dmg "${base}/Lectern_${v}_x64.dmg"
+          curl -fsSL -o lectern.dmg "${base}/Lectern-macOS.dmg"
           {
             echo "VERSION=${v}"
-            echo "SHA_ARM=$(sha256sum arm.dmg | cut -d' ' -f1)"
-            echo "SHA_INTEL=$(sha256sum intel.dmg | cut -d' ' -f1)"
+            echo "SHA=$(sha256sum lectern.dmg | cut -d' ' -f1)"
           } >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
@@ -43,8 +41,9 @@ jobs:
         run: |
           cask=Casks/lectern.rb
           sed -i "s/^  version \".*\"/  version \"${VERSION}\"/" "$cask"
-          sed -i "s/arm:   \"[0-9a-f]*\"/arm:   \"${SHA_ARM}\"/" "$cask"
-          sed -i "s/intel: \"[0-9a-f]*\"/intel: \"${SHA_INTEL}\"/" "$cask"
+          sed -i "s/^  sha256 \"[0-9a-f]*\"/  sha256 \"${SHA}\"/" "$cask"
+          # A re-run for a tag the cask already holds has nothing to commit.
+          git diff --quiet && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "lectern ${VERSION}"
