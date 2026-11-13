@@ -286,7 +286,7 @@ describe('AnthropicClient', () => {
       await vi.advanceTimersByTimeAsync(10_000)
       expect((await promise).outputText).toBe('ok')
       expect(notices).toHaveLength(1)
-      expect(notices[0].status).toBe(529)
+      expect(notices[0].kind).toBe('server')
     })
 
     it('does not retry a rejected key', async () => {

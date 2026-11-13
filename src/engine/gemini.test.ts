@@ -104,7 +104,7 @@ describe('GeminiClient rate-limit visibility', () => {
     await promise
 
     expect(notices).toHaveLength(1)
-    expect(notices[0]).toMatchObject({ status: 429, attempt: 1, waitMs: 30_000 })
+    expect(notices[0]).toMatchObject({ kind: 'rate_limited', attempt: 1, waitMs: 30_000 })
   })
 
   it('honors the server’s retry-after over its own backoff', async () => {
@@ -209,7 +209,7 @@ describe('GeminiClient rate-limit visibility', () => {
     await vi.advanceTimersByTimeAsync(10_000)
     await promise
 
-    expect(notices[0]).toMatchObject({ status: 0 })
+    expect(notices[0]).toMatchObject({ kind: 'network' })
   })
 })
 

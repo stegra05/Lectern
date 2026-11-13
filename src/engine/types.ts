@@ -5,7 +5,7 @@
  */
 
 import type { ProviderId } from './config'
-import type { DocumentRef } from './llm'
+import type { DocumentRef, TransientKind } from './llm'
 
 export type NoteKind = 'Basic' | 'Cloze'
 
@@ -230,8 +230,8 @@ export type PipelinePhase = 'uploading' | 'mapping' | 'generating' | 'reflecting
 
 /** A wait the model client is about to take before trying a request again. */
 export interface RetryNotice {
-  /** HTTP status that caused it; 0 for a network-level failure. */
-  status: number
+  /** What went wrong, for the countdown to name. */
+  kind: TransientKind
   /** 1-based: the wait before attempt `attempt + 1`. */
   attempt: number
   maxAttempts: number

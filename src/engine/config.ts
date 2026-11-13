@@ -195,6 +195,14 @@ export const ANTHROPIC_MAX_TOKENS = 64_000
 export const RATE_LIMIT_MAX_RETRIES = 5
 export const RETRY_BASE_DELAY_MS = 2000
 export const RETRY_MAX_DELAY_MS = 60_000
+/** A request that timed out is tried once more, not five times: under load
+ *  OpenAI can leave a request hanging, and five more full waits kept a
+ *  student waiting the better part of an hour. */
+export const TIMEOUT_MAX_RETRIES = 1
+/** How long an OpenAI request may run before it counts as hung. About twice
+ *  the longest turn measured (a high-effort concept map of a large lecture,
+ *  2-3 minutes); the SDK's own default is 10 minutes. */
+export const OPENAI_REQUEST_TIMEOUT_MS = 5 * 60_000
 export const UPLOAD_MAX_RETRIES = 3
 /** How long to poll a freshly uploaded file for ACTIVE state. */
 export const FILE_ACTIVE_TIMEOUT_MS = 120_000

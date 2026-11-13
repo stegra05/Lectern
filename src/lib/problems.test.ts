@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AnkiApiError, AnkiTransportError } from '../engine/anki'
 import { LlmError } from '../engine/llm'
 import { LINKS, PROVIDER_LINKS } from './links'
-import { describeProblem, describeSyncFailure } from './problems'
+import { describeProblem, describeSyncFailure, waitCause } from './problems'
 
 describe('describeProblem', () => {
   it('sends a rejected key to Settings, with a way to get a new one', () => {
@@ -40,6 +40,17 @@ describe('describeProblem', () => {
     )
     expect(problem.retry).toBe(false)
     expect(problem.link?.url).toBe(PROVIDER_LINKS.gemini.rateLimits)
+  })
+
+  it('says a request hung, without blaming the student’s connection', () => {
+    const problem = describeProblem(
+      new LlmError('Request timed out.', 0, 'timeout', 'openai'),
+      'generating',
+    )
+    expect(problem.title).toBe('OpenAI stopped answering')
+    expect(problem.body).not.toMatch(/internet/)
+    expect(problem.retry).toBe(true)
+    expect(problem.link?.url).toBe(PROVIDER_LINKS.openai.status)
   })
 
   it('names an unreachable Anki and how to fix it, whatever Lectern was doing', () => {
@@ -80,5 +91,12 @@ describe('describeSyncFailure', () => {
 
   it('tells a silent Anki apart from a refusal', () => {
     expect(describeSyncFailure(new AnkiTransportError('timeout'))).toBe('Anki stopped answering')
+  })
+})
+
+describe('waitCause', () => {
+  it('names a timeout apart from a dropped connection', () => {
+    expect(waitCause('timeout')).toBe('No answer in time')
+    expect(waitCause('network')).toBe('Connection lost')
   })
 })

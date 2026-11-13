@@ -13,7 +13,13 @@
  * the document is billed at the cache-read rate after the first turn.
  */
 
-import Anthropic, { APIConnectionError, APIError, NotFoundError, toFile } from '@anthropic-ai/sdk'
+import Anthropic, {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  APIError,
+  NotFoundError,
+  toFile,
+} from '@anthropic-ai/sdk'
 import type {
   BetaContentBlockParam,
   BetaMessage,
@@ -219,7 +225,7 @@ function parseMessage(message: BetaMessage, conversation: AnthropicConversation)
 }
 
 const toLlmError = (e: unknown): LlmError =>
-  fromSdkError(e, 'anthropic', { APIError, APIConnectionError }, kindFor)
+  fromSdkError(e, 'anthropic', { APIError, APIConnectionError, APIConnectionTimeoutError }, kindFor)
 
 function kindFor(status: number, message: string): LlmErrorKind {
   if (status === 401 || status === 403) return 'key_rejected'

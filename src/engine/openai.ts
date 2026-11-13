@@ -7,7 +7,13 @@
  * in the activity log like Gemini's do.
  */
 
-import OpenAI, { APIConnectionError, APIError, NotFoundError, toFile } from 'openai'
+import OpenAI, {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  APIError,
+  NotFoundError,
+  toFile,
+} from 'openai'
 import type {
   FunctionTool,
   ResponseCreateParamsNonStreaming,
@@ -29,6 +35,7 @@ import {
   type TurnRequest,
   type TurnResult,
 } from './llm'
+import { OPENAI_REQUEST_TIMEOUT_MS } from './config'
 import { requireAll } from './strictSchema'
 
 export class OpenAIClient implements LlmClient {
@@ -42,7 +49,13 @@ export class OpenAIClient implements LlmClient {
   ) {
     // The key lives in the user's keychain and the request leaves from their
     // own machine: the "browser" here is the app's webview.
-    this.sdk = new OpenAI({ apiKey, fetch: fetchFn, maxRetries: 0, dangerouslyAllowBrowser: true })
+    this.sdk = new OpenAI({
+      apiKey,
+      fetch: fetchFn,
+      maxRetries: 0,
+      timeout: OPENAI_REQUEST_TIMEOUT_MS,
+      dangerouslyAllowBrowser: true,
+    })
   }
 
   async uploadPdf(
@@ -205,7 +218,7 @@ function parseArguments(raw: string): unknown {
 }
 
 const toLlmError = (e: unknown): LlmError =>
-  fromSdkError(e, 'openai', { APIError, APIConnectionError }, kindFor)
+  fromSdkError(e, 'openai', { APIError, APIConnectionError, APIConnectionTimeoutError }, kindFor)
 
 function kindFor(status: number, message: string, code: string): LlmErrorKind {
   if (status === 401 || code === 'invalid_api_key') return 'key_rejected'
