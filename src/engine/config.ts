@@ -114,19 +114,13 @@ export const PROVIDERS: Record<ProviderId, { label: string; voice: string }> = {
   anthropic: { label: 'Claude', voice: 'Claude' },
 }
 
-export const DEFAULT_MODEL = 'gemini-3.8-flash'
+export const DEFAULT_MODEL = 'gemini-4-hydrogen'
 export const MODEL_CHOICES = [
   {
-    id: 'gemini-3.8-flash',
+    id: 'gemini-4-hydrogen',
     provider: 'gemini',
-    label: 'Gemini 3.8 Flash',
-    note: 'fast, agentic (recommended)',
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    provider: 'gemini',
-    label: 'Gemini 3.1 Pro',
-    note: 'deepest reasoning, slower',
+    label: 'Gemini 4 Hydrogen',
+    note: 'fast, grounded (recommended)',
   },
   { id: 'gpt-6-luna', provider: 'openai', label: 'GPT-6 Luna', note: 'lowest cost' },
   {
@@ -154,18 +148,20 @@ export function providerOf(model: string): ProviderId {
 
 /** Models that were once offered and no longer are. A saved setting wins over
  *  DEFAULT_MODEL on load, so without this an existing install would sit on a
- *  retired id forever — and keep paying the older, higher output rate. */
+ *  retired id forever, on a model the reviews have since found worse. */
 export const MODEL_MIGRATIONS: Record<string, string> = {
-  'gemini-3.7-flash': 'gemini-3.8-flash',
-  'gemini-3.6-flash': 'gemini-3.8-flash',
-  'gemini-3.5-flash': 'gemini-3.8-flash',
-  'gemini-3-flash': 'gemini-3.8-flash',
-  'gemini-3-pro': 'gemini-3.1-pro-preview',
+  'gemini-3.8-flash': 'gemini-4-hydrogen',
+  'gemini-3.7-flash': 'gemini-4-hydrogen',
+  'gemini-3.6-flash': 'gemini-4-hydrogen',
+  'gemini-3.5-flash': 'gemini-4-hydrogen',
+  'gemini-3-flash': 'gemini-4-hydrogen',
+  'gemini-3.1-pro-preview': 'gemini-4-hydrogen',
+  'gemini-3-pro': 'gemini-4-hydrogen',
 }
 
 /** Thinking effort, in the three levels every provider understands: Gemini's
  *  thinking_level, OpenAI's reasoning effort and Claude's output effort all
- *  take low/medium/high. (`minimal`, a Gemini 3.6-ism, errors on 3.8.) */
+ *  take low/medium/high. (`minimal`, a Gemini 3.6-ism, errors from 3.8 on.) */
 export type ThinkingLevel = 'low' | 'medium' | 'high'
 /** Thinking effort per phase. `low` suits the agentic loops — few steps per
  *  decision; the one-shot document analysis gets `high`, and review edits sit
@@ -194,8 +190,8 @@ export function effortFor(model: string, phase: ThinkingPhase): ThinkingLevel {
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
 /** Pins the May-2026 Interactions API schema (`steps` timeline) — required
- *  when not going through an official SDK. Still the current revision for
- *  3.8 Flash; the model bump introduced no new one. */
+ *  when not going through an official SDK. Still the current revision:
+ *  neither 3.8 Flash nor Gemini 4 introduced a new one. */
 export const GEMINI_API_REVISION = '2026-05-20'
 
 /** Output ceiling per Claude turn. Generous because thinking counts against
@@ -239,7 +235,9 @@ export interface ModelPrice {
 const gemini = (input: number, output: number): ModelPrice => ({ input, output })
 
 export const MODEL_PRICING: Record<string, ModelPrice> = {
-  // Introductory rate through 2026-12-31; doubles to 1.5/7.5 on 2027-01-01.
+  'gemini-4-hydrogen': gemini(1.5, 7.5),
+  // Retired 2026-11-13 at its introductory rate: blind reviews put its decks
+  // at 19/30 against Hydrogen's 24, on answers that add to the source.
   'gemini-3.8-flash': gemini(0.75, 3.75),
   'gemini-3.7-flash': gemini(0.75, 3.75),
   'gemini-3.6-flash': gemini(1.5, 7.5),
@@ -256,6 +254,12 @@ export const MODEL_PRICING: Record<string, ModelPrice> = {
     cacheRead: 0.1,
     longPrompt: { aboveTokens: 272_000, input: 0.2, output: 0.75 },
   },
+  'gpt-6.1-terra': {
+    input: 1.0,
+    output: 5.0,
+    cacheRead: 0.05,
+    longPrompt: { aboveTokens: 272_000, input: 2.0, output: 7.5 },
+  },
   'claude-haiku-5-5': {
     input: 0.1,
     output: 0.5,
@@ -264,7 +268,7 @@ export const MODEL_PRICING: Record<string, ModelPrice> = {
     // A lecture PDF with its page images usually crosses this line.
     longPrompt: { aboveTokens: 100_000, input: 0.5, output: 2.5 },
   },
-  'claude-sonnet-5-5': { input: 2.0, output: 10.0, cacheRead: 0.1, cacheWrite: 1.25 },
+  'claude-sonnet-5-5': { input: 2.0, output: 10.0, cacheRead: 0.05, cacheWrite: 1.25 },
   default: { input: 0.5, output: 4.0, cacheRead: 0.1 },
 }
 

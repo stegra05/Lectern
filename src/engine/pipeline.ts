@@ -8,8 +8,7 @@
  *   2. generating  — agentic tool loop: the model calls submit_cards, every
  *                    batch is quality-gated and deduped, and the tool result
  *                    feeds back verdicts + a fresh coverage ledger so the
- *                    model plans the next batch itself (thinking: low, the
- *                    Flash agentic mode)
+ *                    model plans the next batch itself (thinking: low)
  *   3. reflecting  — agentic review loop: the model edits the deck through
  *                    update_card / add_cards / remove_cards, each edit gated
  *                    like generation, until finish_review (thinking: medium)

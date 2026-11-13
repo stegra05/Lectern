@@ -41,9 +41,10 @@ interface Variant {
 const DEEPER_LOOPS: EffortPlan = { generating: 'medium', reflecting: 'high' }
 
 const VARIANTS: Variant[] = [
-  { name: 'gemini-flash', model: 'gemini-3.8-flash' },
+  { name: 'gemini-hydrogen', model: 'gemini-4-hydrogen' },
   { name: 'luna', model: 'gpt-6-luna' },
   { name: 'luna-deeper', model: 'gpt-6-luna', effort: DEEPER_LOOPS },
+  { name: 'terra', model: 'gpt-6.1-terra' },
   { name: 'haiku', model: 'claude-haiku-5-5' },
   { name: 'haiku-deeper', model: 'claude-haiku-5-5', effort: DEEPER_LOOPS },
   { name: 'sonnet', model: 'claude-sonnet-5-5' },

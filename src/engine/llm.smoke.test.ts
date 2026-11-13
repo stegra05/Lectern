@@ -1,6 +1,6 @@
 /**
- * Live smoke test for every provider adapter. Each provider runs only when
- * its key is set:
+ * Live smoke test for every model the picker offers. A model runs only when
+ * its provider's key is set:
  *   GEMINI_API_KEY=... OPENAI_API_KEY=... ANTHROPIC_API_KEY=... \
  *     pnpm vitest run src/engine/llm.smoke.test.ts
  *
@@ -14,16 +14,16 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { createClient } from './clients'
-import type { ProviderId } from './config'
+import { MODEL_CHOICES, type ProviderId } from './config'
 import { parseJsonPayload, type ToolDeclaration } from './llm'
 
 const PDF_PATH = process.env.LECTERN_TEST_PDF
 
-const PROVIDERS: Array<{ provider: ProviderId; model: string; key: string | undefined }> = [
-  { provider: 'gemini', model: 'gemini-3.8-flash', key: process.env.GEMINI_API_KEY },
-  { provider: 'openai', model: 'gpt-6-luna', key: process.env.OPENAI_API_KEY },
-  { provider: 'anthropic', model: 'claude-haiku-5-5', key: process.env.ANTHROPIC_API_KEY },
-]
+const KEYS: Record<ProviderId, string | undefined> = {
+  gemini: process.env.GEMINI_API_KEY,
+  openai: process.env.OPENAI_API_KEY,
+  anthropic: process.env.ANTHROPIC_API_KEY,
+}
 
 const ECHO_TOOL: ToolDeclaration = {
   name: 'echo_check',
@@ -40,8 +40,9 @@ const IDLE_TOOL: ToolDeclaration = {
   parameters: { type: 'object', properties: {} },
 }
 
-for (const { provider, model, key } of PROVIDERS) {
-  describe.skipIf(!key)(`${provider} adapter (live)`, () => {
+for (const { id: model, provider } of MODEL_CHOICES) {
+  const key = KEYS[provider]
+  describe.skipIf(!key)(`${model} (live)`, () => {
     // Built lazily: the SDKs refuse to construct without a key, and a
     // skipped suite still runs its body.
     const client = () => createClient(provider, key ?? '', fetch)
