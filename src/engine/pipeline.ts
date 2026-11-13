@@ -267,13 +267,22 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   // A card flagged answer_not_on_cited_page goes back for a rewrite once. Its
   // second try lands, flag and all: the check misses text inside slide
   // images, so the model must be able to stand by a card. A rewrite keeps its
-  // front or its facets, so either one recognises the second try.
+  // front or its facets, so either one recognises the second try. A rewrite
+  // with a new front and no known facet looks like a new card, though, and a
+  // send-back is no stall (see nonProgressRounds), so the run sends back at
+  // most its own budget's worth; past that, flagged cards land and the
+  // review's mandatory handling takes over.
   const bouncedKeys = new Set<string>()
   const bouncedFacets = new Set<string>()
+  let sentBack = 0
   const isSecondTry = (card: Card, key: string): boolean =>
     bouncedKeys.has(key) ||
     findNearDuplicate(key, bouncedKeys) !== null ||
     card.facetIds.some((id) => bouncedFacets.has(id))
+  const shouldSendBack = (card: Card, key: string): boolean =>
+    card.qualityIssues.includes('answer_not_on_cited_page') &&
+    sentBack < sizing.totalCardCap &&
+    !isSecondTry(card, key)
   const finishVerdict = () =>
     handleFinishRequest(
       catalog,
@@ -414,7 +423,8 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: firstField(card), reasons: ['budget_exhausted'] })
           continue
         }
-        if (card.qualityIssues.includes('answer_not_on_cited_page') && !isSecondTry(card, key)) {
+        if (shouldSendBack(card, key)) {
+          sentBack++
           bounced.push(card)
           rejected.push({ front: firstField(card), reasons: ['answer_not_on_cited_page'] })
           continue

@@ -932,4 +932,72 @@ describe('runPipeline (answers the cited pages do not hold)', () => {
     ])
     expect(outcome.cards.find((c) => c.fields.Front === 'Where does A apply?')).toBeDefined()
   })
+
+  it('sends back no more cards than the deck budget', async () => {
+    // Every batch is two new fronts with no facets, all flagged: nothing marks
+    // them as second tries, so only the bound ends the send-backs.
+    let n = 0
+    const freshBatch = (id: string): ScriptedTurn => ({
+      id,
+      steps: [
+        {
+          type: 'function_call',
+          id: `call-${id}`,
+          name: 'submit_cards',
+          arguments: {
+            cards: [++n, ++n].map((i) => card(`Why ${i}?`, INVENTED, [1], ['c-a'], [])),
+          },
+        },
+      ],
+    })
+    const finish = (id: string): ScriptedTurn => ({
+      id,
+      steps: [{ type: 'function_call', id: `call-${id}`, name: 'finish_review', arguments: {} }],
+    })
+    const captured: CapturedInteraction[] = []
+    const events: PipelineEvent[] = []
+    const outcome = await runPipeline({
+      pdfBytes: new Uint8Array([1, 2, 3]),
+      pdfInfo: { pageCount: 4, textChars: 1000, imageCount: 0, pageTexts: PAGE_TEXTS },
+      fileName: 'test.pdf',
+      density: 'standard',
+      model: 'gemini-3.8-flash',
+      apiKey: 'test-key',
+      fetchFn: makeScriptedFetch(
+        [
+          { id: 'i-map', output_text: JSON.stringify(OFF_SOURCE_MAP) },
+          ...['i-gen-1', 'i-gen-2', 'i-gen-3', 'i-gen-4'].map(freshBatch),
+          finish('i-review-1'),
+          finish('i-review-2'),
+        ],
+        captured,
+      ),
+      emit: (e) => events.push(e),
+    })
+
+    const sizing = events.find(
+      (e): e is Extract<PipelineEvent, { type: 'concept_map' }> => e.type === 'concept_map',
+    )?.sizing
+    expect(sizing?.totalCardCap).toBe(4)
+
+    // The first two batches went back, four cards in all; the next two landed,
+    // flag and all, and filled the deck.
+    const sentBack = events.filter((e) => e.type === 'card_rejected')
+    expect(sentBack).toHaveLength(4)
+    expect(outcome.cards.map((c) => c.fields.Front)).toEqual([
+      'Why 5?',
+      'Why 6?',
+      'Why 7?',
+      'Why 8?',
+    ])
+    expect(outcome.cards.every((c) => c.qualityIssues.includes('answer_not_on_cited_page'))).toBe(
+      true,
+    )
+    expect(outcome.terminationReason).toBe('max_cap_reached')
+
+    // The review takes it from there.
+    expect(JSON.stringify(captured[6].body.input)).toContain(
+      '4 cards flagged answer_not_on_cited_page are untouched: c1, c2, c3, c4.',
+    )
+  })
 })
