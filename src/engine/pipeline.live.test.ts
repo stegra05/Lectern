@@ -1,7 +1,7 @@
 /**
  * Full end-to-end live test: real PDF → real agentic pipeline → real Anki
- * sync via AnkiConnect. LECTERN_LIVE_MODEL picks the model (default Gemini
- * 3.8 Flash); the run needs that provider's key, and the Anki leg
+ * sync via AnkiConnect. LECTERN_LIVE_MODEL picks the model (default: the
+ * app's default); the run needs that provider's key, and the Anki leg
  * additionally a running Anki with AnkiConnect.
  *
  *   GEMINI_API_KEY=... pnpm vitest run src/engine/pipeline.live.test.ts
@@ -15,12 +15,12 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { AnkiClient, checkConnection, resolveModelNames, syncCards } from './anki'
 import { createClient } from './clients'
-import { DEFAULT_SETTINGS, providerOf, type ProviderId } from './config'
+import { DEFAULT_MODEL, DEFAULT_SETTINGS, providerOf, type ProviderId } from './config'
 import { runPipeline } from './pipeline'
 import { buildCardTags } from './tags'
 import type { Card, PipelineEvent, Settings } from './types'
 
-const MODEL = process.env.LECTERN_LIVE_MODEL ?? 'gemini-3.8-flash'
+const MODEL = process.env.LECTERN_LIVE_MODEL ?? DEFAULT_MODEL
 const KEY_ENV: Record<ProviderId, string> = {
   gemini: 'GEMINI_API_KEY',
   openai: 'OPENAI_API_KEY',
