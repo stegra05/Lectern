@@ -161,7 +161,7 @@ export const MODEL_MIGRATIONS: Record<string, string> = {
 
 /** Thinking effort, in the three levels every provider understands: Gemini's
  *  thinking_level, OpenAI's reasoning effort and Claude's output effort all
- *  take low/medium/high. (`minimal`, a Gemini 3.6-ism, errors on 3.8.) */
+ *  take low/medium/high. (`minimal`, a Gemini 3.6-ism, errors from 3.8 on.) */
 export type ThinkingLevel = 'low' | 'medium' | 'high'
 /** Thinking effort per phase. `low` suits the agentic loops — few steps per
  *  decision; the one-shot document analysis gets `high`, and review edits sit
