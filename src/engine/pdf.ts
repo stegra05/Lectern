@@ -1,6 +1,6 @@
 /**
  * PDF handling via pdf.js — metadata for deck sizing plus page thumbnails
- * for the coverage and provenance UI. The PDF itself goes to Gemini natively;
+ * for the coverage and provenance UI. The PDF itself goes to the model natively;
  * nothing here feeds the model.
  */
 

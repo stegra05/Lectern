@@ -2,16 +2,16 @@
  * Every error the student can see is described here, once.
  *
  * The engine throws errors that say what kind of failure happened (a
- * GeminiError kind, an Anki transport or API error, a pdf.js exception);
+ * LlmError kind, an Anki transport or API error, a pdf.js exception);
  * this module turns them into a title, a sentence that names the fix, and
  * the action or link that carries it out. The error banner, toasts and
  * desktop notifications all render from the same Problem.
  */
 
 import { AnkiApiError, AnkiTransportError } from '../engine/anki'
-import { RATE_LIMIT_MAX_RETRIES } from '../engine/config'
-import { GeminiError } from '../engine/gemini'
-import { LINKS, reportIssueUrl, type Link } from './links'
+import { PROVIDERS, RATE_LIMIT_MAX_RETRIES } from '../engine/config'
+import { LlmError } from '../engine/llm'
+import { LINKS, PROVIDER_LINKS, reportIssueUrl, type Link } from './links'
 
 /** What Lectern was doing when the error happened. */
 export type Activity =
@@ -49,11 +49,10 @@ const FALLBACK_TITLE: Record<Activity, string> = {
   opening_anki: 'Lectern could not open Anki',
 }
 
-const RATE_LIMITS: Link = { label: 'See your rate limits', url: LINKS.geminiRateLimits }
 const ANKICONNECT: Link = { label: 'Get AnkiConnect', url: LINKS.ankiConnect }
 
 export function describeProblem(error: unknown, activity: Activity): Problem {
-  if (error instanceof GeminiError) return describeGemini(error, activity)
+  if (error instanceof LlmError) return describeLlm(error, activity)
 
   if (error instanceof AnkiTransportError) {
     return {
@@ -91,63 +90,66 @@ export function describeProblem(error: unknown, activity: Activity): Problem {
   return unknownProblem(error, activity)
 }
 
-function describeGemini(error: GeminiError, activity: Activity): Problem {
+function describeLlm(error: LlmError, activity: Activity): Problem {
+  const name = PROVIDERS[error.provider].label
+  const links = PROVIDER_LINKS[error.provider]
+  const rateLimits: Link = { label: 'See your rate limits', url: links.rateLimits }
   switch (error.kind) {
     case 'key_rejected':
       return {
-        title: 'Gemini rejected the API key',
-        body: 'Check the key in Settings, or create a new one in Google AI Studio.',
+        title: `${name} rejected the API key`,
+        body: `Check the key in Settings, or create a new one in ${links.console}.`,
         fix: 'settings',
         retry: true,
-        link: { label: 'Get a key', url: LINKS.geminiKey },
+        link: { label: 'Get a key', url: links.key },
       }
     case 'quota_daily':
       return {
-        title: 'Your Gemini key’s daily quota is used up',
+        title: `Your ${name} key’s daily quota is used up`,
         body: 'Waiting a few minutes won’t help today. The quota resets tomorrow.',
         retry: false,
-        link: RATE_LIMITS,
+        link: rateLimits,
       }
     case 'rate_limited':
       return {
-        title: 'Gemini is rate-limiting your key',
+        title: `${name} is rate-limiting your key`,
         body:
           `The per-minute limit stayed spent through ${RATE_LIMIT_MAX_RETRIES} retries, ` +
-          'which usually means a free-tier key. Wait a few minutes, then try again.',
+          'which usually means a low usage tier. Wait a few minutes, then try again.',
         retry: true,
-        link: RATE_LIMITS,
+        link: rateLimits,
       }
     case 'spending_cap':
       return {
-        title: 'Your Gemini spending cap was reached',
-        body: 'Raise the cap or check billing for the key’s project in Google AI Studio.',
+        title: `Your ${name} account is out of budget`,
+        body: `A spending cap or the balance stopped the run. Check billing in ${links.console}.`,
         retry: false,
-        link: { label: 'Open your projects', url: LINKS.geminiProjects },
+        link: { label: 'Open billing', url: links.billing },
       }
     case 'server':
       return {
-        title: 'Gemini is having trouble',
+        title: `${name} is having trouble`,
         body:
           `Its servers kept failing through ${RATE_LIMIT_MAX_RETRIES} retries. ` +
-          'This is on Google’s side, so try again in a few minutes.',
+          `This is on ${name}’s side, so try again in a few minutes.`,
         retry: true,
-        link: { label: 'Check Gemini’s status', url: LINKS.geminiStatus },
+        link: { label: `Check ${name}’s status`, url: links.status },
       }
     case 'network':
       return {
-        title: 'Lectern can’t reach Gemini',
+        title: `Lectern can’t reach ${name}`,
         body: 'The connection kept dropping. Check your internet connection, then try again.',
         retry: true,
       }
     case 'bad_response':
       return {
-        title: 'Gemini sent back something Lectern couldn’t read',
+        title: `${name} sent back something Lectern couldn’t read`,
         body: 'This is usually a one-off, and trying again tends to fix it.',
         retry: true,
       }
     case 'pdf_rejected':
       return {
-        title: 'Gemini couldn’t process this PDF',
+        title: `${name} couldn’t process this PDF`,
         body:
           'It may be damaged, or scanned pages without any text. ' +
           'Try exporting it again, or pick a different file.',
@@ -155,12 +157,19 @@ function describeGemini(error: GeminiError, activity: Activity): Problem {
       }
     case 'pdf_timeout':
       return {
-        title: 'Gemini took too long to read the PDF',
+        title: `${name} took too long to read the PDF`,
         body: 'Large or image-heavy PDFs can time out. Try again, or split the lecture into parts.',
         retry: true,
       }
+    case 'refused':
+      return {
+        title: `${name} declined this material`,
+        body: 'Its safety checks stopped the request. A different model in Settings may accept it.',
+        fix: 'settings',
+        retry: false,
+      }
     case 'request_rejected':
-      return unknownProblem(error, activity, `Gemini refused the request: “${error.message}”`)
+      return unknownProblem(error, activity, `${name} refused the request: “${error.message}”`)
   }
 }
 

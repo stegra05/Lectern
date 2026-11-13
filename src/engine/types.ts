@@ -4,6 +4,9 @@
  * speaks these types. There is deliberately no second "transport" event model.
  */
 
+import type { ProviderId } from './config'
+import type { DocumentRef } from './llm'
+
 export type NoteKind = 'Basic' | 'Cloze'
 
 /** A flashcard as it lives in the app. Fields hold the actual Anki note fields
@@ -192,7 +195,7 @@ export interface GateVerdict {
 
 export type PipelinePhase = 'uploading' | 'mapping' | 'generating' | 'reflecting' | 'complete'
 
-/** A wait the Gemini client is about to take before trying a request again. */
+/** A wait the model client is about to take before trying a request again. */
 export interface RetryNotice {
   /** HTTP status that caused it; 0 for a network-level failure. */
   status: number
@@ -212,6 +215,7 @@ export type PipelineEvent =
       quote?: string
     }
   | ({ type: 'waiting' } & RetryNotice)
+  | { type: 'document_uploaded'; provider: ProviderId; document: DocumentRef }
   | { type: 'concept_map'; conceptMap: ConceptMap; sizing: SizingPlan }
   | { type: 'card_accepted'; card: Card }
   | { type: 'card_rejected'; front: string; reasons: RejectionReason[] }
@@ -228,7 +232,7 @@ export type PipelineSink = (event: PipelineEvent) => void
 // ---------------------------------------------------------------------------
 
 export interface Settings {
-  /** Gemini model id, e.g. "gemini-3.8-flash" */
+  /** Model id, e.g. "gemini-3.8-flash"; it also picks the provider. */
   model: string
   ankiUrl: string
   /** Install and sync to the bundled "Lectern Basic"/"Lectern Cloze" note

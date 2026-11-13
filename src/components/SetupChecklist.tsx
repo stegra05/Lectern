@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { LINKS } from '../lib/links'
-import { useLectern } from '../state/store'
+import { PROVIDERS, providerOf } from '../engine/config'
+import { LINKS, PROVIDER_LINKS } from '../lib/links'
+import { selectHasApiKey, useLectern } from '../state/store'
 import { ExternalLink } from './ExternalLink'
 
 /**
@@ -10,7 +11,10 @@ import { ExternalLink } from './ExternalLink'
  * Disappears once both are in place.
  */
 export function SetupChecklist() {
-  const hasApiKey = useLectern((s) => s.hasApiKey)
+  const hasApiKey = useLectern(selectHasApiKey)
+  const provider = useLectern((s) => providerOf(s.settings?.model ?? ''))
+  const name = PROVIDERS[provider].label
+  const links = PROVIDER_LINKS[provider]
   const ankiStatus = useLectern((s) => s.ankiStatus)
   const openSettings = useLectern((s) => s.openSettings)
   const refreshAnki = useLectern((s) => s.refreshAnki)
@@ -22,15 +26,15 @@ export function SetupChecklist() {
     <div className="border-desk-edge/60 bg-desk-raised/50 rise-in mx-auto mt-8 max-w-sm divide-y divide-desk-edge/60 rounded-md border">
       <Row
         done={hasApiKey}
-        title={hasApiKey ? 'Gemini API key saved' : 'Add a Gemini API key'}
+        title={hasApiKey ? `${name} API key saved` : `Add a ${name} API key`}
         note={
           hasApiKey ? (
             'Kept in your keychain.'
           ) : (
             <>
               Needed to generate.{' '}
-              <ExternalLink href={LINKS.geminiKey} className="hover:text-chalk">
-                Free from Google AI Studio
+              <ExternalLink href={links.key} className="hover:text-chalk">
+                Get one from {links.console}
               </ExternalLink>
             </>
           )

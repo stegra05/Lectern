@@ -1,21 +1,45 @@
 import { describe, expect, it } from 'vitest'
 import { AnkiApiError, AnkiTransportError } from '../engine/anki'
-import { GeminiError } from '../engine/gemini'
-import { LINKS } from './links'
+import { LlmError } from '../engine/llm'
+import { LINKS, PROVIDER_LINKS } from './links'
 import { describeProblem, describeSyncFailure } from './problems'
 
 describe('describeProblem', () => {
   it('sends a rejected key to Settings, with a way to get a new one', () => {
-    const problem = describeProblem(new GeminiError('bad key', 400, 'key_rejected'), 'generating')
+    const problem = describeProblem(
+      new LlmError('bad key', 400, 'key_rejected', 'gemini'),
+      'generating',
+    )
     expect(problem.fix).toBe('settings')
     expect(problem.retry).toBe(true)
-    expect(problem.link?.url).toBe(LINKS.geminiKey)
+    expect(problem.link?.url).toBe(PROVIDER_LINKS.gemini.key)
+  })
+
+  it('names the provider the error came from, and sends the student to its console', () => {
+    const problem = describeProblem(
+      new LlmError('invalid x-api-key', 401, 'key_rejected', 'anthropic'),
+      'generating',
+    )
+    expect(problem.title).toBe('Claude rejected the API key')
+    expect(problem.link?.url).toBe(PROVIDER_LINKS.anthropic.key)
+  })
+
+  it('treats an empty OpenAI balance as billing, not something to wait out', () => {
+    const problem = describeProblem(
+      new LlmError('You exceeded your current quota', 429, 'spending_cap', 'openai'),
+      'generating',
+    )
+    expect(problem.retry).toBe(false)
+    expect(problem.link?.url).toBe(PROVIDER_LINKS.openai.billing)
   })
 
   it('offers no retry when a daily quota is spent', () => {
-    const problem = describeProblem(new GeminiError('per day', 429, 'quota_daily'), 'generating')
+    const problem = describeProblem(
+      new LlmError('per day', 429, 'quota_daily', 'gemini'),
+      'generating',
+    )
     expect(problem.retry).toBe(false)
-    expect(problem.link?.url).toBe(LINKS.geminiRateLimits)
+    expect(problem.link?.url).toBe(PROVIDER_LINKS.gemini.rateLimits)
   })
 
   it('names an unreachable Anki and how to fix it, whatever Lectern was doing', () => {

@@ -1,10 +1,10 @@
 /**
- * Follow-up requests — the post-completion chat in the activity log.
+ * Follow-up requests: the post-completion chat in the activity log.
  *
  * After the pipeline completes, the user can ask for additional cards in
  * natural language ("add cards on X", "emphasize Y"). The request continues
- * the same server-side Gemini conversation — the model still holds the
- * document, the concept map, and the review history — as a small agentic
+ * the session's conversation (the model still holds the document, the
+ * concept map, and the review history) as a small agentic
  * loop: add_cards batches pass the same quality gate as generation and are
  * deduped against the existing deck. Additions only; existing cards are
  * never touched.
@@ -14,16 +14,18 @@
  * Anki sync until the user opts them in.
  */
 
+import { createClient } from './clients'
 import {
   FOLLOWUP_CARD_CAP,
-  GEMINI_PRICING,
   MAX_FOLLOWUP_ROUNDS,
   NON_PROGRESS_MAX_ROUNDS,
-  THINKING_BY_PHASE,
+  effortFor,
+  providerOf,
 } from './config'
+import { UsageMeter } from './cost'
 import { buildCoverageCatalog, buildGenerationGapText, computeCoverageData } from './coverage'
-import { GeminiClient, type GeminiUsage, type InputPart } from './gemini'
-import { FINISH_REQUEST_TOOL, FOLLOWUP_ADD_CARDS_TOOL, parseSubmitCardsArgs } from './geminiSchemas'
+import type { Conversation, InputPart, Usage } from './llm'
+import { FOLLOWUP_TOOLS, SESSION_TOOLS, parseSubmitCardsArgs } from './schemas'
 import {
   buildCard,
   closeUnansweredCalls,
@@ -50,11 +52,9 @@ export interface FollowUpOptions {
   deck: Card[]
   conceptMap: ConceptMap
   seed: FollowUpSeed
-  focusPrompt?: string
   /** The document the deck was built from, so a follow-up card's citations
    *  face the same checks generation did. */
   pdfInfo?: PdfInfo
-  model: string
   apiKey: string
   fetchFn: typeof fetch
   emit: PipelineSink
@@ -68,23 +68,22 @@ export interface FollowUpOutcome {
   note?: string
   /** Continuation handle for the next request. */
   seed: FollowUpSeed
-  usage: GeminiUsage & { costUsd: number }
+  usage: Usage & { costUsd: number }
 }
 
 export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcome> {
   const { emit, signal } = opts
-  const client = new GeminiClient(opts.apiKey, opts.fetchFn, undefined, (notice) =>
+  // The conversation continues on the model it started with.
+  const { model } = opts.seed
+  const client = createClient(providerOf(model), opts.apiKey, opts.fetchFn, (notice) =>
     emit({ type: 'waiting', ...notice }),
   )
-  const usage: GeminiUsage = { inputTokens: 0, outputTokens: 0 }
-  const track = (u: GeminiUsage) => {
-    usage.inputTokens += u.inputTokens
-    usage.outputTokens += u.outputTokens
-  }
+  const meter = new UsageMeter(model)
+  const track = (u: Usage) => meter.add(u)
 
   const ctx: PromptContext = {
     language: opts.conceptMap.language || 'en',
-    focusPrompt: opts.focusPrompt,
+    focusPrompt: opts.seed.focusPrompt,
   }
   const request = sanitizeFocusPrompt(opts.request, MAX_REQUEST_PROMPT_LEN)
   const catalog = buildCoverageCatalog(opts.conceptMap, opts.pdfInfo?.pageCount)
@@ -100,51 +99,44 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
   let idleRounds = 0
   let pendingResults: InputPart[] = []
 
-  const tools = [FOLLOWUP_ADD_CARDS_TOOL, FINISH_REQUEST_TOOL]
-  let response = await client.interact({
-    model: opts.model,
-    instructions: systemInstructions(ctx),
-    previousInteractionId: opts.seed.interactionId,
-    input: [
-      ...opts.seed.pendingInput,
-      {
-        type: 'text',
-        text: followUpRequestPrompt(ctx, {
-          request,
-          deckFronts: opts.deck.map((card) => firstField(card)).filter((front) => front !== ''),
-          cardBudget: FOLLOWUP_CARD_CAP,
-          gapText: buildGenerationGapText(catalog, coverage, opts.deck),
-        }),
-      },
-    ],
-    tools,
-    toolChoice: 'any',
-    thinkingLevel: THINKING_BY_PHASE.followUp,
-    signal,
-  })
+  const requestTurn = (conversation: Conversation, input: InputPart[]) =>
+    client.turn({
+      model,
+      instructions: systemInstructions(opts.seed.focusPrompt),
+      conversation,
+      input,
+      tools: SESSION_TOOLS,
+      activeTools: FOLLOWUP_TOOLS,
+      requireTool: true,
+      effort: effortFor(model, 'followUp'),
+      signal,
+    })
+  let response = await requestTurn(opts.seed.conversation, [
+    ...opts.seed.pendingInput,
+    {
+      type: 'text',
+      text: followUpRequestPrompt(ctx, {
+        request,
+        deckFronts: opts.deck.map((card) => firstField(card)).filter((front) => front !== ''),
+        cardBudget: FOLLOWUP_CARD_CAP,
+        gapText: buildGenerationGapText(catalog, coverage, opts.deck),
+      }),
+    },
+  ])
   track(response.usage)
 
   for (let round = 1; round <= MAX_FOLLOWUP_ROUNDS && !finished; round++) {
     throwIfAborted(signal)
 
-    if (response.functionCalls.length === 0) {
+    if (response.toolCalls.length === 0) {
       idleRounds++
       if (idleRounds >= NON_PROGRESS_MAX_ROUNDS) break
-      response = await client.interact({
-        model: opts.model,
-        instructions: systemInstructions(ctx),
-        previousInteractionId: response.id,
-        input: [
-          {
-            type: 'text',
-            text: 'Continue: call add_cards with the remaining cards, or finish_request if the request is served.',
-          },
-        ],
-        tools,
-        toolChoice: 'any',
-        thinkingLevel: THINKING_BY_PHASE.followUp,
-        signal,
-      })
+      response = await requestTurn(response.conversation, [
+        {
+          type: 'text',
+          text: 'Continue: call add_requested_cards with the remaining cards, or finish_request if the request is served.',
+        },
+      ])
       track(response.usage)
       continue
     }
@@ -152,7 +144,7 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
     const results: InputPart[] = []
     let acceptedThisRound = 0
 
-    for (const call of response.functionCalls) {
+    for (const call of response.toolCalls) {
       if (call.name === 'finish_request') {
         finished = true
         const args = (call.arguments ?? {}) as Record<string, unknown>
@@ -161,9 +153,12 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
         continue
       }
 
-      if (call.name !== 'add_cards') {
+      if (call.name !== 'add_requested_cards') {
         results.push(
-          functionResult(call, `Unknown tool ${call.name}. Use add_cards or finish_request.`),
+          functionResult(
+            call,
+            `Unknown tool ${call.name}. Use add_requested_cards or finish_request.`,
+          ),
         )
         continue
       }
@@ -222,32 +217,21 @@ export async function runFollowUp(opts: FollowUpOptions): Promise<FollowUpOutcom
     idleRounds = acceptedThisRound === 0 ? idleRounds + 1 : 0
     if (idleRounds >= NON_PROGRESS_MAX_ROUNDS) break
 
-    response = await client.interact({
-      model: opts.model,
-      instructions: systemInstructions(ctx),
-      previousInteractionId: response.id,
-      input: results,
-      tools,
-      toolChoice: 'any',
-      thinkingLevel: THINKING_BY_PHASE.followUp,
-      signal,
-    })
+    response = await requestTurn(response.conversation, results)
     pendingResults = []
     track(response.usage)
   }
-
-  const [inPrice, outPrice] = GEMINI_PRICING[opts.model] ?? GEMINI_PRICING.default
-  const costUsd = (usage.inputTokens * inPrice + usage.outputTokens * outPrice) / 1_000_000
 
   return {
     added,
     outsideSourceCount: added.filter((card) => card.outsideSource).length,
     note,
     seed: {
-      interactionId: response.id,
+      ...opts.seed,
+      conversation: response.conversation,
       pendingInput: closeUnansweredCalls(response, pendingResults),
     },
-    usage: { ...usage, costUsd },
+    usage: { ...meter.usage, costUsd: meter.costUsd },
   }
 }
 

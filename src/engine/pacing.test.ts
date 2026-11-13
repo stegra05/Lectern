@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { DYNAMIC_MAX_NOTES_PER_BATCH, DYNAMIC_MIN_NOTES_PER_BATCH } from './config'
-import { computeSizingPlan, detectContentMode } from './pacing'
+import { computeSizingPlan, conceptTarget, detectContentMode } from './pacing'
 import type { PdfInfo } from './types'
 
 const pdf = (pageCount: number, textChars: number, imageCount = 0): PdfInfo => ({
@@ -81,5 +81,28 @@ describe('computeSizingPlan', () => {
       // cap 300 -> target 45 -> clamped to DYNAMIC_MAX
       expect(computeSizingPlan(pdf(100, 300000)).batchSize).toBe(DYNAMIC_MAX_NOTES_PER_BATCH)
     })
+  })
+})
+
+describe('conceptTarget', () => {
+  it('follows the slides that earn a card', () => {
+    // 72 slides → about 43 → 26 to 40 concepts.
+    expect(conceptTarget({ pageCount: 72, textChars: 29_000, imageCount: 0 })).toEqual({
+      min: 26,
+      max: 40,
+    })
+  })
+
+  it('gives a short dense script concepts by its text, not by its page count', () => {
+    // 3 pages, 4975 chars → about 17 → 10 to 17 concepts.
+    expect(conceptTarget({ pageCount: 3, textChars: 4_975, imageCount: 0 })).toEqual({
+      min: 10,
+      max: 17,
+    })
+  })
+
+  it('stays within the floor and ceiling', () => {
+    expect(conceptTarget({ pageCount: 400, textChars: 100_000, imageCount: 0 }).max).toBe(40)
+    expect(conceptTarget({ pageCount: 1, textChars: 100, imageCount: 0 }).min).toBe(6)
   })
 })

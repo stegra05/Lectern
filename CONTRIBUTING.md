@@ -68,10 +68,11 @@ Every string a student can see (labels, toasts, banners, the activity log,
 exported Markdown) follows the same voice:
 
 - **Name the fix.** An error says what happened and what to do next, in that
-  order. "The Gemini API key was rejected. Check it in Settings." beats
+  order. "Claude rejected the API key. Check it in Settings." beats
   "Request failed (403)."
 - **Speak the student's language, not the engine's.** No tools, rounds, gates,
-  ledgers, slugs or HTTP codes. Say "Gemini", "Anki", "cards", "the lecture".
+  ledgers, slugs or HTTP codes. Say "Gemini", "Claude", "Anki", "cards", "the
+  lecture".
 - **Say it once.** If the banner explains it, the toast doesn't repeat it.
 - **Real plurals.** Use `count(n, 'card')` from `src/engine/plural.ts`, never
   "card(s)".

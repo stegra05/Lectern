@@ -1,8 +1,10 @@
-import { useLectern } from '../state/store'
+import { PROVIDERS, providerOf } from '../engine/config'
+import { selectHasApiKey, useLectern } from '../state/store'
 
 export function TitleBar() {
   const ankiStatus = useLectern((s) => s.ankiStatus)
-  const hasApiKey = useLectern((s) => s.hasApiKey)
+  const hasApiKey = useLectern(selectHasApiKey)
+  const provider = useLectern((s) => providerOf(s.settings?.model ?? ''))
   const openSettings = useLectern((s) => s.openSettings)
   const view = useLectern((s) => s.view)
   const fileName = useLectern((s) => s.fileName)
@@ -51,7 +53,7 @@ export function TitleBar() {
       )}
       {!hasApiKey && (
         <Problem
-          label="Gemini"
+          label={PROVIDERS[provider].label}
           problem="no key"
           title="No API key yet. Add one in Settings"
           onClick={() => openSettings(true)}

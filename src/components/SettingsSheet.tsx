@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MODEL_CHOICES } from '../engine/config'
+import { MODEL_CHOICES, PROVIDERS, providerOf, type ProviderId } from '../engine/config'
 import { NOTE_TYPE_THEMES, type NoteTypeTheme } from '../engine/noteTypes'
 import { buildCardTags, unknownTagPlaceholders } from '../engine/tags'
 import type { Settings } from '../engine/types'
 import { confirmDiscard } from '../lib/confirm'
 import { deleteApiKey, setApiKey } from '../lib/settings'
 import { useLectern } from '../state/store'
-import { APP_VERSION, LINKS, reportIssueUrl } from '../lib/links'
+import { APP_VERSION, LINKS, PROVIDER_LINKS, reportIssueUrl } from '../lib/links'
 import { ExternalLink } from './ExternalLink'
 
 export function SettingsSheet() {
   const open = useLectern((s) => s.settingsOpen)
   const openSettings = useLectern((s) => s.openSettings)
   const settings = useLectern((s) => s.settings)
-  const hasApiKey = useLectern((s) => s.hasApiKey)
-  const setHasApiKey = useLectern((s) => s.setHasApiKey)
+  const savedKeys = useLectern((s) => s.savedKeys)
+  const setKeySaved = useLectern((s) => s.setKeySaved)
   const applySettings = useLectern((s) => s.applySettings)
   const ankiStatus = useLectern((s) => s.ankiStatus)
   const refreshAnki = useLectern((s) => s.refreshAnki)
@@ -111,11 +111,17 @@ export function SettingsSheet() {
     enableDefaultTag: draft.enableDefaultTag,
   })
 
+  // The key field belongs to the provider of the model picked above it.
+  const provider = providerOf(draft.model)
+  const providerName = PROVIDERS[provider].label
+  const providerLinks = PROVIDER_LINKS[provider]
+  const hasApiKey = savedKeys[provider]
+
   const save = async () => {
     if (keyDraft.trim()) {
       try {
-        await setApiKey(keyDraft.trim())
-        setHasApiKey(true)
+        await setApiKey(provider, keyDraft.trim())
+        setKeySaved(provider, true)
       } catch (e) {
         showProblem(e, 'saving_key')
         return
@@ -150,7 +156,31 @@ export function SettingsSheet() {
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
           <label className="block">
-            <span className="eyebrow">Gemini API key</span>
+            <span className="eyebrow">Model</span>
+            <select
+              value={draft.model}
+              onChange={(e) => {
+                const model = e.target.value
+                // A typed key belongs to the provider it was typed for.
+                if (providerOf(model) !== provider) setKeyDraft('')
+                setDraft({ ...draft, model })
+              }}
+              className="field bg-desk mt-1.5 cursor-pointer"
+            >
+              {(Object.keys(PROVIDERS) as ProviderId[]).map((p) => (
+                <optgroup key={p} label={PROVIDERS[p].label}>
+                  {MODEL_CHOICES.filter((m) => m.provider === p).map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} · {m.note}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="eyebrow">{providerName} API key</span>
             <input
               autoFocus
               type="password"
@@ -159,30 +189,30 @@ export function SettingsSheet() {
               placeholder={
                 hasApiKey
                   ? 'Saved in the system keychain. Paste a new key to replace it'
-                  : 'Paste your Gemini API key'
+                  : `Paste your ${providerName} API key`
               }
               className="field bg-desk mt-1.5"
             />
             {!hasApiKey && (
               <p className="text-chalk-dim mt-1.5 text-xs">
                 No key yet?{' '}
-                <ExternalLink href={LINKS.geminiKey} className="hover:text-chalk">
-                  Get a free one from Google AI Studio
+                <ExternalLink href={providerLinks.key} className="hover:text-chalk">
+                  Get one from {providerLinks.console}
                 </ExternalLink>
               </p>
             )}
             {hasApiKey && (
-              // Deleting the key means fetching a new one from Google to
-              // generate again, so it asks first.
+              // Deleting the key means fetching a new one from the provider
+              // to generate again, so it asks first.
               <button
                 onClick={() => {
                   void confirmDiscard(
                     'Lectern cannot generate cards until you paste a key again.',
-                    'Remove the saved API key?',
+                    `Remove the saved ${providerName} API key?`,
                   ).then((ok) => {
                     if (!ok) return
-                    void deleteApiKey().then(() => {
-                      setHasApiKey(false)
+                    void deleteApiKey(provider).then(() => {
+                      setKeySaved(provider, false)
                       toast('info', 'API key removed from the keychain.')
                     })
                   })
@@ -192,21 +222,6 @@ export function SettingsSheet() {
                 Remove saved key
               </button>
             )}
-          </label>
-
-          <label className="block">
-            <span className="eyebrow">Model</span>
-            <select
-              value={draft.model}
-              onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-              className="field bg-desk mt-1.5 cursor-pointer"
-            >
-              {MODEL_CHOICES.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label} · {m.note}
-                </option>
-              ))}
-            </select>
           </label>
 
           <label className="block">

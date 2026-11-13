@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.sh before-bash",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
@@ -11,6 +23,26 @@
             "statusMessage": "prettier"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.sh mark",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.sh after-bash",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [
@@ -18,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "git status --porcelain -- src src-tauri/src | grep -q . || exit 0; out=$(pnpm typecheck 2>&1) || { printf 'Stop gate: typecheck failing:\\n%s\\n' \"$out\" | tail -30 >&2; exit 2; }; out=$(pnpm vitest run 2>&1) || { printf 'Stop gate: tests failing:\\n%s\\n' \"$out\" | tail -30 >&2; exit 2; }",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.sh check",
             "timeout": 180,
             "statusMessage": "Stop gate: typecheck + tests"
           }

@@ -1,24 +1,35 @@
 /**
- * Full end-to-end live test: real PDF → real Gemini agentic pipeline → real
- * Anki sync via AnkiConnect. Runs only when GEMINI_API_KEY is set; the Anki
- * leg additionally requires a running Anki with AnkiConnect.
+ * Full end-to-end live test: real PDF → real agentic pipeline → real Anki
+ * sync via AnkiConnect. LECTERN_LIVE_MODEL picks the model (default Gemini
+ * 3.8 Flash); the run needs that provider's key, and the Anki leg
+ * additionally a running Anki with AnkiConnect.
  *
  *   GEMINI_API_KEY=... pnpm vitest run src/engine/pipeline.live.test.ts
+ *   LECTERN_LIVE_MODEL=claude-haiku-5-5 ANTHROPIC_API_KEY=... pnpm vitest run …
  *
  * The Anki leg writes into the deck "Lectern E2E" and removes the created
  * notes and deck afterwards.
  */
 
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { AnkiClient, checkConnection, resolveModelNames, syncCards } from './anki'
-import { DEFAULT_SETTINGS } from './config'
+import { createClient } from './clients'
+import { DEFAULT_SETTINGS, providerOf, type ProviderId } from './config'
 import { runPipeline } from './pipeline'
 import { buildCardTags } from './tags'
 import type { Card, PipelineEvent, Settings } from './types'
 
-const apiKey = process.env.GEMINI_API_KEY
-const PDF_PATH = '/Users/stef/Dev/Product/apps/Lectern/LecternApp/resources/test_script.pdf'
+const MODEL = process.env.LECTERN_LIVE_MODEL ?? 'gemini-3.8-flash'
+const KEY_ENV: Record<ProviderId, string> = {
+  gemini: 'GEMINI_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+}
+const apiKey = process.env[KEY_ENV[providerOf(MODEL)]]
+const PDF_PATH =
+  process.env.LECTERN_TEST_PDF ??
+  '/Users/stef/Archive/code/apps/lectern-v1/LecternApp/resources/test_script.pdf'
 const E2E_DECK = 'Lectern E2E'
 
 describe.skipIf(!apiKey)('pipeline live E2E', () => {
@@ -45,11 +56,16 @@ describe.skipIf(!apiKey)('pipeline live E2E', () => {
         pdfInfo,
         fileName: 'test_script.pdf',
         userTargetCards: 6,
-        model: 'gemini-3.8-flash',
+        model: MODEL,
         apiKey: apiKey ?? '',
         fetchFn: fetch,
         emit: (e) => {
           events.push(e)
+          // The test must not leave the lecture in the provider account.
+          if (e.type === 'document_uploaded') {
+            const client = createClient(e.provider, apiKey ?? '', fetch)
+            onTestFinished(() => client.deleteDocument(e.document))
+          }
           if (e.type === 'log') console.log(`[${e.level}] ${e.message}`)
           if (e.type === 'phase') console.log(`--- phase: ${e.phase}`)
           if (e.type === 'done') console.log(`DONE: ${e.summary}`)

@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **OpenAI and Claude, next to Gemini.** Pick a GPT or Claude model in
+  Settings and add a key for its provider; each provider's key has its own
+  keychain entry, and the Gemini key you already saved stays where it is.
+  Errors name the provider they came from and link to its console, rate
+  limits, billing and status pages. A request a model declines on safety
+  grounds now says so, instead of reading as a failed run.
+- **Uploads don't linger.** OpenAI and Anthropic keep an uploaded PDF until
+  someone deletes it, so Lectern now removes the lecture from the provider
+  when the session ends (a new run, back to the start screen, or a cancel),
+  and on the next launch removes anything a crash or a quit left behind.
+
+### Changed
+
+- **One engine, three providers.** The pipeline talks to a provider-neutral
+  client; Gemini keeps its server-side conversation, OpenAI chains responses
+  the same way, and Claude carries an append-only transcript whose system
+  prompt and tool set never change mid-run, so its prompt cache holds and the
+  document is billed at the cache-read rate after the first turn. Reported
+  costs count cached input at its discounted price.
+- **Costs priced turn by turn.** A long prompt can move a request into a
+  provider's higher rate (Claude Haiku above 100K tokens, GPT-6 Luna above
+  272K), cache writes carry Claude's premium, and the estimate before a run
+  uses the same rates.
+- **Concept maps at the lecture's own grain.** The concept map now aims for
+  a size that follows the amount of material (about one concept per slide
+  that earns a card, or per 300 characters of a script), with short labels
+  instead of sentences. Models that split finely and models that group
+  broadly now describe the same lecture alike, so coverage means the same
+  thing whichever model ran, and a short dense script no longer collapses
+  into one concept per section heading.
+- **Honest quality-pass notes.** The model's closing note on the deck now
+  states coverage as the ledger measures it instead of claiming everything
+  is covered.
+- **Strict schemas where the provider can hold them.** On OpenAI, card
+  submissions and the concept map are checked against their schema by the
+  provider itself; on Claude, the concept map is. (Claude's strict mode
+  cannot compile all eight card tools of a session at once, and the gate
+  still catches a malformed card there.)
+
 ## 2.16.0 (2026-09-24)
 
 ### Added

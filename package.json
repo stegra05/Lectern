@@ -16,6 +16,7 @@
     "format:check": "prettier --check src"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@fontsource-variable/schibsted-grotesk": "^5.2.8",
     "@fontsource-variable/source-serif-4": "^5.2.9",
     "@fontsource/ibm-plex-mono": "^5.2.7",
@@ -31,6 +32,7 @@
     "dompurify": "^3.4.11",
     "katex": "^0.17.0",
     "motion": "^12.42.2",
+    "openai": "^7.38.0",
     "pdfjs-dist": "^6.1.200",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

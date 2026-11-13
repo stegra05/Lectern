@@ -16,7 +16,7 @@ const IMPORTANCE_LABEL: Record<Importance, string> = {
 }
 
 /**
- * The concept map, opened from the sidebar card: everything Gemini extracted
+ * The concept map, opened from the sidebar card: everything the model extracted
  * from the lecture, drawn as a graph — concepts sized by importance, lit
  * amber where cards cover them, connected by the extracted relations. A list
  * view keeps the scannable per-importance breakdown. Page numbers open the
