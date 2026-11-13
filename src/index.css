@@ -252,30 +252,6 @@ article.bg-paper:focus-visible {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-lamp) 45%, transparent);
 }
 
-/* Range input — the deck-size slider, styled to the desk. */
-input[type='range'] {
-  @apply h-5 w-full cursor-pointer appearance-none bg-transparent;
-}
-input[type='range']::-webkit-slider-runnable-track {
-  @apply bg-desk-edge h-1 rounded-full;
-}
-input[type='range']::-webkit-slider-thumb {
-  @apply bg-lamp -mt-[5px] size-3.5 appearance-none rounded-full;
-  transition: transform 150ms ease-out;
-}
-input[type='range']:hover::-webkit-slider-thumb {
-  transform: scale(1.15);
-}
-input[type='range']:active::-webkit-slider-thumb {
-  transform: scale(1);
-}
-input[type='range']::-moz-range-track {
-  @apply bg-desk-edge h-1 rounded-full;
-}
-input[type='range']::-moz-range-thumb {
-  @apply bg-lamp size-3.5 rounded-full border-0;
-}
-
 /* Long scrollers fade at both edges instead of clipping lines mid-word. */
 .scroll-fade-y {
   mask-image: linear-gradient(

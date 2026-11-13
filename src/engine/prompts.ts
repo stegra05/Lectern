@@ -137,7 +137,7 @@ export function conceptMapPrompt(ctx: PromptContext, target: { min: number; max:
     'Return JSON with:\n' +
     '- objectives: explicit learning goals plus the implicit competency targets.\n' +
     `- concepts: the core entities, theories, and definitions, fundamentals first. List ${target.min} to ${target.max} concepts: one per idea a student must master, with its sub-points, examples, and special cases folded into it rather than listed apart, and no concept as wide as a whole section. Mark high importance only for the concepts the objectives hinge on.` +
-    ' Each carries a name (a plain-text label of 2-6 words, never a sentence), a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), and page_references (integer pages where it is taught or illustrated).\n' +
+    ' Each carries a name (a plain-text label of 2-6 words, never a sentence), a stable short unique id, importance (high|medium|low, judged against the objectives), difficulty (foundational|intermediate|advanced), page_references (integer pages where it is taught or illustrated), and facets: the distinct facts the material gives it to test, as short labels, one card each. Most concepts have one facet; a concept taught on a single slide almost always does. Name every named entity, type, or rule the lecture lists under a concept as its own facet, so none goes without a card.\n' +
     '- relations: the semantic structure between concepts (is_a, part_of, causes, contrasts_with, ...) with page_references.\n' +
     "- language: ISO 639-1 code of the document's primary language.\n" +
     '- slide_set_name: Title Case name for this set, max 8 words, keeping any lecture/week number.\n' +
@@ -154,6 +154,8 @@ export function generationMissionPrompt(
     totalCardCap: number
     batchSize: number
     gapText: string
+    /** One line per concept: its id, name and numbered facets. */
+    facetCatalog: string
     /** Extend runs: what the target deck already teaches. */
     existingDeck?: { count: number; topics: string[]; truncated: number }
     /** The deck already covers the document — this run adds depth, not breadth. */
@@ -182,7 +184,7 @@ export function generationMissionPrompt(
     `Now build the deck for the document you just mapped. Work in batches: call submit_cards, read the review it returns — accepted/rejected verdicts with reasons plus a coverage ledger of pages, concepts, and relations still lacking cards — and let that drive the next batch. Rework rejected material rather than dropping it.\n` +
     existingBrief +
     depthBrief +
-    `\nBudget: ${opts.totalCardCap} accepted cards total. Keep each submit_cards call to about ${opts.batchSize} cards; larger payloads risk truncation.\n` +
+    `\nBudget: up to ${opts.totalCardCap} accepted cards. It is a ceiling, not a quota: stop when the material runs out. Keep each submit_cards call to about ${opts.batchSize} cards; larger payloads risk truncation.\n` +
     `Coverage order: every high-importance concept first, then breadth across pages. Spend at most 2 cards on one slide while gaps remain elsewhere.\n` +
     (focus ? `User focus: "${focus}" — align card selection and style with it.\n` : '') +
     `Quality bar: the front has exactly one defensible answer (open questions, never yes/no); the answer is verifiable against the card's source_excerpt; prefer why/how/compare/apply over restatement. Use Cloze for definitions and lists (with a {{c1::...}} deletion), Basic for open questions.\n` +
@@ -191,10 +193,15 @@ export function generationMissionPrompt(
     `- slide_number: integer page, when confident.\n` +
     `- source_pages: the page numbers grounding the card.\n` +
     `- concept_ids: ids copied exactly from your concept map — unrecognized ids are dropped and earn no coverage.\n` +
+    `- facet_ids: the facets the card tests, from the facet catalog below. A card tests one facet unless it deliberately connects facets (a comparison), and then lists each.\n` +
     `- relation_keys: "<source>|<type>|<target>" signatures when the card teaches a mapped relation.\n` +
     `- rationale: why the card matters, up to 140 chars.\n` +
     `- source_excerpt: the grounding slide wording or diagram content, up to 220 chars.\n` +
     `When grounding is weak, submit fewer cards.\n` +
+    `Your concept map gave every concept a card budget. Breadth first: give every concept its first card before any concept gets a second. A further card on a concept must test a facet its existing cards do not; never the same fact from another angle (a Cloze and a Basic on one fact are one fact twice). A card whose facets all have their cards already is rejected as facet_already_tested, unless it connects facets of two concepts or teaches a mapped relation: that is depth, not a repeat.\n` +
+    (opts.facetCatalog
+      ? `\nFacet catalog. A facet's id is its concept id, "#", and its number: c-a#2 is the second facet of c-a.\n${opts.facetCatalog}\n`
+      : '') +
     `\nCall finish_generation once the ledger shows the important material is covered or the budget is spent.\n` +
     `\n${opts.gapText}\n` +
     `All content stays in ${ctx.language}.\n` +
@@ -208,6 +215,16 @@ const FEEDBACK_LIST_LIMIT = 10
 
 function pushTruncationNote(lines: string[], total: number, shown: number, noun: string): void {
   if (total > shown) lines.push(`  …and ${total - shown} more ${noun} not listed.`)
+}
+
+/** The one rejection that is about the deck rather than the card: say what
+ *  to do instead, or the model rewrites the same fact in other words. */
+function pushFacetRepeatNote(lines: string[], rejected: Array<{ reasons: string[] }>): void {
+  if (rejected.some((r) => r.reasons.includes('facet_already_tested'))) {
+    lines.push(
+      'facet_already_tested: every facet the card claims already has its cards. Test an untested facet from the ledger instead, or improve the card that tests this one.',
+    )
+  }
 }
 
 /** Feedback payload returned to the model after each submit_cards call. */
@@ -230,6 +247,7 @@ export function buildSubmitFeedback(opts: {
       lines.push(`  - "${r.front.slice(0, 80)}" → ${r.reasons.join(', ')}`)
     }
     pushTruncationNote(lines, opts.rejected.length, FEEDBACK_LIST_LIMIT, 'rejected card(s)')
+    pushFacetRepeatNote(lines, opts.rejected)
   }
   if (opts.duplicateFronts.length > 0) {
     lines.push('Duplicates of cards already in the deck (do not resubmit these):')
@@ -240,7 +258,7 @@ export function buildSubmitFeedback(opts: {
   }
   if (opts.unknownMetadataDropped > 0) {
     lines.push(
-      `${opts.unknownMetadataDropped} concept_id/relation_key value(s) did not match your concept map and were dropped — copy ids exactly from the map.`,
+      `${opts.unknownMetadataDropped} concept_id/facet_id/relation_key value(s) did not match your concept map and were dropped; copy ids exactly from the map.`,
     )
   }
   lines.push(`Remaining budget: ${opts.cardsRemaining} card(s).`)
@@ -273,11 +291,12 @@ export function reviewMissionPrompt(
       : `\n${inherited} further card(s) from earlier runs are already in this deck. They are not listed below and are not yours to edit — the user is studying them. They do count toward the coverage ledger, so a gap the ledger does not show is not a gap.\n`
   return (
     'The deck is generated. Review it as a quality editor, working through the edit tools:\n' +
-    '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back.\n' +
-    '- remove_cards: delete redundant or low-value cards. When two overlap, keep the stronger one or merge them via update_card.\n' +
+    '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back. A card flagged answer_not_on_cited_page says things its pages do not: bring the answer back to what the lecture says.\n' +
+    '- remove_cards: delete redundant or low-value cards. Two cards that test the same fact from different angles are redundant; so is filler a student gains nothing from (a term restated, a single number from an example). Each card lists the facet_ids it tests: two cards with the same facet are a duplicate unless they test genuinely different facts. When two overlap, keep the stronger one or merge them via update_card. A smaller deck is fine.\n' +
     `- add_cards: close remaining coverage gaps. The deck budget stays ${opts.cardCap} cards (${opts.freeSlots} slot(s) currently free); removing a card frees a slot.\n` +
     '- finish_review: call when the deck is sound, with a short quality summary.\n' +
     '\nEvery edit passes the same quality gate as generation and returns a verdict plus an updated coverage ledger. ' +
+    'Cards you add or rewrite carry facet_ids like the rest; one whose facets all have their cards already is rejected as facet_already_tested. ' +
     'Leave strong cards untouched — edit only where you can name the defect. ' +
     `All content stays in ${ctx.language}.\n` +
     (focus ? `Check alignment with the user focus: "${focus}".\n` : '') +
@@ -305,7 +324,7 @@ export function followUpRequestPrompt(
   return (
     `The user reviewed the finished deck and asks for additional cards:\n"${opts.request}"\n\n` +
     `Additions only: the existing deck stays untouched. Call add_requested_cards with the new cards, read the verdicts, and call finish_request with a short summary once the request is served (immediately if it needs no new cards). Add only what the request asks for, up to ${opts.cardBudget} card(s), no filler.\n` +
-    `Every card meets the same quality bar and metadata requirements as before (source_pages, concept_ids copied from the concept map, rationale, source_excerpt).\n` +
+    `Every card meets the same quality bar and metadata requirements as before (source_pages, concept_ids and facet_ids copied from the concept map, rationale, source_excerpt).\n` +
     `Ground each card in the document. If the request needs material the document does not contain, still write the card: set in_source=false, leave source_pages empty, and put the knowledge the answer rests on in source_excerpt — the app labels such cards "outside source" for the user to check.\n` +
     `All content stays in ${ctx.language}.\n` +
     `\nCurrent deck fronts (do not duplicate them):\n${listing}\n` +
@@ -360,10 +379,11 @@ export function buildReviewFeedback(opts: {
       lines.push(`  - ${r.ref} → ${r.reasons.join(', ')}`)
     }
     pushTruncationNote(lines, opts.rejected.length, FEEDBACK_LIST_LIMIT, 'rejection(s)')
+    pushFacetRepeatNote(lines, opts.rejected)
   }
   if (opts.unknownMetadataDropped > 0) {
     lines.push(
-      `${opts.unknownMetadataDropped} concept_id/relation_key value(s) did not match your concept map and were dropped — copy ids exactly from the map.`,
+      `${opts.unknownMetadataDropped} concept_id/facet_id/relation_key value(s) did not match your concept map and were dropped; copy ids exactly from the map.`,
     )
   }
   if (opts.applied.length === 0 && opts.rejected.length === 0) lines.push('No edits applied.')

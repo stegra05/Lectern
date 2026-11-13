@@ -85,6 +85,7 @@ const makeClient = (fetchFn: typeof fetch): AnkiClient =>
 
 const makeSettings = (overrides: Partial<Settings> = {}): Settings => ({
   model: 'gemini-3.8-flash',
+  cardDensity: 'standard',
   ankiUrl: BASE_URL,
   // Off by default so the fixtures exercise the classic Basic/Cloze paths;
   // the bundled-note-type behavior gets dedicated tests.
@@ -105,6 +106,7 @@ const makeCard = (overrides: Partial<Card> = {}): Card => ({
   fields: { Front: 'What is X?', Back: 'X is Y.' },
   sourcePages: [1],
   conceptIds: [],
+  facetIds: [],
   relationKeys: [],
   qualityScore: 80,
   qualityIssues: [],

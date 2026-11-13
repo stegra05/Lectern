@@ -82,6 +82,7 @@ describe.skipIf(!enabled)('note type sync live', () => {
       sourcePages: [3, 4, 5, 9],
       sourceExcerpt: 'Amber is spent only on coverage & the answer.',
       conceptIds: [],
+      facetIds: [],
       relationKeys: [],
       qualityScore: 100,
       qualityIssues: [],

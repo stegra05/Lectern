@@ -8,8 +8,10 @@
 
 /** Cards per slide the generator aims for in slides mode. */
 export const CARDS_PER_SLIDE_TARGET = 0.6
-/** Chars of source text per card in script mode. */
-export const SCRIPT_BASE_CHARS = 1000
+/** Chars of source text per card in script mode. Was 1000, which gave a
+ *  dense 3-page pathology script 5 cards where blind reviews wanted 24-26;
+ *  with the budget guardrails this allows up to one card per 200 chars. */
+export const SCRIPT_BASE_CHARS = 400
 /** Weight of embedded images when sizing script-mode decks. */
 export const IMAGE_CARD_WEIGHT = 0.5
 /** Documents above this chars/page are treated as script, below as slides. */
@@ -22,6 +24,19 @@ export const DYNAMIC_MAX_NOTES_PER_BATCH = 25
 
 /** Minimum sensible deck size. */
 export const MIN_TOTAL_CARDS = 3
+
+// --- Deck size from card budgets --------------------------------------------
+// The concept map gives every concept a card budget (1-4) after reading the
+// whole lecture; the deck is their sum at the chosen density. The page and
+// character heuristic above only guards the sum against a model that
+// over- or under-allocates, and sizes the estimate before a run.
+
+export const CONCEPT_CARD_BUDGET_MAX = 4
+/** How each density scales the budgets (and the heuristic's guardrails). */
+export const DENSITY_FACTOR = { overview: 0.5, standard: 1, thorough: 1.5 } as const
+/** The budget sum may go this far below or above the heuristic deck. */
+export const BUDGET_GUARD_MIN = 0.5
+export const BUDGET_GUARD_MAX = 2
 
 /** Concept-map size. Without a target, models split the same lecture into
  *  anywhere from about 30 to 75 concepts, and coverage is measured against
@@ -45,10 +60,12 @@ export const MAX_GENERATION_ROUNDS = 30
 /** A page holding more than this many cards counts as saturated. */
 export const SATURATION_CARDS_PER_PAGE = 2
 
-/** Times an extend run is sent back to look for depth before its request to
- *  stop early is taken at face value. One push, not an endless one: the brief
- *  asks for an honest short deck, so the gate has to let it be one. */
-export const DEPTH_FINISH_ATTEMPTS = 1
+/** Times a run is sent back to the concepts short of their card budget
+ *  before its request to stop early is taken at face value. One push, not an
+ *  endless one: the brief asks for an honest short deck over a padded one, so
+ *  a second request means the model has looked and found nothing worth
+ *  adding, and the deck ends where the material does. */
+export const EARLY_FINISH_ATTEMPTS = 1
 
 // --- Coverage sufficiency (loop termination) -------------------------------
 
@@ -239,6 +256,7 @@ export const ESTIMATION_BASE_OUTPUT_RATIO = 0.2
 
 export const DEFAULT_SETTINGS = {
   model: DEFAULT_MODEL,
+  cardDensity: 'standard',
   ankiUrl: 'http://localhost:8765',
   useLecternNoteTypes: true,
   noteTypeTheme: 'paper',

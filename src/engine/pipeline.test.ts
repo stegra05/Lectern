@@ -6,7 +6,10 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { adoptExistingCards, runPipeline } from './pipeline'
+import { buildCoverageCatalog } from './coverage'
+import { adoptExistingCards, buildCard, runPipeline } from './pipeline'
+import { normalizeCardPayload } from './quality'
+import { parseConceptMap } from './schemas'
 import type { Card, PipelineEvent } from './types'
 
 // --- Scripted Gemini ---------------------------------------------------------
@@ -20,6 +23,7 @@ const CONCEPT_MAP = {
       importance: 'high',
       difficulty: 'foundational',
       page_references: [1],
+      facets: ['what A is', 'where A applies', 'how A relates to B'],
     },
     {
       id: 'c-b',
@@ -27,6 +31,7 @@ const CONCEPT_MAP = {
       importance: 'medium',
       difficulty: 'intermediate',
       page_references: [2],
+      facets: ['what B is'],
     },
   ],
   relations: [{ source: 'c-a', type: 'relates_to', target: 'c-b', page_references: [1] }],
@@ -37,7 +42,13 @@ const CONCEPT_MAP = {
   document_type: 'slides',
 }
 
-const card = (front: string, back: string, pages: number[], conceptIds: string[]) => ({
+const card = (
+  front: string,
+  back: string,
+  pages: number[],
+  conceptIds: string[],
+  facetIds: string[],
+) => ({
   model_name: 'Basic',
   fields: [
     { name: 'Front', value: front },
@@ -47,16 +58,17 @@ const card = (front: string, back: string, pages: number[], conceptIds: string[]
   slide_number: pages[0],
   source_pages: pages,
   concept_ids: conceptIds,
+  facet_ids: facetIds,
   relation_keys: [],
   rationale: 'Covers a core concept.',
   source_excerpt: 'The slide defines this concept in detail.',
 })
 
 const GENERATED_CARDS = [
-  card('What is A?', 'A is the first concept.', [1], ['c-a']),
-  card('What is B?', 'B is the second concept.', [2], ['c-b']),
-  card('Compare A and B.', 'A is foundational, B builds on it.', [1, 2], ['c-a', 'c-b']),
-  card('Where does A apply?', 'A applies when the input is fresh.', [1], ['c-a']),
+  card('What is A?', 'A is the first concept.', [1], ['c-a'], ['c-a#1']),
+  card('What is B?', 'B is the second concept.', [2], ['c-b'], ['c-b#1']),
+  card('Compare A and B.', 'A is foundational, B builds on it.', [1, 2], ['c-a', 'c-b'], ['c-a#3']),
+  card('Where does A apply?', 'A applies when the input is fresh.', [1], ['c-a'], ['c-a#2']),
 ]
 
 interface ScriptedTurn {
@@ -97,7 +109,14 @@ const SCRIPT: ScriptedTurn[] = [
         name: 'update_card',
         arguments: {
           card_id: 'c1',
-          card: card('What defines concept A?', 'A is defined by its invariants.', [1], ['c-a']),
+          // The same facet as the card it replaces: a card is no repeat of itself.
+          card: card(
+            'What defines concept A?',
+            'A is defined by its invariants.',
+            [1],
+            ['c-a'],
+            ['c-a#1'],
+          ),
         },
       },
       {
@@ -111,7 +130,10 @@ const SCRIPT: ScriptedTurn[] = [
         id: 'call-add',
         name: 'add_cards',
         arguments: {
-          cards: [card('Why does A precede B?', 'B builds on the invariants of A.', [2], ['c-b'])],
+          // c-b#1 is free again once c2 is gone.
+          cards: [
+            card('Why does A precede B?', 'B builds on the invariants of A.', [2], [], ['c-b#1']),
+          ],
         },
       },
     ],
@@ -184,7 +206,7 @@ describe('runPipeline (scripted)', () => {
       pdfBytes: new Uint8Array([1, 2, 3]),
       pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
       fileName: 'test.pdf',
-      userTargetCards: 4,
+      density: 'standard',
       model: 'gemini-3.8-flash',
       apiKey: 'test-key',
       fetchFn: makeScriptedFetch(SCRIPT, captured),
@@ -200,6 +222,11 @@ describe('runPipeline (scripted)', () => {
     expect(fronts).not.toContain('What is A?') // old content replaced
     expect(fronts).not.toContain('What is B?') // removed
     expect(fronts).toContain('Why does A precede B?') // added
+
+    // The added card named only a facet, and the facet brought its concept.
+    const addedCard = outcome.cards.find((c) => c.fields.Front === 'Why does A precede B?')
+    expect(addedCard?.facetIds).toEqual(['c-b#1'])
+    expect(addedCard?.conceptIds).toEqual(['c-b'])
 
     // update_card keeps the card's identity.
     const updated = outcome.cards.find((c) => c.fields.Front === 'What defines concept A?')
@@ -232,11 +259,19 @@ describe('runPipeline (scripted)', () => {
     expect(levelOf(1)).toBe('low')
     expect(levelOf(2)).toBe('medium')
 
+    // The generation brief carries the facet catalog the cards are tagged from.
+    const missionText = JSON.stringify(captured[1].body.input)
+    expect(missionText).toContain(
+      'c-a Concept A: #1 what A is; #2 where A applies; #3 how A relates to B',
+    )
+    expect(missionText).toContain('c-b Concept B: #1 what B is')
+
     // The review turn answers the dangling submit_cards call before the mission.
     const reviewInput = captured[2].body.input as Array<Record<string, unknown>>
     expect(reviewInput[0].type).toBe('function_result')
     expect(reviewInput[0].call_id).toBe('call-submit')
     expect(String((reviewInput[1] as { text: string }).text)).toContain('Deck under review')
+    expect(String((reviewInput[1] as { text: string }).text)).toContain('"facet_ids":["c-a#1"]')
 
     // The finished pipeline hands over a clean continuation seed: the last
     // interaction id, with the dangling finish_review call answered.
@@ -267,6 +302,169 @@ describe('runPipeline (scripted)', () => {
   })
 })
 
+// --- Card metadata -------------------------------------------------------------
+
+describe('buildCard', () => {
+  const catalog = buildCoverageCatalog(parseConceptMap(CONCEPT_MAP))
+  const build = (conceptIds: string[], facetIds: string[]) => {
+    const normalized = normalizeCardPayload(card('Q?', 'A.', [1], conceptIds, facetIds))
+    if (normalized === null) throw new Error('unreadable card')
+    return buildCard(normalized, catalog)
+  }
+
+  it('keeps the facet ids the concept map has and counts the rest as unknown', () => {
+    const { card: built, unknownMetadata } = build(['c-a'], ['c-a#2', 'c-a#9', 'c-z#1'])
+    expect(built.facetIds).toEqual(['c-a#2'])
+    expect(unknownMetadata).toBe(2)
+  })
+
+  it('adds the concept a facet belongs to when concept_ids leaves it out', () => {
+    const { card: built, unknownMetadata } = build(['c-a'], ['c-a#1', 'c-b#1'])
+    expect(built.conceptIds).toEqual(['c-a', 'c-b'])
+    expect(unknownMetadata).toBe(0)
+  })
+})
+
+// --- Facet repeats -------------------------------------------------------------
+
+/** The same fact as "What is A?", asked once more as a cloze: the duplicate a
+ *  blind review kept finding, which no text-based dedupe catches. */
+const CLOZE_REPEAT = {
+  model_name: 'Cloze',
+  fields: [{ name: 'Text', value: 'A is {{c1::the first concept}} of the lecture.' }],
+  slide_topic: 'Test Topic',
+  slide_number: 1,
+  source_pages: [1],
+  concept_ids: ['c-a'],
+  facet_ids: ['c-a#1'],
+  relation_keys: [],
+  rationale: 'Covers a core concept.',
+  source_excerpt: 'The slide defines this concept in detail.',
+}
+
+const FACET_SCRIPT: ScriptedTurn[] = [
+  { id: 'i-map', output_text: JSON.stringify(CONCEPT_MAP) },
+  {
+    id: 'i-gen-1',
+    steps: [
+      {
+        type: 'function_call',
+        id: 'call-submit',
+        name: 'submit_cards',
+        arguments: {
+          cards: [
+            card('What is A?', 'A is the first concept.', [1], ['c-a'], ['c-a#1']),
+            CLOZE_REPEAT,
+            // No facet named: nothing to compare it on, so the rule passes it.
+            card('What is B?', 'B is the second concept.', [2], ['c-b'], []),
+          ],
+        },
+      },
+    ],
+  },
+  // Asked to stop with two of A's facets untested: refused once, then let go.
+  {
+    id: 'i-gen-2',
+    steps: [
+      { type: 'function_call', id: 'call-finish-1', name: 'finish_generation', arguments: {} },
+    ],
+  },
+  {
+    id: 'i-gen-3',
+    steps: [
+      { type: 'function_call', id: 'call-finish-2', name: 'finish_generation', arguments: {} },
+    ],
+  },
+  // The review tries the same repeat through add_cards.
+  {
+    id: 'i-review',
+    steps: [
+      {
+        type: 'function_call',
+        id: 'call-add',
+        name: 'add_cards',
+        arguments: { cards: [CLOZE_REPEAT] },
+      },
+    ],
+  },
+  {
+    id: 'i-finish',
+    steps: [
+      {
+        type: 'function_call',
+        id: 'call-finish-review',
+        name: 'finish_review',
+        arguments: { summary: 'Sound.' },
+      },
+    ],
+  },
+]
+
+const runFacetScript = async (density: 'standard' | 'thorough') => {
+  const captured: CapturedInteraction[] = []
+  const events: PipelineEvent[] = []
+  const outcome = await runPipeline({
+    pdfBytes: new Uint8Array([1, 2, 3]),
+    pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
+    fileName: 'test.pdf',
+    density,
+    model: 'gemini-3.8-flash',
+    apiKey: 'test-key',
+    fetchFn: makeScriptedFetch(FACET_SCRIPT, captured),
+    emit: (e) => events.push(e),
+  })
+  return { outcome, events, captured }
+}
+
+describe('runPipeline (facet repeats)', () => {
+  it('rejects a second card on a tested facet and says so', async () => {
+    const { outcome, events, captured } = await runFacetScript('standard')
+
+    expect(outcome.cards.map((c) => c.fields.Front ?? c.fields.Text)).toEqual([
+      'What is A?',
+      'What is B?',
+    ])
+    const rejections = events.filter(
+      (e): e is Extract<PipelineEvent, { type: 'card_rejected' }> => e.type === 'card_rejected',
+    )
+    expect(rejections).toEqual([
+      {
+        type: 'card_rejected',
+        front: 'A is {{c1::the first concept}} of the lecture.',
+        reasons: ['facet_already_tested'],
+      },
+    ])
+
+    // The submit feedback names the reason and what to do instead.
+    const feedback = JSON.stringify(captured[2].body.input)
+    expect(feedback).toContain('facet_already_tested')
+    expect(feedback).toContain('Test an untested facet from the ledger instead')
+    expect(feedback).toContain('Facets no card tests yet')
+    expect(feedback).toContain('c-a#2 where A applies; c-a#3 how A relates to B')
+
+    // The finish gate names the untested facets by id, and only those.
+    const refusal = JSON.stringify(captured[3].body.input)
+    expect(refusal).toContain('2 facets from your concept map are still untested')
+    expect(refusal).toContain('c-a#2 where A applies; c-a#3 how A relates to B')
+    expect(refusal).not.toContain('c-a#1')
+
+    // The review cannot slip the repeat back in through add_cards.
+    const reviewFeedback = JSON.stringify(captured[5].body.input)
+    expect(reviewFeedback).toContain('facet_already_tested')
+  })
+
+  it('rejects the repeat at thorough depth too', async () => {
+    // Thorough's extra slots buy depth, never a second card on one fact.
+    const { outcome, events } = await runFacetScript('thorough')
+
+    const rejections = events.filter(
+      (e): e is Extract<PipelineEvent, { type: 'card_rejected' }> => e.type === 'card_rejected',
+    )
+    expect(rejections.map((e) => e.reasons)).toEqual([['facet_already_tested']])
+    expect(outcome.cards.map((c) => c.facetIds)).not.toContainEqual(['c-a#1', 'c-a#1'])
+  })
+})
+
 // --- Extend runs ---------------------------------------------------------------
 
 /** A card as it comes back from Anki at the start of an extend run. */
@@ -277,6 +475,7 @@ const inherited = (uid: string, front: string, pages: number[]): Card => ({
   slideTopic: 'Test Topic',
   sourcePages: pages,
   conceptIds: [],
+  facetIds: [],
   relationKeys: [],
   qualityScore: 100,
   qualityIssues: [],
@@ -320,8 +519,18 @@ describe('adoptExistingCards', () => {
   })
 })
 
+/** The same lecture, budgeted so the two inherited cards (one per page)
+ *  leave exactly one card missing: a second one on concept A. */
+const EXTEND_MAP = {
+  ...CONCEPT_MAP,
+  concepts: CONCEPT_MAP.concepts.map((c) => ({
+    ...c,
+    facets: c.id === 'c-a' ? ['what A is', 'where A applies'] : ['what B is'],
+  })),
+}
+
 const EXTEND_SCRIPT: ScriptedTurn[] = [
-  { id: 'i-map', output_text: JSON.stringify(CONCEPT_MAP) },
+  { id: 'i-map', output_text: JSON.stringify(EXTEND_MAP) },
   // The model submits one genuinely new card and one that repeats what the
   // deck already holds, then calls it done.
   {
@@ -333,8 +542,14 @@ const EXTEND_SCRIPT: ScriptedTurn[] = [
         name: 'submit_cards',
         arguments: {
           cards: [
-            card('Where does A apply?', 'A applies when the input is fresh.', [1], ['c-a']),
-            card('What is A?', 'A is the first concept.', [1], ['c-a']),
+            card(
+              'Where does A apply?',
+              'A applies when the input is fresh.',
+              [1],
+              ['c-a'],
+              ['c-a#2'],
+            ),
+            card('What is A?', 'A is the first concept.', [1], ['c-a'], ['c-a#1']),
           ],
         },
       },
@@ -385,7 +600,7 @@ describe('runPipeline (extend run)', () => {
       pdfBytes: new Uint8Array([1, 2, 3]),
       pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
       fileName: 'test.pdf',
-      userTargetCards: 1,
+      density: 'standard',
       existingCards: existing,
       model: 'gemini-3.8-flash',
       apiKey: 'test-key',
@@ -445,7 +660,7 @@ describe('runPipeline (extend run)', () => {
 /** The inherited deck already covers every page, so breadth is spent before
  *  the run starts — the only honest budget left is depth. */
 const DEPTH_SCRIPT: ScriptedTurn[] = [
-  { id: 'i-map', output_text: JSON.stringify(CONCEPT_MAP) },
+  { id: 'i-map', output_text: JSON.stringify(EXTEND_MAP) },
   // The model reads full coverage and tries to leave immediately.
   {
     id: 'i-gen-1',
@@ -467,7 +682,7 @@ const DEPTH_SCRIPT: ScriptedTurn[] = [
         id: 'call-submit',
         name: 'submit_cards',
         arguments: {
-          cards: [card('How does A shape B?', 'B inherits A’s invariants.', [1, 2], ['c-b'])],
+          cards: [card('How does A shape B?', 'B inherits A’s invariants.', [1, 2], ['c-b'], [])],
         },
       },
       {
@@ -500,7 +715,7 @@ describe('runPipeline (extend run, already covered)', () => {
       pdfBytes: new Uint8Array([1, 2, 3]),
       pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
       fileName: 'test.pdf',
-      userTargetCards: 1,
+      density: 'standard',
       existingCards: [
         inherited('anki-1', 'What is A?', [1]),
         inherited('anki-2', 'What is B?', [2]),
@@ -516,10 +731,14 @@ describe('runPipeline (extend run, already covered)', () => {
     expect(missionText).toContain('covers the document end to end')
     expect(missionText).toContain('DEPTH LEDGER')
 
-    // The early finish was refused, with a reason the model can act on.
+    // The early finish was refused, with a reason the model can act on: the
+    // facets of the short concept, by id. The inherited cards cannot say
+    // which facets they test, so both of A's show.
     const refusal = JSON.stringify(captured[2].body.input)
-    expect(refusal).toContain('your budget is for depth')
-    expect(refusal).toContain('added 0 of 1 card')
+    expect(refusal).toContain('this run is for depth')
+    // Concept A has one card of two, so one facet is named.
+    expect(refusal).toContain('c-a#1 what A is')
+    expect(refusal).not.toContain('c-a#2')
 
     // And the run ends having actually added something.
     expect(outcome.cards).toHaveLength(3)

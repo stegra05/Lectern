@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import { DYNAMIC_MAX_NOTES_PER_BATCH, DYNAMIC_MIN_NOTES_PER_BATCH } from './config'
-import { computeSizingPlan, conceptTarget, detectContentMode } from './pacing'
-import type { PdfInfo } from './types'
+import {
+  allocateBudgets,
+  computeSizingPlan,
+  conceptTarget,
+  deckBounds,
+  detectContentMode,
+} from './pacing'
+import type { ConceptMap, PdfInfo } from './types'
 
 const pdf = (pageCount: number, textChars: number, imageCount = 0): PdfInfo => ({
   pageCount,
@@ -51,13 +57,29 @@ describe('computeSizingPlan', () => {
   it('sizes scripts from text volume plus weighted images', () => {
     const plan = computeSizingPlan(pdf(20, 60000, 10)) // 3000 chars/page -> script
     expect(plan.contentMode).toBe('script')
-    expect(plan.totalCardCap).toBe(65) // round(60000/1000 + 10*0.5)
+    expect(plan.totalCardCap).toBe(155) // round(60000/400 + 10*0.5)
   })
 
-  it('honors the user target override', () => {
-    const plan = computeSizingPlan(pdf(40, 20000), { userTargetCards: 50 })
-    expect(plan.totalCardCap).toBe(50)
-    expect(computeSizingPlan(pdf(40, 20000), { userTargetCards: 0 }).totalCardCap).toBe(1)
+  it('takes the concept budgets once the map exists, within the guardrails', () => {
+    // 40 slides → 24 expected → budgets may land between 12 and 48.
+    expect(computeSizingPlan(pdf(40, 20000), { budgetSum: 30 }).totalCardCap).toBe(30)
+    expect(computeSizingPlan(pdf(40, 20000), { budgetSum: 5 }).totalCardCap).toBe(12)
+    expect(computeSizingPlan(pdf(40, 20000), { budgetSum: 500 }).totalCardCap).toBe(48)
+  })
+
+  it('scales the deck and its guardrails with the density', () => {
+    expect(computeSizingPlan(pdf(40, 20000), { density: 'overview' }).totalCardCap).toBe(12)
+    expect(computeSizingPlan(pdf(40, 20000), { density: 'thorough' }).totalCardCap).toBe(36)
+    expect(deckBounds(pdf(40, 20000), 'thorough')).toEqual({ min: 18, max: 72 })
+  })
+
+  it('lets an extend run go as low as what the deck lacks', () => {
+    expect(computeSizingPlan(pdf(40, 20000), { budgetSum: 4, extending: true }).totalCardCap).toBe(
+      4,
+    )
+    expect(computeSizingPlan(pdf(40, 20000), { budgetSum: 0, extending: true }).totalCardCap).toBe(
+      1,
+    )
   })
 
   it('honors forceMode over the density heuristic', () => {
@@ -69,7 +91,7 @@ describe('computeSizingPlan', () => {
   describe('batch size', () => {
     it('derives the batch from the cap', () => {
       // script cap 100 -> round(100 * 0.15) = 15
-      expect(computeSizingPlan(pdf(20, 100000)).batchSize).toBe(15)
+      expect(computeSizingPlan(pdf(20, 40000)).batchSize).toBe(15)
     })
 
     it('clamps up to the minimum for small decks', () => {
@@ -104,5 +126,27 @@ describe('conceptTarget', () => {
   it('stays within the floor and ceiling', () => {
     expect(conceptTarget({ pageCount: 400, textChars: 100_000, imageCount: 0 }).max).toBe(40)
     expect(conceptTarget({ pageCount: 1, textChars: 100, imageCount: 0 }).min).toBe(6)
+  })
+})
+
+describe('allocateBudgets', () => {
+  const map = {
+    concepts: [
+      { id: 'a', importance: 'high', facets: ['x', 'y', 'z'] },
+      { id: 'b', importance: 'medium', facets: [] },
+      { id: 'c', importance: 'low', facets: ['x', 'y'] },
+    ],
+  } as unknown as ConceptMap
+
+  it('gives one card per facet at standard depth', () => {
+    expect([...allocateBudgets(map, 'standard').values()]).toEqual([3, 1, 2])
+  })
+
+  it('drops low-importance concepts and halves the rest for an overview', () => {
+    expect([...allocateBudgets(map, 'overview').values()]).toEqual([2, 1, 0])
+  })
+
+  it('goes half again deeper when thorough', () => {
+    expect([...allocateBudgets(map, 'thorough').values()]).toEqual([5, 2, 3])
   })
 })

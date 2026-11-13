@@ -290,6 +290,53 @@ export function excerptIsOnPage(
   return found / words.length >= EXCERPT_MATCH_RATIO
 }
 
+/** Below this share of its content words on the cited pages, an answer is
+ *  saying things the lecture does not. Paraphrase keeps most of a slide's
+ *  terms; tutor-style additions ("exploding gradients", "legal reasons")
+ *  bring their own. Measured on blind-reviewed decks before it was set. */
+export const ANSWER_MATCH_RATIO = 0.5
+/** Inflected and compound forms share a stem: Zyste/Zysten, normalize/normalizes. */
+const STEM_LEN = 6
+/** Cited pages with less extractable text than this carry their content in
+ *  images (a blind review caught the check firing on a diagram slide). */
+const ANSWER_MIN_PAGE_TEXT_CHARS = 200
+/** \( … \), \[ … \] and $ … $ math. Inline $ … $ follows Pandoc: no space
+ *  inside either dollar and no digit after the closing one, so "$5 and $10"
+ *  stays prose. */
+const MATH_RE = /\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$(?!\s)[^$]*?(?<!\s)\$(?!\d)/g
+
+/**
+ * Does the answer say what the cited pages say? Same honesty rule as
+ * excerptIsOnPage: null when there is nothing to compare against.
+ */
+export function answerIsOnPages(
+  answer: string,
+  pages: readonly number[],
+  pageTexts: readonly string[],
+): boolean | null {
+  // Formulas come out of pdf.js as loose symbols, never as the words a
+  // LaTeX answer uses, so they are left out of the comparison.
+  const words = wordsOf(stripMarkup(answer).replace(MATH_RE, ' '))
+  if (words.length < MIN_EXCERPT_WORDS) return null
+  const texts = pages.map((page) => pageTexts[page - 1] ?? '')
+  // A slide whose words live in a figure has too little text to judge by,
+  // and judging the answer on its other cited pages alone would flag what
+  // the figure says.
+  if (texts.length === 0 || texts.some((text) => text.length < ANSWER_MIN_PAGE_TEXT_CHARS)) {
+    return null
+  }
+
+  const pageWords = wordsOf(texts.join(' '))
+  const exact = new Set(pageWords)
+  const stems = new Set(
+    pageWords.filter((w) => w.length >= STEM_LEN).map((w) => w.slice(0, STEM_LEN)),
+  )
+  const found = words.filter(
+    (word) => exact.has(word) || (word.length >= STEM_LEN && stems.has(word.slice(0, STEM_LEN))),
+  ).length
+  return found / words.length >= ANSWER_MATCH_RATIO
+}
+
 /**
  * Evaluate a card in one pass. `failures` are hard requirements — any one of
  * them rejects the card. `issues` (failures + soft flags) annotate the card
@@ -381,6 +428,9 @@ export function evaluateCard(card: Card, opts: EvaluateOptions = {}): GateVerdic
   if (opts.pageTexts !== undefined && !card.outsideSource && card.sourceExcerpt) {
     const onPage = excerptIsOnPage(card.sourceExcerpt, sourcePages, opts.pageTexts)
     if (onPage === false) soft.push('excerpt_not_on_cited_page')
+    if (answerIsOnPages(answerText, sourcePages, opts.pageTexts) === false) {
+      soft.push('answer_not_on_cited_page')
+    }
   }
 
   const score = Math.max(
@@ -409,6 +459,7 @@ export interface NormalizedCardPayload {
   slideNumber?: number
   sourcePages: number[]
   conceptIds: string[]
+  facetIds: string[]
   relationKeys: string[]
   rationale?: string
   sourceExcerpt?: string
@@ -504,6 +555,7 @@ export function normalizeCardPayload(raw: unknown): NormalizedCardPayload | null
     fields,
     sourcePages: normalizePageReferences(raw['source_pages'] ?? raw['sourcePages']),
     conceptIds: normalizeStringList(raw['concept_ids'] ?? raw['conceptIds']),
+    facetIds: normalizeStringList(raw['facet_ids'] ?? raw['facetIds']),
     relationKeys: normalizeStringList(raw['relation_keys'] ?? raw['relationKeys']),
   }
 
