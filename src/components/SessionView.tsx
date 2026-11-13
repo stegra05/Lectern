@@ -6,6 +6,7 @@ import type { Concept, ConceptMap, CoverageData } from '../engine/types'
 import type { AppPhase } from '../state/store'
 import { useLectern } from '../state/store'
 import { ActivityLog, FollowUpComposer } from './ActivityLog'
+import { CardComposer } from './CardComposer'
 import { CardTile } from './CardTile'
 import { ConceptMapPreview } from './ConceptGraph'
 import { ConceptSheet } from './ConceptSheet'
@@ -308,6 +309,8 @@ function CardColumn() {
   const pageFilter = useLectern((s) => s.pageFilter)
   const setPageFilter = useLectern((s) => s.setPageFilter)
   const selectedUid = useLectern((s) => s.selectedUid)
+  const slidePeek = useLectern((s) => s.slidePeek)
+  const openCardComposer = useLectern((s) => s.openCardComposer)
   const listRef = useRef<HTMLDivElement>(null)
   const [showKeys, setShowKeys] = useState(() => !readFlag(REVIEW_KEYS_LEARNED))
   const filtered = searchQuery.trim() !== '' || pageFilter !== null
@@ -347,19 +350,23 @@ function CardColumn() {
       el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
   }, [cards.length, reviewable])
 
-  // Keyboard review: ↑↓/jk walk the visible cards, e/↩ edits, x removes
+  // Keyboard review: ↑↓/jk walk the visible cards, n creates, e/↩ edits, x removes
   // (undoable), s peeks the card's source slide. Fields keep their own keys.
   useEffect(() => {
     if (!reviewable) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
       const state = useLectern.getState()
-      if (state.editingUid || state.settingsOpen || state.conceptsOpen) return
+      if (state.editingUid || state.settingsOpen || state.conceptsOpen || state.cardComposer) return
       const index = visible.findIndex((c) => c.uid === state.selectedUid)
       const select = (i: number) => state.setSelectedUid(visible[i]?.uid ?? null)
-      if ('jkesx'.includes(e.key) || e.key.startsWith('Arrow')) writeFlag(REVIEW_KEYS_LEARNED)
+      if ('jkesxn'.includes(e.key) || e.key.startsWith('Arrow')) writeFlag(REVIEW_KEYS_LEARNED)
 
       switch (e.key) {
+        case 'n':
+          e.preventDefault()
+          state.openCardComposer({ sourcePage: state.slidePeek ?? undefined })
+          break
         case 'j':
         case 'ArrowDown':
           e.preventDefault()
@@ -411,8 +418,15 @@ function CardColumn() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {reviewable && cards.length > 0 && (
+      {reviewable && (
         <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-6 pt-4 pb-1">
+          <button
+            onClick={() => openCardComposer({ sourcePage: pageFilter ?? slidePeek ?? undefined })}
+            className="btn-secondary px-2.5 py-1.5 text-xs text-lamp border-lamp/40 hover:border-lamp"
+            title="Create a new flashcard (n)"
+          >
+            + New card
+          </button>
           {/* A visible way out of a search — Esc clears it too, but only if
               you already knew that. */}
           <div className="relative w-56">
@@ -454,7 +468,7 @@ function CardColumn() {
                 that, ? brings them back. */}
             {showKeys ? (
               <span className="font-data text-chalk-faint text-2xs whitespace-nowrap">
-                ↑↓ select · e edit · x remove · s slide · ⌘↩ send
+                ↑↓ select · n new · e edit · x remove · s slide · ⌘↩ send
               </span>
             ) : (
               <button
@@ -471,34 +485,39 @@ function CardColumn() {
       )}
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        {visible.length === 0 ? (
-          <Empty
-            phase={phase}
-            filtered={cards.length > 0}
-            onClearFilters={() => {
-              setSearchQuery('')
-              setPageFilter(null)
-            }}
-          />
-        ) : (
-          <div
-            className="mx-auto max-w-2xl space-y-3 pb-24"
-            role={reviewable ? 'listbox' : undefined}
-            aria-label={reviewable ? 'Generated cards' : undefined}
-          >
-            {visible.map((card, i) => (
-              <CardTile
-                key={card.uid}
-                card={card}
-                editable={reviewable}
-                selected={reviewable && card.uid === selectedUid}
-                animate={!reviewable && i >= cards.length - 3}
-              />
-            ))}
-            {/* The next card, forming. */}
-            {streaming && <div aria-hidden className="bg-paper/8 h-10 animate-pulse rounded-md" />}
-          </div>
-        )}
+        <div className="mx-auto max-w-2xl pb-24">
+          <CardComposer />
+          {visible.length === 0 ? (
+            <Empty
+              phase={phase}
+              filtered={cards.length > 0}
+              onClearFilters={() => {
+                setSearchQuery('')
+                setPageFilter(null)
+              }}
+            />
+          ) : (
+            <div
+              className="space-y-3"
+              role={reviewable ? 'listbox' : undefined}
+              aria-label={reviewable ? 'Generated cards' : undefined}
+            >
+              {visible.map((card, i) => (
+                <CardTile
+                  key={card.uid}
+                  card={card}
+                  editable={reviewable}
+                  selected={reviewable && card.uid === selectedUid}
+                  animate={!reviewable && i >= cards.length - 3}
+                />
+              ))}
+              {/* The next card, forming. */}
+              {streaming && (
+                <div aria-hidden className="bg-paper/8 h-10 animate-pulse rounded-md" />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -513,23 +532,37 @@ function Empty({
   filtered: boolean
   onClearFilters: () => void
 }) {
+  const openCardComposer = useLectern((s) => s.openCardComposer)
+  // Every generation run builds a concept map before its first card, so a
+  // finished session without one is the slides opened via "View slides".
+  const slidesOnly = useLectern((s) => s.conceptMap === null)
+  const reviewable = phase === 'complete' || phase === 'error'
+
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3">
       <p className="text-chalk-dim text-base">
         {filtered
           ? 'No cards match the search or page filter.'
           : phase === 'complete'
-            ? 'No cards made it through. Try a larger deck size or a different focus.'
+            ? slidesOnly
+              ? 'No cards yet. Write the first one with + Create card, or press n.'
+              : 'No cards made it through. Try a larger deck size or a different focus.'
             : phase === 'error'
               ? 'No cards had been accepted before the stop.'
               : 'Reading the lecture…'}
       </p>
       {/* Telling someone to clear a filter, without the button that clears it,
           leaves them hunting for the two controls that caused it. */}
-      {filtered && (
+      {filtered ? (
         <button onClick={onClearFilters} className="btn-secondary px-3 py-1.5">
           Show all cards
         </button>
+      ) : (
+        reviewable && (
+          <button onClick={() => openCardComposer()} className="btn-primary px-4 py-2">
+            + Create card
+          </button>
+        )
       )}
     </div>
   )
