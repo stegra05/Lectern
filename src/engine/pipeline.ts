@@ -264,6 +264,25 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   const inDepthMode = (): boolean => inheritedCount > 0 && isCoverageSufficient(coverage)
   /** How many times the model has asked to stop while short of budget. */
   let earlyFinishAttempts = 0
+  // A card flagged answer_not_on_cited_page goes back for a rewrite once. Its
+  // second try lands, flag and all: the check misses text inside slide
+  // images, so the model must be able to stand by a card. A rewrite keeps its
+  // front or its facets, so either one recognises the second try. A rewrite
+  // with a new front and no known facet looks like a new card, though, and a
+  // send-back is no stall (see nonProgressRounds), so the run sends back at
+  // most its own budget's worth; past that, flagged cards land and the
+  // review's mandatory handling takes over.
+  const bouncedKeys = new Set<string>()
+  const bouncedFacets = new Set<string>()
+  let sentBack = 0
+  const isSecondTry = (card: Card, key: string): boolean =>
+    bouncedKeys.has(key) ||
+    findNearDuplicate(key, bouncedKeys) !== null ||
+    card.facetIds.some((id) => bouncedFacets.has(id))
+  const shouldSendBack = (card: Card, key: string): boolean =>
+    card.qualityIssues.includes('answer_not_on_cited_page') &&
+    sentBack < sizing.totalCardCap &&
+    !isSecondTry(card, key)
   const finishVerdict = () =>
     handleFinishRequest(
       catalog,
@@ -332,6 +351,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
     const results: InputPart[] = []
     let acceptedThisRound = 0
+    let bouncedThisRound = 0
 
     for (const call of response.toolCalls) {
       if (call.name === 'finish_generation') {
@@ -369,6 +389,8 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       const rejected: Array<{ front: string; reasons: RejectionReason[] }> = []
       const duplicateFronts: string[] = []
       let unknownMetadataDropped = 0
+      // Recorded after the batch, so a twin in the same batch is no second try.
+      const bounced: Card[] = []
 
       for (const raw of rawCards) {
         const normalized = normalizeCardPayload(raw)
@@ -401,11 +423,22 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
           rejected.push({ front: firstField(card), reasons: ['budget_exhausted'] })
           continue
         }
+        if (shouldSendBack(card, key)) {
+          sentBack++
+          bounced.push(card)
+          rejected.push({ front: firstField(card), reasons: ['answer_not_on_cited_page'] })
+          continue
+        }
         seenKeys.add(key)
         cards.push(card)
         acceptedThisRound++
         emit({ type: 'card_accepted', card })
       }
+      for (const card of bounced) {
+        bouncedKeys.add(cardKey(card))
+        for (const id of card.facetIds) bouncedFacets.add(id)
+      }
+      bouncedThisRound += bounced.length
 
       for (const r of rejected) emit({ type: 'card_rejected', front: r.front, reasons: r.reasons })
 
@@ -443,7 +476,9 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       terminationReason = 'max_cap_reached'
       break
     }
-    nonProgressRounds = acceptedThisRound === 0 ? nonProgressRounds + 1 : 0
+    // A batch sent back for rewrites is work in hand, not a stall: a lecture
+    // whose cards mostly get flagged would otherwise end the run here.
+    nonProgressRounds = acceptedThisRound + bouncedThisRound === 0 ? nonProgressRounds + 1 : 0
     if (nonProgressRounds >= NON_PROGRESS_MAX_ROUNDS) {
       terminationReason = 'non_progress'
       emit({
@@ -758,11 +793,22 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
   let idleRounds = 0
   /** Tool results built but not yet sent when the loop exits. */
   let pendingResults: InputPart[] = []
+  /** Cards this review rewrote or wrote: their flags are the model's call. */
+  const edited = new Set<string>()
+  let offSourceReminderSent = false
 
   const indexOfId = (cardId: string): number => {
     const uid = idToUid.get(cardId)
     return uid === undefined ? -1 : cards.findIndex((c) => c.uid === uid)
   }
+  /** Flagged cards the review has neither rewritten nor removed. */
+  const unhandledOffSource = (): string[] =>
+    [...idToUid].flatMap(([cardId, uid]) => {
+      const card = cards.find((c) => c.uid === uid)
+      return card?.qualityIssues.includes('answer_not_on_cited_page') && !edited.has(uid)
+        ? [cardId]
+        : []
+    })
 
   const reviewTurn = (conversation: Conversation, input: InputPart[]) =>
     client.turn({
@@ -797,9 +843,25 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
 
     const results: InputPart[] = []
     let editsThisRound = 0
+    let finishRefused = false
 
     for (const call of response.toolCalls) {
       if (call.name === 'finish_review') {
+        // Sent back once, like an early finish in generation: a second
+        // request means the model has looked and stands by those cards.
+        const unhandled = unhandledOffSource()
+        if (unhandled.length > 0 && !offSourceReminderSent) {
+          offSourceReminderSent = true
+          finishRefused = true
+          results.push(
+            functionResult(
+              call,
+              `Not yet: ${count(unhandled.length, 'card')} flagged answer_not_on_cited_page ${unhandled.length === 1 ? 'is' : 'are'} untouched: ${unhandled.join(', ')}. ` +
+                'Rewrite each against its cited page with update_card, or remove it. If an answer really is on its page (inside a figure, say), call finish_review again and say so in the summary; it will be accepted.',
+            ),
+          )
+          continue
+        }
         finished = true
         const args = (call.arguments ?? {}) as Record<string, unknown>
         note = typeof args.summary === 'string' ? args.summary : undefined
@@ -809,6 +871,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
 
       const applied: string[] = []
       const rejected: Array<{ ref: string; reasons: string[] }> = []
+      const stillOffSource: string[] = []
       let unknownMetadataDropped = 0
 
       if (call.name === 'update_card') {
@@ -842,9 +905,13 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
             seenKeys.delete(oldKey)
             seenKeys.add(newKey)
             cards[index] = card
+            edited.add(card.uid)
             counts.updated++
             editsThisRound++
             applied.push(`updated ${cardId}`)
+            if (card.qualityIssues.includes('answer_not_on_cited_page')) {
+              stillOffSource.push(cardId)
+            }
           }
         }
       } else if (call.name === 'add_cards') {
@@ -880,9 +947,14 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           }
           seenKeys.add(key)
           cards.push(card)
+          edited.add(card.uid)
           counts.added++
           editsThisRound++
-          applied.push(`added ${assignId(card.uid)}`)
+          const cardId = assignId(card.uid)
+          applied.push(`added ${cardId}`)
+          if (card.qualityIssues.includes('answer_not_on_cited_page')) {
+            stillOffSource.push(cardId)
+          }
         }
       } else if (call.name === 'remove_cards') {
         const { cardIds } = parseRemoveCardsArgs(call.arguments)
@@ -921,6 +993,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
           buildReviewFeedback({
             applied,
             rejected,
+            stillOffSource,
             unknownMetadataDropped,
             gapText: buildReflectionGapText(catalog, coverage),
           }),
@@ -930,7 +1003,7 @@ async function runReviewLoop(opts: ReviewLoopOptions): Promise<ReviewOutcome> {
 
     pendingResults = results
     if (finished) break
-    idleRounds = editsThisRound === 0 ? idleRounds + 1 : 0
+    idleRounds = editsThisRound === 0 && !finishRefused ? idleRounds + 1 : 0
     if (idleRounds >= NON_PROGRESS_MAX_ROUNDS) {
       emit({
         type: 'log',

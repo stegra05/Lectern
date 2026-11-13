@@ -585,4 +585,38 @@ describe('answerIsOnPages', () => {
       ),
     ).toBeNull()
   })
+
+  describe('neighbouring pages', () => {
+    const offSource =
+      'Outliers compress the remaining values, so gradients explode during backpropagation.'
+    const backprop =
+      'During backpropagation, outliers compress the remaining values and gradients explode. ' +
+      'Clipping the gradients or rescaling the features keeps the updates stable across every layer ' +
+      'of the network, which is why robust scaling is preferred for skewed inputs.'
+    const unrelated =
+      'Decision trees split the data on one feature at a time and need no feature scaling at all. ' +
+      'Their depth controls how closely they fit the training set, and pruning trades accuracy ' +
+      'on the training data for better generalisation on unseen examples.'
+
+    it('finds the answer on the page after the cited one', () => {
+      expect(answerIsOnPages(offSource, [1], [...pages, backprop])).toBe(true)
+    })
+
+    it('finds the answer on the page before the cited one', () => {
+      expect(answerIsOnPages(offSource, [2], [backprop, ...pages])).toBe(true)
+    })
+
+    it('looks no further than one page away', () => {
+      expect(answerIsOnPages(offSource, [1], [...pages, unrelated, backprop])).toBe(false)
+    })
+
+    it('stays within the document at its first and last page', () => {
+      expect(answerIsOnPages(offSource, [1], pages)).toBe(false)
+      expect(answerIsOnPages(offSource, [2], [unrelated, ...pages])).toBe(false)
+    })
+
+    it('does not fall silent because a neighbour is a figure', () => {
+      expect(answerIsOnPages(offSource, [1], [...pages, 'Diagram: outliers'])).toBe(false)
+    })
+  })
 })

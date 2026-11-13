@@ -187,7 +187,7 @@ export function generationMissionPrompt(
     `\nBudget: up to ${opts.totalCardCap} accepted cards. It is a ceiling, not a quota: stop when the material runs out. Keep each submit_cards call to about ${opts.batchSize} cards; larger payloads risk truncation.\n` +
     `Coverage order: every high-importance concept first, then breadth across pages. Spend at most 2 cards on one slide while gaps remain elsewhere.\n` +
     (focus ? `User focus: "${focus}" — align card selection and style with it.\n` : '') +
-    `Quality bar: the front has exactly one defensible answer (open questions, never yes/no); the answer is verifiable against the card's source_excerpt; prefer why/how/compare/apply over restatement. Use Cloze for definitions and lists (with a {{c1::...}} deletion), Basic for open questions.\n` +
+    `Quality bar: the front has exactly one defensible answer (open questions, never yes/no); the answer is verifiable against the card's source_excerpt and says what its cited pages say, nothing the lecture does not (an answer whose words are not on those pages comes back once for a rewrite); prefer why/how/compare/apply over restatement. Use Cloze for definitions and lists (with a {{c1::...}} deletion), Basic for open questions.\n` +
     `Metadata required on every card:\n` +
     `- slide_topic: short section label, Title Case, up to 8 words.\n` +
     `- slide_number: integer page, when confident.\n` +
@@ -227,6 +227,19 @@ function pushFacetRepeatNote(lines: string[], rejected: Array<{ reasons: string[
   }
 }
 
+/** What the off-source check found, said once wherever it fires. */
+const OFF_SOURCE_FINDING = 'the answer was not found on the cited pages or the pages next to them'
+
+/** A card sent back for the off-source check is a request, not a verdict:
+ *  the check misses text inside slide images, so the model may stand by it. */
+function pushOffSourceNote(lines: string[], rejected: Array<{ reasons: string[] }>): void {
+  if (rejected.some((r) => r.reasons.includes('answer_not_on_cited_page'))) {
+    lines.push(
+      `answer_not_on_cited_page: ${OFF_SOURCE_FINDING}. Rewrite the answer to say what the page says, or cite the page that holds it. If the answer really is on the cited page (inside a figure, say), resubmit the card with the same front and facet_ids; it is then accepted with its flag.`,
+    )
+  }
+}
+
 /** Feedback payload returned to the model after each submit_cards call. */
 export function buildSubmitFeedback(opts: {
   acceptedCount: number
@@ -248,6 +261,7 @@ export function buildSubmitFeedback(opts: {
     }
     pushTruncationNote(lines, opts.rejected.length, FEEDBACK_LIST_LIMIT, 'rejected card(s)')
     pushFacetRepeatNote(lines, opts.rejected)
+    pushOffSourceNote(lines, opts.rejected)
   }
   if (opts.duplicateFronts.length > 0) {
     lines.push('Duplicates of cards already in the deck (do not resubmit these):')
@@ -291,10 +305,11 @@ export function reviewMissionPrompt(
       : `\n${inherited} further card(s) from earlier runs are already in this deck. They are not listed below and are not yours to edit — the user is studying them. They do count toward the coverage ledger, so a gap the ledger does not show is not a gap.\n`
   return (
     'The deck is generated. Review it as a quality editor, working through the edit tools:\n' +
-    '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back. A card flagged answer_not_on_cited_page says things its pages do not: bring the answer back to what the lecture says.\n' +
+    '- update_card: rewrite one card in place — vague fronts, multi-idea cards, answers the source_excerpt cannot back.\n' +
     '- remove_cards: delete redundant or low-value cards. Two cards that test the same fact from different angles are redundant; so is filler a student gains nothing from (a term restated, a single number from an example). Each card lists the facet_ids it tests: two cards with the same facet are a duplicate unless they test genuinely different facts. When two overlap, keep the stronger one or merge them via update_card. A smaller deck is fine.\n' +
     `- add_cards: close remaining coverage gaps. The deck budget stays ${opts.cardCap} cards (${opts.freeSlots} slot(s) currently free); removing a card frees a slot.\n` +
     '- finish_review: call when the deck is sound, with a short quality summary.\n' +
+    '\nRequired: every card whose quality_issues include answer_not_on_cited_page must be handled. Its answer was not found on its cited pages or the pages next to them, which usually means it says things the lecture does not. Rewrite it against its cited page with update_card, or remove it. Leave it unchanged only when the answer really is on the page (inside a figure, say), and say so in your summary.\n' +
     '\nEvery edit passes the same quality gate as generation and returns a verdict plus an updated coverage ledger. ' +
     'Cards you add or rewrite carry facet_ids like the rest; one whose facets all have their cards already is rejected as facet_already_tested. ' +
     'Leave strong cards untouched — edit only where you can name the defect. ' +
@@ -368,11 +383,18 @@ export function buildFollowUpFeedback(opts: {
 export function buildReviewFeedback(opts: {
   applied: string[]
   rejected: Array<{ ref: string; reasons: string[] }>
+  /** Applied edits whose card still carries answer_not_on_cited_page. */
+  stillOffSource: string[]
   unknownMetadataDropped: number
   gapText: string
 }): string {
   const lines: string[] = []
   if (opts.applied.length > 0) lines.push(`Applied: ${opts.applied.join('; ')}.`)
+  if (opts.stillOffSource.length > 0) {
+    lines.push(
+      `Still flagged answer_not_on_cited_page: ${opts.stillOffSource.join(', ')}. For these, ${OFF_SOURCE_FINDING}. Rewrite against the cited page or remove, unless the answer really is on the page (inside a figure, say).`,
+    )
+  }
   if (opts.rejected.length > 0) {
     lines.push('Rejected (card unchanged):')
     for (const r of opts.rejected.slice(0, FEEDBACK_LIST_LIMIT)) {

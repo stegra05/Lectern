@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Changed
+
+- **Answers that say more than the lecture get rewritten.** A card whose
+  answer is not on its cited page goes back to the model once, to be
+  rewritten against the page or pointed at the page that holds it. The
+  quality pass must then rewrite or remove every card still flagged, unless
+  the answer really is on the slide, inside a figure for example. The check
+  now also reads the pages just before and after the cited one, so a point
+  that runs over onto the next slide is no longer flagged.
+
 ### Fixed
 
 - An OpenAI request that gets no answer now gives up after five minutes and

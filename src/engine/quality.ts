@@ -325,6 +325,12 @@ export function answerIsOnPages(
   if (texts.length === 0 || texts.some((text) => text.length < ANSWER_MIN_PAGE_TEXT_CHARS)) {
     return null
   }
+  // A slide often finishes its point on the next one, and a citation is off
+  // by a page as often as it is wrong: the neighbours count as the source.
+  const neighbours = pages
+    .flatMap((page) => [page - 1, page + 1])
+    .filter((page) => page >= 1 && page <= pageTexts.length && !pages.includes(page))
+  for (const page of neighbours) texts.push(pageTexts[page - 1])
 
   const pageWords = wordsOf(texts.join(' '))
   const exact = new Set(pageWords)
