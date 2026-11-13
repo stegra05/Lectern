@@ -78,6 +78,7 @@ describe('feedback builders', () => {
     const text = buildReviewFeedback({
       applied: ['updated c1'],
       rejected: [],
+      stillOffSource: [],
       unknownMetadataDropped: 2,
       gapText: 'gaps',
     })
@@ -88,6 +89,7 @@ describe('feedback builders', () => {
     const withRepeat = buildReviewFeedback({
       applied: [],
       rejected: [{ ref: 'What is A?', reasons: ['facet_already_tested'] }],
+      stillOffSource: [],
       unknownMetadataDropped: 0,
       gapText: 'gaps',
     })
@@ -104,6 +106,55 @@ describe('feedback builders', () => {
       finishAllowed: false,
     })
     expect(without).not.toContain('facet_already_tested')
+  })
+
+  it('sends an off-source card back with what to do, and how to stand by it', () => {
+    const text = buildSubmitFeedback({
+      acceptedCount: 0,
+      rejected: [{ front: 'Why normalise?', reasons: ['answer_not_on_cited_page'] }],
+      duplicateFronts: [],
+      unknownMetadataDropped: 0,
+      cardsRemaining: 5,
+      gapText: 'gaps',
+      finishAllowed: false,
+    })
+    expect(text).toContain('Why normalise?" → answer_not_on_cited_page')
+    expect(text).toContain('not found on the cited pages or the pages next to them')
+    expect(text).toContain('Rewrite the answer to say what the page says, or cite the page')
+    expect(text).toContain('resubmit the card with the same front and facet_ids')
+
+    const without = buildSubmitFeedback({
+      acceptedCount: 0,
+      rejected: rejects(1),
+      duplicateFronts: [],
+      unknownMetadataDropped: 0,
+      cardsRemaining: 5,
+      gapText: 'gaps',
+      finishAllowed: false,
+    })
+    expect(without).not.toContain('answer_not_on_cited_page')
+  })
+
+  it('says when a review edit still carries the off-source flag', () => {
+    const text = buildReviewFeedback({
+      applied: ['updated c3', 'updated c4'],
+      rejected: [],
+      stillOffSource: ['c3'],
+      unknownMetadataDropped: 0,
+      gapText: 'gaps',
+    })
+    expect(text).toContain('Still flagged answer_not_on_cited_page: c3.')
+    expect(text).not.toContain('c3, c4')
+    expect(text).toContain('Rewrite against the cited page or remove')
+
+    const clean = buildReviewFeedback({
+      applied: ['updated c4'],
+      rejected: [],
+      stillOffSource: [],
+      unknownMetadataDropped: 0,
+      gapText: 'gaps',
+    })
+    expect(clean).not.toContain('answer_not_on_cited_page')
   })
 
   it('keeps the follow-up duplicate counter consistent with the listed fronts', () => {
