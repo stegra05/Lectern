@@ -1179,6 +1179,9 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         sourceExcerpt: draft.sourceExcerpt,
         conceptIds: draft.conceptIds ?? [],
         relationKeys: draft.relationKeys ?? [],
+        // A hand-made card names concepts, not facets: the composer has no
+        // facet picker, so it never closes a facet or counts as a repeat.
+        facetIds: [],
         qualityScore: 100,
         qualityIssues: [],
         manual: true,

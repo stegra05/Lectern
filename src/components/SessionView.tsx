@@ -546,7 +546,7 @@ function Empty({
           : phase === 'complete'
             ? slidesOnly
               ? 'No cards yet. Write the first one with + Create card, or press n.'
-              : 'No cards made it through. Try a larger deck size or a different focus.'
+              : 'No cards made it through. Try a more thorough depth or a different focus.'
             : phase === 'error'
               ? 'No cards had been accepted before the stop.'
               : 'Reading the lecture…'}
