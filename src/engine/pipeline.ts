@@ -256,9 +256,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     emit({
       type: 'log',
       level: 'info',
-      message:
-        `Tidied the concept map: merged overlapping facts, ` +
-        `${facetsBefore} down to ${count(facetsAfter, 'fact')}.`,
+      message: `Tidied the concept map: ${count(facetsBefore, 'fact')} down to ${facetsAfter}.`,
     })
   }
   emit({

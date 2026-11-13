@@ -417,7 +417,7 @@ describe('runPipeline (concept-map cleanup)', () => {
 
     // The student hears it once, in plain words.
     const logs = events.flatMap((e) => (e.type === 'log' ? [e.message] : []))
-    expect(logs).toContain('Tidied the concept map: merged overlapping facts, 6 down to 3 facts.')
+    expect(logs).toContain('Tidied the concept map: 6 facts down to 3.')
 
     // The extra turn is on the bill.
     const usage = events.find(

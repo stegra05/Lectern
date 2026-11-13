@@ -224,4 +224,47 @@ describe('applyFacetCorrection', () => {
     })
     expect(applyFacetCorrection(map, worse, TARGET)).toBeNull()
   })
+
+  describe('floor', () => {
+    const WORDS =
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mango november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu'.split(
+        ' ',
+      )
+    /** `n` concepts of `k` distinct facets each, on pages of their own. */
+    const wideMap = (n: number, k: number) =>
+      mapOf(
+        ...Array.from({ length: n }, (_, i) =>
+          concept(
+            `c${i}`,
+            WORDS.slice(i * k, i * k + k).map((w) => `${w} property`),
+            [i + 1],
+          ),
+        ),
+      )
+    /** The first `keep[i]` facets of each concept. */
+    const trimmed = (map: ConceptMap, keep: number[]) =>
+      new Map(map.concepts.map((c, i) => [c.id, c.facets.slice(0, keep[i])]))
+
+    it('adopts a correction at half of the map it was asked to tighten', () => {
+      // 10 facets within a limit of 20: the floor is 5.
+      const map = wideMap(5, 2)
+      expect(applyFacetCorrection(map, trimmed(map, [1, 1, 1, 1, 1]), { max: 10 })).not.toBeNull()
+    })
+
+    it('discards a correction that cuts below half', () => {
+      const map = wideMap(4, 3)
+      // 12 facets within a limit of 20: the floor is 6, and 5 is below it.
+      expect(applyFacetCorrection(map, trimmed(map, [2, 1, 1, 1]), { max: 10 })).toBeNull()
+      expect(applyFacetCorrection(map, trimmed(map, [2, 2, 1, 1]), { max: 10 })).not.toBeNull()
+    })
+
+    it('measures a map far over the limit against the limit, so it can still be corrected', () => {
+      // 24 facets against a limit of 10: half of 24 would refuse the 10 asked for.
+      const map = wideMap(4, 6)
+      const fixed = applyFacetCorrection(map, trimmed(map, [3, 3, 2, 2]), { max: 5 })
+      expect(fixed && facetTotal(fixed)).toBe(10)
+      // The floor is half the limit: 4 is below it.
+      expect(applyFacetCorrection(map, trimmed(map, [1, 1, 1, 1]), { max: 5 })).toBeNull()
+    })
+  })
 })

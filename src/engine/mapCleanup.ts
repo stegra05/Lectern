@@ -12,7 +12,7 @@
  * All functions are pure.
  */
 
-import { FACETS_PER_CONCEPT_LIMIT } from './config'
+import { CLEANUP_MIN_SHARE, FACETS_PER_CONCEPT_LIMIT } from './config'
 import { facetCount } from './pacing'
 import { jaccard, stripMarkup, wordsKey } from './quality'
 import type { Concept, ConceptMap, Importance } from './types'
@@ -133,9 +133,10 @@ export const hasFlags = (flags: MapFlags): boolean => flagCount(flags) > 0
 /**
  * The map with the model's corrected facets, or null when the correction is
  * not one to trust. It must name exactly the map's concepts, leave no concept
- * that had facets without any, add no facets, and not fare worse on the same
- * check. Only the facets are taken: the turn was about them, and the rest of
- * the map stays as first read.
+ * that had facets without any, add no facets, not fall below half of the
+ * size it was asked to reach, and not fare worse on the same check. Only the
+ * facets are taken: the turn was about them, and the rest of the map stays
+ * as first read.
  */
 export function applyFacetCorrection(
   map: ConceptMap,
@@ -151,9 +152,9 @@ export function applyFacetCorrection(
     ...map,
     concepts: map.concepts.map((concept) => ({ ...concept, facets: facetsOf(concept) })),
   })
-  if (facetTotal(candidate) > facetTotal(map)) return null
-  if (flagCount(checkConceptMap(candidate, target)) > flagCount(checkConceptMap(map, target))) {
-    return null
-  }
-  return candidate
+  const before = checkConceptMap(map, target)
+  const asked = Math.min(before.facetTotal, before.facetLimit)
+  const total = facetTotal(candidate)
+  if (total > before.facetTotal || total < asked * CLEANUP_MIN_SHARE) return null
+  return flagCount(checkConceptMap(candidate, target)) > flagCount(before) ? null : candidate
 }

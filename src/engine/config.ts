@@ -55,6 +55,12 @@ export const CONCEPT_COUNT_CEILING = 40
  *  133 facets there (3.3 per) drove the deck to its ceiling with about 13%
  *  padding. Not yet tuned against live runs. */
 export const FACETS_PER_CONCEPT_LIMIT = 2
+/** A cleanup correction may not cut the map below this share of the size it
+ *  was asked to reach (its facet total, or the limit when over it). It keeps
+ *  a model told to shrink the map from collapsing it to one facet per
+ *  concept: a fact that leaves the map is a fact no card ever asks. Not yet
+ *  tuned against live runs. */
+export const CLEANUP_MIN_SHARE = 0.5
 
 // --- Generation loop -------------------------------------------------------
 
