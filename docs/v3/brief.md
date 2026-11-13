@@ -132,6 +132,7 @@ expansion needs.
 - Atomic cards with hard limits and roles, a subdeck per lecture, tags, the slide behind
   every card.
 - The result view: summary, concept map, decisions taken.
+- Browsing the cards of a lecture, editing or removing a card, adding a card of your own.
 - Sending through the add-on.
 - The headless engine with evals against the reference deck.
 
@@ -140,10 +141,14 @@ blind comparison against the reference deck, and adding lecture 12 creates only 
 
 **Expansions, in order**
 
-1. The study plan, which brings the other two questions (ready-by date, minutes per day).
-2. Past exams and exercise sheets: inferred exam format and exam weight.
-3. The quiz.
-4. Several card designs, and smart cards for every type of lecture.
+1. The feedback loop on the result: fixed actions on a lecture, a concept, a decision or a
+   card. No free text. Marking a concept as known lives here.
+2. The study plan, which brings the other two questions (ready-by date, minutes per day).
+3. Past exams and exercise sheets: inferred exam format and exam weight.
+4. The multiple-choice quiz.
+5. A second card design, typed answers, and smart cards for every type of lecture.
+
+The chosen design direction is recorded in `design/v3/DIRECTION.md`.
 
 **Vision, not planned**: reading progress back from Anki, hosted keys and payment, a website.
 
