@@ -3,10 +3,12 @@
  * Responses API and records every request.
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { OPENAI_REQUEST_TIMEOUT_MS } from './config'
 import { LlmError, type ToolDeclaration } from './llm'
 import { OpenAIClient } from './openai'
+import type { RetryNotice } from './types'
 
 interface Captured {
   url: string
@@ -25,6 +27,18 @@ function scriptedFetch(script: Array<() => Response>, captured: Captured[]): typ
     return next()
   })
 }
+
+/** A fetch whose requests never get an answer: they end only when the SDK
+ *  aborts them, the way standard fetch does. */
+const hangingFetch = (): typeof fetch =>
+  vi.fn<typeof fetch>(
+    (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')),
+        )
+      }),
+  )
 
 const json =
   (body: unknown, status = 200) =>
@@ -256,5 +270,27 @@ describe('OpenAIClient', () => {
     await client.deleteDocument(document)
     expect(captured[0].request.method).toBe('DELETE')
     expect(captured[0].url).toBe('https://api.openai.com/v1/files/file-1')
+  })
+
+  describe('a request that never gets an answer', () => {
+    afterEach(() => vi.useRealTimers())
+
+    it('times out, retries once, then reports the timeout', async () => {
+      vi.useFakeTimers()
+      const fetchFn = hangingFetch()
+      const notices: RetryNotice[] = []
+      const client = new OpenAIClient('key', fetchFn, (n) => notices.push(n))
+      const result = client
+        .turn({ model: 'gpt-6-luna', input: [{ type: 'text', text: 'x' }] })
+        .catch((e: unknown) => e)
+
+      // Two of Lectern's timeouts fit inside a single one of the SDK's default.
+      await vi.advanceTimersByTimeAsync(2 * OPENAI_REQUEST_TIMEOUT_MS + 10_000)
+      const error = await result
+      expect(error).toBeInstanceOf(LlmError)
+      expect((error as LlmError).kind).toBe('timeout')
+      expect(fetchFn).toHaveBeenCalledTimes(2)
+      expect(notices).toEqual([expect.objectContaining({ kind: 'timeout', maxAttempts: 1 })])
+    })
   })
 })

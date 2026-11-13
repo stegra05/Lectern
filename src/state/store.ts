@@ -40,6 +40,7 @@ import type {
   NoteKind,
   PdfInfo,
   PipelineEvent,
+  RetryNotice,
   Settings,
   SizingPlan,
   SyncPreview,
@@ -213,9 +214,9 @@ interface LecternState {
    *  pipeline completes. */
   followUp: FollowUpSeed | null
   followUpBusy: boolean
-  /** A retry wait in progress: until when, and the HTTP status behind it.
+  /** A retry wait in progress: until when, and what went wrong.
    *  Shown as a countdown, so a paused run does not look like a hung one. */
-  wait: { until: number; waitMs: number; status: number } | null
+  wait: { until: number; waitMs: number; kind: RetryNotice['kind'] } | null
 
   // review
   editingUid: string | null
@@ -426,7 +427,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         break
       case 'waiting':
         set({
-          wait: { until: Date.now() + event.waitMs, waitMs: event.waitMs, status: event.status },
+          wait: { until: Date.now() + event.waitMs, waitMs: event.waitMs, kind: event.kind },
         })
         // Said live by the countdown under the current step, not in the log.
         break

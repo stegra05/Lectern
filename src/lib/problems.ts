@@ -10,7 +10,7 @@
 
 import { AnkiApiError, AnkiTransportError } from '../engine/anki'
 import { PROVIDERS, RATE_LIMIT_MAX_RETRIES } from '../engine/config'
-import { LlmError } from '../engine/llm'
+import { LlmError, type TransientKind } from '../engine/llm'
 import { LINKS, PROVIDER_LINKS, reportIssueUrl, type Link } from './links'
 
 /** What Lectern was doing when the error happened. */
@@ -141,6 +141,15 @@ function describeLlm(error: LlmError, activity: Activity): Problem {
         body: 'The connection kept dropping. Check your internet connection, then try again.',
         retry: true,
       }
+    case 'timeout':
+      return {
+        title: `${name} stopped answering`,
+        body:
+          'A request went unanswered for minutes, and trying again did not help. ' +
+          `This is usually on ${name}’s side, so try again in a few minutes.`,
+        retry: true,
+        link: { label: `Check ${name}’s status`, url: links.status },
+      }
     case 'bad_response':
       return {
         title: `${name} sent back something Lectern couldn’t read`,
@@ -201,10 +210,17 @@ export function describeSyncFailure(error: Error): string {
   return sentence(error.message)
 }
 
-/** The cause of a wait in two words, for the sidebar countdown. */
-export function waitCause(status: number): string {
-  return status === 429 ? 'Rate limit' : status === 0 ? 'Connection lost' : 'Server error'
+/** The cause of a wait in a word or two, for the sidebar countdown. */
+const WAIT_CAUSE: Record<TransientKind, string> = {
+  rate_limited: 'Rate limit',
+  server: 'Server error',
+  network: 'Connection lost',
+  timeout: 'No answer in time',
+  bad_response: 'Unreadable answer',
+  pdf_timeout: 'PDF still processing',
 }
+
+export const waitCause = (kind: TransientKind): string => WAIT_CAUSE[kind]
 
 /** AnkiConnect's own words, without the "AnkiConnect error for addNote:" wrapper. */
 const ankiDetail = (error: AnkiApiError): string =>

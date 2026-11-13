@@ -12,6 +12,7 @@ import {
   RATE_LIMIT_MAX_RETRIES,
   RETRY_BASE_DELAY_MS,
   RETRY_MAX_DELAY_MS,
+  TIMEOUT_MAX_RETRIES,
   type ProviderId,
   type ThinkingLevel,
 } from './config'
@@ -145,6 +146,8 @@ export type LlmErrorKind =
   | 'server'
   /** The connection dropped and kept dropping. */
   | 'network'
+  /** A request outlasted the client's timeout, and so did its retry. */
+  | 'timeout'
   /** The model answered, but not in a shape Lectern can use. */
   | 'bad_response'
   /** The provider could not process the uploaded PDF. */
@@ -157,15 +160,19 @@ export type LlmErrorKind =
   | 'request_rejected'
 
 /** Failures that can clear up by themselves, and so are worth a retry. */
-const TRANSIENT_KINDS = new Set<LlmErrorKind>([
+const TRANSIENT_KINDS = [
   'rate_limited',
   'server',
   'network',
+  'timeout',
   'bad_response',
   'pdf_timeout',
-])
+] as const satisfies readonly LlmErrorKind[]
 
-export const isTransient = (kind: LlmErrorKind): boolean => TRANSIENT_KINDS.has(kind)
+export type TransientKind = (typeof TRANSIENT_KINDS)[number]
+
+export const isTransient = (kind: LlmErrorKind): kind is TransientKind =>
+  TRANSIENT_KINDS.some((k) => k === kind)
 
 export class LlmError extends Error {
   constructor(
@@ -204,6 +211,8 @@ export interface SdkErrorClasses {
     ...args: never[]
   ) => Error & { status?: number; headers?: Headers; code?: string | null }
   APIConnectionError: abstract new (...args: never[]) => Error
+  /** A subclass of APIConnectionError, thrown when the client's timeout ran out. */
+  APIConnectionTimeoutError: abstract new (...args: never[]) => Error
 }
 
 /** Turn whatever an SDK call threw into an LlmError. */
@@ -214,6 +223,9 @@ export function fromSdkError(
   kindFor: (status: number, message: string, code: string) => LlmErrorKind,
 ): LlmError {
   if (e instanceof LlmError) return e
+  if (e instanceof sdk.APIConnectionTimeoutError) {
+    return new LlmError(e.message, 0, 'timeout', provider)
+  }
   // A connection error is an APIError without a status.
   if (e instanceof sdk.APIConnectionError) return new LlmError(e.message, 0, 'network', provider)
   if (e instanceof sdk.APIError) {
@@ -259,7 +271,10 @@ export async function withRetry<T>(
       const error = toError(e)
       // A daily quota or a spending cap will not clear in the next few
       // minutes; retrying only made the student wait for the same answer.
-      if (!isTransient(error.kind) || n === RATE_LIMIT_MAX_RETRIES) throw error
+      if (!isTransient(error.kind)) throw error
+      // Each timeout already cost a full timeout's wait.
+      const maxRetries = error.kind === 'timeout' ? TIMEOUT_MAX_RETRIES : RATE_LIMIT_MAX_RETRIES
+      if (n >= maxRetries) throw error
       // A provider that asks for a longer wait than the cap is not having a
       // blip; saying so now beats a run that looks hung.
       if (error.retryAfterMs !== undefined && error.retryAfterMs > RETRY_MAX_DELAY_MS) throw error
@@ -270,9 +285,9 @@ export async function withRetry<T>(
       const waitMs =
         error.retryAfterMs !== undefined && error.retryAfterMs > 0 ? error.retryAfterMs : backoff
       onRetry?.({
-        status: error.status,
+        kind: error.kind,
         attempt: n + 1,
-        maxAttempts: RATE_LIMIT_MAX_RETRIES,
+        maxAttempts: maxRetries,
         waitMs,
       })
       await sleep(waitMs, signal)

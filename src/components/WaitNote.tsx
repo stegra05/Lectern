@@ -34,7 +34,7 @@ export function WaitNote({
     // No live region: a countdown announced every second is noise. The wait
     // itself lands in the activity log.
     <p className={`font-data text-lamp-deep text-2xs ${className}`}>
-      {waitCause(wait.status)} · retry in {Math.floor(seconds / 60)}:
+      {waitCause(wait.kind)} · retry in {Math.floor(seconds / 60)}:
       {String(seconds % 60).padStart(2, '0')}
     </p>
   )
