@@ -7,7 +7,7 @@
 [![CI](https://github.com/stegra05/Lectern/actions/workflows/ci.yml/badge.svg)](https://github.com/stegra05/Lectern/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/stegra05/Lectern?include_prereleases)](https://github.com/stegra05/Lectern/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
 
 <img src="docs/screenshots/demo.gif" alt="Lectern generating a deck from a machine-learning lecture. The filmstrip lights up page by page as grounded cards stream in." width="840" />
 
@@ -50,8 +50,10 @@ every card by hand, so Lectern makes the checking visible instead:
 
 ## Install
 
-**[Download the latest release](https://github.com/stegra05/Lectern/releases/latest)**
-for macOS (Apple Silicon and Intel), Windows, or Linux.
+**[Download for Mac](https://github.com/stegra05/Lectern/releases/latest/download/Lectern-macOS.dmg)** (Apple Silicon and Intel) ·
+**[Download for Windows](https://github.com/stegra05/Lectern/releases/latest/download/Lectern-Windows-Setup.exe)**
+
+Lectern updates itself from then on.
 
 On macOS you can also use Homebrew:
 
@@ -64,7 +66,7 @@ brew install --cask lectern
 The macOS builds are not yet notarized with Apple. If macOS reports the app as
 damaged, clear the quarantine flag with `xattr -cr /Applications/Lectern.app`.
 
-Or build from source:
+Or build from source, which is also how to run Lectern on Linux:
 
 ```sh
 git clone https://github.com/stegra05/Lectern.git
