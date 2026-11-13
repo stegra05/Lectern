@@ -3,7 +3,8 @@
  *
  * Three phases over one model conversation (the provider is the model's; see
  * llm.ts for the neutral surface the phases talk to):
- *   1. mapping     — whole PDF in, global concept map out (thinking: high)
+ *   1. mapping     — whole PDF in, global concept map out (thinking: high),
+ *                    its facets cleaned up before the first card
  *   2. generating  — agentic tool loop: the model calls submit_cards, every
  *                    batch is quality-gated and deduped, and the tool result
  *                    feeds back verdicts + a fresh coverage ledger so the
@@ -55,10 +56,19 @@ import {
   type Usage,
 } from './llm'
 import {
+  applyFacetCorrection,
+  checkConceptMap,
+  facetTotal,
+  hasFlags,
+  mergeExactRepeats,
+} from './mapCleanup'
+import {
+  CONCEPT_FACETS_RESPONSE_SCHEMA,
   CONCEPT_MAP_RESPONSE_SCHEMA,
   GENERATION_TOOLS,
   REVIEW_TOOLS,
   SESSION_TOOLS,
+  parseConceptFacets,
   parseConceptMap,
   parseRemoveCardsArgs,
   parseSubmitCardsArgs,
@@ -70,6 +80,7 @@ import { count } from './plural'
 import {
   buildReviewFeedback,
   buildSubmitFeedback,
+  conceptMapCleanupPrompt,
   conceptMapPrompt,
   generationMissionPrompt,
   reviewMissionPrompt,
@@ -139,6 +150,16 @@ export interface PipelineOutcome {
   usage: Usage & { costUsd: number }
   terminationReason: string
   followUp: FollowUpSeed
+  mapCleanup: MapCleanup
+}
+
+/** What the cleanup between mapping and the first card did, for evaluation:
+ *  the facet total before and after, and whether the model was asked to
+ *  correct its map and its correction kept. */
+export interface MapCleanup {
+  facetsBefore: number
+  facetsAfter: number
+  turn: 'none' | 'adopted' | 'discarded'
 }
 
 export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcome> {
@@ -172,12 +193,13 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
   emit({ type: 'phase', phase: 'mapping' })
 
   let ctx: PromptContext = { language: 'en', focusPrompt: opts.focusPrompt }
+  const target = conceptTarget(opts.pdfInfo)
   const mapResult = await client.turn({
     model: opts.model,
     instructions,
     input: [
       { type: 'document', document },
-      { type: 'text', text: conceptMapPrompt(ctx, conceptTarget(opts.pdfInfo)) },
+      { type: 'text', text: conceptMapPrompt(ctx, target) },
     ],
     tools: SESSION_TOOLS,
     responseSchema: CONCEPT_MAP_RESPONSE_SCHEMA,
@@ -185,7 +207,19 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     signal,
   })
   track(mapResult.usage)
-  const conceptMap = parseConceptMap(parseJsonPayload(mapResult.outputText, client.provider))
+  const mapped = parseConceptMap(parseJsonPayload(mapResult.outputText, client.provider))
+  const tidy = await tidyConceptMap({
+    client,
+    model: opts.model,
+    instructions,
+    effort: effort('mapping'),
+    conversation: mapResult.conversation,
+    conceptMap: mapped,
+    target,
+    signal,
+    track,
+  })
+  const conceptMap = tidy.conceptMap
   ctx = { language: conceptMap.language || 'en', focusPrompt: opts.focusPrompt }
 
   const reconciled = reconcilePdfInfo(opts.pdfInfo, conceptMap)
@@ -217,6 +251,14 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     pageTexts: opts.pdfInfo.pageTexts,
   }
   emit({ type: 'concept_map', conceptMap, sizing })
+  const { facetsBefore, facetsAfter } = tidy.cleanup
+  if (facetsAfter < facetsBefore) {
+    emit({
+      type: 'log',
+      level: 'info',
+      message: `Tidied the concept map: ${count(facetsBefore, 'fact')} down to ${facetsAfter}.`,
+    })
+  }
   emit({
     type: 'log',
     level: 'info',
@@ -309,7 +351,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
       effort: effort('generating'),
       signal,
     })
-  let response = await generationTurn(mapResult.conversation, [
+  let response = await generationTurn(tidy.conversation, [
     {
       type: 'text',
       text: generationMissionPrompt(ctx, {
@@ -563,12 +605,64 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
     usage: { ...usage, costUsd },
     terminationReason,
     followUp: followUpSeed,
+    mapCleanup: tidy.cleanup,
   }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Clean the map's facets before any card is written: the app merges what is
+ * certainly one fact, and when the check still flags overlaps or a total the
+ * lecture cannot support, the model gets one turn, in the same conversation,
+ * to correct its facets. A correction that is unreadable or fares worse is
+ * dropped and the app-merged map stands. One turn, never a loop.
+ */
+async function tidyConceptMap(opts: {
+  client: LlmClient
+  model: string
+  instructions: string
+  effort: ThinkingLevel
+  conversation: Conversation
+  conceptMap: ConceptMap
+  target: { min: number; max: number }
+  signal?: AbortSignal
+  track: (u: Usage) => void
+}): Promise<{ conceptMap: ConceptMap; conversation: Conversation; cleanup: MapCleanup }> {
+  const facetsBefore = facetTotal(opts.conceptMap)
+  const merged = mergeExactRepeats(opts.conceptMap).conceptMap
+  const flags = checkConceptMap(merged, opts.target)
+  const done = (conceptMap: ConceptMap, conversation: Conversation, turn: MapCleanup['turn']) => ({
+    conceptMap,
+    conversation,
+    cleanup: { facetsBefore, facetsAfter: facetTotal(conceptMap), turn },
+  })
+  if (!hasFlags(flags)) return done(merged, opts.conversation, 'none')
+
+  const result = await opts.client.turn({
+    model: opts.model,
+    instructions: opts.instructions,
+    conversation: opts.conversation,
+    input: [{ type: 'text', text: conceptMapCleanupPrompt(flags) }],
+    tools: SESSION_TOOLS,
+    responseSchema: CONCEPT_FACETS_RESPONSE_SCHEMA,
+    effort: opts.effort,
+    signal: opts.signal,
+  })
+  opts.track(result.usage)
+  let corrected: Map<string, string[]> | null = null
+  try {
+    corrected = parseConceptFacets(parseJsonPayload(result.outputText, opts.client.provider))
+  } catch {
+    // Unreadable: the app-merged map stands.
+  }
+  const adopted = corrected && applyFacetCorrection(merged, corrected, opts.target)
+  return adopted
+    ? done(adopted, result.conversation, 'adopted')
+    : done(merged, result.conversation, 'discarded')
+}
 
 function reconcilePdfInfo(pdfInfo: PdfInfo, conceptMap: ConceptMap): PdfInfo {
   return {

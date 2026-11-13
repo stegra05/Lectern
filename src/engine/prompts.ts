@@ -11,6 +11,8 @@
  * and the deterministic gate — they survive any prompt rewrite.
  */
 
+import type { MapFlags } from './mapCleanup'
+
 // --- Formatting rules (constraints of the Anki renderer) --------------------
 
 export const FORMATTING_RULES = `Formatting — Anki renders HTML and MathJax; Markdown renders as literal characters:
@@ -145,6 +147,37 @@ export function conceptMapPrompt(ctx: PromptContext, target: { min: number; max:
     '- document_type: slides, script, or mixed.\n' +
     'Text fields use HTML, never Markdown.'
   )
+}
+
+/** Overlapping pairs shown in the cleanup brief; the cap is announced. */
+const OVERLAP_LIST_LIMIT = 20
+
+/** Phase 1, once and only when the check flagged something: the model
+ *  corrects its own facets before any card is written. */
+export function conceptMapCleanupPrompt(flags: MapFlags): string {
+  const lines = [
+    'Before any card is written, clean up the facets of your concept map. The facets set the deck size and decide which cards count as repeats, so every fact must sit in exactly one facet. A check of the map found:',
+  ]
+  if (flags.overlaps.length > 0) {
+    lines.push('- Facets that look like one fact in two slots:')
+    for (const [a, b] of flags.overlaps.slice(0, OVERLAP_LIST_LIMIT)) {
+      lines.push(`  - "${a.label}" (${a.conceptId}) and "${b.label}" (${b.conceptId})`)
+    }
+    pushTruncationNote(lines, flags.overlaps.length, OVERLAP_LIST_LIMIT, 'pair(s)')
+  }
+  if (flags.facetTotal > flags.facetLimit) {
+    lines.push(
+      `- ${flags.facetTotal} facets in total, more than this lecture supports. Bring the total down to at most ${flags.facetLimit}.`,
+    )
+  }
+  lines.push(
+    'Rework the facets:',
+    '- Merge facets that restate each other, within a concept or across concepts, and keep the fact under the concept that teaches it. A listed pair that really holds two different facts stays as it is.',
+    '- Keep a facet only for a claim a student could get wrong. Fold sub-points, examples, and restatements into the facet they belong to.',
+    '- If the lecture teaches a fact no facet names yet, add it, but the total must not grow.',
+    "Return every concept of the map by its id, with its corrected facets: short labels of 2-6 words in the document's language. Keep every concept and its id; a concept that had facets keeps at least one.",
+  )
+  return lines.join('\n')
 }
 
 /** Phase 2 — the mission brief that opens the agentic generation loop. */

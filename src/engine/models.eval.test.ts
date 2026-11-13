@@ -63,6 +63,8 @@ interface RunResult {
   costUsd: number
   concepts: number
   conceptTarget: string
+  /** Facets as mapped and after the cleanup, and whether the model was asked. */
+  facets: string
   cards: number
   cap: number
   pageCoverage: number
@@ -167,6 +169,9 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
       seconds: Math.round((Date.now() - started) / 1000),
       costUsd: outcome.usage.costUsd,
       concepts: outcome.conceptMap.concepts.length,
+      facets:
+        `${outcome.mapCleanup.facetsBefore}->${outcome.mapCleanup.facetsAfter}` +
+        (outcome.mapCleanup.turn === 'none' ? '' : ` (turn ${outcome.mapCleanup.turn})`),
       cards: outcome.cards.length,
       cap: cap?.type === 'concept_map' ? cap.sizing.totalCardCap : 0,
       pageCoverage: Math.round(outcome.coverage.pageCoveragePercent),
@@ -200,6 +205,7 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
       seconds: Math.round((Date.now() - started) / 1000),
       costUsd: 0,
       concepts: 0,
+      facets: '',
       cards: 0,
       cap: 0,
       pageCoverage: 0,
@@ -223,7 +229,7 @@ async function runOne(variant: Variant, pdfPath: string): Promise<RunResult> {
 
 function table(results: RunResult[]): string {
   const header =
-    '| variant | pdf | s | $ | concepts (target) | cards/cap | pages % | concepts % | ' +
+    '| variant | pdf | s | $ | concepts (target) | facets | cards/cap | pages % | concepts % | ' +
     'accepted | rejected (reasons) | off-source sent back/shipped | review | rounds | end |'
   const rule = `|${header
     .split('|')
@@ -232,9 +238,9 @@ function table(results: RunResult[]): string {
     .join('|')}|`
   const rows = results.map((r) =>
     r.error
-      ? `| ${r.variant} | ${r.pdf} | ${r.seconds} | | | | | | | | | ${r.error.replaceAll('|', '/')} | | error |`
+      ? `| ${r.variant} | ${r.pdf} | ${r.seconds} | | | | | | | | | | ${r.error.replaceAll('|', '/')} | | error |`
       : `| ${r.variant} | ${r.pdf} | ${r.seconds} | ${r.costUsd.toFixed(3)} | ` +
-        `${r.concepts} (${r.conceptTarget}) | ${r.cards}/${r.cap} | ${r.pageCoverage} | ` +
+        `${r.concepts} (${r.conceptTarget}) | ${r.facets} | ${r.cards}/${r.cap} | ${r.pageCoverage} | ` +
         `${r.conceptCoverage} | ${r.accepted} | ${r.rejected} ` +
         `(${Object.entries(r.rejectReasons)
           .map(([k, v]) => `${k} ${v}`)
