@@ -30,10 +30,12 @@ import { evaluateCard } from '../engine/quality'
 import { extractPdfInfo, openPdf, renderPageThumbnail } from '../engine/pdf'
 import { runFollowUp } from '../engine/followUp'
 import { runPipeline, type FollowUpSeed } from '../engine/pipeline'
+import { buildCoverageCatalog, computeCoverageData } from '../engine/coverage'
 import type {
   Card,
   ConceptMap,
   CoverageData,
+  NoteKind,
   PdfInfo,
   PipelineEvent,
   Settings,
@@ -63,6 +65,28 @@ const SLIDE_PEEK_RENDER_WIDTH = 1100
 // Owned by loadPdfFromBytes; used by peekSlide for on-demand full renders.
 let currentDoc: PDFDocumentProxy | null = null
 const slideRendersInFlight = new Set<number>()
+
+export interface CardComposerInitial {
+  modelName?: NoteKind
+  front?: string
+  back?: string
+  text?: string
+  backExtra?: string
+  sourcePage?: number
+  topic?: string
+  excerpt?: string
+  conceptIds?: string[]
+}
+
+export interface CardDraft {
+  modelName: NoteKind
+  fields: Record<string, string>
+  sourcePages: number[]
+  slideTopic?: string
+  sourceExcerpt?: string
+  conceptIds?: string[]
+  relationKeys?: string[]
+}
 
 export interface LogLine {
   level: 'info' | 'warn' | 'error'
@@ -156,6 +180,8 @@ interface LecternState {
   slidePeek: number | null
   /** Full-size page renders for the peek panel, keyed by page number. */
   slideRenders: Record<number, string>
+  /** Active manual card composer, null when closed. */
+  cardComposer: CardComposerInitial | null
 
   // sync
   syncState: 'idle' | 'syncing' | 'done'
@@ -200,6 +226,13 @@ interface LecternActions {
 
   updateCardFields: (uid: string, fields: Record<string, string>) => void
   removeCard: (uid: string) => void
+  /** Open manual card authoring composer. */
+  openCardComposer: (initial?: Partial<CardComposerInitial>) => void
+  closeCardComposer: () => void
+  addCard: (draft: CardDraft) => string
+  /** Open the lecture slides directly in study mode without running AI generation. */
+  openPdfViewer: () => void
+
   /** Opt an outside-source card in or out of the Anki send. */
   setCardSyncExcluded: (uid: string, excluded: boolean) => void
   setEditingUid: (uid: string | null) => void
@@ -238,6 +271,38 @@ let syncPreviewSeq = 0
 let runStartedAt = 0
 
 const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** The page a card sits under in the deck: its first cited slide. */
+const lowestSlide = (c: Card): number => {
+  if (c.sourcePages.length > 0) return Math.min(...c.sourcePages)
+  if (c.slideNumber !== undefined) return c.slideNumber
+  return Infinity
+}
+
+/** What a new session starts from. Shared by a generation run and the plain
+ *  slide viewer, so neither carries over the previous lecture's deck. */
+const freshSession = {
+  cards: [],
+  coverage: null,
+  conceptMap: null,
+  logs: [],
+  progress: null,
+  usage: null,
+  doneSummary: null,
+  runMs: null,
+  problem: null,
+  wait: null,
+  followUp: null,
+  followUpBusy: false,
+  syncState: 'idle',
+  syncPreview: null,
+  syncResult: null,
+  editingUid: null,
+  selectedUid: null,
+  searchQuery: '',
+  pageFilter: null,
+  cardComposer: null,
+} satisfies Partial<LecternState>
 
 export const useLectern = create<LecternState & LecternActions>()((set, get) => {
   const pushLog = (
@@ -329,6 +394,12 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
    */
   const staleSync = (s: LecternState): Partial<LecternState> =>
     s.syncState === 'done' ? { syncState: 'idle', syncResult: null, syncPreview: null } : {}
+
+  /** Coverage after a hand edit to the deck, built the way the pipeline builds it. */
+  const recomputeCoverage = (s: LecternState, cards: Card[]): CoverageData | null =>
+    s.conceptMap
+      ? computeCoverageData(buildCoverageCatalog(s.conceptMap, s.pdfInfo?.pageCount), cards)
+      : s.coverage
 
   const scheduleDeckProbe = () => {
     if (deckProbeTimer !== null) window.clearTimeout(deckProbeTimer)
@@ -534,6 +605,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
     pageFilter: null,
     slidePeek: null,
     slideRenders: {},
+    cardComposer: null,
 
     syncState: 'idle',
     syncPreview: null,
@@ -741,25 +813,7 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
       set({
         view: 'session',
         phase: 'uploading',
-        cards: [],
-        coverage: null,
-        conceptMap: null,
-        logs: [],
-        progress: null,
-        usage: null,
-        doneSummary: null,
-        runMs: null,
-        problem: null,
-        wait: null,
-        followUp: null,
-        followUpBusy: false,
-        syncState: 'idle',
-        syncPreview: null,
-        syncResult: null,
-        editingUid: null,
-        selectedUid: null,
-        searchQuery: '',
-        pageFilter: null,
+        ...freshSession,
         slidePeek: null,
       })
 
@@ -953,8 +1007,8 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
 
     updateCardFields: (uid, fields) => {
       const pdfInfo = get().pdfInfo
-      set((s) => ({
-        cards: s.cards.map((c) => {
+      set((s) => {
+        const cards = s.cards.map((c) => {
           if (c.uid !== uid) return c
           // Editing a card inherited from Anki opts it into the next send as
           // an update against its existing note — without it ceasing to be a
@@ -967,16 +1021,20 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
           const verdict = evaluateCard(edited, {
             pageCount: pdfInfo?.pageCount,
             pageTexts: pdfInfo?.pageTexts,
-            provenanceOptional: c.fromAnki === true,
+            provenanceOptional: c.fromAnki === true || c.manual === true,
           })
           edited.qualityScore = verdict.score
           edited.qualityIssues = verdict.issues
           return edited
-        }),
-        editingUid: null,
-        // The send bar's breakdown describes a deck that just changed.
-        ...staleSync(s),
-      }))
+        })
+        return {
+          cards,
+          coverage: recomputeCoverage(s, cards),
+          editingUid: null,
+          // The send bar's breakdown describes a deck that just changed.
+          ...staleSync(s),
+        }
+      })
     },
 
     removeCard: (uid) => {
@@ -989,14 +1047,86 @@ export const useLectern = create<LecternState & LecternActions>()((set, get) => 
         get().toast('info', 'This card is already in Anki. Remove it there.')
         return
       }
-      set((s) => ({ cards: s.cards.filter((c) => c.uid !== uid), ...staleSync(s) }))
+      set((s) => {
+        const remaining = s.cards.filter((c) => c.uid !== uid)
+        return { cards: remaining, coverage: recomputeCoverage(s, remaining), ...staleSync(s) }
+      })
       const undo = () =>
         set((s) => {
           const restored = [...s.cards]
           restored.splice(Math.min(index, restored.length), 0, card)
-          return { cards: restored, ...staleSync(s) }
+          return { cards: restored, coverage: recomputeCoverage(s, restored), ...staleSync(s) }
         })
       get().toast('info', 'Card removed.', { action: { label: 'Undo', run: undo } })
+    },
+
+    openCardComposer: (initial) =>
+      set((s) => {
+        const targetPage = initial?.sourcePage ?? s.slidePeek ?? (s.pdfInfo ? 1 : undefined)
+        return {
+          cardComposer: {
+            modelName: initial?.modelName ?? 'Basic',
+            front: initial?.front ?? '',
+            back: initial?.back ?? '',
+            text: initial?.text ?? '',
+            backExtra: initial?.backExtra ?? '',
+            sourcePage: targetPage,
+            topic: initial?.topic ?? '',
+            excerpt: initial?.excerpt ?? '',
+            conceptIds: initial?.conceptIds ?? [],
+          },
+          slidePeek: targetPage !== undefined ? targetPage : s.slidePeek,
+        }
+      }),
+
+    closeCardComposer: () => set({ cardComposer: null }),
+
+    addCard: (draft) => {
+      const uid = crypto.randomUUID()
+      const { pdfInfo } = get()
+      const card: Card = {
+        uid,
+        modelName: draft.modelName,
+        fields: draft.fields,
+        sourcePages: draft.sourcePages,
+        slideTopic: draft.slideTopic,
+        sourceExcerpt: draft.sourceExcerpt,
+        conceptIds: draft.conceptIds ?? [],
+        relationKeys: draft.relationKeys ?? [],
+        qualityScore: 100,
+        qualityIssues: [],
+        manual: true,
+      }
+      const verdict = evaluateCard(card, {
+        pageCount: pdfInfo?.pageCount,
+        pageTexts: pdfInfo?.pageTexts,
+        provenanceOptional: true,
+      })
+      card.qualityScore = verdict.score
+      card.qualityIssues = verdict.issues
+
+      set((s) => {
+        // Slotted in after the last card from the same or an earlier slide,
+        // so the generated cards keep the order they arrived in.
+        const page = lowestSlide(card)
+        let at = s.cards.length
+        while (at > 0 && lowestSlide(s.cards[at - 1]) > page) at--
+        const cards = [...s.cards.slice(0, at), card, ...s.cards.slice(at)]
+        return {
+          cards,
+          coverage: recomputeCoverage(s, cards),
+          selectedUid: uid,
+          cardComposer: null,
+          ...staleSync(s),
+        }
+      })
+      get().toast('info', 'Card created.')
+      return uid
+    },
+
+    openPdfViewer: () => {
+      set({ view: 'session', phase: 'complete', ...freshSession })
+      get().peekSlide(1)
     },
 
     setCardSyncExcluded: (uid, excluded) =>

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { countCardsPerPage } from '../engine/coverage'
 import { prefersReducedMotion } from '../lib/motion'
 import type { CoverageData } from '../engine/types'
 import { useLectern } from '../state/store'
@@ -13,11 +14,16 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
   const pdfInfo = useLectern((s) => s.pdfInfo)
   const pageThumbs = useLectern((s) => s.pageThumbs)
   const coverage = useLectern((s) => s.coverage)
+  const cards = useLectern((s) => s.cards)
   const pageFilter = useLectern((s) => s.pageFilter)
   const slidePeek = useLectern((s) => s.slidePeek)
   const peekSlide = useLectern((s) => s.peekSlide)
   const stripRef = useRef<HTMLDivElement>(null)
   const scrolledTo = useRef<Set<number>>(new Set())
+
+  // Slides opened without a generation run have no coverage ledger, so the
+  // hand-made cards are counted directly.
+  const handCounts = useMemo(() => (coverage ? null : countCardsPerPage(cards)), [coverage, cards])
 
   // Pages covered in earlier coverage snapshots — a page flares only in the
   // renders between the snapshot that lit it and the next one. Tracked with
@@ -52,8 +58,8 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
   }, [coverage, streaming])
 
   if (!pdfInfo) return null
-  const covered = new Set(coverage?.coveredPages ?? [])
-  const counts = coverage?.cardsPerPage ?? {}
+  const counts = coverage?.cardsPerPage ?? handCounts ?? {}
+  const covered = new Set(coverage?.coveredPages ?? Object.keys(counts).map(Number))
 
   return (
     <div className="border-desk-edge/60 shrink-0 border-b">

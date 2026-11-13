@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { countCardsPerPage } from '../engine/coverage'
 import { count } from '../engine/plural'
 import { useLectern } from '../state/store'
 
@@ -25,6 +26,7 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   const slideRenders = useLectern((s) => s.slideRenders)
   const pageThumbs = useLectern((s) => s.pageThumbs)
   const coverage = useLectern((s) => s.coverage)
+  const cards = useLectern((s) => s.cards)
   const pageFilter = useLectern((s) => s.pageFilter)
   const setPageFilter = useLectern((s) => s.setPageFilter)
   // The quote the selected card rests on, when it cites this page. It used to
@@ -61,7 +63,8 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   if (page === null || !pdfInfo) return null
 
   const image = slideRenders[page] ?? pageThumbs[page]
-  const cardsHere = coverage?.cardsPerPage[page] ?? 0
+  // Without a generation run there is no coverage ledger to count from.
+  const cardsHere = (coverage?.cardsPerPage ?? countCardsPerPage(cards))[page] ?? 0
   const filteredHere = pageFilter === page
 
   return (
