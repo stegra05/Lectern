@@ -267,7 +267,7 @@ export type PipelineSink = (event: PipelineEvent) => void
 export interface Settings {
   /** How deep decks go; chosen on the home screen and remembered. */
   cardDensity: CardDensity
-  /** Model id, e.g. "gemini-3.8-flash"; it also picks the provider. */
+  /** Model id, e.g. "gemini-4-hydrogen"; it also picks the provider. */
   model: string
   ankiUrl: string
   /** Install and sync to the bundled "Lectern Basic"/"Lectern Cloze" note

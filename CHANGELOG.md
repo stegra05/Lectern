@@ -4,6 +4,17 @@
 
 ### Changed
 
+- **Lectern runs on Gemini 4 Hydrogen.** Google's new model, released on 12
+  November, replaces both Gemini 3.8 Flash and Gemini 3.1 Pro. In blind
+  reviews of decks from two test lectures it scored 24 out of 30 where 3.8
+  Flash scored 19: Flash kept adding details the lecture does not state,
+  five to eight cards per deck, and Hydrogen at most two. It was no slower.
+  If you ran on either Gemini model, your setting moves to Hydrogen on its
+  own. Hydrogen costs $1.50 in and $7.50 out per million tokens: less than
+  3.1 Pro did, and twice what 3.8 Flash costs until the end of the year,
+  when Flash's introductory price ends and the two cost the same. The cost
+  calibration is per model, so the first three runs on Hydrogen fall back to
+  the correction learned across all your runs.
 - **One fact, one slot in the concept map.** Right after the lecture is
   mapped, a fact the map lists twice, within one concept or under two, is
   merged, and a map split finer than the lecture supports is sent back once
