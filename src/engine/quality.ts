@@ -591,6 +591,10 @@ const CLOZE_RE = /\{\{c\d+::(.*?)(?:::[^}]*)?\}\}/g
  *  letter, digit, underscore or whitespace. */
 const NON_WORD_RE = /[^\p{L}\p{N}_\s]/gu
 
+/** Plain text as lowercase words, punctuation dropped, single-spaced. */
+export const wordsKey = (value: string): string =>
+  value.replace(NON_WORD_RE, ' ').toLowerCase().split(/\s+/).filter(Boolean).join(' ')
+
 /**
  * Normalized duplicate-detection key: Text/Front basis, markup stripped,
  * cloze wrappers reduced to their answers, punctuation dropped, lowercased,
@@ -598,10 +602,7 @@ const NON_WORD_RE = /[^\p{L}\p{N}_\s]/gu
  */
 export function cardKey(card: Pick<Card, 'modelName' | 'fields'>): string {
   const fields = card.fields ?? {}
-  let value = stripMarkup(fields['Text'] || fields['Front'] || '')
-  value = value.replace(CLOZE_RE, '$1')
-  value = value.replace(NON_WORD_RE, ' ')
-  return value.toLowerCase().split(/\s+/).filter(Boolean).join(' ')
+  return wordsKey(stripMarkup(fields['Text'] || fields['Front'] || '').replace(CLOZE_RE, '$1'))
 }
 
 // ---------------------------------------------------------------------------
@@ -616,7 +617,7 @@ const MIN_TOKENS_FOR_SIMILARITY = 4
 
 const tokenSet = (key: string): Set<string> => new Set(key.split(' ').filter(Boolean))
 
-const jaccard = (a: Set<string>, b: Set<string>): number => {
+export const jaccard = (a: Set<string>, b: Set<string>): number => {
   let shared = 0
   for (const token of a) if (b.has(token)) shared++
   const union = a.size + b.size - shared

@@ -49,6 +49,12 @@ export const SCRIPT_CHARS_PER_CONCEPT = 300
 export const CONCEPT_TARGET_MIN_SHARE = 0.6
 export const CONCEPT_COUNT_FLOOR = 6
 export const CONCEPT_COUNT_CEILING = 40
+/** Facets per concept of the target's upper end above which a map is split
+ *  finer than the lecture supports. Blind reviews put the 72-slide lecture's
+ *  deck at 68-75 cards, about 1.8 per target concept (40), and GPT-6 Luna's
+ *  133 facets there (3.3 per) drove the deck to its ceiling with about 13%
+ *  padding. Not yet tuned against live runs. */
+export const FACETS_PER_CONCEPT_LIMIT = 2
 
 // --- Generation loop -------------------------------------------------------
 

@@ -4,6 +4,13 @@
 
 ### Changed
 
+- **One fact, one slot in the concept map.** Right after the lecture is
+  mapped, a fact the map lists twice, within one concept or under two, is
+  merged, and a map split finer than the lecture supports is sent back once
+  to be tightened. The deck size and the repeat check follow the cleaned map,
+  so a fact no longer earns two cards by sitting in two places, and an
+  over-split map no longer pads the deck. The activity log says when the map
+  was tidied.
 - **Answers that say more than the lecture get rewritten.** A card whose
   answer is not on its cited page goes back to the model once, to be
   rewritten against the page or pointed at the page that holds it. The

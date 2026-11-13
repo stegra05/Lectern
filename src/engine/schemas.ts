@@ -139,6 +139,26 @@ export const CONCEPT_MAP_RESPONSE_SCHEMA = {
   ],
 } as const
 
+/** The cleanup turn's answer: every concept's facets, by concept id. Only
+ *  the facets, so the turn costs a list of labels, not the whole map again. */
+export const CONCEPT_FACETS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    concepts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          facets: CONCEPT_MAP_RESPONSE_SCHEMA.properties.concepts.items.properties.facets,
+        },
+        required: ['id', 'facets'],
+      },
+    },
+  },
+  required: ['concepts'],
+} as const
+
 // --- Review-phase tools (agentic edit loop over the generated deck) ---------
 
 export const UPDATE_CARD_TOOL = {
@@ -335,6 +355,18 @@ export function parseConceptMap(raw: unknown): ConceptMap {
     estimatedTextChars: data.estimated_text_chars,
     documentType: data.document_type,
   }
+}
+
+const conceptFacetsZ = z.object({
+  concepts: z.array(z.object({ id: z.string(), facets: z.array(z.string()) })),
+})
+
+/** Concept id -> facets from the cleanup turn, or null when unreadable. */
+export function parseConceptFacets(raw: unknown): Map<string, string[]> | null {
+  const result = conceptFacetsZ.safeParse(raw)
+  return result.success
+    ? new Map(result.data.concepts.map((c) => [c.id.trim(), cleanFacets(c.facets)]))
+    : null
 }
 
 const submitCardsArgsZ = z.object({
