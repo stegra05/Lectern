@@ -10,9 +10,11 @@ import {
   buildFollowUpFeedback,
   buildReviewFeedback,
   buildSubmitFeedback,
+  conceptMapCleanupPrompt,
   MAX_FOCUS_PROMPT_LEN,
   sanitizeFocusPrompt,
 } from './prompts'
+import type { FacetRef } from './mapCleanup'
 
 describe('sanitizeFocusPrompt', () => {
   it('keeps pasted list items apart instead of running them together', () => {
@@ -165,5 +167,32 @@ describe('feedback builders', () => {
       cardsRemaining: 10,
     })
     expect(text).toContain('Duplicates dropped: 2')
+  })
+})
+
+describe('conceptMapCleanupPrompt', () => {
+  const pair = (i: number): [FacetRef, FacetRef] => [
+    { conceptId: 'c-a', label: `fact ${i}` },
+    { conceptId: 'c-b', label: `same fact ${i}` },
+  ]
+
+  it('names each overlap and announces the ones it leaves out', () => {
+    const text = conceptMapCleanupPrompt({
+      overlaps: Array.from({ length: 22 }, (_, i) => pair(i)),
+      facetTotal: 30,
+      facetLimit: 40,
+    })
+    expect(text).toContain('"fact 0" (c-a) and "same fact 0" (c-b)')
+    expect(text).not.toContain('"fact 20"')
+    expect(text).toContain('…and 2 more pair(s) not listed.')
+    // Within the limit, the size is not raised.
+    expect(text).not.toContain('more than this lecture supports')
+  })
+
+  it('asks for a smaller map when the total is over the limit', () => {
+    const text = conceptMapCleanupPrompt({ overlaps: [], facetTotal: 133, facetLimit: 80 })
+    expect(text).toContain('133 facets in total')
+    expect(text).toContain('at most 80')
+    expect(text).not.toContain('one fact in two slots:')
   })
 })

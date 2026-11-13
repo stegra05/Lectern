@@ -299,6 +299,174 @@ describe('runPipeline (scripted)', () => {
     expect(resultTexts.some((t) => t.includes('updated c1'))).toBe(true)
     expect(resultTexts.some((t) => t.includes('removed c2'))).toBe(true)
     expect(resultTexts.some((t) => t.includes('added c5'))).toBe(true)
+
+    // A clean map goes straight to generation: no cleanup turn.
+    expect(outcome.mapCleanup).toEqual({ facetsBefore: 4, facetsAfter: 4, turn: 'none' })
+  })
+})
+
+// --- Concept-map cleanup ---------------------------------------------------------
+
+/** One fact twice under A, and one fact in other words under A and B: the
+ *  app merges the first, the model is asked about the second. */
+const OVERLAPPING_MAP = {
+  ...CONCEPT_MAP,
+  concepts: [
+    {
+      ...CONCEPT_MAP.concepts[0],
+      facets: [
+        'what A is',
+        'freezing pretrained parameters',
+        'where A applies',
+        'Where A applies.',
+      ],
+    },
+    { ...CONCEPT_MAP.concepts[1], facets: ['freezing parameters', 'what B is'] },
+  ],
+}
+
+const CORRECTED_FACETS = {
+  concepts: [
+    { id: 'c-a', facets: ['what A is', 'freezing pretrained parameters'] },
+    { id: 'c-b', facets: ['what B is'] },
+  ],
+}
+
+const CLEANUP_SCRIPT: ScriptedTurn[] = [
+  { id: 'i-map', output_text: JSON.stringify(OVERLAPPING_MAP) },
+  { id: 'i-cleanup', output_text: JSON.stringify(CORRECTED_FACETS) },
+  {
+    id: 'i-gen',
+    steps: [
+      {
+        type: 'function_call',
+        id: 'call-submit',
+        name: 'submit_cards',
+        arguments: {
+          cards: [
+            card('What is A?', 'A is the first concept.', [1], ['c-a'], ['c-a#1']),
+            card(
+              'Why freeze parameters?',
+              'To keep what pretraining learned.',
+              [1],
+              ['c-a'],
+              ['c-a#2'],
+            ),
+            card('What is B?', 'B is the second concept.', [2], ['c-b'], ['c-b#1']),
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: 'i-review',
+    steps: [
+      {
+        type: 'function_call',
+        id: 'call-finish',
+        name: 'finish_review',
+        arguments: { summary: 'Sound.' },
+      },
+    ],
+  },
+]
+
+describe('runPipeline (concept-map cleanup)', () => {
+  it('asks the model once about a flagged map and sizes the deck from its correction', async () => {
+    const captured: CapturedInteraction[] = []
+    const events: PipelineEvent[] = []
+    const outcome = await runPipeline({
+      pdfBytes: new Uint8Array([1, 2, 3]),
+      pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
+      fileName: 'test.pdf',
+      density: 'standard',
+      model: 'gemini-3.8-flash',
+      apiKey: 'test-key',
+      fetchFn: makeScriptedFetch(CLEANUP_SCRIPT, captured),
+      emit: (e) => events.push(e),
+    })
+
+    // One cleanup turn, in the mapping conversation, at the mapping effort,
+    // naming the overlap the app could not settle (the exact repeat it did).
+    expect(captured).toHaveLength(4)
+    const cleanup = captured[1].body
+    expect(cleanup.previous_interaction_id).toBe('i-map')
+    expect((cleanup.generation_config as Record<string, unknown>).thinking_level).toBe('high')
+    expect(cleanup.response_format).toBeDefined()
+    const brief = JSON.stringify(cleanup.input)
+    expect(brief).toContain(
+      '\\"freezing pretrained parameters\\" (c-a) and \\"freezing parameters\\" (c-b)',
+    )
+    expect(brief).not.toContain('Where A applies.')
+
+    // The corrected map drives everything after it: the deck size, the map
+    // the UI shows, and the facet catalog the cards are tagged from.
+    const planned = events.find(
+      (e): e is Extract<PipelineEvent, { type: 'concept_map' }> => e.type === 'concept_map',
+    )
+    expect(planned?.sizing.totalCardCap).toBe(3)
+    expect(planned?.conceptMap.concepts.map((c) => c.facets)).toEqual(
+      CORRECTED_FACETS.concepts.map((c) => c.facets),
+    )
+    expect(outcome.conceptMap).toBe(planned?.conceptMap)
+    expect(captured[2].body.previous_interaction_id).toBe('i-cleanup')
+    const mission = JSON.stringify(captured[2].body.input)
+    expect(mission).toContain('c-b Concept B: #1 what B is')
+    expect(mission).not.toContain('freezing parameters')
+    expect(outcome.cards).toHaveLength(3)
+
+    // The student hears it once, in plain words.
+    const logs = events.flatMap((e) => (e.type === 'log' ? [e.message] : []))
+    expect(logs).toContain('Tidied the concept map: merged overlapping facts, 6 down to 3 facts.')
+
+    // The extra turn is on the bill.
+    const usage = events.find(
+      (e): e is Extract<PipelineEvent, { type: 'usage' }> => e.type === 'usage',
+    )
+    expect(usage?.inputTokens).toBe(400)
+    expect(outcome.mapCleanup).toEqual({ facetsBefore: 6, facetsAfter: 3, turn: 'adopted' })
+  })
+
+  it.each([
+    ['drops a concept', JSON.stringify({ concepts: [CORRECTED_FACETS.concepts[0]] })],
+    ['is not JSON', 'I merged the overlapping facets.'],
+  ])('keeps the app-merged map when the correction %s', async (_, correction) => {
+    const captured: CapturedInteraction[] = []
+    const events: PipelineEvent[] = []
+    // The run is stopped once the map is planned; generation is not under test.
+    const controller = new AbortController()
+    const run = runPipeline({
+      pdfBytes: new Uint8Array([1, 2, 3]),
+      pdfInfo: { pageCount: 2, textChars: 100, imageCount: 0 },
+      fileName: 'test.pdf',
+      density: 'standard',
+      model: 'gemini-3.8-flash',
+      apiKey: 'test-key',
+      fetchFn: makeScriptedFetch(
+        [
+          { id: 'i-map', output_text: JSON.stringify(OVERLAPPING_MAP) },
+          { id: 'i-cleanup', output_text: correction },
+        ],
+        captured,
+      ),
+      emit: (e) => {
+        events.push(e)
+        if (e.type === 'concept_map') controller.abort()
+      },
+      signal: controller.signal,
+    })
+    await expect(run).rejects.toThrow()
+
+    const planned = events.find(
+      (e): e is Extract<PipelineEvent, { type: 'concept_map' }> => e.type === 'concept_map',
+    )
+    expect(planned?.conceptMap.concepts.map((c) => c.facets)).toEqual([
+      ['what A is', 'freezing pretrained parameters', 'where A applies'],
+      ['freezing parameters', 'what B is'],
+    ])
+    expect(planned?.sizing.totalCardCap).toBe(5)
+    // Generation still continues the conversation the cleanup turn left.
+    expect(captured[2].body.previous_interaction_id).toBe('i-cleanup')
   })
 })
 
