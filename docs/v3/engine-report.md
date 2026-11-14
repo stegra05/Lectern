@@ -2,7 +2,7 @@
 
 Updated 2026-11-14 after milestone 2. Goal: `engine-goal.md`. Decisions: `engine-decisions.md`.
 Plan with both milestones: `engine-plan.md`. Branch `v3`, local commits only, nothing pushed.
-Milestone 1 ends at `15d00fc`, milestone 2 is `f5d004a`.
+Milestone 1 ends at `15d00fc`, milestone 2 is `f5d004a`, the commands for the interface follow it.
 
 ## Verdict
 
@@ -28,12 +28,12 @@ PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 | Run | Result |
 |---|---|
-| Engine tests | 142 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 6 files, 3 s |
+| Engine tests | 153 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
 | Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
 
 By file: validators 57, cards 20, tree and lecture numbering 14, plan, clashes and estimate 11,
-whole pipeline 40. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
+whole pipeline 40, library commands and the offline models 11. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
 real files; only the two models are scripted.
 
 Checked by hand, offline, on the 11 Entrepreneurship decks (356 slides): the estimate command
@@ -91,6 +91,17 @@ How the seven steps run:
    most. What still fails is dropped and listed with concept and reasons.
 7. **End.** Code pairs cards that look alike across the course and the decision model judges
    them. An identical question is dropped by code. Nothing is rewritten.
+
+**For the interface**, added after milestone 2 at the app session's request:
+
+- Commands `courses` (the library), `course` (one course: lectures with topics, concepts and
+  card counts, left-out slides, dropped cards, PDFs waiting to be built, decisions, runs),
+  `cards` (the cards of a lecture), `create` (a course with name and goal) and `add` (copy
+  PDFs from disk into a course). Shapes: `src/library.ts`, events in `src/api.ts`.
+- `adapters/offline.ts`: a model and a decision model that need no script and no network. They
+  turn the text of any slides into a small course, so an interface test can run a real build.
+  They say nothing about real card quality.
+- The adapters are exported from the package (`@lectern/engine/adapters/...`).
 
 ## Placeholder
 

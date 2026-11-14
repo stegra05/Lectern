@@ -187,6 +187,12 @@ Events: `phase` and `progress` as before, plus `profile` (kind and confidence) a
 Placeholder: one preset (`presets.ts`) serves every kind of lecture until the four real ones
 are written and approved. It is not a quality statement.
 
+### Commands for the interface
+
+Added after milestone 2 so the app needs nothing but the boundary: `courses`, `course`, `cards`,
+`create`, `add`, answered by the events `courses`, `course`, `cards`, `created`, `added`. They
+read and write the plain files of the course folders and call no model.
+
 ## Open questions
 
 - PDFs live in `slides/` inside the course folder, and a command carries the course as a
