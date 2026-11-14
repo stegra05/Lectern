@@ -113,6 +113,9 @@ export function renderPageWithTextLayer(
     const page = await doc.getPage(pageNumber)
     try {
       const base = page.getViewport({ scale: 1 })
+      // Fetched before anything is drawn: a render cancelled while this is
+      // pending must stop here, not go on to fill the shared text layer.
+      const textContent = await page.getTextContent()
       if (cancelled) throw new Error('page render cancelled')
 
       const viewport = page.getViewport({ scale: pixelWidth / base.width })
@@ -125,7 +128,7 @@ export function renderPageWithTextLayer(
 
       textLayer.replaceChildren()
       const text = new pdfjs.TextLayer({
-        textContentSource: await page.getTextContent(),
+        textContentSource: textContent,
         container: textLayer,
         viewport: base,
       })

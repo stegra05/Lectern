@@ -103,6 +103,12 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
     return () => document.removeEventListener('selectionchange', onSelectionChange)
   }, [onSelectionChange])
 
+  // A selection belongs to the slide it was made on.
+  useEffect(() => {
+    const sel = window.getSelection()
+    if (sel && slideRef.current?.contains(sel.anchorNode)) sel.removeAllRanges()
+  }, [page])
+
   if (page === null || !pdfInfo) return null
 
   const image = pageThumbs[page]
