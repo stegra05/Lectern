@@ -121,12 +121,30 @@ the shell never spends money by accident.
 - Queries for the interface, editing and adding cards, sending to Anki, evals, themes, study
   plan, quiz, past exams. A changed PDF behind a built lecture is ignored.
 
+## Changed by engine-decisions.md
+
+Steffen's eleven decisions of 2026-11-14 (`engine-decisions.md`), confirmed by the session that
+set the goal. Where this section differs from the text above, this section holds.
+
+| Decision | Change to the plan |
+|---|---|
+| 1 Reading | Text is still extracted locally. A slide with under 100 characters of text is also rendered and sent to the model as an image. `PdfPort` gains `renderSlides`, a model request gains `images`. No slide is left out for lacking text |
+| 2 Model | The real adapter is OpenAI (`adapters/openai.ts`), the Anthropic one is removed. The default model waits for the eval |
+| 3 Goal | A preset per goal sets coverage and depth. Pass: core concepts only, one card. Good: every concept, two cards. Top: every concept, four cards, with cases and contrasts. The map marks each concept as core or not |
+| 4 Language | Already in the system prompt |
+| 5 Failed cards | `lecture.json` lists each dropped card with its concept and the problems |
+| 6 Checking | New `CheckPort`. A free rule passes a card when half of its answer terms are on the slide. The rest goes to the port, which for OpenAI is its Decisions API (in the installed SDK). A "no" sends the card back for a rewrite |
+| 7 Cost | New command `estimate`, and every build emits the estimate before the first model call. The build stops with a failure when the real cost passes three times the estimate (at least 25 cents). `ModelPort` gains `price` |
+| 8, 9 Card kinds | The role set is the full twelve of the field contract. `code` carries a listing that must be found on the slide. `diagram` carries a structured description (matrix, sequence or cycle) with a validator. No renderer yet: the Diagram field falls back to the slide image |
+| 10 Card files | `lectures/02/cards.yaml`, one readable file per lecture, replaces one JSON file per card. Files of earlier lectures stay byte-identical |
+| 11 Whole course | No repeats across lectures (as before). A concept that comes up again keeps its id and its stored name (one vocabulary) and gets one more card in the later lecture |
+
+The card-writing step sits behind one seam, `writer.ts` (write drafts, rewrite rejected
+drafts). Its strategy and prompts are provisional until Steffen's input on how cards are
+created arrives. Everything else (folder, tree, validators, ports, fake model, CLI, outline)
+does not depend on it.
+
 ## Open questions
 
-- Mine, to confirm: PDFs live in `slides/` inside the course folder, and a command carries the
-  course as a folder name rather than a path.
-- `docs/v3/engine-decisions.md` (interview with Steffen, 2026-11-14) appeared while this
-  milestone was being built. It changes the folder format (one YAML file per lecture instead of
-  one JSON file per card) and the ports (OpenAI first, slide images, a checking port). The
-  milestone was finished to the goal as written; the differences are listed in
-  `engine-report.md` and wait for a yes before they are applied.
+- PDFs live in `slides/` inside the course folder, and a command carries the course as a
+  folder name rather than a path. To confirm.
