@@ -34,6 +34,24 @@ function CardComposerInline({ composer }: { composer: CardComposerInitial }) {
   const clozeTextareaRef = useRef<HTMLTextAreaElement>(null)
   const pageCount = pdfInfo?.pageCount ?? 1
 
+  // Slide text sent over with "Insert as answer" arrives through the store,
+  // read in a subscription so it does not reset the fields typed so far.
+  useEffect(() => {
+    return useLectern.subscribe((state, prevState) => {
+      const inserted = state.pendingComposerAnswer
+      if (inserted && inserted !== prevState.pendingComposerAnswer) {
+        state.clearPendingComposerAnswer()
+        if (modelName === 'Basic') {
+          setBack((prev) => (prev ? `${prev}\n${inserted}` : inserted))
+        } else {
+          setBackExtra((prev) => (prev ? `${prev}\n${inserted}` : inserted))
+        }
+        setExcerpt((prev) => (prev ? `${prev}\n${inserted}` : inserted))
+        setErrorHint(null)
+      }
+    })
+  }, [modelName])
+
   // Keep the slide peek in sync when slideNumber changes.
   const handleSlideChange = (newSlide: number) => {
     const clamped = Math.max(1, Math.min(pageCount, newSlide))

@@ -86,6 +86,9 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
           const isNew = isCovered && !litBefore.has(page)
           const isFiltered = pageFilter === page
           const isPeeked = slidePeek === page
+          // The slide open in the peek is lit too, so the strip always shows
+          // where you are, cards or not.
+          const isLit = isCovered || isPeeked
           const count = counts[page] ?? 0
           const thumb = pageThumbs[page]
 
@@ -95,7 +98,7 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
           const tile = (
             <div
               className={`relative h-[54px] w-[72px] shrink-0 overflow-hidden rounded-sm transition-[opacity,filter] duration-500 ${
-                isCovered
+                isLit
                   ? 'opacity-100 ring-lamp/70 ring-1'
                   : 'ring-paper/10 opacity-35 grayscale ring-1 group-hover:opacity-60'
               } ${isFiltered || isPeeked ? 'ring-lamp ring-2' : ''}`}
@@ -125,7 +128,9 @@ export function Filmstrip({ streaming }: { streaming: boolean }) {
                 {tile}
               </button>
               <span
-                className={`font-data text-2xs ${isCovered ? 'text-lamp' : 'text-chalk-faint'}`}
+                className={`font-data text-2xs ${isLit ? 'text-lamp' : 'text-chalk-faint'} ${
+                  isPeeked ? 'font-bold' : ''
+                }`}
               >
                 {page}
               </span>
