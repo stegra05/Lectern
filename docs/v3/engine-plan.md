@@ -190,7 +190,8 @@ are written and approved. It is not a quality statement.
 ### Commands for the interface
 
 Added after milestone 2 so the app needs nothing but the boundary: `courses`, `course`, `cards`,
-`create`, `add`, answered by the events `courses`, `course`, `cards`, `created`, `added`. They
+`slide`, `create`, `add`, answered by the events `courses`, `course`, `cards`, `slide`, `created`,
+`added`. They
 read and write the plain files of the course folders and call no model.
 
 ## Open questions

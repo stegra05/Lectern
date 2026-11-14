@@ -28,12 +28,12 @@ PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 | Run | Result |
 |---|---|
-| Engine tests | 153 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
+| Engine tests | 156 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
 | Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
 
 By file: validators 57, cards 20, tree and lecture numbering 14, plan, clashes and estimate 11,
-whole pipeline 40, library commands and the offline models 11. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
+whole pipeline 40, library commands and the offline models 14. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
 real files; only the two models are scripted.
 
 Checked by hand, offline, on the 11 Entrepreneurship decks (356 slides): the estimate command
@@ -96,8 +96,9 @@ How the seven steps run:
 
 - Commands `courses` (the library), `course` (one course: lectures with topics, concepts and
   card counts, left-out slides, dropped cards, PDFs waiting to be built, decisions, runs),
-  `cards` (the cards of a lecture), `create` (a course with name and goal) and `add` (copy
-  PDFs from disk into a course). Shapes: `src/library.ts`, events in `src/api.ts`.
+  `cards` (the cards of a lecture), `slide` (one slide as a PNG), `create` (a course with a
+  name) and `add` (PDFs as file name plus base64, so the boundary stays plain JSON). Shapes:
+  `src/library.ts`, events in `src/api.ts`.
 - `adapters/offline.ts`: a model and a decision model that need no script and no network. They
   turn the text of any slides into a small course, so an interface test can run a real build.
   They say nothing about real card quality.
