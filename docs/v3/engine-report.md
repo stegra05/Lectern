@@ -30,7 +30,7 @@ PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 | Run | Result |
 |---|---|
-| Engine tests | 162 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
+| Engine tests | 168 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
 | Live OpenAI tests, run once with a key | 2 passed |
 | Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
@@ -49,10 +49,11 @@ All on `gpt-6-luna` for writing and for decisions, goal top grade, 2026-11-14.
 | The same deck | with the cache fix | 40 | 0 | 7 | 0.7 cents | 1.3 cents | 49 s |
 | 11 decks, run by the app session | before the cache fix (`7332526`) | 658 | 7 | 38 | 48.4 cents | 18.6 cents | 19.4 min |
 | 11 decks, run by this session | with the cache fix (`a460b25`) | 596 | 5 | 31 | 16.7 cents | 33.6 cents | 16.6 min |
+| 11 decks with the concept draft | `704922e`, preset `concept-draft` | 554 | 8 | 24 | 18.6 cents | 25.0 cents | 17.5 min |
 
 The two full runs happened at once by a coordination miss between the two sessions: each had
-Steffen's yes, and the messages crossed. Total spent today on OpenAI: about 70 cents of the
-50 dollars. Both results are kept. The reference deck has 636 notes for the same decks.
+Steffen's yes, and the messages crossed. Total spent today on OpenAI, the run with the
+concept draft included: about 90 cents of the 50 dollars. Both results are kept. The reference deck has 636 notes for the same decks.
 
 My full run in numbers (course folder under the shared notes folder, `courses/entrepreneurship`):
 
@@ -173,8 +174,11 @@ five lines. It exists so the pipeline runs. It is not one of the four presets St
 approve, and no result from it should be read as the quality of the method.
 
 A draft of the preset for concept courses now sits beside it as `concept-draft`, written from
-the Entrepreneurship study kit and waiting for review: `engine-profile-concept.md`. A build uses
-it only when the command names it. The roles `why`,
+the Entrepreneurship study kit and waiting for approval: `engine-profile-concept.md`. A build
+uses it only when the command names it. In its comparison run it removed the course
+administration from the cards (71 such cards down to none) and brought "why" cards (11%), but
+definitions still restate their question and near-identical cards remain. Details and a table
+against the reference deck are in that document. The roles `why`,
 `name-two` and `cloze` validate but the placeholder never plans them.
 
 Nothing is calibrated. Every check that goes through the decision model only flags.
@@ -215,13 +219,17 @@ diagram card. The interface session should know these exist.
 
 ## Proposed next steps
 
-1. Decide how course administration is kept out: a calibrated slide label, a rule in the
-   preset, or both. It is the largest visible defect and it multiplies through recurrence.
-2. The concept-course preset, written against the reference deck, replacing the placeholder.
-3. Calibration data from these two runs: the flagged concepts and card pairs are ready-made
-   examples to label. Start with "same card" and "concept belongs", which already look precise.
-4. A first eval: coverage of the reference deck's notes by concept, and a blind sample.
-5. A small run on Datenbanken and Operations Research once code and formula cards have a preset.
+1. Steffen's verdict on the concept draft: use it as the working preset for concept courses,
+   or change it first.
+2. Three checks in code that the comparison run asks for: an answer must not repeat its
+   question, near-identical facts are merged before cards are planned, and lists and contrasts
+   are capped per concept.
+3. Checkpoints: a run saves nothing until the end, and one died on a dropped connection. The
+   adapter now retries harder; saving per lecture would end the risk.
+4. Calibration data from the three full runs: the flagged concepts and card pairs are ready-made
+   examples to label. Start with "same card" and "concept belongs".
+5. The blind comparison against the reference deck.
+6. A small run on Datenbanken and Operations Research once code and formula cards have a preset.
 
 ## Follow-ups outside my paths
 

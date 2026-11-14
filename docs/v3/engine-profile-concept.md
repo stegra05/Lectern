@@ -96,9 +96,57 @@ Still open:
   first run it had labelled only 2 of 356 slides as agenda or recap.
 - **Approval** of the draft itself, after the comparison run.
 
-## How to judge it
+## The comparison run
 
-The fair test is the same decks built with `--preset concept-draft` next to the placeholder
-run. One deck costs about 1 cent, all eleven about 17 cents on `gpt-6-luna`. That is a paid
-run, so it needs your yes. I would run all eleven, then compare card types, the share of
-administration cards and a sample of cards side by side with your deck.
+All eleven decks again, goal top grade, `gpt-6-luna`, with this draft (`--preset concept-draft`)
+and the three decisions above. Course folder: `courses/entrepreneurship-concept-draft` in the
+shared notes folder. 18.6 cents, 17.5 minutes. A first attempt died on a dropped connection and
+saved nothing; the adapter now retries six times.
+
+| | Reference deck | Placeholder run | Draft run |
+|---|---|---|---|
+| Cards | 636 | 596 | 554 |
+| definition | 17% | 29% | 28% |
+| reverse | 22% | 13% | 14% |
+| case | 21% | 12% | 10% |
+| why | 13% | 0% | 11% |
+| name two | 6% | 0% | 0% (1 card) |
+| contrast | 6% | 18% | 17% |
+| list to recite | 5% | 23% | 16% |
+| Concepts that look like course administration | | 43, with 71 cards | 6, with 8 cards |
+| Slides labelled title, agenda, recap or reading list | | 7 | 70 |
+| Slides left out | | 23 | 117 |
+| Concepts that recur across lectures | | 39 | 17 |
+| Dropped cards | | 5 | 8 |
+| Flagged cards | | 31 | 24 |
+| Hard limit violations | | 0 | 0 |
+
+"Looks like course administration" is a search for words such as course, instructor, session,
+agenda, exercise or exam in the concept name. The six left in the draft run are content: they
+are the question types of a lecture on metacognition ("Comprehension questions").
+
+**What the draft fixed.** Course administration is gone from the cards: no lecturer, no
+course outline, no exercise instructions. "Why" cards exist and read like yours ("Why can an
+investor's high-profile reputation become self-fulfilling?"). The reworded slide question
+labels ten times as many slides, which also explains why recurring concepts halved: the
+administration concepts were the ones that recurred.
+
+**What it did not fix.**
+
+- Definitions still restate the question ("Cognitive adaptability describes how dynamic
+  entrepreneurs are") although the rule says never to. The cheap model does not follow that
+  rule from text alone.
+- One concept often gets two or three cards that ask nearly the same thing, because the map
+  states near-identical facts. The "same card" check flags only a few of them.
+- Lists and contrasts are still two to three times as frequent as in your deck, term and case
+  cards about half as frequent. "Name two" barely appears: the map marked only four lists as
+  having two items.
+- Lecture 04 (96 slides) lost 52 slides and has 46 cards, against 81 with the placeholder. Many
+  of its slides are pictures. Whether that is a loss or a gain needs a look at the slides.
+
+**My read.** Use the draft as the working preset for concept courses: it removes the largest
+defect and costs nothing extra. It is not yet at the level of your deck. The next gains are
+not in more rules for the model but in code: a check that an answer does not repeat its
+question, merging near-identical facts before cards are planned, and a cap on lists and
+contrasts per concept. Then the blind comparison against your deck.
+
