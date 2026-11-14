@@ -12,18 +12,20 @@ src/
   api.ts            the boundary: Command, Event, createEngine(ports)
   ports.ts          ModelPort, PdfPort, Store
   build.ts          the build command: the four phases
+  tree.ts           checks and repairs the model's map of a lecture
   outline.ts        the Markdown outline
-  course.ts         reading and writing the course folder
+  course.ts         the shapes and paths of the course folder
+  prompts.ts        the three prompts (map, write, rewrite) and their reply schemas
   cards/
     roles.ts        the closed role set, one slot template per role
-    words.ts        word counting, shared by all limits
+    words.ts        word counting and text helpers, shared by all limits
     validate.ts     pure validators: draft in, list of problems out
+    typed.ts        the typed answer rule
     assemble.ts     draft to card fields: Back, Slots, Text, Typed, Source, Excerpt
     id.ts           stable card ids
-  prompts.ts        the two prompts (map, write) and the feedback text
-  adapters/         node store, pdf.js reader, Anthropic model, scripted fake model
+  adapters/         node file store, pdf.js reader, Anthropic model, scripted fake model
   cli.ts            command line: build, outline
-test/               validators, ids, whole pipeline offline, incremental build, outline, live
+test/               validators, cards, tree, whole pipeline offline with incremental build, live
 ```
 
 ## The boundary
@@ -108,19 +110,23 @@ The phases are course-wide, as the run screen shows them.
 
 One port. `adapters/fake.ts` is a scripted model for tests. `adapters/anthropic.ts` is the real
 one (`claude-haiku-5-5`, structured output through a JSON schema, $0.10 in and $0.50 out per
-million tokens as configured in v2). Its test runs only when `ANTHROPIC_API_KEY` is set.
+million tokens as configured in v2). Its test runs only when `LECTERN_LIVE=1` is set, so a key in
+the shell never spends money by accident.
 
 ## Deferred
 
-- Slide pictures: rendering slides to PNG (the Slide field holds the file name only), and
+- Slide pictures: rendering slides to PNG (the Slide field holds the file name only) and
   letting the model see slides. Text-only reading is the largest known quality risk.
 - Roles `code` and `diagram`. Asked and Part stay empty until past exams exist.
-- Queries for the interface (read a course, a lecture's cards), editing, removing and adding
-  cards, sending to Anki, evals, themes, study plan, quiz, past exams.
-- A changed PDF behind a built lecture is ignored; the stored hash would let a later version
-  say so.
+- Queries for the interface, editing and adding cards, sending to Anki, evals, themes, study
+  plan, quiz, past exams. A changed PDF behind a built lecture is ignored.
 
 ## Open questions
 
-None that block. Two to confirm with Steffen after the milestone: PDFs live in `slides/` inside
-the course folder, and the command carries the course as a folder name rather than a path.
+- Mine, to confirm: PDFs live in `slides/` inside the course folder, and a command carries the
+  course as a folder name rather than a path.
+- `docs/v3/engine-decisions.md` (interview with Steffen, 2026-11-14) appeared while this
+  milestone was being built. It changes the folder format (one YAML file per lecture instead of
+  one JSON file per card) and the ports (OpenAI first, slide images, a checking port). The
+  milestone was finished to the goal as written; the differences are listed in
+  `engine-report.md` and wait for a yes before they are applied.
