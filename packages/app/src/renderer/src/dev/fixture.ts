@@ -338,6 +338,7 @@ function built(): CourseView {
         startedAt: '2026-11-14T09:12:00.000Z',
         model: 'gpt-6-luna',
         decisionModel: 'gpt-6-luna',
+        preset: 'placeholder',
         calls: 430,
         decisions: 2100,
         inputTokens: 3_100_000,
