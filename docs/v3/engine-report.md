@@ -1,158 +1,153 @@
-# Lectern v3 engine: report on milestone 1
+# Lectern v3 engine: report
 
-Written 2026-11-14. Goal: `engine-goal.md`. Plan: `engine-plan.md`. Branch `v3`, local commits
-`c768343` to `fb4d017` plus the commit of this report. Nothing pushed.
+Updated 2026-11-14 after milestone 2. Goal: `engine-goal.md`. Decisions: `engine-decisions.md`.
+Plan with both milestones: `engine-plan.md`. Branch `v3`, local commits only, nothing pushed.
+Milestone 1 ends at `15d00fc`, milestone 2 is `f5d004a`.
 
 ## Verdict
 
-All nine criteria of the goal are met offline. No model has been called for real, so nothing
-here says anything about card quality yet. `engine-decisions.md` arrived during the work and
-is not applied: see "Decisions file" below, it needs a yes.
+Everything that can be done without a paid call is done and tested: the engine runs the seven
+steps of "How cards are created" end to end against scripted models. No real model has been
+called yet, so nothing here says anything about card quality. The first real run waits for
+Steffen's yes in this session (criterion 10 of milestone 2).
 
-## What was built
+## Commands
 
-`packages/engine` (`@lectern/engine`): 1,876 lines of source, 1,506 lines of tests, no interface
-code, no build step (Node runs the TypeScript directly).
-
-| Criterion | Where |
+| What | Command |
 |---|---|
-| 1 Plan first | `docs/v3/engine-plan.md`, commit `c768343`, before any code |
-| 2 Package, one command each | `pnpm --filter @lectern/engine test` and `pnpm --filter @lectern/engine typecheck` |
-| 3 CLI build | `node packages/engine/src/cli.ts build <course folder> [--goal pass\|good\|top]` |
-| 4 Validators | `src/cards/validate.ts`, `typed.ts`, `id.ts`, `assemble.ts` |
-| 5 One model port, scripted fake | `src/ports.ts`, `src/adapters/fake.ts`, `test/pipeline.test.ts` |
-| 6 Add a lecture | same test, "adding a lecture and building again" |
-| 7 Outline | `node packages/engine/src/cli.ts outline <course folder>` |
-| 8 Real adapter | `src/adapters/anthropic.ts`, `test/anthropic.live.test.ts` (runs only with `LECTERN_LIVE=1`) |
+| Tests | `pnpm --filter @lectern/engine test` |
+| Typecheck | `pnpm --filter @lectern/engine typecheck` |
+| Lint | `pnpm exec eslint packages/engine` |
+| Estimate, free | `node packages/engine/src/cli.ts estimate <course folder> [--goal pass\|good\|top] [--model gpt-6-luna]` |
+| Build, paid | `node packages/engine/src/cli.ts build <course folder> [--goal ...] [--profile ...] [--model ...]` |
+| Outline | `node packages/engine/src/cli.ts outline <course folder>` |
 
-A build reads `<course>/slides/*.pdf` and writes `course.json`, `lectures/NN/lecture.json`
-(topics, concepts with slide numbers, every unused slide with a reason),
-`lectures/NN/cards/<id>.json` (all 16 Q&A or 13 cloze fields of `FIELDS.md`), `decisions.json`
-and `runs/NNN.json` (model, calls, tokens, cost, duration per phase). It prints the phases
-read, map, write, check as JSON lines.
-
-How the method lives in code:
-
-- The model returns flat slots only: concept, role, slide, front, answers, labels, extra. Code
-  writes Back, Slots, the deletions of a cloze list, the key term mark, Typed, Lecture, Topic,
-  Source, Excerpt, Slide and Key.
-- Ten roles are built: definition, reverse, contrast, chain, name-two, why, case, formula,
-  cloze, cloze-list. `code` and `diagram` are rejected for now.
-- A rejected card goes back with the exact problems ("front has 21 words; the limit is 20"),
-  at most twice, keeping its id and role. Then it is dropped and counted in a decision.
-- The map of a lecture is checked the same way: every slide is used or left out with a reason,
-  slide numbers exist, names are unique. One retry, then code closes the gaps.
-- A concept an earlier lecture already has is dropped by code, and a question the course
-  already asks is rejected, also across lectures.
+PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 ## Test results
 
 | Run | Result |
 |---|---|
-| `pnpm --filter @lectern/engine test` | 94 passed, 1 skipped (the live test), 5 files, 3 s |
-| `pnpm --filter @lectern/engine typecheck` | clean |
-| `pnpm exec eslint packages/engine` | clean |
+| Engine tests | 142 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 6 files, 3 s |
+| Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
 
-By file: validators 42, cards (assembly, typed answers, ids) 18, tree and lecture numbering 10,
-whole pipeline 24. The pipeline test uses real PDFs made in the test, the real pdf.js reader and
-real files in a temp folder; only the model is scripted. It makes three mistakes on purpose:
-a yes/no question (fixed on rewrite, same id), an answer of 30 words (never fixed, dropped),
-and a question lecture 1 already has (rejected across lectures, fixed on rewrite).
+By file: validators 57, cards 20, tree and lecture numbering 14, plan, clashes and estimate 11,
+whole pipeline 40. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
+real files; only the two models are scripted.
 
-Also checked by hand, offline: the reader on the 11 Entrepreneurship slide decks. 356 slides,
-none without text, about 35,000 tokens of text, read in 0.5 s. The lecture numbers 1 to 11
-came out right from the file names.
+Checked by hand, offline, on the 11 Entrepreneurship decks (356 slides): the estimate command
+runs in under two seconds and gives, on `gpt-6-luna`:
 
-## Decisions taken and why
+| Goal | Cards expected | Estimate | Cap |
+|---|---|---|---|
+| pass | 91 | 5 cents | 25 cents |
+| good grade | 356 | 11 cents | 32 cents |
+| top grade | 712 | 19 cents | 56 cents |
 
-1. **Slots, not fields.** One flat draft shape for every role. It keeps the JSON schema free of
-   unions, which every provider's strict mode accepts, and it makes "the model only fills
-   slots" literal.
-2. **Phases are course-wide and nothing is saved until the end.** That is what the run screen
-   shows. Cost: a failed run loses its paid work.
-3. **`course.json` is the marker for "built".** It is written last. A lecture listed there is
-   never touched again, which is what makes the byte-identical test trivial.
-4. **Lecture numbers** come from the leading number of the file name when free, otherwise the
-   next free one, and never change.
-5. **Card ids** are `<lecture>-<concept>-<role>-<n>`, for example `02-bird-in-hand-reverse-1`.
-   Readable, and independent of the wording.
-6. **Goal sets depth only**: 2, 3 or 4 cards per concept. Default `good`.
-7. **Text only.** Slides reach the model as extracted text. Slides without text are left out
-   with that reason.
-8. **A light grounding rule**: at least one term of the answer must appear on the cited slide.
-   v2 showed that off-source answers are the main weakness of cheap models.
-9. **Yes/no openers in English and German.** "Was" is left out because it means "what" in
-   German, as v2 learned.
-10. **Cloze text at most 45 words.** Not in the brief; taken from the Entrepreneurship kit.
-11. **Anthropic (`claude-haiku-5-5`) as the first adapter.** Same list price as `gpt-6-luna`
-    in the v2 config ($0.10 and $0.50 per million tokens). Superseded by the decisions file.
-12. **The live test needs `LECTERN_LIVE=1`**, not just a key, so a key in the shell cannot
-    spend money during a normal test run.
-13. **The outline is read back from the card fields.** No second copy of the question and
-    answer is stored.
+On `gpt-6.1-terra` a good-grade run is estimated at 83 cents. These figures come from constants
+I chose; the first real run will show how far off they are.
 
-## What failed along the way
+## What was built
 
-All found by the tests and fixed:
+`packages/engine`: 3,328 lines of source, 2,392 lines of tests, no interface code, no build step.
 
-- Word counting split `H<sub>2</sub>O` into three words.
-- A quoted opener (`"Are" ...`) slipped past the yes/no rule.
-- The outline put a space before the full stop after a marked key term.
-- zod writes integer bounds into the JSON schema, which Anthropic's structured output does
-  not accept. Slide numbers are plain numbers now and checked in code.
-- vitest picked up the root config and found no tests; the package has its own config now.
+**Milestone 1** (unchanged in substance): the package and its one boundary (commands in, events
+out, plain JSON), the course folder, validators for the hard limits, typed answers, stable ids,
+the scripted model, incremental builds, the outline export.
 
-No criterion needed more than one attempt.
+**Milestone 2**, by criterion:
+
+| # | Criterion | Where |
+|---|---|---|
+| 1 | Cards in `lectures/NN/cards.yaml`, dropped cards listed, earlier files byte-identical | `course.ts`, tested in `pipeline.test.ts` |
+| 2 | One decisions port, batched per shared input, OpenAI adapter, scripted fake | `ports.ts`, `decide.ts`, `adapters/openai.ts`, `adapters/fake.ts` |
+| 3 | Calibration per check: unmeasured flags, measured acts, both tested | `decide.ts`, `build.ts`, "calibrated checks act instead of flagging" |
+| 4 | The seven steps end to end with a placeholder preset | `build.ts`, `mapper.ts`, `writer.ts`, `presets.ts` |
+| 5 | The plan as a pure function | `plan.ts`, `plan.test.ts` |
+| 6 | OpenAI model adapter with a gated live test | `adapters/openai.ts`, `openai.live.test.ts` |
+| 7 | `estimate` command, estimate before the first paid call, cap that stops | `cost.ts`, `ask.ts`, tested with a model that charges |
+| 8 | All twelve roles validate, `code` and `diagram` with their own checks | `cards/roles.ts`, `cards/validate.ts` |
+| 9 | Tests, typecheck, lint with one command each | see above |
+| 10 | First real run only after a yes | open |
+
+How the seven steps run:
+
+1. **Profile.** One closed question per course picks the kind of lecture. It is emitted as a
+   `profile` event for the student's one line and stored in `course.json`. A command can
+   override it.
+2. **Kind of slide.** One question per slide, the whole lecture as shared input. The label is
+   the reason shown when a slide has no cards.
+3. **Map.** One model call per lecture returns topics, concepts and facts with their slide.
+   Code checks it and asks once more with the problems. Two closed checks follow.
+4. **Kind of fact, then the plan.** Each fact gets a kind from the closed list. Code plans the
+   cards: pass is one fact of each core concept, good grade two facts of every concept, top
+   grade four plus every case and contrast. The kind and the preset pick the card type.
+5. **Fill.** One call per planned card. The model sees the whole lecture and fills one small
+   form for that card type, with the limits written into the fields and an example from the
+   preset. Reasoning effort is low.
+6. **Gate.** Hard limits, the copy check, the slide check. A card that is too long is split
+   into up to three atomic cards. Other failures are repaired with the full list, twice at
+   most. What still fails is dropped and listed with concept and reasons.
+7. **End.** Code pairs cards that look alike across the course and the decision model judges
+   them. An identical question is dropped by code. Nothing is rewritten.
+
+## Placeholder
+
+`presets.ts` holds **one placeholder preset** used for every kind of lecture. Its plan table is
+my guess, its examples are seven of the sample cards from `design/v3/samples.md`, its rules are
+five lines. It exists so the pipeline runs. It is not one of the four presets Steffen will
+approve, and no result from it should be read as the quality of the method. The roles `why`,
+`name-two` and `cloze` validate but the placeholder never plans them.
+
+Nothing is calibrated. Every check that goes through the decision model only flags.
+
+## Where a decision met something already built
+
+| Decision | What I did | Open |
+|---|---|---|
+| Step 2: slides that are not content are left out | Uncalibrated, the label does not remove a slide from the map. It becomes the reason when the map leaves the slide unused. Calibrated, facts on such slides are refused | Two rules pulled against each other: "left out" and "unmeasured checks only flag". I followed the second |
+| Step 1: blends of kinds, weighted | One kind is chosen. No blend | Needs the real presets first |
+| Step 5: key terms exactly as on the slides | A rule in the prompt, plus the copy check that flags sentences taking over 8 or more slide words in a row | Not enforced by code |
+| Decision 6: a small model where the provider has no decision model | Not built. Only OpenAI's Decisions API sits behind the port | Needed for a provider without one |
+| Decisions API: "up to 400 questions per request" | The installed SDK (7.38.0) documents 1 to 200, so the adapter sends chunks of 200 | Harmless either way |
+| Decision 10: readable YAML as in the study kits | The file holds the card fields as they go to Anki (HTML, all 16 fields, empty ones too), not the kits' Markdown | Is field HTML readable enough, or should the file hold the slots and the fields be built at delivery? |
+| Decision 9: drawings from a small set of types | Three types: matrix, sequence, cycle. Data shape and validator only; the card shows the slide | A canvas such as the BMC does not fit these three |
+| Decision 7: stop cleanly at the cap | The run fails with a message and saves nothing. Calls already under way (up to four) still finish | A stopped run loses its paid work |
+| Thinking off for recall tasks | Fill, repair and split run on effort `low` | Whether the model accepts less than `low` is unverified |
+| Milestone 1: Anthropic adapter | Removed, no backward compatibility | |
+| Milestone 1: a rejected card kept its role and went back twice | Still twice, now with the split step first for cards that are too long | |
+
+New in the files, not in `FIELDS.md`: `flags` on a card and on a concept, and `diagram` on a
+diagram card. The interface session should know these exist.
 
 ## Unverified
 
-- **No live call.** The Anthropic adapter has never talked to the API. Its request passes the
-  SDK's types, and the CLI error path was run against an address that cannot be reached. The
-  prompts have never met a real model.
-- **Card quality**: unknown until a real run and an eval.
-- **Cost**: the prices are constants from the v2 config, not checked against a bill. My
-  estimate for the 11 reference decks on a model at $0.10 and $0.50: 10 to 40 cents.
-- **Slide images**: the Slide field names a PNG that nothing renders yet.
-- **Rate limits** with 4 calls in parallel.
-- **A crash in the final write burst** could leave a lecture folder that `course.json` does not
-  list. The next build would write over it, but stray card files could remain.
-- **Excerpt and grounding heuristics** on real cards, and German decks in general.
+- **No live call.** Neither OpenAI adapter has talked to the API. Both pass the types of the
+  installed SDK, and the error path was run against an address that cannot be reached.
+- **Card quality, map quality, decision quality**: unknown until a real run.
+- **Prices**: constants from the v2 config and the decisions file, not checked against a bill.
+- **Slide pictures**: rendering works on generated PDFs and was looked at once. Not tried on
+  the real decks' fonts and figures. The Slide field still names a PNG that nothing saves.
+- **Prompt caching**: the lecture comes first in every request so OpenAI's cache can cover it.
+  Whether it does, and at what share, is unmeasured.
+- **Rate limits** with four calls in parallel.
+- **The two extra test courses** are readable from this session (21 and 17 PDFs). Nothing was
+  run on them. German yes/no openers and code cards have never met real slides.
 
-## Decisions file
+## Proposed next steps
 
-`docs/v3/engine-decisions.md` appeared at 10:22 while I was building. It records an interview
-with Steffen and says it overrides the goal. I did not write it and did not commit it. I
-finished to the goal as written, because it changes the folder format and the ports, and my
-goal says to stop and ask in that case. What differs from what is built:
-
-| Decision | Built now | Change needed |
-|---|---|---|
-| 10 One readable YAML file per lecture | One JSON file per card | Folder format. Small in code, breaks criterion 3 as written |
-| 2 OpenAI adapter first, eval budget of 50 dollars | Anthropic adapter | New adapter behind the same port. I spend nothing without a direct yes |
-| 1 Slides with little text as an image | Text only | Model port gains attachments, reader renders pages |
-| 6 Checking port with a decision model | One rule in code | New port |
-| 3 Goal changes coverage and depth | Depth only | Map marks core concepts |
-| 5 Dropped cards listed with concept and reason | Counted per lecture | Small |
-| 7 Estimate before the run, hard cap | Cost recorded after | New event and a stop |
-| 8, 9 Code and drawing cards | Rejected roles | Larger, needs a benchmark |
-| 11 Recurring concepts weigh more, one vocabulary | No repeats only | Map step across lectures |
-| 4 Language of the slides | Done, in the system prompt | None |
-
-## Proposed next milestone
-
-"First real run": apply the decisions that change the format before anything depends on it,
-then meet a real model.
-
-1. Card files per lecture as YAML (10), dropped cards with reasons (5).
-2. OpenAI adapter (2), checked against the v2 adapter's lessons, with the live test.
-3. One real run on the 11 Entrepreneurship decks, with the estimate and the cap (7) in place.
-4. A first eval against the reference deck: counts, limit violations, and a blind sample.
-5. Slide images for low-text slides (1) only after the first run shows how much text-only
-   reading loses.
+1. One real run on the Entrepreneurship decks with `gpt-6-luna`, goal top grade: estimated
+   19 cents, capped at 56 cents. Then read the cards, the flags and the run file together.
+2. Compare with the reference deck: counts per lecture, share of cards dropped or split, and a
+   blind sample. That is the start of the eval.
+3. Calibration data from that run: the flagged cases are the first examples to label.
+4. The four real presets, starting with the concept course.
+5. A small Datenbanken and Operations Research run once code and formula cards have a preset.
 
 ## Follow-ups outside my paths
 
-- Root `pnpm lint` fails locally on `design/v3/cards-lamp/build-gallery.mjs` (not known to the
-  TypeScript project). The file is untracked today; once it is committed, the lint step of CI
-  fails. `design/` is not mine to touch.
+- `pnpm-lock.yaml` is shared. My commit `f5d004a` includes the entries of `packages/app`, which
+  another session added but has not committed. `pnpm-workspace.yaml` (the `electron` line) is
+  theirs and I left it uncommitted.
+- Root `pnpm lint` fails locally on `design/v3/cards-lamp/build-gallery.mjs`.
