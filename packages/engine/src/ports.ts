@@ -86,8 +86,8 @@ export interface Store {
   write(path: string, text: string): Promise<void>
   /** The names inside a folder, or an empty list when it does not exist. `''` is the root. */
   list(dir: string): Promise<string[]>
-  /** Copies a file from outside the store (a path on the student's disk) into it. */
-  copyIn(source: string, path: string): Promise<void>
+  /** Writes a binary file, such as an added PDF, and creates missing folders. */
+  writeBytes(path: string, data: Uint8Array): Promise<void>
 }
 
 export interface Ports {

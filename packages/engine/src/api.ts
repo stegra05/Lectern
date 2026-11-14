@@ -15,6 +15,7 @@ import {
   listCourses,
   readCourse,
   readLectureCards,
+  renderSlide,
   type CourseState,
   type CourseSummary,
 } from './library.ts'
@@ -45,8 +46,19 @@ const CommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cards'), course, lecture: z.number().int().positive() }),
   /** A new, empty course. The reply names its folder. */
   z.object({ type: z.literal('create'), name: z.string().trim().min(1), goal }),
-  /** Copies PDFs from the student's disk into the course. They are built by the next `build`. */
-  z.object({ type: z.literal('add'), course, files: z.array(z.string().min(1)).min(1) }),
+  /** One slide as a picture, for the thumbnail beside a card. */
+  z.object({
+    type: z.literal('slide'),
+    course,
+    lecture: z.number().int().positive(),
+    slide: z.number().int().positive(),
+  }),
+  /** Adds PDFs to the course, each as its file name and its bytes in base64. The next `build` builds them. */
+  z.object({
+    type: z.literal('add'),
+    course,
+    files: z.array(z.object({ name: z.string().min(1), data: z.string().min(1) })).min(1),
+  }),
 ])
 
 export type Command = z.infer<typeof CommandSchema>
@@ -84,6 +96,8 @@ export type Event =
   | { type: 'courses'; courses: CourseSummary[] }
   | { type: 'course'; course: CourseState }
   | { type: 'cards'; lecture: number; cards: CardFile[] }
+  /** A PNG in base64. */
+  | { type: 'slide'; lecture: number; slide: number; png: string }
   | { type: 'created'; course: string }
   /** The file names as they now are in the course. */
   | { type: 'added'; course: string; files: string[] }
@@ -125,13 +139,17 @@ export function createEngine(ports: Ports, options: Options = {}): Engine {
           case 'courses':
             return emit({ type: 'courses', courses: await listCourses(store) })
           case 'course':
-            return emit({ type: 'course', course: await readCourse(store, known.course) })
+            return emit({ type: 'course', course: await readCourse(ports, known.course) })
           case 'cards':
             return emit({
               type: 'cards',
               lecture: known.lecture,
               cards: await readLectureCards(store, known.course, known.lecture),
             })
+          case 'slide': {
+            const { png } = await renderSlide(ports, known.course, known.lecture, known.slide)
+            return emit({ type: 'slide', lecture: known.lecture, slide: known.slide, png })
+          }
           case 'create':
             return emit({
               type: 'created',
@@ -158,4 +176,4 @@ export type * from './ports.ts'
 export type { CardFile } from './cards/assemble.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
 export type { Calibrations } from './decide.ts'
-export type { CourseState, CourseSummary, LectureState } from './library.ts'
+export type { CourseState, CourseSummary, LectureState, PendingLecture } from './library.ts'

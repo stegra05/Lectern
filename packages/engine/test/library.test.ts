@@ -1,4 +1,4 @@
-import { readdir, writeFile } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { nodeStore } from '../src/adapters/node-store.ts'
@@ -16,7 +16,8 @@ import { SLIDES } from './fixtures.ts'
 import { makePdf, tempRoot } from './helpers.ts'
 
 let root: string
-let outside: string
+const pdfs = new Map<string, string>()
+const upload = (...names: string[]) => names.map((name) => ({ name, data: pdfs.get(name)! }))
 
 async function run(command: unknown): Promise<Event[]> {
   let clock = 0
@@ -42,9 +43,9 @@ describe('a course from creation to its cards, through the boundary only, with t
 
   beforeAll(async () => {
     root = join(await tempRoot(), 'library')
-    outside = await tempRoot()
-    for (const [name, slides] of Object.entries(SLIDES))
-      await writeFile(join(outside, name), await makePdf(slides))
+    for (const [name, slides] of Object.entries(SLIDES)) {
+      pdfs.set(name, Buffer.from(await makePdf(slides)).toString('base64'))
+    }
   })
 
   it('creates a course with a name and a goal, in a folder of its own', async () => {
@@ -64,9 +65,9 @@ describe('a course from creation to its cards, through the boundary only, with t
       id: '',
       name: 'Entrepreneurship WS26',
       goal: 'good',
-      lectures: 0,
+      built: [],
+      pending: [],
       cards: 0,
-      pending: 0,
     }
     expect(await only({ type: 'courses' }, 'courses')).toEqual({
       type: 'courses',
@@ -77,8 +78,8 @@ describe('a course from creation to its cards, through the boundary only, with t
     })
   })
 
-  it('adds PDFs from the disk to a course', async () => {
-    const files = ['01 Risk.pdf', '02 Effectuation.pdf'].map((name) => join(outside, name))
+  it('adds PDFs to a course as plain JSON: a name and the bytes in base64', async () => {
+    const files = upload('01 Risk.pdf', '02 Effectuation.pdf')
     expect(await only({ type: 'add', course: 'entrepreneurship-ws26', files }, 'added')).toEqual({
       type: 'added',
       course: 'entrepreneurship-ws26',
@@ -88,18 +89,25 @@ describe('a course from creation to its cards, through the boundary only, with t
       '01 Risk.pdf',
       '02 Effectuation.pdf',
     ])
+  })
+
+  it('shows PDFs without cards as pending, with the number, a title and the slide count', async () => {
     const course = (await only({ type: 'course', course: 'entrepreneurship-ws26' }, 'course'))
       .course
-    expect(course).toMatchObject({
-      lectures: [],
-      pending: ['01 Risk.pdf', '02 Effectuation.pdf'],
-      decisions: [],
-      runs: [],
+    expect(course).toMatchObject({ lectures: [], decisions: [], runs: [] })
+    expect(course.pending).toEqual([
+      { file: '01 Risk.pdf', number: 1, title: 'Risk', slides: 5 },
+      { file: '02 Effectuation.pdf', number: 2, title: 'Effectuation', slides: 4 },
+    ])
+    expect((await only({ type: 'courses' }, 'courses')).courses[0]).toMatchObject({
+      built: [],
+      pending: [1, 2],
+      cards: 0,
     })
   })
 
-  it('refuses a file that is no PDF or whose name the course already has, and copies nothing then', async () => {
-    const again = [join(outside, '03 Lean startup.pdf'), join(outside, '01 Risk.pdf')]
+  it('refuses a file that is no PDF or whose name the course already has, and adds nothing then', async () => {
+    const again = upload('03 Lean startup.pdf', '01 Risk.pdf')
     expect(
       await only({ type: 'add', course: 'entrepreneurship-ws26', files: again }, 'failed'),
     ).toEqual({
@@ -107,19 +115,42 @@ describe('a course from creation to its cards, through the boundary only, with t
       message: 'The course already has a file named 01 Risk.pdf.',
       fix: 'Rename the new file, then add it again.',
     })
+    const notes = [{ name: 'notes.pdf', data: Buffer.from('just text').toString('base64') }]
     expect(
-      await only(
-        { type: 'add', course: 'entrepreneurship-ws26', files: ['/tmp/notes.docx'] },
-        'failed',
-      ),
+      await only({ type: 'add', course: 'entrepreneurship-ws26', files: notes }, 'failed'),
     ).toMatchObject({
-      message: 'notes.docx is not a PDF.',
+      message: 'notes.pdf is not a PDF.',
     })
     expect(await only({ type: 'add', course: 'nowhere', files: again }, 'failed')).toMatchObject({
       message: 'No course found in nowhere.',
       fix: 'Create the course first.',
     })
     expect(await readdir(join(root, 'entrepreneurship-ws26/slides'))).toHaveLength(2)
+  })
+
+  it('renders one slide as a picture, before and after the build', async () => {
+    const event = await only(
+      { type: 'slide', course: 'entrepreneurship-ws26', lecture: 2, slide: 3 },
+      'slide',
+    )
+    expect(event).toMatchObject({ type: 'slide', lecture: 2, slide: 3 })
+    expect(event.png.startsWith('iVBORw0KGgo')).toBe(true)
+    expect(
+      await only(
+        { type: 'slide', course: 'entrepreneurship-ws26', lecture: 2, slide: 9 },
+        'failed',
+      ),
+    ).toMatchObject({
+      message: 'Lecture 2 has no slide 9.',
+    })
+    expect(
+      await only(
+        { type: 'slide', course: 'entrepreneurship-ws26', lecture: 7, slide: 1 },
+        'failed',
+      ),
+    ).toMatchObject({
+      message: 'The course has no lecture 7.',
+    })
   })
 
   it('builds the course with the offline models: no script, no network, plausible cards', async () => {
@@ -197,15 +228,23 @@ describe('a course from creation to its cards, through the boundary only, with t
     await run({
       type: 'add',
       course: 'entrepreneurship-ws26',
-      files: [join(outside, '03 Lean startup.pdf')],
+      files: upload('03 Lean startup.pdf'),
     })
     const [summary] = (await only({ type: 'courses' }, 'courses')).courses
-    expect(summary).toMatchObject({ lectures: 2, pending: 1 })
+    expect(summary).toMatchObject({ built: [1, 2], pending: [3] })
     await run({ type: 'build', course: 'entrepreneurship-ws26' })
     const built = (await only({ type: 'course', course: 'entrepreneurship-ws26' }, 'course')).course
     expect(built.lectures.map((l) => l.number)).toEqual([1, 2, 3])
     expect(built.pending).toEqual([])
     expect(built.runs).toHaveLength(2)
+    expect(
+      (
+        await only(
+          { type: 'slide', course: 'entrepreneurship-ws26', lecture: 3, slide: 1 },
+          'slide',
+        )
+      ).png.length,
+    ).toBeGreaterThan(1000)
   })
 
   it('fails with a fix when a course does not exist', async () => {
@@ -253,5 +292,11 @@ describe('the offline model', () => {
     expect(
       validateDraft(draft, { slides: [2], slideText: () => '', seenAsImage: () => false }),
     ).toEqual([])
+  })
+
+  it('can take its time, so a run can be watched', async () => {
+    const started = Date.now()
+    await offlineDecisions(40).decide({ context: '', images: [], questions: [] })
+    expect(Date.now() - started).toBeGreaterThanOrEqual(35)
   })
 })

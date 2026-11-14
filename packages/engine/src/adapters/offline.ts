@@ -58,18 +58,23 @@ function fill(request: ModelRequest): Record<string, unknown> {
   return Object.fromEntries(fields.map((field) => [field, field === 'extra' ? '' : take(fact, 4)]))
 }
 
-export function offlineModel(): ModelPort {
+const free = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** `delayMs` makes every call take that long, so a run can be watched. */
+export function offlineModel(delayMs = 0): ModelPort {
   return {
     model: 'offline',
     price: { input: 0, cachedInput: 0, output: 0 },
-    complete(request) {
+    async complete(request) {
+      await wait(delayMs)
       const data =
         request.task === 'map'
           ? map(request.context)
           : request.task === 'split'
             ? { cards: [fill(request)] }
             : fill(request)
-      return Promise.resolve({ data, usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } })
+      return { data, usage: free }
     },
   }
 }
@@ -93,14 +98,13 @@ function decide(question: Question): Answer {
   return { type: 'choice', choice, confidence: 0.9 }
 }
 
-export function offlineDecisions(): DecisionsPort {
+export function offlineDecisions(delayMs = 0): DecisionsPort {
   return {
     model: 'offline',
     price: { input: 0 },
-    decide: (request) =>
-      Promise.resolve({
-        answers: request.questions.map(decide),
-        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
-      }),
+    async decide(request) {
+      await wait(delayMs)
+      return { answers: request.questions.map(decide), usage: free }
+    },
   }
 }

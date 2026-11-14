@@ -1,17 +1,20 @@
 /**
  * What an interface needs besides building: the list of courses, the state of one course,
- * the cards of a lecture, and the two ways a course grows (create it, add PDFs to it).
- * Everything is read from the plain files of the course folders; no model is involved.
+ * the cards of a lecture, a slide as a picture, and the two ways a course grows (create it,
+ * add PDFs to it). Everything comes from the plain files of the course folders; no model is
+ * involved.
  */
 
 import type { CardFile } from './cards/assemble.ts'
 import type { Goal } from './cards/roles.ts'
 import { slug } from './cards/words.ts'
 import {
+  assignNumbers,
   inCourseOrder,
   paths,
   readCards,
   readJson,
+  titleFromFile,
   writeJson,
   type Concept,
   type CourseFile,
@@ -20,17 +23,18 @@ import {
   type Run,
 } from './course.ts'
 import { EngineError } from './errors.ts'
-import type { Store } from './ports.ts'
+import type { Ports, SlideImage, Store } from './ports.ts'
 
 export interface CourseSummary {
   /** The folder name: what every command takes as `course`. */
   id: string
   name: string
   goal: Goal
-  lectures: number
+  /** The numbers of the lectures that have cards. */
+  built: number[]
+  /** The numbers the PDFs without cards will get when they are built. */
+  pending: number[]
   cards: number
-  /** PDFs that are in the course but have no cards yet. */
-  pending: number
 }
 
 export interface LectureState extends Omit<Lecture, 'topics'> {
@@ -38,11 +42,21 @@ export interface LectureState extends Omit<Lecture, 'topics'> {
   topics: { name: string; concepts: (Concept & { cards: number })[] }[]
 }
 
+/** A PDF that is in the course but has no cards yet. */
+export interface PendingLecture {
+  file: string
+  /** The number the next build will give it. */
+  number: number
+  /** Guessed from the file name. The build replaces it with the lecture's real name. */
+  title: string
+  slides: number
+}
+
 export interface CourseState extends Omit<CourseFile, 'format' | 'lectures'> {
   id: string
   lectures: LectureState[]
-  /** PDFs waiting for the next build, in course order. */
-  pending: string[]
+  /** In course order. */
+  pending: PendingLecture[]
   decisions: Decision[]
   runs: Run[]
 }
@@ -53,9 +67,15 @@ async function courseFile(store: Store, course: string): Promise<CourseFile> {
   return file
 }
 
-async function pendingSlides(store: Store, course: string, file: CourseFile): Promise<string[]> {
+/** The PDFs no lecture has yet, with the numbers a build would give them. */
+async function pendingFiles(store: Store, course: string, file: CourseFile) {
   const built = new Set(file.lectures.map((l) => l.file))
-  return inCourseOrder(await store.list(paths.slides(course))).filter((f) => !built.has(f))
+  const files = inCourseOrder(await store.list(paths.slides(course))).filter((f) => !built.has(f))
+  const numbers = assignNumbers(
+    file.lectures.map((l) => l.number),
+    files,
+  )
+  return files.map((name, i) => ({ file: name, number: numbers[i]! }))
 }
 
 export async function listCourses(store: Store): Promise<CourseSummary[]> {
@@ -65,20 +85,19 @@ export async function listCourses(store: Store): Promise<CourseSummary[]> {
     if (!file) continue
     let cards = 0
     for (const { number } of file.lectures) cards += (await readCards(store, id, number)).length
-    const pending = (await pendingSlides(store, id, file)).length
     out.push({
       id,
       name: file.name,
       goal: file.goal,
-      lectures: file.lectures.length,
+      built: file.lectures.map((l) => l.number),
+      pending: (await pendingFiles(store, id, file)).map((p) => p.number),
       cards,
-      pending,
     })
   }
   return out
 }
 
-export async function readCourse(store: Store, course: string): Promise<CourseState> {
+export async function readCourse({ store, pdf }: Ports, course: string): Promise<CourseState> {
   const file = await courseFile(store, course)
   const lectures: LectureState[] = []
   for (const { number } of file.lectures) {
@@ -94,6 +113,11 @@ export async function readCourse(store: Store, course: string): Promise<CourseSt
       })),
     })
   }
+  const pending: PendingLecture[] = []
+  for (const { file: name, number } of await pendingFiles(store, course, file)) {
+    const slides = await pdf.readSlides(await store.readBytes(`${paths.slides(course)}/${name}`))
+    pending.push({ file: name, number, title: titleFromFile(name, number), slides: slides.length })
+  }
   const runs: Run[] = []
   for (const name of (await store.list(paths.runs(course))).sort()) {
     runs.push((await readJson<Run>(store, `${paths.runs(course)}/${name}`))!)
@@ -104,7 +128,7 @@ export async function readCourse(store: Store, course: string): Promise<CourseSt
     goal: file.goal,
     ...(file.profile ? { profile: file.profile } : {}),
     lectures,
-    pending: await pendingSlides(store, course, file),
+    pending,
     decisions: (await readJson<Decision[]>(store, paths.decisions(course))) ?? [],
     runs,
   }
@@ -117,6 +141,32 @@ export async function readLectureCards(
 ): Promise<CardFile[]> {
   await courseFile(store, course)
   return readCards(store, course, lecture)
+}
+
+/** One slide of a lecture as a picture, whether the lecture has cards yet or not. */
+export async function renderSlide(
+  { store, pdf }: Ports,
+  course: string,
+  lecture: number,
+  slide: number,
+): Promise<SlideImage> {
+  const file = await courseFile(store, course)
+  const name =
+    file.lectures.find((l) => l.number === lecture)?.file ??
+    (await pendingFiles(store, course, file)).find((p) => p.number === lecture)?.file
+  if (!name)
+    throw new EngineError(
+      `The course has no lecture ${lecture}.`,
+      'Open a lecture from the course.',
+    )
+  const bytes = await store.readBytes(`${paths.slides(course)}/${name}`)
+  if (slide > (await pdf.readSlides(bytes)).length) {
+    throw new EngineError(
+      `Lecture ${lecture} has no slide ${slide}.`,
+      'Open a slide the lecture has.',
+    )
+  }
+  return (await pdf.renderSlides(bytes, [slide]))[0]!
 }
 
 /** A new, empty course. Its folder name is made from the name and never reused. */
@@ -135,30 +185,33 @@ export async function createCourse(store: Store, name: string, goal: Goal): Prom
 }
 
 /**
- * Copies PDFs from the student's disk into the course. Nothing is copied unless every file
- * can be: a lecture is known by its file name, so a name is never taken twice.
+ * Adds PDFs to the course. Nothing is added unless every file can be: a lecture is known by
+ * its file name, so a name is never taken twice.
  */
 export async function addSlides(
   store: Store,
   course: string,
-  sources: string[],
+  files: { name: string; data: string }[],
 ): Promise<string[]> {
   await courseFile(store, course)
   const present = new Set(await store.list(paths.slides(course)))
-  const names = sources.map((source) => source.split(/[\\/]/).at(-1)!)
-  for (const [i, name] of names.entries()) {
-    if (!name.toLowerCase().endsWith('.pdf')) {
+  const pdfs = files.map(({ name, data }) => ({
+    name: name.split(/[\\/]/).at(-1)!,
+    bytes: Uint8Array.from(atob(data), (char) => char.charCodeAt(0)),
+  }))
+  for (const [i, { name, bytes }] of pdfs.entries()) {
+    const isPdf =
+      name.toLowerCase().endsWith('.pdf') && String.fromCharCode(...bytes.slice(0, 4)) === '%PDF'
+    if (!isPdf)
       throw new EngineError(`${name} is not a PDF.`, 'Export the slides as PDF and add that file.')
-    }
-    if (present.has(name) || names.indexOf(name) !== i) {
+    if (present.has(name) || pdfs.findIndex((other) => other.name === name) !== i) {
       throw new EngineError(
         `The course already has a file named ${name}.`,
         'Rename the new file, then add it again.',
       )
     }
   }
-  for (const [i, source] of sources.entries()) {
-    await store.copyIn(source, `${paths.slides(course)}/${names[i]!}`)
-  }
-  return names
+  for (const { name, bytes } of pdfs)
+    await store.writeBytes(`${paths.slides(course)}/${name}`, bytes)
+  return pdfs.map((pdf) => pdf.name)
 }

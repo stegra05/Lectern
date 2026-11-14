@@ -26,6 +26,7 @@ import {
   paths,
   readCards,
   readJson,
+  titleFromFile,
   writeCards,
   writeJson,
   type Concept,
@@ -250,9 +251,7 @@ export async function build(
         kinds: slideKinds,
         contentOnly: calibrations.slideKind.calibrated,
         earlier,
-        fallbackTitle:
-          lecture.file.replace(/\.pdf$/i, '').replace(/^[\d\s._-]+/, '') ||
-          `Lecture ${lecture.number}`,
+        fallbackTitle: titleFromFile(lecture.file, lecture.number),
       }
       const vocabulary = [...earlier.values()].map((concept) => concept.name)
       let settled = settleMap(await askMap(askModel, source, vocabulary), ctx)

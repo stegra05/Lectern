@@ -144,6 +144,11 @@ export function writeCards(
   return store.write(paths.cards(course, lecture), stringify(cards, { lineWidth: 0 }))
 }
 
+/** A lecture's name guessed from its file name, until the map gives the real one. */
+export function titleFromFile(file: string, number: number): string {
+  return file.replace(/\.pdf$/i, '').replace(/^[\d\s._-]+/, '') || `Lecture ${number}`
+}
+
 /** Lecture PDFs in course order: by file name, numbers compared as numbers. */
 export function inCourseOrder(files: string[]): string[] {
   return files
