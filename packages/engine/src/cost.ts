@@ -1,6 +1,6 @@
 /**
- * The estimate before a run and the cap that stops one. Pure. The numbers are rough and
- * will be calibrated against the first real runs.
+ * The estimate before a run and the cap that stops one. Pure. The constants were set against
+ * the first real run (one deck of 16 slides, gpt-6-luna, 2026-11-14) and stay rough.
  */
 
 import { GOAL_PRESETS, type Goal } from './cards/roles.ts'
@@ -16,14 +16,19 @@ const TOKENS = {
   perChar: 0.25,
   perImage: 1000,
   mapPrompt: 500,
-  mapReplyPerSlide: 60,
+  /** The map reasons before it answers, and reasoning is billed as output. */
+  mapReplyPerSlide: 250,
   fillPrompt: 600,
   fillReply: 120,
-  conceptsPerSlide: 0.5,
+  conceptsPerSlide: 1,
+  /** A concept rarely has more facts than this, whatever the goal asks for. */
+  factsPerConcept: 3,
   /** Share of concepts that are core, for the goal that only covers those. */
   coreShare: 0.5,
   /** Repairs and splits on top of the fill calls. */
   reworkShare: 0.25,
+  /** Calls per lecture that read the lecture at full price: the cache is kept per card type. */
+  uncachedCalls: 10,
   /** How often the whole lecture goes to the decision model: slide kinds, map checks, slide check. */
   decisionPasses: 3,
 }
@@ -56,16 +61,17 @@ export function estimate(
     const source = lecture.chars * TOKENS.perChar + lecture.images * TOKENS.perImage
     const concepts =
       lecture.slides * TOKENS.conceptsPerSlide * (depth.coverage === 'core' ? TOKENS.coreShare : 1)
-    const fills = Math.round(concepts * depth.facts)
+    const fills = Math.round(concepts * Math.min(depth.facts, TOKENS.factsPerConcept))
     const calls = fills * (1 + TOKENS.reworkShare)
+    const uncached = Math.min(calls, TOKENS.uncachedCalls)
     cards += fills
     dollars +=
       // The map reads the lecture once at full price.
       (source + TOKENS.mapPrompt) * prices.model.input +
       lecture.slides * TOKENS.mapReplyPerSlide * prices.model.output +
-      // Every card sees the whole lecture again, from the provider's cache.
-      calls * (source * prices.model.cachedInput + TOKENS.fillPrompt * prices.model.input) +
-      calls * TOKENS.fillReply * prices.model.output +
+      // Every card sees the whole lecture again, mostly from the provider's cache.
+      source * (uncached * prices.model.input + (calls - uncached) * prices.model.cachedInput) +
+      calls * (TOKENS.fillPrompt * prices.model.input + TOKENS.fillReply * prices.model.output) +
       source * TOKENS.decisionPasses * prices.decisions.input
   }
   const costUsd = dollars / 1_000_000

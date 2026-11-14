@@ -29,7 +29,10 @@ export interface ModelRequest {
 }
 
 export interface Usage {
+  /** All input tokens, the cached ones included. */
   inputTokens: number
+  /** The part of the input the provider served from its prompt cache, at a lower price. */
+  cachedInputTokens: number
   outputTokens: number
   costUsd: number
 }

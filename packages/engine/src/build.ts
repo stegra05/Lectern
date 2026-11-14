@@ -164,7 +164,14 @@ export async function build(
     return result
   }
 
-  const meter: Meter = { calls: 0, decisions: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
+  const meter: Meter = {
+    calls: 0,
+    decisions: 0,
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  }
 
   // Read all lectures. The estimate is known before the first paid call.
   emit({ type: 'phase', phase: 'read', status: 'started', total: 0 })
@@ -368,10 +375,23 @@ export async function build(
       problems: [],
       flags: [],
     }))
-    await pool(drafted, async (item) => {
+    const fill = async (item: Item) => {
       item.slots = await writer.fill(job(item))
       emit({ type: 'progress', phase: 'write', done: ++done, total: drafted.length })
-    })
+    }
+    // The provider caches the lecture per card type. The first card of each type in a lecture
+    // goes ahead and fills that cache; the rest then read the lecture at the cached price.
+    const first = new Map<string, Item>()
+    for (const item of drafted) {
+      const key = `${item.lecture.number}/${item.role}`
+      if (!first.has(key)) first.set(key, item)
+    }
+    const ahead = new Set(first.values())
+    await pool([...ahead], fill)
+    await pool(
+      drafted.filter((item) => !ahead.has(item)),
+      fill,
+    )
     return drafted
   })
 

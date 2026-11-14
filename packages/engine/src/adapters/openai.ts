@@ -31,9 +31,28 @@ const picture = (image: SlideImage) => ({
 const text = (value: string) => ({ type: 'input_text' as const, text: value })
 
 /**
+ * The lecture as input blocks, ending in a cache breakpoint. OpenAI only reuses a prompt
+ * prefix up to an explicit breakpoint, and only between calls with the same reply format and
+ * reasoning effort (measured 2026-11-14 on gpt-6-luna).
+ */
+function shared(context: string, images: SlideImage[], labelled: boolean) {
+  const blocks = [
+    text(context),
+    ...images.flatMap((image) =>
+      labelled ? [text(`Picture of slide ${image.slide}:`), picture(image)] : [picture(image)],
+    ),
+  ]
+  const last = blocks.at(-1)!
+  return [
+    ...blocks.slice(0, -1),
+    { ...last, prompt_cache_breakpoint: { mode: 'explicit' as const } },
+  ]
+}
+
+/**
  * A writing model through the Responses API. The reply is held to the JSON schema by the API
- * (strict structured output). The lecture comes first in the input, so the provider's prompt
- * cache covers it across the many calls about one lecture.
+ * (strict structured output). The lecture comes first in the input and ends in a cache
+ * breakpoint, so the many calls about one lecture read it at the cached price.
  */
 export function openaiModel(model = 'gpt-6-luna', options: OpenAIOptions = {}): ModelPort {
   const price = PRICES[model]
@@ -55,14 +74,7 @@ export function openaiModel(model = 'gpt-6-luna', options: OpenAIOptions = {}): 
           input: [
             {
               role: 'user',
-              content: [
-                text(request.context),
-                ...request.images.flatMap((image) => [
-                  text(`Picture of slide ${image.slide}:`),
-                  picture(image),
-                ]),
-                text(request.prompt),
-              ],
+              content: [...shared(request.context, request.images, true), text(request.prompt)],
             },
           ],
           reasoning: { effort: request.effort },
@@ -96,7 +108,12 @@ export function openaiModel(model = 'gpt-6-luna', options: OpenAIOptions = {}): 
         outputTokens * (long ? price.longOutput : price.output)
       return {
         data: JSON.parse(response.output_text) as unknown,
-        usage: { inputTokens, outputTokens, costUsd: dollars / 1_000_000 },
+        usage: {
+          inputTokens,
+          cachedInputTokens: cached,
+          outputTokens,
+          costUsd: dollars / 1_000_000,
+        },
       }
     },
   }
@@ -113,12 +130,10 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
     price: { input: DECISION_PRICE },
     async decide(request) {
       client ??= new OpenAI(options)
-      const content = [
-        text(request.context),
-        ...request.images.slice(0, IMAGES_PER_REQUEST).map(picture),
-      ]
+      const content = shared(request.context, request.images.slice(0, IMAGES_PER_REQUEST), false)
       const answers: Answer[] = []
       let inputTokens = 0
+      let cachedInputTokens = 0
       for (let start = 0; start < request.questions.length; start += QUESTIONS_PER_REQUEST) {
         const decision = await client.decisions
           .create({
@@ -132,6 +147,7 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
             throw explain(error)
           })
         inputTokens += decision.usage.input_tokens
+        cachedInputTokens += decision.usage.input_tokens_details.cached_tokens
         for (const answer of decision.answers) {
           if (answer.type === 'predicate')
             answers.push({ type: 'predicate', probability: answer.probability })
@@ -144,15 +160,10 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
           } else answers.push({ type: 'refusal' })
         }
       }
-      // Only input is charged; answers are free.
-      return {
-        answers,
-        usage: {
-          inputTokens,
-          outputTokens: 0,
-          costUsd: (inputTokens * DECISION_PRICE) / 1_000_000,
-        },
-      }
+      // Only input is charged; answers are free. Cached input is billed lower by a factor
+      // that is not published, so the full price stands in as an upper bound.
+      const costUsd = (inputTokens * DECISION_PRICE) / 1_000_000
+      return { answers, usage: { inputTokens, cachedInputTokens, outputTokens: 0, costUsd } }
     },
   }
 }

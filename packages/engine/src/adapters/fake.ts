@@ -32,7 +32,10 @@ export function scriptedModel(
         (request.system.length + request.context.length + request.prompt.length) / 4,
       )
       const outputTokens = Math.ceil(JSON.stringify(data).length / 4)
-      return Promise.resolve({ data, usage: { inputTokens, outputTokens, costUsd: costPerCall } })
+      return Promise.resolve({
+        data,
+        usage: { inputTokens, cachedInputTokens: 0, outputTokens, costUsd: costPerCall },
+      })
     },
   }
 }
@@ -58,7 +61,10 @@ export function scriptedDecisions(
       const answers = request.questions.map(
         (question) => answer(question, request) ?? { type: 'refusal' as const },
       )
-      return Promise.resolve({ answers, usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } })
+      return Promise.resolve({
+        answers,
+        usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, costUsd: 0 },
+      })
     },
   }
 }

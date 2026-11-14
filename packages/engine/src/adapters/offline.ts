@@ -58,7 +58,7 @@ function fill(request: ModelRequest): Record<string, unknown> {
   return Object.fromEntries(fields.map((field) => [field, field === 'extra' ? '' : take(fact, 4)]))
 }
 
-const free = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
+const free = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, costUsd: 0 }
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** `delayMs` makes every call take that long, so a run can be watched. */

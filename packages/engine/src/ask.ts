@@ -11,6 +11,7 @@ export interface Meter {
   calls: number
   decisions: number
   inputTokens: number
+  cachedInputTokens: number
   outputTokens: number
   costUsd: number
 }
@@ -35,6 +36,7 @@ export function createAsk(
 ): { model: AskModel; decide: Decide } {
   const spend = (usage: Usage) => {
     meter.inputTokens += usage.inputTokens
+    meter.cachedInputTokens += usage.cachedInputTokens
     meter.outputTokens += usage.outputTokens
     meter.costUsd += usage.costUsd
     if (meter.costUsd > capUsd) {

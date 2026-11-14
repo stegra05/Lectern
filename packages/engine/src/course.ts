@@ -100,6 +100,8 @@ export interface Run {
   /** Closed questions answered by the decision model. */
   decisions: number
   inputTokens: number
+  /** The share of the input the provider served from its cache. */
+  cachedInputTokens: number
   outputTokens: number
   estimateUsd: number
   costUsd: number
