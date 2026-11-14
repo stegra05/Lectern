@@ -153,6 +153,6 @@ then meet a real model.
 
 ## Follow-ups outside my paths
 
-- Root `pnpm lint` fails on `design/v3/cards-lamp/build-gallery.mjs` (not known to the
-  TypeScript project). CI runs lint, so this will fail on a pull request. `design/` is not
-  mine to touch.
+- Root `pnpm lint` fails locally on `design/v3/cards-lamp/build-gallery.mjs` (not known to the
+  TypeScript project). The file is untracked today; once it is committed, the lint step of CI
+  fails. `design/` is not mine to touch.
