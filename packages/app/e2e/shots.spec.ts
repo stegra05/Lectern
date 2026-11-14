@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { cp, mkdir, mkdtemp, readdir } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { launch } from './launch.ts'
@@ -35,7 +35,15 @@ async function shoot(page: Page, name: string): Promise<void> {
 test('pictures of every base screen', async () => {
   await mkdir(out!, { recursive: true })
   const courses = await mkdtemp(join(tmpdir(), 'lectern-shots-'))
-  if (real) await cp(real, join(courses, 'entrepreneurship'), { recursive: true })
+  if (real) {
+    const copy = join(courses, 'entrepreneurship')
+    await cp(real, copy, { recursive: true })
+    // A course built from the command line is named after its folder. The app names a course
+    // when it creates one, so the copy gets the name a student would have typed.
+    const file = join(copy, 'course.json')
+    const course = JSON.parse(await readFile(file, 'utf8')) as { name: string }
+    await writeFile(file, `${JSON.stringify({ ...course, name: 'Entrepreneurship' }, null, 2)}\n`)
+  }
   const { app, page } = await launch({ courses, delayMs: 150 })
 
   try {
@@ -80,10 +88,7 @@ test('pictures of every base screen', async () => {
       await shoot(page, '12-settings-card-design-next')
       await page.getByRole('button', { name: /AI provider/ }).click()
       await shoot(page, '13-settings-provider')
-      await page
-        .getByRole('button', { name: /Entrepreneurship/ })
-        .first()
-        .click()
+      await page.getByRole('button', { name: 'Entrepreneurship', exact: true }).click()
       await page.getByRole('button', { name: 'Courses' }).click()
     }
 
