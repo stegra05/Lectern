@@ -35,27 +35,31 @@ map that never reshuffles, a slim bottom bar, one side panel for all details, mi
 rings, six card designs with Native as default, "Copy for chat" with cards as content. Themes
 view comes after the base product.
 
-**Engine.** Milestone 1 is done and verified: 94 tests pass, typecheck clean. It was built to
-the first goal, before Steffen's decisions arrived. The engine session then started milestone 2
-and was cut off by a usage limit, so `packages/engine` has uncommitted changes in progress
-(Anthropic adapter removed, several files modified). Look at `git status` and `git diff` there
-before doing anything, and finish or revert deliberately. Do not commit it blindly.
+**Engine.** Milestones 1 and 2 are done and committed (engine code up to `3d408f8`): 158 tests
+pass, typecheck and lint clean. The engine runs the seven steps of "How cards are created" with
+one placeholder preset, has commands for the interface (`courses`, `course`, `cards`, `slide`,
+`create`, `add`, `estimate`, `build`, `outline`) and offline models for interface tests. The
+first real runs happened on 2026-11-14: the 11 Entrepreneurship decks became 596 cards for
+16.7 cents on `gpt-6-luna`, with no card over a hard limit. The content is not good enough yet:
+course administration gets cards, and some cards are thin. Figures and findings are in
+`docs/v3/engine-report.md`, section "First real runs". About 70 cents of the 50 dollars are used.
+
+**App.** `packages/app` exists and is built by the prototype session on the engine's boundary.
+Its state is described in its own report and commits.
 
 ## Next steps
 
-1. **Engine milestone 2**, as agreed: one YAML file per lecture and dropped cards with reasons;
-   the OpenAI adapter and the decisions port (`POST /v1/decisions`); "code plans, model fills"
-   with one placeholder preset; a first real run on Entrepreneurship with estimate and cap.
-   Budget from Steffen, in his words: "up to 50 dollars, only openai. Have some credits there".
-   Any other paid run needs his yes.
-2. **The full prototype.** Scaffold the Electron app as `packages/app`, talking to the engine
-   only through its one boundary. Build the base screens from the canvas: first run, courses,
-   files on the track with the goal, the run with real phases, the result (track, lecture
-   rings, side panel with cards), settings with the card carousel, sent. Leave out for the base:
-   themes view, study plan, quiz, past exams, feedback loop.
-3. **Then:** Anki delivery through the add-on, the four hand-written profiles (drafted for his
-   approval), calibration data for the decision models (a strong model labels, he spot-checks
-   about thirty), evals against the reference deck and on the two extra courses.
+1. **Quality of the cards**, all decided in `engine-decisions.md`: the four lecture profiles as
+   drafts for Steffen's approval, the concept course first; calibration of the decision checks
+   (a strong model labels a few hundred Entrepreneurship examples, he spot-checks about thirty);
+   a blind comparison of a run against his reference deck, the measure of success in the brief.
+2. **Keeping course administration out of the cards.** The largest visible defect of the first
+   real runs. Open with Steffen: a calibrated slide label, a rule in the preset, or both.
+3. **The prototype** in `packages/app`, in progress in its own session.
+4. **Then:** Anki delivery through the add-on, evals on the two extra courses.
+
+Paid runs: only one session starts them (to be agreed between the engine and the prototype
+session, see their messages), on OpenAI only, within the 50 dollars.
 
 ## Open with Steffen
 
