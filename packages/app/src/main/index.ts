@@ -8,6 +8,7 @@
  *   LECTERN_COURSES=<dir>  where courses live (default: "courses" in the app's data folder)
  *   LECTERN_DATA=<dir>     the app's data folder (settings and the stored key)
  *   OPENAI_API_KEY         a key that wins over the stored one
+ *   LECTERN_SHOW=0         keep the window off the screen, for tests
  */
 
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
@@ -37,7 +38,8 @@ function createWindow(): void {
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1C1C1E' : '#EFEFF2',
     webPreferences: { preload: join(import.meta.dirname, '../preload/index.cjs') },
   })
-  window.once('ready-to-show', () => window.show())
+  // A test drives the window without putting it on the student's screen.
+  if (process.env.LECTERN_SHOW !== '0') window.once('ready-to-show', () => window.show())
   // The interface opens no links of its own. Anything that tries goes to the browser.
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)

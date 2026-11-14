@@ -11,8 +11,8 @@ export interface Launched {
 }
 
 /**
- * Starts the built app on the offline models, with its own empty data folder, so a test never
- * touches the student's courses, key or money.
+ * Starts the built app on the offline models, with its own empty data folder and its window
+ * off the screen, so a test never touches the student's courses, key, money or desktop.
  */
 export async function launch(
   options: { courses?: string; delayMs?: number } = {},
@@ -27,8 +27,13 @@ export async function launch(
       LECTERN_FAKE_DELAY: String(options.delayMs ?? 0),
       LECTERN_DATA: data,
       LECTERN_COURSES: courses,
+      LECTERN_SHOW: '0',
     },
   })
   const page = await app.firstWindow()
+  // The reference size of the design kit, whatever the last window size on this computer was.
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1100, 720)
+  })
   return { app, page, courses }
 }

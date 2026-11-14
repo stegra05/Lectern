@@ -48,6 +48,8 @@ test('pictures of every base screen', async () => {
 
   try {
     await expect(page.getByRole('heading', { name: 'Welcome to Lectern' })).toBeVisible()
+    // The small track at the top draws itself once.
+    await page.waitForTimeout(2000)
     await shoot(page, '01-first-run')
     await page.getByPlaceholder('sk-...').fill('sk-offline')
     await page.getByRole('button', { name: 'Continue' }).click()
