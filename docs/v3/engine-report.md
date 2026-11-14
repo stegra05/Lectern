@@ -1,15 +1,17 @@
 # Lectern v3 engine: report
 
-Updated 2026-11-14 after milestone 2. Goal: `engine-goal.md`. Decisions: `engine-decisions.md`.
-Plan with both milestones: `engine-plan.md`. Branch `v3`, local commits only, nothing pushed.
-Milestone 1 ends at `15d00fc`, milestone 2 is `f5d004a`, the commands for the interface follow it.
+Updated 2026-11-14 after the first real runs. Goal: `engine-goal.md`. Decisions:
+`engine-decisions.md`. Plan with both milestones: `engine-plan.md`. Branch `v3`, local commits
+only, nothing pushed. Milestone 1 ends at `15d00fc`, milestone 2 is `f5d004a`, the commands for
+the interface and the fixes from the real runs follow it (up to `3d408f8`).
 
 ## Verdict
 
-Everything that can be done without a paid call is done and tested: the engine runs the seven
-steps of "How cards are created" end to end against scripted models. No real model has been
-called yet, so nothing here says anything about card quality. The first real run waits for
-Steffen's yes in this session (criterion 10 of milestone 2).
+The engine works end to end on real slides with a real cheap model: the 11 Entrepreneurship
+decks became 596 cards for 17 cents in 17 minutes, with no card over a hard limit. The method
+in code holds. The content does not yet: the placeholder preset and the uncalibrated slide
+labels let course administration, exercise instructions and thin cards through. That is the
+work of the real presets and of calibration, not of the pipeline.
 
 ## Commands
 
@@ -19,7 +21,7 @@ Steffen's yes in this session (criterion 10 of milestone 2).
 | Typecheck | `pnpm --filter @lectern/engine typecheck` |
 | Lint | `pnpm exec eslint packages/engine` |
 | Estimate, free | `node packages/engine/src/cli.ts estimate <course folder> [--goal pass\|good\|top] [--model gpt-6-luna]` |
-| Build, paid | `node packages/engine/src/cli.ts build <course folder> [--goal ...] [--profile ...] [--model ...]` |
+| Build, paid | `node packages/engine/src/cli.ts build <course folder> [--goal ...] [--profile ...] [--model ...] [--cap dollars]` |
 | Outline | `node packages/engine/src/cli.ts outline <course folder>` |
 
 PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
@@ -28,29 +30,88 @@ PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 | Run | Result |
 |---|---|
-| Engine tests | 156 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
+| Engine tests | 158 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
+| Live OpenAI tests, run once with a key | 2 passed |
 | Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
 
 By file: validators 57, cards 20, tree and lecture numbering 14, plan, clashes and estimate 11,
-whole pipeline 40, library commands and the offline models 14. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
+whole pipeline 42, library commands and the offline models 14. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
 real files; only the two models are scripted.
 
-Checked by hand, offline, on the 11 Entrepreneurship decks (356 slides): the estimate command
-runs in under two seconds and gives, on `gpt-6-luna`:
+## First real runs
 
-| Goal | Cards expected | Estimate | Cap |
-|---|---|---|---|
-| pass | 91 | 5 cents | 25 cents |
-| good grade | 356 | 11 cents | 32 cents |
-| top grade | 712 | 19 cents | 56 cents |
+All on `gpt-6-luna` for writing and for decisions, goal top grade, 2026-11-14.
 
-On `gpt-6.1-terra` a good-grade run is estimated at 83 cents. These figures come from constants
-I chose; the first real run will show how far off they are.
+| Run | Engine | Cards | Dropped | Flagged | Cost | Estimate | Time |
+|---|---|---|---|---|---|---|---|
+| One deck, 16 slides | before the cache fix | 47 | 0 | 6 | 1.8 cents | 0.7 cents | 71 s |
+| The same deck | with the cache fix | 40 | 0 | 7 | 0.7 cents | 1.3 cents | 49 s |
+| 11 decks, run by the app session | before the cache fix (`7332526`) | 658 | 7 | 38 | 48.4 cents | 18.6 cents | 19.4 min |
+| 11 decks, run by this session | with the cache fix (`a460b25`) | 596 | 5 | 31 | 16.7 cents | 33.6 cents | 16.6 min |
+
+The two full runs happened at once by a coordination miss between the two sessions: each had
+Steffen's yes, and the messages crossed. Total spent today on OpenAI: about 70 cents of the
+50 dollars. Both results are kept. The reference deck has 636 notes for the same decks.
+
+My full run in numbers (course folder under the shared notes folder, `courses/entrepreneurship`):
+
+- 356 slides, 268 concepts, 642 facts, 596 cards. 23 slides left out: 16 without a testable
+  fact, 5 title, 1 agenda, 1 recap.
+- Card types: definition 175, cloze-list 137, contrast 109, reverse 76, case 70, diagram 15,
+  chain 12, code 1, formula 1. 151 cards with a typed answer.
+- Hard limits, measured on the stored fields: 0 violations in 596 cards. Questions average
+  10.3 words. Answers average 10.5 words (the reference deck: 11.6).
+- Dropped, each listed with its reason: 3 asked a question the course already had, 1 had a slot
+  label over 4 words, 1 had a list item over 8 words.
+- Flags: 25 cards copy a long run of slide text, 5 may test the same thing as another card,
+  1 answer may not be on its slide, 35 concepts may not belong to their lecture.
+- 672 model calls, 1,327 decisions, 3.68 million input tokens of which 83 percent came from the
+  cache, 124,000 output tokens. Phases: read 9 s, map 541 s, write 397 s, check 51 s.
+
+Between the two full runs the map differs: 268 against 295 concepts, 596 against 658 cards,
+per lecture within about 20 percent. The same slides do not give the same deck twice.
+
+**What the real runs taught, and what I changed**
+
+- Both adapters worked against the API on the first call.
+- The prompt cache did not work at first, so every card call paid full price for the whole
+  lecture and the run cost 2.6 times its estimate. OpenAI reuses a prompt prefix only up to an
+  explicit breakpoint, and only between calls with the same reply form and reasoning effort
+  (measured with five small calls). Fixed: the adapters set the breakpoint, the first card of
+  each type in a lecture goes ahead to fill the cache, and the run file records cached input.
+  The same deck then cost 60 percent less.
+- The estimate was recalibrated on the first deck. It now errs high: 33.6 cents estimated,
+  16.7 real.
+- A build takes a spending limit (`capUsd`, `--cap`). My run used the 56 cents I had named.
+- The check phase could report more cards done than in total after a split. Fixed.
+
+**What the cards look like**
+
+Read as a student would, a sample of the output is mixed.
+
+- Good: the cards are short, one fact each, in the roles the plan chose. Contrasts have two
+  labelled sides, lists hide one item per card, typed answers appear only on short terms.
+- Course administration gets cards. "Course instructor", "Course opening" and "Course outline"
+  are concepts in several lectures, there is a card asking where the lecturer is professor, and
+  the seating instructions of a class exercise became a `code` card. Only 2 of 356 slides were
+  labelled agenda or recap, so the slide labels let these through; uncalibrated, a label would
+  not have removed them anyway.
+- Thin cards: "Last session: what aspect of entrepreneurial intentions was covered?", or a
+  contrast whose second side reads "No specific reasoning pattern is stated".
+- Some definitions are full sentences that restate the question, where the reference deck
+  leads with the term.
+- The flags look useful. All five "may test the same thing" pairs I read are real duplicates.
+  The 35 "may not belong" flags point mostly at exactly the administration concepts. That is
+  a first sign that these two checks are worth calibrating.
+- Diagram cards misuse the three types: a figure with three inputs and one result came back
+  as a "sequence", twice, differing only in the marked cell.
+- Recurring concepts work mechanically, and so the administration concepts recur too and get
+  one more card in each lecture.
 
 ## What was built
 
-`packages/engine`: 3,328 lines of source, 2,392 lines of tests, no interface code, no build step.
+`packages/engine`: 3,800 lines of source, 2,717 lines of tests, no interface code, no build step.
 
 **Milestone 1** (unchanged in substance): the package and its one boundary (commands in, events
 out, plain JSON), the course folder, validators for the hard limits, typed answers, stable ids,
@@ -69,7 +130,7 @@ the scripted model, incremental builds, the outline export.
 | 7 | `estimate` command, estimate before the first paid call, cap that stops | `cost.ts`, `ask.ts`, tested with a model that charges |
 | 8 | All twelve roles validate, `code` and `diagram` with their own checks | `cards/roles.ts`, `cards/validate.ts` |
 | 9 | Tests, typecheck, lint with one command each | see above |
-| 10 | First real run only after a yes | open |
+| 10 | First real run only after a yes | done after Steffen's yes, see "First real runs" |
 
 How the seven steps run:
 
@@ -125,7 +186,7 @@ Nothing is calibrated. Every check that goes through the decision model only fla
 | Decisions API: "up to 400 questions per request" | The installed SDK (7.38.0) documents 1 to 200, so the adapter sends chunks of 200 | Harmless either way |
 | Decision 10: readable YAML as in the study kits | The file holds the card fields as they go to Anki (HTML, all 16 fields, empty ones too), not the kits' Markdown | Is field HTML readable enough, or should the file hold the slots and the fields be built at delivery? |
 | Decision 9: drawings from a small set of types | Three types: matrix, sequence, cycle. Data shape and validator only; the card shows the slide | A canvas such as the BMC does not fit these three |
-| Decision 7: stop cleanly at the cap | The run fails with a message and saves nothing. Calls already under way (up to four) still finish | A stopped run loses its paid work |
+| Decision 7: stop cleanly at the cap | The run fails with a message and saves nothing. Calls already under way (up to four) still finish. A command can set its own limit | A stopped run loses its paid work |
 | Thinking off for recall tasks | Fill, repair and split run on effort `low` | Whether the model accepts less than `low` is unverified |
 | Milestone 1: Anthropic adapter | Removed, no backward compatibility | |
 | Milestone 1: a rejected card kept its role and went back twice | Still twice, now with the split step first for cards that are too long | |
@@ -135,27 +196,28 @@ diagram card. The interface session should know these exist.
 
 ## Unverified
 
-- **No live call.** Neither OpenAI adapter has talked to the API. Both pass the types of the
-  installed SDK, and the error path was run against an address that cannot be reached.
-- **Card quality, map quality, decision quality**: unknown until a real run.
-- **Prices**: constants from the v2 config and the decisions file, not checked against a bill.
-- **Slide pictures**: rendering works on generated PDFs and was looked at once. Not tried on
-  the real decks' fonts and figures. The Slide field still names a PNG that nothing saves.
-- **Prompt caching**: the lecture comes first in every request so OpenAI's cache can cover it.
-  Whether it does, and at what share, is unmeasured.
-- **Rate limits** with four calls in parallel.
-- **The two extra test courses** are readable from this session (21 and 17 PDFs). Nothing was
-  run on them. German yes/no openers and code cards have never met real slides.
+- **Quality against the reference deck.** Counts are comparable (596 and 658 against 636). No
+  blind comparison and no coverage check has been made. My reading of a sample is above.
+- **Prices.** The cost figures use constants from the v2 config and the decisions file. They
+  have not been checked against the OpenAI bill.
+- **Decision input.** Cached decision input is priced at the full rate here, as an upper
+  bound; the real discount is not published.
+- **Slide pictures.** Slides with little text went to the model as pictures in the real runs.
+  Whether the model used them well was not examined. The Slide field still names a PNG that
+  nothing saves; the `slide` command renders on request.
+- **Rate limits** held with four calls in parallel on this account; other accounts may differ.
+- **The two extra test courses** are readable (21 and 17 PDFs). Nothing was run on them.
+  German yes/no openers and real code cards have never met real slides.
 
 ## Proposed next steps
 
-1. One real run on the Entrepreneurship decks with `gpt-6-luna`, goal top grade: estimated
-   19 cents, capped at 56 cents. Then read the cards, the flags and the run file together.
-2. Compare with the reference deck: counts per lecture, share of cards dropped or split, and a
-   blind sample. That is the start of the eval.
-3. Calibration data from that run: the flagged cases are the first examples to label.
-4. The four real presets, starting with the concept course.
-5. A small Datenbanken and Operations Research run once code and formula cards have a preset.
+1. Decide how course administration is kept out: a calibrated slide label, a rule in the
+   preset, or both. It is the largest visible defect and it multiplies through recurrence.
+2. The concept-course preset, written against the reference deck, replacing the placeholder.
+3. Calibration data from these two runs: the flagged concepts and card pairs are ready-made
+   examples to label. Start with "same card" and "concept belongs", which already look precise.
+4. A first eval: coverage of the reference deck's notes by concept, and a blind sample.
+5. A small run on Datenbanken and Operations Research once code and formula cards have a preset.
 
 ## Follow-ups outside my paths
 
