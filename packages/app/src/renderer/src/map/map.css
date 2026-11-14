@@ -45,7 +45,9 @@
 
 /* Everything that follows the viewport slides with it, except while the hand is on it. */
 .map-move {
-  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-property: transform, d, r, cx, cy;
+  transition-duration: 260ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .map.is-moving .map-move {
   transition: none;
@@ -116,11 +118,14 @@ button.map-stop:hover .map-square {
   pointer-events: none;
 }
 .map-stop-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   line-height: 16px;
   letter-spacing: -0.1px;
-  text-wrap: balance;
 }
 .map-stop-caption {
   font-size: 11px;
@@ -197,26 +202,23 @@ button.map-stop:hover .map-square {
 .map-centre.is-selected {
   box-shadow: 0 0 0 1.5px var(--accent);
 }
-.map-centre .map-square {
-  left: calc(50% - 20px);
-  top: 16px;
-}
-.map-centre-title {
-  position: absolute;
-  left: 50%;
-  top: 62px;
-  transform: translateX(-50%);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 18px;
-  letter-spacing: -0.15px;
-  white-space: nowrap;
-}
-.map-centre-caption {
+.map-centre-text {
   position: absolute;
   left: 0;
   right: 0;
-  top: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+}
+.map-centre-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: -0.15px;
+}
+.map-centre-caption {
+  margin-top: 1px;
   font-size: 11px;
   line-height: 16px;
   color: var(--label-2);
@@ -237,6 +239,14 @@ button.map-stop:hover .map-square {
   font-weight: 600;
   letter-spacing: -0.1px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A shortened pill shows its whole name under the pointer or the keyboard, above the rest. */
+.map-pill:hover,
+.map-pill:focus-visible {
+  z-index: 4;
+  max-width: none !important;
 }
 .map-pill:hover:not(.is-selected) {
   background: color-mix(in srgb, var(--group) 92%, var(--label));
@@ -254,8 +264,18 @@ button.map-stop:hover .map-square {
   background: none;
   color: var(--label);
 }
-.map-concept:hover {
+.map-concept:hover,
+.map-concept:focus-visible {
+  z-index: 2;
+}
+.map-concept:hover:not(.is-peek) {
   background: var(--control);
+}
+/* A name shown only under the pointer floats on a solid plate, above its crowded neighbours. */
+.map-concept.is-peek:not(.is-selected) {
+  z-index: 3;
+  background: var(--group);
+  box-shadow: var(--shadow-control);
 }
 .map-concept.is-selected {
   background: var(--selection);
@@ -286,6 +306,8 @@ button.map-stop:hover .map-square {
   text-align: right;
 }
 .map-concept-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 13px;
   line-height: 15px;
 }

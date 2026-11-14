@@ -4,6 +4,10 @@
  *
  * The page's hash picks a scenario: #first-run, #courses, #empty, #setup, #run, #failed,
  * #result, #lecture, #topic, #concept, #large, #details, #stats, #settings.
+ *
+ * The real course of `dev/real.ts`, with its long titles and dense lectures: #real (the track),
+ * #real-details, #dense (lecture 02, 16 concepts, one selected) and #huge (lecture 01, 51
+ * concepts). Any scenario ending in -closed closes the side panel at the end, as #dense-closed.
  */
 
 import type {
@@ -18,6 +22,7 @@ import type {
   Settings,
 } from '../../../shared/contract.ts'
 import { useStore } from '../store.ts'
+import { REAL_CARDS, REAL_SLIDES, REAL_TITLES, REAL_TOPICS } from './real.ts'
 
 const TITLES = [
   'What and who',
@@ -351,6 +356,39 @@ function built(): CourseView {
   }
 }
 
+/** A lecture of the real course from its topics, concepts and card counts. */
+function realLecture(
+  number: number,
+  title: string,
+  topics: [string, [string, number][]][],
+): Lecture {
+  let slide = 2
+  const made = topics.map(([name, concepts]) => ({
+    name,
+    concepts: concepts.map(([c, n]) => ({ concept: concept(c, [slide++]), cards: n })),
+  }))
+  return {
+    number,
+    title,
+    file: `${two(number)}_${title.replace(/ /g, '_')}.pdf`,
+    slides: REAL_SLIDES[number - 1]!,
+    topics: made.map((t) => ({ name: t.name, concepts: t.concepts.map((c) => c.concept) })),
+    leftOut: [],
+    dropped: [],
+    cards: made.flatMap((t) => t.concepts.flatMap((c) => fill(number, c.concept, c.cards))),
+  }
+}
+
+/** The real course: its titles and card counts, and the real topics of lectures 01 and 02. */
+function real(): CourseView {
+  const lectures = REAL_TITLES.map((title, i) => {
+    const topics = REAL_TOPICS[i + 1]
+    if (topics) return counted(realLecture(i + 1, title, topics))
+    return counted({ ...sample(i + 1, REAL_CARDS[i]!, 4, 12), title, slides: REAL_SLIDES[i]! })
+  })
+  return { ...built(), lectures }
+}
+
 function waiting(): CourseView {
   return {
     id: 'entrepreneurship',
@@ -379,7 +417,8 @@ const empty = (): CourseView => ({
 })
 
 export function installFixture(): void {
-  const scenario = location.hash.replace('#', '') || 'result'
+  const hash = location.hash.replace('#', '') || 'result'
+  const scenario = hash.replace(/-closed$/, '')
   const settings: Settings = {
     provider: 'openai',
     hasKey: scenario !== 'first-run',
@@ -390,7 +429,9 @@ export function installFixture(): void {
       ? empty()
       : ['setup', 'run', 'failed'].includes(scenario)
         ? waiting()
-        : built()
+        : ['real', 'real-details', 'dense', 'huge'].includes(scenario)
+          ? real()
+          : built()
 
   const answer = (command: Command, emit: (event: Event) => void): Promise<void> => {
     switch (command.type) {
@@ -549,6 +590,13 @@ export function installFixture(): void {
       if (scenario === 'details') store.getState().openDetails('decisions')
       if (scenario === 'stats') store.getState().openDetails('statistics')
       if (scenario === 'settings') store.getState().openSettings()
+      if (scenario === 'real-details') store.getState().openDetails('decisions')
+      if (scenario === 'dense') {
+        store.getState().openLecture(2)
+        store.getState().selectConcept('alex-krapp-case')
+      }
+      if (scenario === 'huge') store.getState().openLecture(1)
+      if (hash.endsWith('-closed')) store.getState().closePanel()
     })()
   })
 }

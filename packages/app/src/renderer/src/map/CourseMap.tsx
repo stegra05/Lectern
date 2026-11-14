@@ -13,10 +13,10 @@ import { lectureColour, plural, two } from '../lecture.ts'
 import { useStore } from '../store.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { MapTools } from './MapTools.tsx'
-import type { Measure, Rings } from './rings.ts'
-import { DISC, INNER, OUTER, fitRings, layoutRings, placeLabels } from './rings.ts'
+import type { Box, Frame, Measure, Rings } from './rings.ts'
+import { LABEL_MAX, baseline, fitRings, layoutRings, placeRings, plateBox } from './rings.ts'
 import type { Area, Fit, Point, Track } from './track.ts'
-import { fan, fitTrack, layoutTrack } from './track.ts'
+import { bandPath, fan, fitTrack, labelWidth, layoutTrack } from './track.ts'
 import './map.css'
 
 /** The frame of KIT.md: what the title bar, the bottom bar and the side panel cover. */
@@ -24,8 +24,8 @@ const TITLEBAR = 38
 const BAR = 56 + 12
 const PANEL = 344 + 12
 const REFERENCE = { w: 1100, h: 720 }
-/** Room kept at the left and right edge of a lecture for the faded neighbours. */
-const EDGE = 60
+/** Below the map tools and the copy button: where the rings' labels may start. */
+const TOOLS_BOTTOM = TITLEBAR + 12 + 30 + 6
 const ZOOM_STEP = 1.25
 
 type Stop = { kind: 'lecture'; lecture: Lecture } | { kind: 'pending'; pending: Pending }
@@ -86,17 +86,15 @@ export function CourseMap() {
   }
   const maxK = Math.max(1, Math.min(size.w / REFERENCE.w, size.h / REFERENCE.h))
   const centre = { x: (area.left + area.right) / 2, y: (area.top + area.bottom) / 2 }
+  // The rings keep clear of the window edge, the panel, the tools and the bottom bar.
+  const bounds: Box = {
+    left: area.left + 8,
+    right: area.right - 8,
+    top: TOOLS_BOTTOM,
+    bottom: area.bottom - 6,
+  }
   const fit: Fit = rings
-    ? {
-        k: fitRings(
-          rings,
-          (area.right - area.left) / 2 - EDGE,
-          (area.bottom - area.top) / 2 - 8,
-          maxK,
-        ),
-        centre,
-        origin: { x: 0, y: 0 },
-      }
+    ? { k: fitRings(rings, centre, bounds, maxK), centre, origin: { x: 0, y: 0 } }
     : fitTrack(track, area, maxK)
 
   const key = `${lecture ? lecture.number : 'course'}:${panelOpen}`
@@ -110,7 +108,6 @@ export function CourseMap() {
     y: fit.centre.y + k * (p.y - fit.origin.y) + adjust.dy,
   })
   const shift = toScreen({ x: 0, y: 0 })
-  const layerTransform = `translate(${shift.x}px, ${shift.y}px) scale(${k})`
 
   const minZoom = lecture ? 0.85 : 0.5
   const zoomTo = (z: number, at: Point = centre) => {
@@ -215,7 +212,7 @@ export function CourseMap() {
     const edges = [
       { stop: dir === 1 ? before : after, side: -1 as const, x: area.left + 36 },
       { stop: dir === 1 ? after : before, side: 1 as const, x: area.right - 36 },
-    ]
+    ].flatMap(({ stop, side, x }) => (stop ? [{ stop, side, at: { x, y: centre.y } }] : []))
     layer = (
       <div
         key={`lecture-${lecture.number}`}
@@ -225,26 +222,20 @@ export function CourseMap() {
         <RingsView
           lecture={lecture}
           rings={rings}
-          k={k}
-          toScreen={toScreen}
-          layerTransform={layerTransform}
+          frame={{
+            centre: shift,
+            k,
+            bounds,
+            neighbours: edges.map((e) => neighbourBox(e.at, e.side)),
+          }}
+          edges={edges}
           topic={view.level === 'lecture' ? view.topic : undefined}
           concept={view.level === 'lecture' ? view.concept : undefined}
           onCentre={() => openLecture(lecture.number)}
           onTopic={selectTopic}
           onConcept={selectConcept}
+          onOpen={openLecture}
         />
-        {edges.map(({ stop, side, x }) =>
-          stop ? (
-            <Neighbour
-              key={side}
-              stop={stop}
-              side={side}
-              at={{ x, y: centre.y }}
-              onOpen={openLecture}
-            />
-          ) : null,
-        )}
       </div>
     )
   } else if (!empty) {
@@ -256,14 +247,7 @@ export function CourseMap() {
         className="map-layer map-enter-out"
         style={{ transformOrigin: `${origin.x}px ${origin.y}px` }}
       >
-        <TrackView
-          stops={stops}
-          track={track}
-          k={k}
-          toScreen={toScreen}
-          layerTransform={layerTransform}
-          onOpen={openLecture}
-        />
+        <TrackView stops={stops} track={track} k={k} toScreen={toScreen} onOpen={openLecture} />
       </div>
     )
   }
@@ -336,24 +320,19 @@ function TrackView({
   track,
   k,
   toScreen,
-  layerTransform,
   onOpen,
 }: {
   stops: Stop[]
   track: Track
   k: number
   toScreen: (p: Point) => Point
-  layerTransform: string
   onOpen: (lecture: number) => void
 }) {
-  // Titles wrap rather than run into the next stop when the track is zoomed out.
-  const labelWidth = Math.round(Math.min(200, Math.max(110, k * track.step - 8)))
+  const width = labelWidth(k, track.step)
   return (
     <>
       <svg className="map-svg" aria-hidden="true">
-        <g className="map-move" style={{ transform: layerTransform }}>
-          <path className="map-band" d={track.band} />
-        </g>
+        <path className="map-band map-move" style={pathStyle(bandPath(track, toScreen, k))} />
       </svg>
       {stops.map((stop, i) => {
         const p = toScreen(track.stops[i]!)
@@ -366,9 +345,10 @@ function TrackView({
               style={{ ...at(p), ...colourOf(number) }}
               role="img"
               aria-label={`Lecture ${two(number)} ${title}, ${plural(slides, 'slide')}, no cards yet`}
+              title={measure(title, 600) > width ? title : undefined}
             >
               <span className="map-square">{two(number)}</span>
-              <StopLabel title={title} caption={plural(slides, 'slide')} width={labelWidth} />
+              <StopLabel title={title} caption={plural(slides, 'slide')} width={width} />
             </div>
           )
         }
@@ -380,11 +360,12 @@ function TrackView({
             className="map-stop map-move"
             style={{ ...at(p), ...colourOf(number) }}
             aria-label={`Open lecture ${two(number)} ${title}, ${plural(cards.length, 'card')}, ${plural(topics.length, 'topic')}`}
+            title={measure(title, 600) > width ? title : undefined}
             onClick={() => onOpen(number)}
           >
             <Fan cards={topicCards(stop.lecture)} />
             <span className="map-square">{two(number)}</span>
-            <StopLabel title={title} caption={plural(cards.length, 'card')} width={labelWidth} />
+            <StopLabel title={title} caption={plural(cards.length, 'card')} width={width} />
           </button>
         )
       })}
@@ -401,7 +382,7 @@ function TrackView({
             <path d="M2 2h11l-2.6 3.6L13 9.2H2" />
           </g>
         </svg>
-        <StopLabel title="In Anki" caption="Not sent yet" width={labelWidth} />
+        <StopLabel title="In Anki" caption="Not sent yet" width={width} />
       </div>
     </>
   )
@@ -432,134 +413,188 @@ function Fan({ cards }: { cards: number[] }) {
   )
 }
 
+type Edge = { stop: Stop; side: -1 | 1; at: Point }
+
+/** The box a faded neighbour takes, its stub towards the centre included. */
+function neighbourBox(at: Point, side: -1 | 1): Box {
+  const stub = 26
+  return {
+    left: at.x - 22 - (side === 1 ? stub : 0),
+    right: at.x + 22 + (side === -1 ? stub : 0),
+    top: at.y - 22,
+    bottom: at.y + 22,
+  }
+}
+
+/** An SVG path as a style, so that a change of shape glides like everything else. */
+const pathStyle = (d: string) => ({ d: `path("${d}")` }) as CSSProperties
+
 function RingsView({
   lecture,
   rings,
-  k,
-  toScreen,
-  layerTransform,
+  frame,
+  edges,
   topic,
   concept,
   onCentre,
   onTopic,
   onConcept,
+  onOpen,
 }: {
   lecture: Lecture
   rings: Rings
-  k: number
-  toScreen: (p: Point) => Point
-  layerTransform: string
+  frame: Frame
+  edges: Edge[]
   topic?: string
   concept?: string
   onCentre: () => void
   onTopic: (topic: string) => void
   onConcept: (concept: string) => void
+  onOpen: (lecture: number) => void
 }) {
-  const bases = placeLabels(rings, k, concept)
+  // A concept under the pointer or the keyboard shows its name even where it has no room.
+  const [peek, setPeek] = useState<string | null>(null)
+  const placed = placeRings(rings, frame, { concept, topic })
   const selectedTopic = topic ?? rings.concepts.find((c) => c.id === concept)?.topic
   const whole = !topic && !concept
+  const { centre } = frame
+  const node = new Map(placed.topics.map((t) => [t.name, t]))
+  const twoLines = rings.title.length > 1
+  const disc = rings.disc
 
   return (
     <div className="map-rings" style={colourOf(lecture.number)}>
       <svg className="map-svg" aria-hidden="true">
-        <g className="map-move" style={{ transform: layerTransform }}>
-          <circle className="map-guide" r={INNER} />
-          <circle className="map-guide" r={OUTER} />
-          {rings.topics.map((t) => (
-            <line
-              key={t.name}
-              className={`map-spoke${t.name === selectedTopic ? ' is-on' : ''}`}
-              x1={0}
-              y1={0}
-              x2={t.x}
-              y2={t.y}
+        <circle
+          className="map-guide map-move"
+          style={{ cx: centre.x, cy: centre.y, r: placed.inner }}
+        />
+        <circle
+          className="map-guide map-move"
+          style={{ cx: centre.x, cy: centre.y, r: placed.outer }}
+        />
+        {placed.topics.map((t) => (
+          <path
+            key={t.name}
+            className={`map-spoke map-move${t.name === selectedTopic ? ' is-on' : ''}`}
+            style={pathStyle(`M${centre.x},${centre.y} L${t.x},${t.y}`)}
+          />
+        ))}
+        {placed.concepts.map((p, i) => {
+          const c = rings.concepts[i]!
+          const t = node.get(c.topic)!
+          const on = c.id === concept || (!concept && c.topic === topic)
+          return (
+            <path
+              key={c.id}
+              className={`map-spoke map-move${on ? ' is-on' : ''}`}
+              style={pathStyle(`M${t.x},${t.y} L${p.x},${p.y}`)}
             />
-          ))}
-          {rings.concepts.map((c) => {
-            const t = rings.topics.find((t) => t.name === c.topic)!
-            const on = c.id === concept || (!concept && c.topic === topic)
-            return (
-              <line
-                key={c.id}
-                className={`map-spoke${on ? ' is-on' : ''}`}
-                x1={t.x}
-                y1={t.y}
-                x2={c.x}
-                y2={c.y}
-              />
-            )
-          })}
-        </g>
+          )
+        })}
       </svg>
 
       <button
         type="button"
         className={`map-centre map-move${whole ? ' is-selected' : ''}`}
-        style={{
-          ...at(toScreen({ x: 0, y: 0 })),
-          left: -DISC,
-          top: -DISC,
-          width: DISC * 2,
-          height: DISC * 2,
-        }}
+        style={{ ...at(centre), left: -disc, top: -disc, width: disc * 2, height: disc * 2 }}
         aria-label={`All cards of lecture ${two(lecture.number)} ${lecture.title}, ${plural(lecture.cards.length, 'card')}`}
+        title={rings.title.join(' ') !== lecture.title ? lecture.title : undefined}
         aria-pressed={whole}
         onClick={onCentre}
       >
-        <span className="map-square">{two(lecture.number)}</span>
-        <span className="map-centre-title">{lecture.title}</span>
-        <span className="map-centre-caption">{plural(lecture.cards.length, 'card')}</span>
+        <span className="map-square" style={{ left: disc - 20, top: disc - (twoLines ? 56 : 42) }}>
+          {two(lecture.number)}
+        </span>
+        <span className="map-centre-text" style={{ top: disc + (twoLines ? -7 : 5) }}>
+          {rings.title.map((line) => (
+            <span key={line} className="map-centre-title">
+              {line}
+            </span>
+          ))}
+          <span className="map-centre-caption">{plural(lecture.cards.length, 'card')}</span>
+        </span>
       </button>
 
-      {rings.concepts.map((c) => {
+      {placed.concepts.map((p, i) => {
+        const c = rings.concepts[i]!
         const selected = c.id === concept
-        const base = bases.get(c.id) ?? 0
-        const width = selected ? c.widthSelected : c.width
-        // The button is the label's box and holds the dot too; the selection fills it.
-        const top = Math.min(base - 17, -c.r - 6)
-        const bottom = Math.max(base + 27.3, c.r + 6)
-        const boxWidth = 2 * c.r + 13 + width + 12
-        const left = c.side === 1 ? -(c.r + 6) : c.r + 6 - boxWidth
+        const shown =
+          p.label ??
+          (peek === c.id ? { base: baseline(c.angle), width: Math.min(c.width, LABEL_MAX) } : null)
+        // The button is the label's box and holds the dot too; the selection fills it. A concept
+        // without a label is just its dot, with a little room around it for the pointer.
+        const box = shown
+          ? plateBox(c, shown.base, shown.width, true)
+          : { left: -c.r - 5, right: c.r + 5, top: -c.r - 5, bottom: c.r + 5 }
+        const cut = shown !== null && shown.width < c.width - 0.5
         return (
           <button
             key={c.id}
             type="button"
-            className={`map-concept map-move${selected ? ' is-selected' : ''}${c.side === -1 ? ' is-left' : ''}`}
-            style={{ ...at(toScreen(c)), left, top, width: boxWidth, height: bottom - top }}
+            className={`map-concept map-move${selected ? ' is-selected' : ''}${c.side === -1 ? ' is-left' : ''}${shown && !p.label ? ' is-peek' : ''}`}
+            style={{
+              ...at(p),
+              left: box.left,
+              top: box.top,
+              width: box.right - box.left,
+              height: box.bottom - box.top,
+            }}
             aria-label={`${c.name}, ${plural(c.cards, 'card')}`}
+            title={cut ? c.name : undefined}
             aria-pressed={selected}
             onClick={() => onConcept(c.id)}
+            onPointerEnter={() => setPeek(c.id)}
+            onPointerLeave={() => setPeek((id) => (id === c.id ? null : id))}
+            onFocus={() => setPeek(c.id)}
+            onBlur={() => setPeek((id) => (id === c.id ? null : id))}
           >
             <span
               className="map-dot"
-              style={{ width: 2 * c.r, height: 2 * c.r, left: -left - c.r, top: -top - c.r }}
+              style={{
+                width: 2 * c.r,
+                height: 2 * c.r,
+                left: -box.left - c.r,
+                top: -box.top - c.r,
+              }}
             />
-            <span
-              className="map-concept-label"
-              style={{ top: base - 12 - top, [c.side === 1 ? 'left' : 'right']: 2 * c.r + 13 }}
-            >
-              <span className="map-concept-name">{c.name}</span>
-              <span className="map-concept-caption">{plural(c.cards, 'card')}</span>
-            </span>
+            {shown && (
+              <span
+                className="map-concept-label"
+                style={{
+                  top: shown.base - 12 - box.top,
+                  width: shown.width,
+                  [c.side === 1 ? 'left' : 'right']: 2 * c.r + 13,
+                }}
+              >
+                <span className="map-concept-name">{c.name}</span>
+                <span className="map-concept-caption">{plural(c.cards, 'card')}</span>
+              </span>
+            )}
           </button>
         )
       })}
 
-      {rings.topics.map((t) => {
-        const p = toScreen(t)
-        return (
-          <button
-            key={t.name}
-            type="button"
-            className={`map-pill map-move${t.name === topic ? ' is-selected' : ''}`}
-            style={{ transform: `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)` }}
-            aria-pressed={t.name === topic}
-            onClick={() => onTopic(t.name)}
-          >
-            {t.name}
-          </button>
-        )
-      })}
+      {placed.topics.map((t) => (
+        <button
+          key={t.name}
+          type="button"
+          className={`map-pill map-move${t.name === topic ? ' is-selected' : ''}`}
+          style={{
+            transform: `translate(${t.x}px, ${t.y}px) translate(-50%, -50%)`,
+            maxWidth: t.width,
+          }}
+          title={measure(t.name, 600) + 26 > t.width + 0.5 ? t.name : undefined}
+          aria-pressed={t.name === topic}
+          onClick={() => onTopic(t.name)}
+        >
+          {t.name}
+        </button>
+      ))}
+
+      {edges.map((e, i) =>
+        placed.neighbours[i] ? <Neighbour key={e.side} {...e} onOpen={onOpen} /> : null,
+      )}
     </div>
   )
 }

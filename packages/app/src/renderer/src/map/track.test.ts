@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fan, fitTrack, layoutTrack } from './track.ts'
+import { bandPath, fan, fitTrack, labelWidth, layoutTrack } from './track.ts'
 
 describe('layoutTrack', () => {
   it('draws 11 lectures exactly as the canvas', () => {
@@ -64,9 +64,9 @@ describe('fitTrack', () => {
 
   it('zooms out and slides left of an open side panel', () => {
     const fit = fitTrack(layoutTrack(11), { ...window, right: 1100 - 356 }, 1)
-    expect(fit.k).toBeCloseTo(0.72, 2)
+    expect(fit.k).toBeCloseTo(0.7, 2)
     expect(fit.centre.x).toBe(372)
-    expect(fit.centre.x + fit.k * (160 - fit.origin.x)).toBeCloseTo(92, 0)
+    expect(fit.centre.x + fit.k * (160 - fit.origin.x)).toBeCloseTo(100, 0)
   })
 
   it('never grows the track past the given cap', () => {
@@ -88,5 +88,44 @@ describe('fan', () => {
     const angle = (Math.atan2(dots[3]!.dot.x, -dots[3]!.dot.y) * 180) / Math.PI
     expect(angle).toBeCloseTo(39, 0)
     expect(fan([])).toEqual([])
+  })
+})
+
+describe('labels on the track', () => {
+  const panel = { left: 0, top: 38, right: 1100 - 356, bottom: 652 }
+
+  it('keep every title inside the window and clear of the panel in the fitted view', () => {
+    for (const lectures of [3, 11, 16, 17, 24]) {
+      const track = layoutTrack(lectures)
+      const fit = fitTrack(track, panel, 1)
+      const width = labelWidth(fit.k, track.step)
+      for (const p of [...track.stops, track.flag]) {
+        const x = fit.centre.x + fit.k * (p.x - fit.origin.x)
+        expect(x - width / 2).toBeGreaterThanOrEqual(0)
+        expect(x + width / 2).toBeLessThanOrEqual(panel.right)
+      }
+    }
+  })
+
+  it('never let two titles of a row touch', () => {
+    for (const k of [0.5, 0.7, 1, 1.3]) {
+      expect(labelWidth(k, 260)).toBeLessThan(k * 260)
+      expect(labelWidth(k, 195)).toBeLessThan(k * 195)
+    }
+  })
+
+  it('keep a one-line caption above the fan of the row below', () => {
+    const track = layoutTrack(11)
+    const fit = fitTrack(track, panel, 1)
+    // Caption ends 59px under a stop's centre, the fan reaches 46px above the next one.
+    expect(fit.k * 160).toBeGreaterThanOrEqual(59 + 46)
+  })
+})
+
+describe('bandPath', () => {
+  it('draws the same band through the zoom, with turns that shrink along', () => {
+    const track = layoutTrack(11)
+    const half = bandPath(track, (p) => ({ x: p.x / 2, y: p.y / 2 }), 0.5)
+    expect(half).toBe('M80,95 H470 A40 40 0 0 1 470,175 H80 A40 40 0 0 0 80,255 H470')
   })
 })

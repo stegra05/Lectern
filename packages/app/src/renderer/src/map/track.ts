@@ -50,22 +50,43 @@ export function layoutTrack(lectures: number): Track {
   })
   const flag = all[all.length - 1]!
 
-  const first = all[0]!
+  const stops = all.slice(0, -1)
+  return { stops, flag, perRow, step, band: bandPath({ stops, flag }, (p) => p, 1) }
+}
+
+/**
+ * The band through the stops as an SVG path, drawn through `map` at zoom `k`: straight along
+ * each row, a half circle between rows, ending at the flag. The same commands at every zoom, so
+ * the path can glide from one zoom to the next.
+ */
+export function bandPath(
+  track: Pick<Track, 'stops' | 'flag'>,
+  map: (p: Point) => Point,
+  k: number,
+): string {
+  const first = map(track.stops[0] ?? track.flag)
   const parts = [`M${n(first.x)},${n(first.y)}`]
-  const rows = flag.row + 1
-  for (let row = 0; row < rows; row++) {
+  const { flag } = track
+  for (let row = 0; row <= flag.row; row++) {
     const dir = row % 2 === 0 ? 1 : -1
-    const end = row === flag.row ? flag.x : dir === 1 ? LEFT + WIDTH : LEFT
-    parts.push(`H${n(end)}`)
+    const y = TOP + row * ROW_GAP
+    const end = map({ x: row === flag.row ? flag.x : dir === 1 ? LEFT + WIDTH : LEFT, y })
+    parts.push(`H${n(end.x)}`)
     if (row < flag.row) {
-      const r = ROW_GAP / 2
-      parts.push(
-        `A${n(r)} ${n(r)} 0 0 ${dir === 1 ? 1 : 0} ${n(end)},${n(TOP + (row + 1) * ROW_GAP)}`,
-      )
+      const r = (ROW_GAP / 2) * k
+      const next = map({ x: dir === 1 ? LEFT + WIDTH : LEFT, y: y + ROW_GAP })
+      parts.push(`A${n(r)} ${n(r)} 0 0 ${dir === 1 ? 1 : 0} ${n(next.x)},${n(next.y)}`)
     }
   }
+  return parts.join(' ')
+}
 
-  return { stops: all.slice(0, -1), flag, perRow, step, band: parts.join(' ') }
+/**
+ * How wide a stop's title may be at zoom `k`: one line, ending in an ellipsis, so it never runs
+ * into the next stop of its row.
+ */
+export function labelWidth(k: number, step: number): number {
+  return Math.floor(Math.min(200, k * step - 12))
 }
 
 /** Where the map sits on screen: a map point p is drawn at `centre + k * (p - origin)`. */
@@ -84,7 +105,7 @@ export interface Area {
 }
 
 /** Room a stop needs around its centre that does not scale: fan above, two lines below. */
-const ROOM = { side: 92, above: 50, below: 60 }
+const ROOM = { side: 100, above: 50, below: 60 }
 
 /** Fits the track's stops into the area. `maxK` caps the spread: 1 at the reference window. */
 export function fitTrack(track: Track, area: Area, maxK: number): Fit {
