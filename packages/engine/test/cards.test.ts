@@ -184,6 +184,19 @@ describe('assemble', () => {
     expect(fields({}).Diagram).toBe('')
   })
 
+  it('writes a "why" answer as one sentence, and as two bullets when it has two steps', () => {
+    const why = { role: 'why', front: 'Software: why does copyright protect it only weakly?' }
+    expect(fields({ ...why, answers: ['It protects ==the code, not the idea==.'] }).Back).toBe(
+      'It protects <mark>the code, not the idea</mark>.',
+    )
+    expect(
+      fields({ ...why, answers: ['It protects ==the code==.', 'So the idea can be rebuilt.'] })
+        .Back,
+    ).toBe(
+      '<ul><li>It protects <mark>the code</mark>.</li><li>So the idea can be rebuilt.</li></ul>',
+    )
+  })
+
   it('quotes the slide line that matches the answer, at most 30 words', () => {
     expect(fields({}).Excerpt).toBe(
       'Bird in hand Start from who you are, what you know and whom you know',

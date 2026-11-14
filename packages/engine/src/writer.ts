@@ -138,7 +138,30 @@ const FORMS: Record<Role, Form> = {
     (s) => ({ question: s.front, givenSteps: s.labels, nextSteps: s.answers, extra: s.extra }),
   ),
   'name-two': pairForm('The first item.', 'The second item.'),
-  why: pairForm('The first reasoning step.', 'The step that follows from it.'),
+  why: form(
+    z.object({
+      question,
+      answer: sentence('The reason, the condition or the consequence, in one sentence.'),
+      then: z
+        .string()
+        .describe(
+          `A second step that follows from the first, only when the reasoning needs it; otherwise empty. Both together at most ${LIMITS.answerWords} words.`,
+        ),
+      extra,
+    }),
+    (v) => ({
+      ...none,
+      front: v.question,
+      answers: v.then.trim() ? [v.answer, v.then] : [v.answer],
+      extra: v.extra,
+    }),
+    (s) => ({
+      question: s.front,
+      answer: s.answers[0] ?? '',
+      then: s.answers[1] ?? '',
+      extra: s.extra,
+    }),
+  ),
   formula: form(
     z.object({
       question,

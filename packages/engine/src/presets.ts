@@ -35,6 +35,7 @@ const PLACEHOLDER: Preset = {
     code: ['code'],
     case: ['case'],
     diagram: ['diagram'],
+    cause: ['why'],
   },
   examples: {
     definition: {
@@ -131,8 +132,8 @@ const CONCEPT_DRAFT: Preset = {
     },
     why: {
       question: 'Software: why does copyright give it only weak protection?',
-      first: 'Copyright protects ==the code, not the idea==.',
-      second: 'So a rival may build the same idea in new code.',
+      answer: 'It protects ==the code, not the idea==.',
+      then: '',
       extra: '',
     },
     'cloze-list': {

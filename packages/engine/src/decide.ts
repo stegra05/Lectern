@@ -21,6 +21,8 @@ export const FACT_KINDS = [
   'code',
   'case',
   'diagram',
+  // Added by Steffen on 2026-11-14: a reason, a condition or a consequence. It becomes a "why" card.
+  'cause',
 ] as const
 export type FactKind = (typeof FACT_KINDS)[number]
 
@@ -57,7 +59,11 @@ export const ask = {
   }),
   slideKind: (slide: number): Question => ({
     type: 'choice',
-    ask: `What kind of slide is slide ${slide}? content: it teaches something that can be examined.`,
+    ask:
+      `What kind of slide is slide ${slide}? title: it only names the lecture or a section. ` +
+      'agenda: it lists what the session will cover, or organisation such as dates, grading, ' +
+      'assignments and instructions for an exercise. recap: it repeats what an earlier session ' +
+      'covered. reading list: literature. content: it teaches something that can be examined.',
     choices: SLIDE_KINDS,
   }),
   conceptBelongs: (concept: string): Question => ({

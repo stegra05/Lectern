@@ -40,7 +40,10 @@ export function plan(topics: Topic[], goal: Goal, preset: Preset): Plan {
       const roles = preset.plan[fact.kind]
       const turn = seen.get(fact.kind) ?? 0
       seen.set(fact.kind, turn + 1)
-      slots.push({ concept, fact, role: roles[turn % roles.length]! })
+      // A list of exactly two is asked as "name two", not recited item by item.
+      const role =
+        fact.kind === 'list' && fact.items === 2 ? 'name-two' : roles[turn % roles.length]!
+      slots.push({ concept, fact, role })
     }
   }
   return { slots, outsideCore }

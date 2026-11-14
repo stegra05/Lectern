@@ -81,6 +81,14 @@ describe('a draft that follows the rules', () => {
       },
     ],
     [
+      'why in one sentence',
+      {
+        role: 'why',
+        front: 'Why can risk be insured?',
+        answers: ['Its ==probability== can be calculated.'],
+      },
+    ],
+    [
       'case',
       {
         role: 'case',

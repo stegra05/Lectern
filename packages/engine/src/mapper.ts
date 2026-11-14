@@ -25,7 +25,7 @@ const MapSchema = z.object({
         z.object({
           name: z.string(),
           core: z.boolean(),
-          facts: z.array(z.object({ text: z.string(), slide: z.number() })),
+          facts: z.array(z.object({ text: z.string(), slide: z.number(), items: z.number() })),
         }),
       ),
     }),
@@ -56,7 +56,8 @@ export function mapPrompt(
     '- core: true for the concepts a student needs to pass the exam, false for the rest.',
     `- facts: what can be asked about the concept, most important first, at most ${FACTS_PER_CONCEPT}.`,
     '  One fact is one sentence: a definition, a contrast, a list, a sequence, a formula, a listing,',
-    '  a case, a drawing. slide: the one slide that states it.',
+    '  a case, a drawing, a reason. slide: the one slide that states it.',
+    '  items: how many items the fact lists when it is a list to recite, otherwise 0.',
     'Every slide that teaches something carries at least one fact.',
     ...rules.map((rule) => `- ${rule}`),
     vocabulary.length > 0

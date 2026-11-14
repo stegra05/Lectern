@@ -41,11 +41,14 @@ function toHtml(text: string): string {
 
 function back(role: Role, answers: string[]): string {
   const spec = ROLE_SPECS[role]
+  // One reasoning step reads as a sentence; two are a list like any other.
+  if (spec.back === 'steps' && answers.length === 1) return toHtml(answers[0]!)
   switch (spec.back) {
     case 'sentence':
       return toHtml(answers[0]!)
     case 'term':
       return `<mark>${toHtml(term(answers[0]!))}</mark>`
+    case 'steps':
     case 'list':
       return `<ul>${answers.map((a) => `<li>${item(a, spec.markWhole)}</li>`).join('')}</ul>`
     case 'formula':

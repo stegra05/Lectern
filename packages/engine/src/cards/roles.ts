@@ -69,7 +69,8 @@ export interface RoleSpec {
   /** Allowed number of labels, lowest and highest. */
   labels: readonly [number, number]
   /** How Back is built from the answers. */
-  back: 'sentence' | 'term' | 'list' | 'formula' | 'none'
+  /** `steps` is one sentence, or two bullets when the reasoning has two steps. */
+  back: 'sentence' | 'term' | 'list' | 'steps' | 'formula' | 'none'
   /** A key term mark (`==term==`) is required in the answer. */
   markRequired: boolean
   /** An answer without a mark is the key term as a whole. */
@@ -126,12 +127,12 @@ export const ROLE_SPECS: Record<Role, RoleSpec> = {
   },
   why: {
     note: 'qa',
-    answers: [2, 2],
+    answers: [1, 2],
     labels: [0, 0],
-    back: 'list',
+    back: 'steps',
     markRequired: false,
     markWhole: false,
-    use: 'A cause or justification. answers: two reasoning steps, the second following from the first.',
+    use: 'A reason, a condition or a consequence. answers: one sentence; a second step only when the reasoning needs it.',
   },
   case: {
     note: 'qa',

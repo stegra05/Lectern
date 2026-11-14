@@ -110,6 +110,20 @@ Besides Entrepreneurship (the business course with the reference deck), Steffen 
 
 Read these folders, never write to them. Work on copies in a course folder of your own.
 
+## Decided on the concept profile draft
+
+Steffen's answers on 2026-11-14 to the open points of `engine-profile-concept.md`, given
+through the question tool in the engine session:
+
+- **A ninth kind of fact, `cause`**: a reason, a condition or a consequence. It becomes a "why"
+  card. His reference deck has about 13% of those and the eight kinds could not plan one.
+- **A "why" answer is one sentence, a second step is allowed.** This departs from the field
+  contract, which gives a "why" card two bullets; `design/v3/cards/FIELDS.md` still says so.
+- **The map counts the items of a list fact.** A list of exactly two becomes a "name two"
+  card, a longer one a list to recite.
+- **Paid runs.** Only the engine session starts them. He approved one run of all eleven
+  Entrepreneurship decks with the draft profile, about 17 cents.
+
 ## Pending
 
 - Themes across lectures stay out of the base.

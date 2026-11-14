@@ -83,6 +83,23 @@ describe('the plan: code decides how many cards exist and what shape they take',
     ])
   })
 
+  it('asks a list of exactly two as "name two", and recites longer lists', () => {
+    const lists = concept('exit', ['list', 'list', 'list'])
+    lists.facts[0]!.items = 2
+    lists.facts[1]!.items = 5
+    expect(plan(topics(lists), 'top', preset).slots.map((s) => s.role)).toEqual([
+      'name-two',
+      'cloze-list',
+      'cloze-list',
+    ])
+  })
+
+  it('turns a cause into a "why" card', () => {
+    expect(shape(plan(topics(concept('copyright', ['cause'])), 'good', preset))).toEqual([
+      'copyright fact 1: why',
+    ])
+  })
+
   it('gives a concept that comes up again one more card, whatever the goal', () => {
     const again = topics(concept('risk', ['definition', 'definition', 'case'], { since: 1 }))
     expect(shape(plan(again, 'top', preset))).toEqual(['risk fact 1: definition'])

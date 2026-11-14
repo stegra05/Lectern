@@ -67,40 +67,34 @@ cards at all, and many definitions that restate the question.
 | contrast | Causation versus effectuation: how does each handle risk? | Causation: ==expected return==, the best risk-adjusted opportunity. Effectuation: ==affordable loss==, never more than you can afford to lose |
 | chain | Lean iteration: which step follows the theory? | Hypothesis |
 | name two | Which two exit routes are the most common? | trade sales; buyouts |
-| why | Software: why does copyright give it only weak protection? | Copyright protects ==the code, not the idea==. So a rival may build the same idea in new code. |
+| why | Software: why does copyright give it only weak protection? | It protects ==the code, not the idea==. |
 | list | Five Cs of lending: | character, capacity, capital, collateral, conditions |
 | cloze sentence | Market development can target a new ... market, a new ... market, or a new ... | geographical; demographic; product use |
 
-Two of these are adapted to fit the forms: the "name two" answer was one phrase in the deck
-("Trade sales and buyouts, both changing ownership"), and the "why" answer was one sentence
-("It protects the code, not the idea") where the form asks for two steps.
+One of these is adapted to fit its form: the "name two" answer was one phrase in the deck
+("Trade sales and buyouts, both changing ownership").
 
-**Mix of card types.** Unchanged from the placeholder for now: a definition fact becomes a
-definition card, the next one of the same concept a reverse card; contrast, list, sequence,
-case and diagram facts become their own card type. The draft changes the mix through the map
-rules instead (fewer lists, more angles), because the plan can only choose among the kinds of
-fact that exist.
+**Mix of card types.** A definition fact becomes a definition card, the next one of the same
+concept a reverse card. A cause becomes a "why" card, a list of exactly two a "name two" card,
+a longer list a list to recite. Contrast, sequence, case and diagram facts become their own
+card type. Beyond that the draft changes the mix through the map rules (fewer lists, more
+angles).
 
-## What the draft cannot do, and what I need from you
+## Decided by Steffen on 2026-11-14
 
-1. **"Why" cards.** 13% of your deck asks why, when or what follows. The closed list of fact
-   kinds you decided (definition, contrast, list, sequence, formula, code, case, diagram) has
-   no kind for a cause or a consequence, so the plan can never choose a "why" card.
-   - Option A, my lean: add a ninth kind, `cause`. One more label for the decision model.
-   - Option B: keep eight kinds. "Why" questions then only appear when the model happens to
-     word a definition card that way, and code cannot count or steer them.
-2. **The shape of a "why" answer.** The field contract (`FIELDS.md`) gives a "why" card two
-   reasoning steps as two bullets. Your "why" cards are almost all one sentence.
-   - Option A, my lean: one sentence, as in your deck, with two steps allowed.
-   - Option B: keep two steps as the contract says.
-3. **"Name two" cards.** 6% of your deck. Code cannot see from a fact's text whether it names
-   exactly two items. Option A, my lean: the map marks how many items a list fact has, and a
-   list of two becomes "name two". Option B: leave them to the list card.
-4. **Course administration.** Rule 1 of the map is in this draft. A second guard is the slide
-   label (title, agenda, recap, reading list, content), which only flags until it is
-   calibrated. In the first run it labelled 2 of 356 slides as agenda or recap, so it needs
-   better wording before calibration is worth it. I would do both; say if you want only one.
-5. **Approval.** This is a draft from your own rules and cards. Change anything.
+1. **"Why" cards**: a ninth kind of fact, `cause`, is added. It becomes a "why" card.
+2. **The shape of a "why" answer**: one sentence, a second step allowed. The field contract
+   (`FIELDS.md`) still describes two bullets and should follow.
+3. **"Name two" cards**: the map counts the items of a list fact; a list of two becomes "name
+   two".
+4. **A run of all eleven decks with this draft** is approved.
+
+Still open:
+
+- **Course administration.** Rule 1 of the map is in this draft. The second guard is the slide
+  label, which only flags until it is calibrated. Its question now describes each kind; in the
+  first run it had labelled only 2 of 356 slides as agenda or recap.
+- **Approval** of the draft itself, after the comparison run.
 
 ## How to judge it
 

@@ -23,7 +23,7 @@ function map(context: string): unknown {
     const name = take(lines[0] ?? '', CONCEPT_WORDS)
     if (lines.length < 2 || names.has(name.toLowerCase())) return []
     names.add(name.toLowerCase())
-    const facts = lines.slice(1, 1 + FACTS).map((text) => ({ text, slide }))
+    const facts = lines.slice(1, 1 + FACTS).map((text) => ({ text, slide, items: 0 }))
     return [{ name, core: i % 2 === 0, facts }]
   })
   const topics = []

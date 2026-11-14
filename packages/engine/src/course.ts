@@ -21,6 +21,8 @@ export interface Fact {
   text: string
   slide: number
   kind: FactKind
+  /** How many items the fact lists, when it is a list to recite. */
+  items?: number
 }
 
 export interface Concept {

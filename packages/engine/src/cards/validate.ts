@@ -149,7 +149,7 @@ function answer(spec: RoleSpec, answers: string[], labels: string[]): string[] {
   if (total > LIMITS.answerWords) {
     problems.push(`the answer has ${total} words; the limit is ${LIMITS.answerWords}`)
   }
-  if (spec.back === 'list' && answers.length > LIMITS.bullets) {
+  if ((spec.back === 'list' || spec.back === 'steps') && answers.length > LIMITS.bullets) {
     problems.push(`the answer has ${answers.length} bullets; the limit is ${LIMITS.bullets}`)
   }
   if (spec.back === 'term' && words(answers[0] ?? '') > LIMITS.termWords) {
@@ -313,7 +313,7 @@ export function tooLong(draft: Draft): boolean {
   return (
     words(front) > LIMITS.frontWords ||
     total > LIMITS.answerWords ||
-    (spec.back === 'list' && draft.answers.length > LIMITS.bullets)
+    ((spec.back === 'list' || spec.back === 'steps') && draft.answers.length > LIMITS.bullets)
   )
 }
 

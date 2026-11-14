@@ -78,7 +78,7 @@ const F = {
   early: 'Lean startup lowers risk by testing early.',
 }
 
-const fact = (text: string, slide: number) => ({ text, slide })
+const fact = (text: string, slide: number, items = 0) => ({ text, slide, items })
 
 const MAPS: Record<string, unknown> = {
   '01 Risk.pdf': {
@@ -107,7 +107,7 @@ const MAPS: Record<string, unknown> = {
       {
         name: 'Principles',
         concepts: [
-          { name: 'effectual principles', core: true, facts: [fact(F.principles, 2)] },
+          { name: 'effectual principles', core: true, facts: [fact(F.principles, 2, 5)] },
           { name: 'bird in hand', core: true, facts: [fact(F.birdIs, 3), fact(F.birdMeans, 3)] },
           { name: 'Risk', core: false, facts: [fact(F.riskAgain, 4)] },
         ],

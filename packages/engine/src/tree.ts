@@ -17,7 +17,11 @@ export interface MapOutput {
   title: string
   topics: {
     name: string
-    concepts: { name: string; core: boolean; facts: { text: string; slide: number }[] }[]
+    concepts: {
+      name: string
+      core: boolean
+      facts: { text: string; slide: number; items: number }[]
+    }[]
   }[]
 }
 
@@ -87,7 +91,12 @@ export function settleMap(out: MapOutput, ctx: MapContext): Settled {
       const facts = stated
         .filter((fact) => usable(fact.slide))
         .slice(0, FACTS_PER_CONCEPT)
-        .map((fact) => ({ text: fact.text.trim(), slide: fact.slide, kind: 'definition' as const }))
+        .map((fact) => ({
+          text: fact.text.trim(),
+          slide: fact.slide,
+          kind: 'definition' as const,
+          ...(Number.isInteger(fact.items) && fact.items > 0 ? { items: fact.items } : {}),
+        }))
       if (facts.length === 0) {
         problems.push(`concept "${name}" has no fact`)
         continue

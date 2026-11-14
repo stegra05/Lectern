@@ -10,7 +10,7 @@ const ctx: MapContext = {
   earlier: new Map([['risk', { name: 'risk', lecture: 1 }]]),
   fallbackTitle: 'Slides',
 }
-const fact = (slide: number, text = `A fact on slide ${slide}.`) => ({ text, slide })
+const fact = (slide: number, text = `A fact on slide ${slide}.`) => ({ text, slide, items: 0 })
 const concept = (name: string, slides: number[], core = true) => ({
   name,
   core,
@@ -54,6 +54,23 @@ describe('settleMap', () => {
         },
       ],
     })
+  })
+
+  it('keeps the number of items of a list fact, and nothing for other facts', () => {
+    const list = {
+      name: 'five Cs',
+      core: true,
+      facts: [
+        { text: 'The five Cs of lending.', slide: 2, items: 5 },
+        { text: 'One C.', slide: 2, items: 0 },
+        { text: 'Odd.', slide: 2, items: 1.5 },
+      ],
+    }
+    const facts = settleMap(
+      { title: 'T', topics: [{ name: 'T', concepts: [list, concept('rest', [3, 5, 6])] }] },
+      ctx,
+    ).topics[0]!.concepts[0]!.facts
+    expect(facts.map((f) => f.items)).toEqual([5, undefined, undefined])
   })
 
   it('leaves out every unused slide, with its kind as the reason', () => {
