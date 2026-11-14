@@ -81,6 +81,22 @@ const SLIDE_THUMB = `<img alt="" src="data:image/svg+xml,${encodeURIComponent(
 )}">`
 
 /** The canvas's card, for when no course with cards is open. */
+/**
+ * The student's own card for the carousel: a definition from the concept that got the most
+ * cards, so the designs are judged on something the course cares about.
+ */
+function showcase(course: CourseView | null): Card | undefined {
+  const cards = course?.lectures.flatMap((l) => l.cards).filter((c) => c.note === 'qa') ?? []
+  const perConcept = new Map<string, number>()
+  for (const card of cards) perConcept.set(card.concept, (perConcept.get(card.concept) ?? 0) + 1)
+  const weight = (card: Card) =>
+    (perConcept.get(card.concept) ?? 0) + (card.fields.Role === 'definition' ? 0.5 : 0)
+  return cards.reduce<Card | undefined>(
+    (best, card) => (!best || weight(card) > weight(best) ? card : best),
+    undefined,
+  )
+}
+
 const SAMPLE: Card = {
   id: 'sample',
   note: 'qa',
@@ -106,9 +122,9 @@ const SAMPLE: Card = {
   },
 }
 
-/** The card to show: the first question card of the open course, or the sample. */
+/** The card to show: one from the open course, or the sample. */
 function previewCard(course: CourseView | null): { card: Card; own: boolean } {
-  const own = course?.lectures.flatMap((l) => l.cards).find((c) => c.note === 'qa')
+  const own = showcase(course)
   const card = own ?? SAMPLE
   return { card: { ...card, fields: { ...card.fields, Slide: SLIDE_THUMB } }, own: Boolean(own) }
 }

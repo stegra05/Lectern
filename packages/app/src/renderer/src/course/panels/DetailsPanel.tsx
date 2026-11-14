@@ -115,9 +115,11 @@ function Decisions({ course }: { course: CourseView }) {
 }
 
 function pluralReason(reason: string, count: number): string {
-  // The engine's reasons are short names like "Title slide" or longer sentences.
+  // The engine's reasons are short names ("Title slide") or whole sentences. Only a name of
+  // two or three words takes a plural; a sentence is shown as the engine wrote it.
   const name = reason.charAt(0).toUpperCase() + reason.slice(1)
-  return count > 1 && /(slide|list)$/i.test(name) ? `${name}s` : name
+  const isName = name.split(' ').length <= 3 && /(slide|list)$/i.test(name)
+  return count > 1 && isName ? `${name}s` : name
 }
 
 function clock(ms: number): string {
