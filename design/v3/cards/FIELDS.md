@@ -7,7 +7,9 @@ first; the limits below repeat the brief's hard limits and add the ones the temp
 Two note types, installed by Lectern and owned by Lectern:
 
 - **Lectern Q&A**: `front.html` and `back.html`, one card per note.
-- **Lectern Cloze**: `cloze-front.html` and `cloze-back.html`, one card per deletion.
+- **Lectern Cloze v3**: `cloze-front.html` and `cloze-back.html`, one card per deletion. Not
+  "Lectern Cloze": Lectern 2 installed a note type of that name with other fields, and a
+  student who used it still has it.
 
 Sort field in both: `Key`. Field order is the order of the tables.
 
@@ -32,7 +34,7 @@ Sort field in both: `Key`. Field order is the order of the tables.
 | Diagram | The answer as a drawing | Code | Inline `<svg class="dg">`, see "Diagrams". Only in the diagram role |
 | Key | The concept as plain text | Code | Never rendered. Sort field, search handle and the stable identity of the concept |
 
-## Lectern Cloze
+## Lectern Cloze v3
 
 Same as Q&A, with `Text` in place of Front, Back, Slots and Code.
 

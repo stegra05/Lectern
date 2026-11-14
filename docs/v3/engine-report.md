@@ -23,6 +23,7 @@ work of the real presets and of calibration, not of the pipeline.
 | Estimate, free | `node packages/engine/src/cli.ts estimate <course folder> [--goal pass\|good\|top] [--model gpt-6-luna]` |
 | Build, paid | `node packages/engine/src/cli.ts build <course folder> [--goal ...] [--profile ...] [--model ...] [--cap dollars]` |
 | Outline | `node packages/engine/src/cli.ts outline <course folder>` |
+| Send to Anki | `node packages/engine/src/cli.ts send <course folder> [--design native]` |
 
 PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
@@ -165,6 +166,50 @@ How the seven steps run:
   turn the text of any slides into a small course, so an interface test can run a real build.
   They say nothing about real card quality.
 - The adapters are exported from the package (`@lectern/engine/adapters/...`).
+
+## Sending to Anki
+
+Added 2026-11-14 by a third session, on Steffen's instruction. Never run against a real Anki:
+Anki was closed, and a first run writes into his real collection, which needs his yes.
+
+**What it does.** The command `send` takes a course and a card design. It installs Lectern's two
+note types in that design, creates one deck per lecture under a deck named after the course
+(`Entrepreneurship::02 Effectuation`, the number first so Anki lists them in course order),
+stores the slide picture of every card, and adds one note per card. Events: `sending` after
+each card, `sent` at the end. The command `restyle` gives the cards already in Anki another
+design. `course` now reports `sent` per lecture.
+
+**A card is sent once.** `<course>/anki.json` records the Anki note of every card that went. A
+later send adds only cards that are not in it. A note in Anki is never written again: not its
+wording, not its progress, and a note the student deleted does not come back. The record is
+saved even when a send breaks off, so the next send continues with the rest.
+
+**Where it is.** `src/deliver.ts`, the ports `anki` and `designs` in `src/ports.ts`,
+`adapters/ankiconnect.ts` (the add-on on `127.0.0.1:8765`), `adapters/memory-anki.ts` (an Anki
+in memory that refuses what the real one refuses, for tests and for the app offline),
+`adapters/node-designs.ts` (reads `design/v3/cards/anki`). Tests: `test/deliver.test.ts`, 14.
+
+**Defaults I chose, none of them in the design documents:**
+
+| Topic | Default | Why |
+|---|---|---|
+| Cloze note type name | `Lectern Cloze v3` | Lectern 2 installed `Lectern Cloze` with other fields. `FIELDS.md` is updated |
+| Tags | `<course>::lecture::02` and `<course>::role::definition` | Hierarchical, as in his study kits. Exam part and weight wait for past exams |
+| Slide pictures | `lectern-<course>-l02-s14.png`, PNG, 1024 px wide | Anki keeps all media in one folder, so the bare `l02-s14.png` of two courses would collide |
+| Deck preset | Not touched | The study plan brings the preset. Until then the new decks use Anki's default |
+| Who owns a note type | Lectern, while its stylesheet opens with the `lectern-notetype` line | The rule of Lectern 2. A student who edits the styling removes the line |
+| Same question twice | Allowed | Anki refuses a note whose first field it has. Two courses may ask the same question |
+
+**Open.**
+
+- The first real send, on a throwaway profile or with his yes on his own collection. The shapes
+  of the add-on calls follow the Lectern 2 client, which ran against a real Anki.
+- `FIELDS.md` wants `Key` as the sort field. The add-on cannot set a sort field when it creates
+  a note type, so Anki sorts by the first field.
+- Size. A course of 350 slides stores about 330 PNG pictures in Anki's media folder, which
+  Anki then syncs. Not measured.
+- A send adds notes one call at a time, as Lectern 2 did, so each failure names its card.
+  Speed on 600 cards is not measured.
 
 ## Placeholder
 
