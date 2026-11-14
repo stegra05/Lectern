@@ -21,6 +21,7 @@ import {
 } from './library.ts'
 import { outline } from './outline.ts'
 import type { Ports } from './ports.ts'
+import { PRESET_IDS } from './presets.ts'
 
 /** The course folder inside the store. */
 const course = z.string().min(1)
@@ -34,6 +35,8 @@ const CommandSchema = z.discriminatedUnion('type', [
     goal,
     /** The student's correction of the kind of course. Without it the engine decides. */
     profile: z.enum(PROFILE_KINDS).optional(),
+    /** Write with this preset instead of the one the kind of course picks. For trying a draft. */
+    preset: z.enum(PRESET_IDS).optional(),
     /** A spending limit in dollars for this build. Without it: three times the estimate. */
     capUsd: z.number().positive().optional(),
   }),

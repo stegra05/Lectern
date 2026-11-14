@@ -4,7 +4,10 @@ import { CAP_FLOOR_USD, CAP_MULTIPLE, estimate } from '../src/cost.ts'
 import type { Concept, Topic } from '../src/course.ts'
 import type { FactKind } from '../src/decide.ts'
 import { plan } from '../src/plan.ts'
-import { presetFor } from '../src/presets.ts'
+import { validateDraft } from '../src/cards/validate.ts'
+import type { Role } from '../src/cards/roles.ts'
+import { presetFor, PRESETS } from '../src/presets.ts'
+import { slotsFromForm } from '../src/writer.ts'
 
 const preset = presetFor('concept')
 const concept = (name: string, kinds: FactKind[], extra: Partial<Concept> = {}): Concept => ({
@@ -147,5 +150,24 @@ describe('the estimate', () => {
     })
     expect(big.capUsd).toBeCloseTo(CAP_MULTIPLE * big.costUsd)
     expect(estimate(decks.slice(0, 1), 'pass', prices).capUsd).toBe(CAP_FLOOR_USD)
+  })
+})
+
+describe('presets', () => {
+  it.each(Object.values(PRESETS))(
+    '$id: every example card fits its form and the hard limits',
+    (preset) => {
+      const source = { slides: [1], slideText: () => '', seenAsImage: () => true }
+      for (const [role, values] of Object.entries(preset.examples)) {
+        const draft = { concept: 'example', role, slide: 1, ...slotsFromForm(role as Role, values) }
+        expect(validateDraft(draft, source), `${preset.id} ${role}`).toEqual([])
+      }
+    },
+  )
+
+  it('covers every kind of fact with a card type', () => {
+    for (const preset of Object.values(PRESETS)) {
+      expect(Object.values(preset.plan).every((roles) => roles.length > 0)).toBe(true)
+    }
   })
 })

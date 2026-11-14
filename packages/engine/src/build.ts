@@ -52,7 +52,7 @@ import { askMap, slidesBlock } from './mapper.ts'
 import { questionAndAnswer } from './outline.ts'
 import { plan } from './plan.ts'
 import type { Ports, SlideImage } from './ports.ts'
-import { presetFor } from './presets.ts'
+import { presetFor, PRESETS } from './presets.ts'
 import { settleMap, unusedSlides } from './tree.ts'
 import { createWriter, type CardJob, type Slots } from './writer.ts'
 
@@ -215,7 +215,7 @@ export async function build(
     }
   }
   emit({ type: 'profile', ...profile })
-  const preset = presetFor(profile.kind)
+  const preset = command.preset ? PRESETS[command.preset] : presetFor(profile.kind)
   const writer = createWriter(askModel, preset)
 
   // Step 2: the kind of every slide, one request per lecture.
@@ -262,9 +262,12 @@ export async function build(
         fallbackTitle: titleFromFile(lecture.file, lecture.number),
       }
       const vocabulary = [...earlier.values()].map((concept) => concept.name)
-      let settled = settleMap(await askMap(askModel, source, vocabulary), ctx)
+      let settled = settleMap(await askMap(askModel, source, preset.mapRules, vocabulary), ctx)
       if (settled.problems.length > 0) {
-        settled = settleMap(await askMap(askModel, source, vocabulary, settled.problems), ctx)
+        settled = settleMap(
+          await askMap(askModel, source, preset.mapRules, vocabulary, settled.problems),
+          ctx,
+        )
       }
 
       // Closed questions about the map, all in one request over the lecture.
@@ -587,6 +590,7 @@ export async function build(
     startedAt: new Date(startedAt).toISOString(),
     model: ports.model.model,
     decisionModel: ports.decisions.model,
+    preset: preset.id,
     goal,
     lectures: lectures.map((l) => l.number),
     cards: accepted.length,

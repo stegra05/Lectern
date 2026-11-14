@@ -3,7 +3,7 @@
  * The engine from a command line.
  *
  *   node src/cli.ts estimate <course folder> [--goal pass|good|top] [--model gpt-6-luna]
- *   node src/cli.ts build <course folder> [--goal pass|good|top] [--profile concept|formula|programming|fact-heavy] [--model gpt-6-luna] [--cap dollars]
+ *   node src/cli.ts build <course folder> [--goal pass|good|top] [--profile concept|formula|programming|fact-heavy] [--model gpt-6-luna] [--cap dollars] [--preset concept-draft]
  *   node src/cli.ts outline <course folder>
  *
  * `estimate` and `build` print every event as one JSON line. `outline` prints the Markdown.
@@ -24,6 +24,7 @@ const { positionals, values } = parseArgs({
     profile: { type: 'string' },
     model: { type: 'string' },
     cap: { type: 'string' },
+    preset: { type: 'string' },
   },
 })
 const [type, folder] = positionals
@@ -40,7 +41,11 @@ const command = {
   course: basename(path),
   ...(type === 'outline' ? {} : { goal: values.goal }),
   ...(type === 'build'
-    ? { profile: values.profile, capUsd: values.cap ? Number(values.cap) : undefined }
+    ? {
+        profile: values.profile,
+        preset: values.preset,
+        capUsd: values.cap ? Number(values.cap) : undefined,
+      }
     : {}),
 }
 try {

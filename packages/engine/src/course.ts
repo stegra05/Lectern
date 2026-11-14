@@ -91,6 +91,8 @@ export interface Run {
   startedAt: string
   model: string
   decisionModel: string
+  /** The preset the cards were written with. */
+  preset: string
   goal: Goal
   lectures: number[]
   cards: number

@@ -448,6 +448,7 @@ describe('building a course of two lectures, offline', () => {
       startedAt: '2026-11-14T00:00:01.000Z',
       model: 'scripted',
       decisionModel: 'scripted-decisions',
+      preset: 'placeholder',
       goal: 'good',
       lectures: [1, 2],
       cards: 7,
@@ -724,6 +725,23 @@ describe('goal, profile and cost', () => {
         .flatMap((r) => r.questions)
         .some((q) => q.type === 'choice' && q.ask.startsWith('Which kind of course')),
     ).toBe(false)
+  })
+
+  it('writes with a draft preset when the command names it: its rules reach the map and the cards', async () => {
+    await courseOf('01 Risk.pdf')
+    await run({ type: 'build', course: 'course', preset: 'concept-draft' })
+    expect(calls('map')[0]!.prompt).toContain(
+      '- Only what can be examined is a concept. The organisation of the course is never one',
+    )
+    const fill = calls('fill')[0]!
+    expect(fill.prompt).toContain('- Lead with the answer: the key term comes first')
+    expect(fill.prompt).toContain('"question":"Sarasvathy: what is causation?"')
+    expect(await json<Run>('runs/001.json')).toMatchObject({ preset: 'concept-draft' })
+    expect(await json<Decision[]>('decisions.json')).toContainEqual({
+      lecture: null,
+      kind: 'profile',
+      text: 'Read as a concept course. Cards follow the "concept-draft" preset.',
+    })
   })
 
   it('estimates a build without calling a model', async () => {

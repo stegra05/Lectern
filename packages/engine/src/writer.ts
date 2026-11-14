@@ -255,6 +255,12 @@ const FORMS: Record<Role, Form> = {
   ),
 }
 
+/** A filled form as the slots of a draft. Checks the form first, as a model's reply is checked. */
+export function slotsFromForm(role: Role, values: unknown): Slots {
+  const { schema, toSlots } = FORMS[role]
+  return toSlots(schema.parse(values))
+}
+
 export function createWriter(ask: AskModel, preset: Preset): Writer {
   const brief = (job: CardJob) => {
     const example = preset.examples[job.role]

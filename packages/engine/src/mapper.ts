@@ -42,7 +42,11 @@ export function slidesBlock(heading: string, slides: string[][], images: SlideIm
   return [heading, 'Slides:', ...lines].join('\n')
 }
 
-export function mapPrompt(vocabulary: string[], problems: string[]): string {
+export function mapPrompt(
+  rules: readonly string[],
+  vocabulary: string[],
+  problems: string[],
+): string {
   return [
     'Map this lecture:',
     `- title: the name of the lecture, at most ${TITLE_CHARS} characters, without its number.`,
@@ -54,6 +58,7 @@ export function mapPrompt(vocabulary: string[], problems: string[]): string {
     '  One fact is one sentence: a definition, a contrast, a list, a sequence, a formula, a listing,',
     '  a case, a drawing. slide: the one slide that states it.',
     'Every slide that teaches something carries at least one fact.',
+    ...rules.map((rule) => `- ${rule}`),
     vocabulary.length > 0
       ? `\nThe course already uses these concept names. When this lecture teaches one of them again, use exactly that name: ${vocabulary.join('; ')}.`
       : '',
@@ -66,9 +71,10 @@ export function mapPrompt(vocabulary: string[], problems: string[]): string {
 export function askMap(
   ask: AskModel,
   lecture: { context: string; images: SlideImage[] },
+  rules: readonly string[],
   vocabulary: string[],
   problems: string[] = [],
 ): Promise<MapOutput> {
-  const prompt = mapPrompt(vocabulary, problems)
+  const prompt = mapPrompt(rules, vocabulary, problems)
   return ask({ task: 'map', system: SYSTEM, ...lecture, prompt, effort: 'medium' }, MapSchema)
 }

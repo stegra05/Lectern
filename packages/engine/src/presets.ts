@@ -1,10 +1,12 @@
 /**
  * Presets: the hand-written part of the method. A preset says which card types a kind of fact
- * becomes, shows the model example cards per card type, and states the writing rules.
+ * becomes, shows the model example cards per card type, and states the rules for the map and
+ * for the cards.
  *
- * PLACEHOLDER. One minimal preset serves every kind of lecture so the pipeline runs end to
- * end. The four real presets (concept, formula, programming, fact-heavy courses) are drafted
- * from real lectures and the reference deck and approved by Steffen before they ship.
+ * Nothing here is approved yet. `placeholder` is one minimal preset that serves every kind of
+ * lecture so the pipeline runs end to end. `concept-draft` is a draft of the preset for concept
+ * courses, written from Steffen's Entrepreneurship study kit, waiting for his review; a build
+ * uses it only when the command names it. See `docs/v3/engine-profile-concept.md`.
  */
 
 import type { Role } from './cards/roles.ts'
@@ -16,6 +18,9 @@ export interface Preset {
   plan: Record<FactKind, readonly Role[]>
   /** One filled form per card type, shown to the model when it fills that form. */
   examples: Partial<Record<Role, Record<string, unknown>>>
+  /** What counts as a concept and a fact, for the model that maps a lecture. */
+  mapRules: readonly string[]
+  /** How a card is worded, for the model that fills the forms. */
   rules: readonly string[]
 }
 
@@ -74,6 +79,7 @@ const PLACEHOLDER: Preset = {
       extra: '',
     },
   },
+  mapRules: [],
   rules: [
     'One fact per card. Exactly one defensible answer.',
     'Never a yes/no question: ask what, which, why or how.',
@@ -83,8 +89,87 @@ const PLACEHOLDER: Preset = {
   ],
 }
 
-/** Every kind of lecture gets the placeholder until its own preset exists. */
-const PRESETS: Record<ProfileKind, Preset> = {
+/** Draft for concept courses. Examples are cards of the reference deck, put into the forms. */
+const CONCEPT_DRAFT: Preset = {
+  id: 'concept-draft',
+  plan: PLACEHOLDER.plan,
+  examples: {
+    definition: {
+      question: 'Sarasvathy: what is causation?',
+      answer: 'Start from a ==given goal== and select the means to reach it.',
+      extra: '',
+    },
+    reverse: {
+      question: 'Greiner: which phase resolves the crisis of autonomy?',
+      term: 'delegation',
+      extra: '',
+    },
+    case: {
+      question: 'Alex Krapp: which big clients did soul-surf win?',
+      term: 'BMW and MAN',
+      extra: '',
+    },
+    contrast: {
+      question: 'Causation versus effectuation: how does each handle risk?',
+      sideA: 'Causation',
+      valueA: '==expected return==, the best risk-adjusted opportunity',
+      sideB: 'Effectuation',
+      valueB: '==affordable loss==, never more than you can afford to lose',
+      extra: '',
+    },
+    chain: {
+      question: 'Lean iteration: which step follows the theory?',
+      givenSteps: ['Theory'],
+      nextSteps: ['Hypothesis'],
+      extra: '',
+    },
+    'name-two': {
+      question: 'Which two exit routes are the most common?',
+      first: '==trade sales==',
+      second: '==buyouts==',
+      extra: 'Both change the ownership of the firm.',
+    },
+    why: {
+      question: 'Software: why does copyright give it only weak protection?',
+      first: 'Copyright protects ==the code, not the idea==.',
+      second: 'So a rival may build the same idea in new code.',
+      extra: '',
+    },
+    'cloze-list': {
+      leadIn: 'Five Cs of lending:',
+      items: ['character', 'capacity', 'capital', 'collateral', 'conditions'],
+      extra: 'Banks judge them from past financial statements and projections.',
+    },
+    cloze: {
+      sentence:
+        'Market development can target a new {{c1::geographical}} market, a new {{c2::demographic}} market, or a new {{c3::product use}}.',
+      extra: '',
+    },
+  },
+  mapRules: [
+    'Only what can be examined is a concept. The organisation of the course is never one: the lecturer, dates, grading, assignments, the agenda, a recap of the last session, reading lists, instructions for a class exercise.',
+    'Give each idea several angles as separate facts: what it is, why or when it holds, what follows from it, the course example, how it differs from its neighbour.',
+    'A list fact is a named set the exam asks to recite, such as "the five Cs of lending". The bullet points of a slide are not a list fact: take what each bullet teaches as its own fact.',
+    'A case fact names a company, a person or a study from the lecture and says what it shows. Biography and trivia are not facts.',
+  ],
+  rules: [
+    'Lead with the answer: the key term comes first, marked as ==term==. Never restate the question in the answer.',
+    'One fact per answer, answerable in about ten seconds. Aim for about 12 words.',
+    'Exactly one defensible answer. Add a context prefix such as "Greiner:" or "Bank loan versus VC:" when it rules out a rival answer from another framework.',
+    'Never a yes/no or an either/or question, and no wording that gives the answer away. Ask what, which, why or how.',
+    'A case card names the case in the question.',
+    'A contrast compares both sides on one dimension, in the same wording.',
+    'The example, the mechanism or the source goes to extra. Extra is never tested.',
+    'Key terms appear exactly as on the slides. Reword the sentence around them; do not copy it.',
+    'Write in the language of the slides.',
+  ],
+}
+
+export const PRESETS = { placeholder: PLACEHOLDER, 'concept-draft': CONCEPT_DRAFT }
+export const PRESET_IDS = ['placeholder', 'concept-draft'] as const
+
+/** Every kind of lecture gets the placeholder until its own preset is approved. */
+const BY_KIND: Record<ProfileKind, Preset> = {
   concept: PLACEHOLDER,
   formula: PLACEHOLDER,
   programming: PLACEHOLDER,
@@ -92,5 +177,5 @@ const PRESETS: Record<ProfileKind, Preset> = {
 }
 
 export function presetFor(kind: ProfileKind): Preset {
-  return PRESETS[kind]
+  return BY_KIND[kind]
 }
