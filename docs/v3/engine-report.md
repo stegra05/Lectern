@@ -187,7 +187,7 @@ back. The record is saved even when a send breaks off, so the next send continue
 **Where it is.** `src/deliver.ts`, the ports `anki` and `designs` in `src/ports.ts`,
 `adapters/ankiconnect.ts` (the add-on on `127.0.0.1:8765`), `adapters/memory-anki.ts` (an Anki
 in memory that behaves like the real one where it matters, for tests and for the app offline),
-`adapters/node-designs.ts` (reads `design/v3/cards/anki`). Tests: `test/deliver.test.ts`, 18.
+`adapters/node-designs.ts` (reads `design/v3/cards/anki`). Tests: `test/deliver.test.ts`, 19.
 
 **The real run.** Two lectures of the first real Entrepreneurship run (03 and 09, 94 cards),
 copied into a course named "Lectern send test", from the command line.
@@ -205,11 +205,12 @@ copied into a course named "Lectern send test", from the command line.
 What the real Anki taught, and what changed because of it:
 
 - **Anki can hand back a note and not keep it.** Two notes got an id and were not in the
-  collection afterwards. They arrived when sent again, so it was not their content. The cause
-  is not established. The add-on records every added note as an undo step, so an undo in Anki
-  while a send runs would do exactly this. Now the send asks Anki which notes of a lecture are
-  there, adds the missing ones again, up to three times, and fails with the count when some
-  still do not stay. Only notes found in Anki are recorded.
+  collection afterwards. Steffen confirmed the cause: he was studying in Anki and pressed undo.
+  The add-on records every added note as an undo step, so the undo took Lectern's newest note
+  instead of his answer. A student who studies while Lectern sends will do the same. Now the
+  send asks Anki which notes of a lecture are there, adds the missing ones again, up to three
+  times, checks the whole send once more at the end, and fails with the count when some still
+  do not stay. Only notes found in Anki are recorded.
 - **A course named like a deck the student has.** His own deck is called "Entrepreneurship",
   with subdecks. A course of that name would have put Lectern's cards into it. The first send
   now takes a deck that is not there yet ("Entrepreneurship (Lectern)") and keeps it.
@@ -235,7 +236,8 @@ What the real Anki taught, and what changed because of it:
   HTML was read back and is what the templates should give.
 - The send from inside the app has only run on the Anki in memory. The real run used the
   command line, which shares the engine code and not the app's wiring.
-- A note lost after its lecture was checked (a late undo) is not noticed.
+- An undo after the last check of a send still removes its newest note unnoticed. The
+  student's own undo is lost too: it takes Lectern's note, not the answer it was meant for.
 - `FIELDS.md` wants `Key` as the sort field. The add-on cannot set a sort field when it creates
   a note type, so Anki sorts by the first field.
 - Left in his collection by the test, for him to delete: the decks "Lectern send test" (94

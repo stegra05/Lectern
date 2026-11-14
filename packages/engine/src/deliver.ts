@@ -36,8 +36,10 @@ export const NOTE_TYPE_NAMES = { qa: 'Lectern Q&A', cloze: 'Lectern Cloze v3' } 
 const OWNED = /^\/\* lectern-notetype v\d+ skin:/
 
 /**
- * How often the cards of a lecture are added before the send gives up. Anki can hand back the
- * id of a note that is then not there: the first send into a real Anki lost 2 of 94 that way.
+ * How often cards are added before the send gives up. Anki can hand back the id of a note that
+ * is then not there: the add-on makes every added note an undo step, so a student who undoes
+ * something in Anki while a send runs removes Lectern's newest note instead. The first send
+ * into a real Anki lost 2 of 94 that way.
  */
 const ATTEMPTS = 3
 
@@ -197,7 +199,46 @@ export async function send(
     // Kept before the deck exists in Anki: once it does, its name would no longer look free.
     await writeJson(store, paths.anki(course), delivery)
   }
+  interface Item {
+    card: CardFile
+    lecture: number
+    deck: string
+  }
+  /** The cards Anki does not have, whatever it said when they were added. They count as not sent. */
+  const lost = async (items: Item[]): Promise<Item[]> => {
+    const there = new Set(
+      await anki.existingNotes(items.map(({ card }) => delivery.notes[card.id]!)),
+    )
+    const gone = items.filter(({ card }) => !there.has(delivery.notes[card.id]!))
+    for (const { card } of gone) delete delivery.notes[card.id]
+    return gone
+  }
+  /** Adds the cards until Anki has them all. `onAdded` hears of each card once. */
+  const add = async (items: Item[], onAdded?: (item: Item) => void): Promise<void> => {
+    let missing = items
+    for (let attempt = 1; missing.length > 0 && attempt <= ATTEMPTS; attempt++) {
+      for (const item of missing) {
+        const { card, lecture, deck } = item
+        delivery.notes[card.id] = await anki.addNote({
+          deck,
+          noteType: NOTE_TYPE_NAMES[card.note],
+          fields: fieldsForAnki(course, card),
+          tags: tags(course, lecture, card),
+        })
+        if (attempt === 1) onAdded?.(item)
+      }
+      missing = await lost(missing)
+    }
+    if (missing.length > 0) {
+      throw new EngineError(
+        `${missing.length} ${missing.length === 1 ? 'card' : 'cards'} did not stay in Anki.`,
+        'Do not undo or edit in Anki while Lectern sends. Then send again: only the missing cards are added.',
+      )
+    }
+  }
+
   let done = 0
+  const sent: Item[] = []
   try {
     for (const { lecture, cards } of waiting) {
       const deck = lectureDeck(delivery.deck, lecture)
@@ -207,31 +248,15 @@ export async function send(
       for (const image of await pdf.renderSlides(pdfBytes, slides)) {
         await anki.storeMedia(mediaName(course, lecture.number, image.slide), image.png)
       }
-      let missing = cards
-      for (let attempt = 1; missing.length > 0 && attempt <= ATTEMPTS; attempt++) {
-        for (const card of missing) {
-          delivery.notes[card.id] = await anki.addNote({
-            deck,
-            noteType: NOTE_TYPE_NAMES[card.note],
-            fields: fieldsForAnki(course, card),
-            tags: tags(course, lecture.number, card),
-          })
-          if (attempt === 1) emit({ type: 'sending', lecture: lecture.number, done: ++done, total })
-        }
-        // Anki's word that a note was added is not enough. Only what is found there counts.
-        const there = new Set(
-          await anki.existingNotes(missing.map((card) => delivery.notes[card.id]!)),
-        )
-        missing = missing.filter((card) => !there.has(delivery.notes[card.id]!))
-        for (const card of missing) delete delivery.notes[card.id]
-      }
-      if (missing.length > 0) {
-        throw new EngineError(
-          `${missing.length} ${missing.length === 1 ? 'card' : 'cards'} of lecture ${lecture.number} did not stay in Anki.`,
-          'Do not undo or edit in Anki while Lectern sends. Then send again: only the missing cards are added.',
-        )
-      }
+      const items = cards.map((card) => ({ card, lecture: lecture.number, deck }))
+      await add(items, () =>
+        emit({ type: 'sending', lecture: lecture.number, done: ++done, total }),
+      )
+      sent.push(...items)
     }
+    // Once more over everything: an undo while the next lecture's slides were drawn took the
+    // last note of a lecture that had already been checked.
+    await add(await lost(sent))
   } finally {
     // Also after a failure: what reached Anki must never be sent a second time.
     await writeJson(store, paths.anki(course), delivery)

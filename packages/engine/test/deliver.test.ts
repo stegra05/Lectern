@@ -351,6 +351,28 @@ describe('an Anki that hands back a note and does not keep it', () => {
     )
   })
 
+  it('notices a note that went after its lecture was checked', async () => {
+    await fresh()
+    await addAndBuild('02 Effectuation.pdf')
+    const cards = (await state()).lectures.reduce((sum, l) => sum + l.cards, 0)
+    // An undo while the second lecture is prepared takes the last note of the first.
+    let decks = 0
+    const undoing: AnkiPort = {
+      ...anki,
+      createDeck: (name) => {
+        if (++decks === 2) anki.notes.pop()
+        return anki.createDeck(name)
+      },
+    }
+    const events = await run({ type: 'send', course: COURSE, design: 'native' }, undoing)
+    expect(events.at(-1)).toMatchObject({ type: 'sent', cards })
+    expect(events.filter((e) => e.type === 'sending')).toHaveLength(cards)
+    const { notes } = await deliveryFile()
+    expect(anki.notes.map((note) => note.id).sort()).toEqual(Object.values(notes).sort())
+    expect(anki.notes).toHaveLength(cards)
+    expect((await state()).lectures.every((l) => l.sent === l.cards)).toBe(true)
+  })
+
   it('gives up after three tries, says so, and records only what is there', async () => {
     const cards = await fresh()
     // The first card never stays: calls 1, then the two retries of it.
@@ -360,7 +382,7 @@ describe('an Anki that hands back a note and does not keep it', () => {
     )
     expect(events.at(-1)).toEqual({
       type: 'failed',
-      message: '1 card of lecture 1 did not stay in Anki.',
+      message: '1 card did not stay in Anki.',
       fix: 'Do not undo or edit in Anki while Lectern sends. Then send again: only the missing cards are added.',
     })
     expect(anki.notes).toHaveLength(cards - 1)
