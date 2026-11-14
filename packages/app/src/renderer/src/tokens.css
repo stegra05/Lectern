@@ -1,0 +1,192 @@
+/* The design kit of design/v3/KIT.md as CSS variables. Light and dark follow the system. */
+
+:root {
+  color-scheme: light dark;
+
+  --ground: #efeff2;
+  --group: #ffffff;
+  --material: rgba(250, 250, 252, 0.82);
+  --titlebar: rgba(246, 246, 249, 0.78);
+  --label: #1d1d1f;
+  --label-2: #636366;
+  --label-3: #3a3a3c;
+  --separator: rgba(0, 0, 0, 0.1);
+  --hairline: rgba(0, 0, 0, 0.12);
+  --neutral-mark: #7c7c80;
+  --accent: #0064d2;
+  --accent-text: #0064d2;
+  --selection: #e3eefb;
+  --key-term: #cfe2fb;
+  --positive: #1a7f37;
+  --positive-fill: #e3f3e7;
+  --problem: #b3261e;
+  --focus: #4a8bdf;
+  --control: rgba(0, 0, 0, 0.06);
+  --control-hover: rgba(0, 0, 0, 0.09);
+  --chip: rgba(0, 0, 0, 0.06);
+  --track: rgba(0, 0, 0, 0.08);
+  --grid-dot: rgba(0, 0, 0, 0.07);
+  --dot-stroke: rgba(0, 0, 0, 0.22);
+  --stop-stroke: rgba(0, 0, 0, 0.14);
+  --shadow-panel:
+    0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.1);
+  --shadow-control: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.1);
+  --segment-on: #ffffff;
+  --sidebar: #e6e6ea;
+
+  /* The colour a lecture owns. Numerals on these fills are always --on-lecture. */
+  --on-lecture: #1d1d1f;
+  --lec-1: #ffc629;
+  --lec-2: #ff7a33;
+  --lec-3: #ffa3d1;
+  --lec-4: #a487ff;
+  --lec-5: #7fd0ff;
+  --lec-6: #ff6b6b;
+  --lec-7: #b6e33a;
+  --lec-8: #1fb5b0;
+  --lec-9: #56e0b0;
+  --lec-10: #7b93ff;
+  --lec-11: #ddb3ff;
+  --lec-12: #e8c39e;
+
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --r-control: 8px;
+  --r-group: 12px;
+  --r-panel: 14px;
+
+  --titlebar-h: 38px;
+  --bar-h: 56px;
+  --panel-w: 344px;
+  --gutter: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #1c1c1e;
+    --group: #2c2c2e;
+    --material: rgba(44, 44, 46, 0.78);
+    --titlebar: rgba(36, 36, 38, 0.78);
+    --label: #f2f2f7;
+    --label-2: #aeaeb2;
+    --label-3: #d1d1d6;
+    --separator: rgba(255, 255, 255, 0.12);
+    --hairline: rgba(255, 255, 255, 0.14);
+    --neutral-mark: #98989d;
+    --accent-text: #6cb0ff;
+    --selection: #1f3a5c;
+    --key-term: #27456b;
+    --positive: #5fd07a;
+    --positive-fill: #1e3a26;
+    --problem: #ff8a80;
+    --focus: #6cb0ff;
+    --control: rgba(255, 255, 255, 0.09);
+    --control-hover: rgba(255, 255, 255, 0.13);
+    --chip: rgba(255, 255, 255, 0.1);
+    --track: rgba(255, 255, 255, 0.1);
+    --grid-dot: rgba(255, 255, 255, 0.06);
+    --dot-stroke: rgba(0, 0, 0, 0.35);
+    --stop-stroke: rgba(0, 0, 0, 0.3);
+    --shadow-panel:
+      0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 2px 6px rgba(0, 0, 0, 0.3),
+      0 12px 32px rgba(0, 0, 0, 0.4);
+    --shadow-control: 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --segment-on: #636366;
+    --sidebar: #252527;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ground);
+  color: var(--label);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: default;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+/* Type roles of the kit. */
+.t-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.t-heading {
+  font-size: 15px;
+  font-weight: 600;
+}
+.t-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+.t-caption {
+  font-size: 11px;
+  color: var(--label-2);
+}
+.t-secondary {
+  color: var(--label-2);
+}
+
+/* The floating material of the bar, the side panel and the map tools. */
+.material {
+  background: var(--material);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--shadow-panel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

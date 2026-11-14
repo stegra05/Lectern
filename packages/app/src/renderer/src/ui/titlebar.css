@@ -1,0 +1,66 @@
+.titlebar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 4;
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: var(--titlebar);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid var(--separator);
+  -webkit-app-region: drag;
+}
+/* Room for the three window controls the system draws. */
+.titlebar[data-platform='darwin'] {
+  padding-left: 82px;
+}
+.titlebar button,
+.titlebar a,
+.titlebar [role='group'] {
+  -webkit-app-region: no-drag;
+}
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  white-space: nowrap;
+  min-width: 0;
+}
+.titlebar-centre {
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  transform: translateX(-50%);
+}
+.titlebar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.crumb {
+  border: 0;
+  background: transparent;
+  color: var(--label-2);
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.crumb:hover {
+  background: var(--control);
+}
+.crumb-here {
+  font-weight: 600;
+  color: var(--label);
+  padding: 3px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crumb-sep {
+  color: var(--neutral-mark);
+}
