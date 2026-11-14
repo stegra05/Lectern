@@ -53,6 +53,11 @@ export function CardsPanel({ close }: { close: ReactNode }) {
   )
   const dropped = lecture.dropped.filter((d) => names.has(d.concept))
 
+  // A remark of a check may name another card by its id. The student knows it by its question.
+  const questions = new Map(
+    course.lectures.flatMap((l) => l.cards).map((card) => [card.id, questionOf(card)]),
+  )
+
   return (
     <>
       <div className="cards-head">
@@ -65,12 +70,23 @@ export function CardsPanel({ close }: { close: ReactNode }) {
         </div>
         <h1 className="cards-title">{name}</h1>
         <p className="panel-note">{summary(cards)}</p>
+        {concept?.flags?.map((flag) => (
+          <p key={flag} className="panel-note cards-flag">
+            Worth a look: {flag}.
+          </p>
+        ))}
       </div>
       <div className="cards-body">
         {cards.length > 0 && (
           <ul className="panel-group">
             {cards.map((card) => (
-              <CardRow key={card.id} card={card} lecture={lecture} course={course.id} />
+              <CardRow
+                key={card.id}
+                card={card}
+                lecture={lecture}
+                course={course.id}
+                questions={questions}
+              />
             ))}
           </ul>
         )}
@@ -104,7 +120,34 @@ function summary(cards: Card[]): string {
   return `${plural(cards.length, 'card')} from ${from}`
 }
 
-function CardRow({ card, lecture, course }: { card: Card; lecture: Lecture; course: string }) {
+/** The card's question as plain text. A cloze card is known by its sentence with gaps. */
+function questionOf(card: Card): string {
+  const html =
+    card.note === 'cloze'
+      ? (card.fields.Text ?? '').replace(/\{\{c\d+::.*?\}\}/g, '...')
+      : (card.fields.Front ?? '')
+  return (new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '').trim()
+}
+
+/** A check's remark in the student's words: a card id becomes that card's question. */
+function remark(flag: string, questions: Map<string, string>): string {
+  return flag.replace(/\b\d{2}-[a-z0-9-]+-\d+\b/, (id) => {
+    const question = questions.get(id)
+    return question ? `the card "${question}"` : 'another card'
+  })
+}
+
+function CardRow({
+  card,
+  lecture,
+  course,
+  questions,
+}: {
+  card: Card
+  lecture: Lecture
+  course: string
+  questions: Map<string, string>
+}) {
   const f = card.fields
   const cloze = card.note === 'cloze'
   return (
@@ -124,6 +167,12 @@ function CardRow({ card, lecture, course }: { card: Card; lecture: Lecture; cour
             __html: cloze ? clozeAnswer(f.Text ?? '') : answer(f.Back ?? '', f.Slots ?? ''),
           }}
         />
+        {/* What an unmeasured check noticed. The card is kept, the student decides. */}
+        {card.flags?.map((flag) => (
+          <span key={flag} className="panel-note cards-flag">
+            Worth a look: {remark(flag, questions)}.
+          </span>
+        ))}
       </span>
     </li>
   )

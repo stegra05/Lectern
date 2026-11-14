@@ -429,3 +429,10 @@
 .cards-body > * {
   flex: none;
 }
+
+/* A remark of a check that only flags. Quiet, but it must be seen. */
+.cards-flag {
+  display: block;
+  margin-top: 4px;
+  color: var(--label-3);
+}
