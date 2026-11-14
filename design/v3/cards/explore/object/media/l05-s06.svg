@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Helvetica, Arial, sans-serif">
+<rect width="1600" height="900" fill="#ffffff"/>
+<rect width="1600" height="14" fill="#16794f"/>
+<text x="64" y="150" font-size="64" font-weight="700" fill="#1d2433">Binary search</text>
+<rect x="64" y="182" width="120" height="6" fill="#16794f"/>
+<circle cx="78" cy="262" r="7" fill="#16794f"/><text x="104" y="274" font-size="36" fill="#333">Input: sorted array xs, value target</text><circle cx="78" cy="336" r="7" fill="#16794f"/><text x="104" y="348" font-size="36" fill="#333">Compare with the middle, discard half</text><circle cx="78" cy="410" r="7" fill="#16794f"/><text x="104" y="422" font-size="36" fill="#333">Runtime: O(log n) comparisons</text>
+<line x1="64" y1="820" x2="1536" y2="820" stroke="#dddddd" stroke-width="2"/>
+<text x="64" y="862" font-size="28" fill="#777">Algorithms · Lecture 5</text>
+<text x="1536" y="862" font-size="28" fill="#777" text-anchor="end">6</text>
+</svg>

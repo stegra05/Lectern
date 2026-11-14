@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lectern cards: Lecture colours</title>
+<style>
+  :root { --g-bg: #e9eeeb; --g-ink: #172238; --g-soft: #465267; --g-line: #c9d3cd; --g-on: #172238; --g-on-ink: #ffffff; }
+  html, body { margin: 0; }
+  body { background: var(--g-bg); color: var(--g-ink); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 12px 24px; background: var(--g-bg); border-bottom: 1px solid var(--g-line); }
+  .bar h1 { font-size: 15px; margin: 0 8px 0 0; }
+  .bar h1 span { color: var(--g-soft); font-weight: 400; }
+  .lbl { color: var(--g-soft); margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid var(--g-line); border-radius: 7px; overflow: hidden; background: #fff; }
+  .seg button { background: none; border: 0; color: var(--g-ink); font: inherit; padding: 5px 11px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--g-line); }
+  .seg button[aria-pressed="true"] { background: var(--g-on); color: var(--g-on-ink); }
+  .seg button:focus-visible, .jump a:focus-visible { outline: 2px solid #2445a8; outline-offset: 2px; }
+  .jump a { color: var(--g-ink); text-decoration: none; padding: 3px 5px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+  .jump a:hover { background: var(--g-line); }
+  main { padding: 4px 24px 80px; }
+  section { padding: 24px 0 18px; border-bottom: 1px solid var(--g-line); scroll-margin-top: 64px; }
+  h2 { font-size: 15px; margin: 0 0 2px; display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+  h2 .n { font-family: ui-monospace, Menlo, monospace; color: var(--g-soft); font-weight: 400; }
+  h2 .meta { color: var(--g-soft); font-weight: 400; font-size: 13px; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px 14px; align-items: flex-start; margin-top: 10px; }
+  .group { display: flex; gap: 10px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { font: 11px/1 ui-monospace, Menlo, monospace; color: var(--g-soft); margin-bottom: 6px; letter-spacing: 0.02em; }
+  .pal { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 24px 0; }
+  .pal span { display: inline-block; min-width: 38px; padding: 4px 0; text-align: center; border-radius: 10px; border: 2px solid #1d1d1f; color: #1d1d1f; font: 700 13px/1.2 "Arial Rounded MT Bold", ui-rounded, sans-serif; }
+  iframe { display: block; border: 0; height: 240px; border-radius: 4px; outline: 1px solid var(--g-line); background: #fff; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>Lecture colours <span>every card wears the colour of its lecture</span></h1>
+    <div><span class="lbl">Mode</span><span class="seg" data-key="mode"><button data-v="light">Light</button><button data-v="night">Night</button><button data-v="both">Both</button></span></div>
+  <div><span class="lbl">Width</span><span class="seg" data-key="w"><button data-v="360">360</button><button data-v="600">600</button><button data-v="both">Both</button></span></div>
+  <div><span class="lbl">Slide</span><span class="seg" data-key="slide"><button data-v="closed">Closed</button><button data-v="open">Open</button></span></div>
+  <nav class="jump" aria-label="Cards"></nav>
+</div>
+<div class="pal" aria-label="Lecture colours 01 to 24"></div>
+<main id="out"></main>
+<script>
+const CARDS = /*CARDS*/[];
+
+// What Anki's desktop reviewer adds around every card (ts/reviewer/reviewer.scss),
+// so that the skins are tested against the same defaults they meet in Anki.
+const REVIEWER_CSS = `
+hr { background-color: #c0c0c0; margin: 1em 0; border: none; height: 1px; }
+body { margin: 20px; overflow-wrap: break-word; }
+body.nightMode { background-color: var(--canvas); color: var(--fg); }
+:root { --canvas: #2c2c2c; --fg: #fcfcfc; }
+img { max-width: 100%; max-height: 95vh; }
+li { text-align: start; }
+pre { text-align: left; }
+#typeans { width: 100%; box-sizing: border-box; line-height: 1.75; }
+code#typeans { white-space: pre-wrap; font-variant-ligatures: none; }
+.typeGood { background: #afa; color: black; }
+.typeBad { color: black; background: #faa; }
+.typeMissed { color: black; background: #ccc; }
+`;
+const MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],displayMath:[["\\\\[","\\\\]"]]},chtml:{scale:1}};<\/script>' +
+  '<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"><\/script>';
+
+const params = new URLSearchParams(location.search);
+const state = {
+  skin: 'colours',
+  mode: params.get('mode') || 'light',
+  w: params.get('w') || '360',
+  slide: params.get('slide') || 'closed',
+};
+const only = params.get('cards') ? params.get('cards').split(',') : null;
+
+function doc(card, side, skin, width, night) {
+  const html = side === 'front' ? card.front : card.back;
+  const math = /\\[(\[]/.test(html) ? MATHJAX : '';
+  return '<!doctype html><html' + (width === 360 ? ' class="mobile"' : '') + '><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1"><style>' + REVIEWER_CSS + '</style>' +
+    '<link rel="stylesheet" href="../../anki/style-' + skin + '.css">' + math + '</head>' +
+    '<body class="card card' + card.ord + (night ? ' nightMode night_mode' : '') + '"><div id="qa">' + html + '</div></body></html>';
+}
+
+function list(v, all) { return v === 'both' ? all : [v]; }
+
+function render() {
+  const out = document.getElementById('out');
+  out.innerHTML = '';
+  const skins = ['colours'];
+  const modes = list(state.mode, ['light', 'night']);
+  const widths = list(state.w, ['360', '600']).map(Number);
+  CARDS.forEach((c) => {
+    if (only && !only.includes(c.id)) return;
+    const sec = document.createElement('section');
+    sec.id = 'c' + c.id;
+    const role = c.role.replace('-', ' ');
+    sec.innerHTML = '<h2><span class="n">' + c.id + '</span>' +
+      role.charAt(0).toUpperCase() + role.slice(1) + '<span class="meta">' + c.kind + ' · ' + c.model +
+      ' · Role "' + c.role + '" · ' + c.weight + (c.note ? ' · ' + c.note : '') + '</span></h2>';
+    const row = document.createElement('div');
+    row.className = 'row';
+    skins.forEach((skin) => modes.forEach((mode) => widths.forEach((w) => {
+      const g = document.createElement('div');
+      g.className = 'group';
+      ['front', 'back'].forEach((side) => {
+        const fig = document.createElement('figure');
+        fig.innerHTML = '<figcaption>' + skin + ' · ' + mode + ' · ' + w + ' · ' + side + '</figcaption>';
+        const f = document.createElement('iframe');
+        f.title = 'Card ' + c.id + ' ' + side + ', ' + skin + ', ' + mode + ', ' + w + ' pixels';
+        f.style.width = w + 'px';
+        f.addEventListener('load', () => {
+          const d = f.contentDocument;
+          const fit = () => { f.style.height = d.documentElement.offsetHeight + 'px'; };
+          fit();
+          new ResizeObserver(fit).observe(d.documentElement);
+          if (state.slide === 'open') d.querySelectorAll('details.lc-plate').forEach((x) => (x.open = true));
+        });
+        f.srcdoc = doc(c, side, skin, w, mode === 'night');
+        fig.appendChild(f);
+        g.appendChild(fig);
+      });
+      row.appendChild(g);
+    })));
+    sec.appendChild(row);
+    out.appendChild(sec);
+  });
+}
+
+const KIT = ['#FFC629','#FF7A33','#FFA3D1','#A487FF','#7FD0FF','#FF6B6B','#B6E33A','#1FB5B0','#56E0B0','#7B93FF','#DDB3FF','#E8C39E'];
+for (let n = 1; n <= 24; n++) document.querySelector('.pal').insertAdjacentHTML('beforeend', '<span style="background:' + KIT[(n - 1) % 12] + '">' + String(n).padStart(2, '0') + '</span>');
+const nav = document.querySelector('.jump');
+CARDS.forEach((c) => nav.insertAdjacentHTML('beforeend', '<a href="#c' + c.id + '">' + c.id + '</a>'));
+
+function sync() {
+  document.querySelectorAll('.seg').forEach((s) => s.querySelectorAll('button').forEach((b) =>
+    b.setAttribute('aria-pressed', String(b.dataset.v === state[s.dataset.key]))));
+}
+document.querySelectorAll('.seg').forEach((s) => s.addEventListener('click', (e) => {
+  const v = e.target.dataset.v;
+  if (!v) return;
+  state[s.dataset.key] = v;
+  sync();
+  if (s.dataset.key === 'slide') {
+    document.querySelectorAll('iframe').forEach((f) => f.contentDocument &&
+      f.contentDocument.querySelectorAll('details.lc-plate').forEach((d) => (d.open = v === 'open')));
+  } else {
+    render();
+  }
+}));
+sync();
+render();
+</script>
+</body>
+</html>

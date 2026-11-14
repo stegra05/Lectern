@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vitrine: overview</title>
+<style>
+  html, body { margin: 0; }
+  body {
+    width: 1600px; height: 1000px; overflow: hidden; box-sizing: border-box;
+    display: flex; gap: 26px; padding: 30px 30px 0;
+    background: #e4e9e7; color: #141a19;
+    font: 14px/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .intro { flex: none; width: 262px; display: flex; flex-direction: column; }
+  .room { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #4f5b58; }
+  h1 { font-size: 46px; line-height: 1; letter-spacing: -0.02em; margin: 14px 0 14px; }
+  .idea { font-size: 17px; line-height: 1.35; margin: 0 0 26px; }
+  dl { margin: 0; }
+  dt { font-weight: 700; font-size: 13px; }
+  dd { margin: 2px 0 12px; font-size: 13px; color: #4f5b58; }
+  .credit { margin-top: auto; padding: 0 0 28px; font-size: 12px; color: #4f5b58; }
+  .cols { display: flex; gap: 22px; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 14px; }
+  .pair { display: flex; gap: 6px; flex-direction: column; }
+  .pair > b { font-size: 12px; letter-spacing: 0.02em; color: #4f5b58; font-weight: 700; }
+  .faces { display: flex; gap: 6px; align-items: flex-start; }
+  .face { overflow: hidden; }
+  iframe { display: block; border: 0; width: 360px; transform-origin: 0 0; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <div class="room">LECTERN CARD DESIGN</div>
+  <h1>Vitrine</h1>
+  <p class="idea">Every card is a museum wall: the question is the label, the answer is the exhibit, and on the front its case stands empty in the shape of what you have to recall.</p>
+  <dl>
+    <dt>Room sign</dt><dd>Lecture number and lecture name, painted on the wall.</dd>
+    <dt>Marker</dt><dd>Exam weight. Filled when past exams asked it, outlined when core.</dd>
+    <dt>Label</dt><dd>The question in bold, then the medium line: role and answer shape.</dd>
+    <dt>Niche</dt><dd>The empty case on the front. Its shape is the answer's shape.</dd>
+    <dt>Exhibit</dt><dd>The answer, lit on a white panel in the same niche.</dd>
+    <dt>Extended label</dt><dd>Context, then the credit line with the source slide.</dd>
+  </dl>
+  <div class="credit">One typeface, one colour: the wall. Cards at 360 px, scaled to 55 %.</div>
+</div>
+<div class="cols" id="cols"></div>
+<script>
+const CARDS = /*CARDS*/[];
+const REVIEWER_CSS = `
+hr { background-color: #c0c0c0; margin: 1em 0; border: none; height: 1px; }
+body { margin: 20px; overflow-wrap: break-word; }
+body.nightMode { background-color: var(--canvas); color: var(--fg); }
+:root { --canvas: #2c2c2c; --fg: #fcfcfc; }
+img { max-width: 100%; max-height: 95vh; }
+li { text-align: start; }
+pre { text-align: left; }
+#typeans { width: 100%; box-sizing: border-box; line-height: 1.75; }
+code#typeans { white-space: pre-wrap; font-variant-ligatures: none; }
+.typeGood { background: #afa; color: black; }
+.typeBad { color: black; background: #faa; }
+.typeMissed { color: black; background: #ccc; }
+`;
+const MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],displayMath:[["\\\\[","\\\\]"]]},chtml:{scale:1}};<\/script>' +
+  '<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"><\/script>';
+const S = 0.55;
+function doc(card, side, night) {
+  const html = side === 'front' ? card.front : card.back;
+  const math = /\\[(\[]/.test(html) ? MATHJAX : '';
+  return '<!doctype html><html class="mobile"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1"><style>' + REVIEWER_CSS + '</style>' +
+    '<link rel="stylesheet" href="../../anki/style-object.css">' + math + '</head>' +
+    '<body class="card card' + card.ord + (night ? ' nightMode night_mode' : '') + '"><div id="qa">' + html + '</div></body></html>';
+}
+const LAYOUT = [
+  [['3', 'Contrast', false], ['9', 'Code', false]],
+  [['5', 'Cloze list', false], ['7', 'Formula', false]],
+  [['2t', 'Typed answer, wrong', false], ['6', 'Diagram, night', true]],
+];
+const cols = document.getElementById('cols');
+LAYOUT.forEach((list) => {
+  const col = document.createElement('div');
+  col.className = 'col';
+  list.forEach(([id, title, night]) => {
+    const card = CARDS.find((c) => c.id === id);
+    const pair = document.createElement('div');
+    pair.className = 'pair';
+    pair.innerHTML = '<b>' + title + '</b>';
+    const faces = document.createElement('div');
+    faces.className = 'faces';
+    ['front', 'back'].forEach((side) => {
+      const box = document.createElement('div');
+      box.className = 'face';
+      box.style.width = (360 * S) + 'px';
+      const f = document.createElement('iframe');
+      f.style.transform = 'scale(' + S + ')';
+      f.addEventListener('load', () => {
+        const d = f.contentDocument;
+        const fit = () => {
+          const h = d.documentElement.offsetHeight;
+          f.style.height = h + 'px';
+          box.style.height = (h * S) + 'px';
+        };
+        fit();
+        new ResizeObserver(fit).observe(d.documentElement);
+      });
+      f.srcdoc = doc(card, side, night);
+      box.appendChild(f);
+      faces.appendChild(box);
+    });
+    pair.appendChild(faces);
+    col.appendChild(pair);
+  });
+  cols.appendChild(col);
+});
+</script>
+</body>
+</html>

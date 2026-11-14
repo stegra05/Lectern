@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Afterglow overview</title>
+<style>
+  @font-face { font-family: "OvSans"; src: url("../../anki/_StructureSans.woff2") format("woff2"); font-weight: 200 800; }
+  @font-face { font-family: "OvMono"; src: url("../../anki/_LampMono.woff2") format("woff2"); }
+  html, body { margin: 0; width: 1600px; height: 1000px; overflow: hidden; }
+  body { background: #0d0f15; color: #d9d5c9; font-family: OvSans, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 28px; padding: 26px 32px 0; height: 74px; box-sizing: border-box; }
+  h1 { margin: 0; font-size: 40px; font-weight: 500; letter-spacing: -0.01em; color: #a6f2c9; text-shadow: 0 0 18px rgba(120,230,170,.35); }
+  .idea { font-size: 19px; font-weight: 370; color: #d9d5c9; }
+  .idea b { font-weight: 560; color: #a6f2c9; }
+  .meta { margin-left: auto; font: 12px/1.4 OvMono, monospace; letter-spacing: .08em; text-transform: uppercase; color: #9a9cb8; text-align: right; }
+  main { display: flex; gap: 10px; padding: 14px 28px 0; height: 926px; box-sizing: border-box; overflow: hidden; }
+  .col { display: flex; flex-direction: column; gap: 10px; width: 245px; flex: none; }
+  .col.light { padding-left: 16px; border-left: 1px solid #262a38; }
+  .cap { font: 11px/1 OvMono, monospace; letter-spacing: .08em; text-transform: uppercase; color: #9a9cb8; margin-bottom: 5px; }
+  .light .cap { color: #c3c3da; }
+  .face { overflow: hidden; border-radius: 6px; outline: 1px solid #262a38; }
+  .face iframe { display: block; border: 0; width: 360px; transform-origin: 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Afterglow</h1>
+  <div class="idea">Built for review in bed with the lights off: <b>the answer is the only light on the screen.</b></div>
+  <div class="meta">Night first, light derived</div>
+</header>
+<main id="m"></main>
+<script>
+const CARDS = /*CARDS*/[];
+const REVIEWER_CSS = `
+hr { background-color: #c0c0c0; margin: 1em 0; border: none; height: 1px; }
+body { margin: 20px; overflow-wrap: break-word; }
+body.nightMode { background-color: var(--canvas); color: var(--fg); }
+:root { --canvas: #2c2c2c; --fg: #fcfcfc; }
+img { max-width: 100%; max-height: 95vh; }
+li { text-align: start; }
+pre { text-align: left; }
+#typeans { width: 100%; box-sizing: border-box; line-height: 1.75; }
+code#typeans { white-space: pre-wrap; font-variant-ligatures: none; }
+.typeGood { background: #afa; color: black; }
+.typeBad { color: black; background: #faa; }
+.typeMissed { color: black; background: #ccc; }
+`;
+const MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],displayMath:[["\\\\[","\\\\]"]]},chtml:{scale:1}};<\/script>' +
+  '<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"><\/script>';
+function doc(card, side, night) {
+  const html = side === 'front' ? card.front : card.back;
+  const math = /\\[(\[]/.test(html) ? MATHJAX : '';
+  return '<!doctype html><html class="mobile"><head><meta charset="utf-8"><style>' + REVIEWER_CSS + '</style>' +
+    '<link rel="stylesheet" href="../../anki/style-night.css">' + math + '</head>' +
+    '<body class="card card' + card.ord + (night ? ' nightMode night_mode' : '') + '"><div id="qa">' + html + '</div></body></html>';
+}
+// [id, side, night, caption, max height in card px]
+const S = 0.68;
+const COLS = [
+  { faces: [['3', 'front', 1, 'Contrast, front'], ['3', 'back', 1, 'Contrast, back', 560], ['12', 'back', 1, 'Slide opened: inverted, no glare', 420, '.lc-plate', 1]] },
+  { faces: [['9', 'front', 1, 'Code, front'], ['9', 'back', 1, 'Code, back, from the cue', 300, '.lc-cue']] },
+  { faces: [['5', 'front', 1, 'Cloze list, front'], ['5', 'back', 1, 'Cloze list, back', 600]] },
+  { faces: [['7', 'front', 1, 'Formula, front'], ['7', 'back', 1, 'Formula, back', 600], ['6', 'back', 1, 'Diagram, back, from the cue', 400, '.lc-cue']] },
+  { faces: [['2t', 'front', 1, 'Typed, front'], ['2t', 'back', 1, 'Typed, back, one word wrong', 600]] },
+  { light: 1, faces: [['1', 'back', 0, 'Light: definition, back', 470], ['12', 'front', 0, 'Light: case, front'], ['10', 'back', 0, 'Light: cloze, back', 400]] },
+];
+const m = document.getElementById('m');
+COLS.forEach((c) => {
+  const col = document.createElement('div');
+  col.className = 'col' + (c.light ? ' light' : '');
+  c.faces.forEach(([id, side, night, cap, max, from, open]) => {
+    const card = CARDS.find((x) => x.id === id);
+    const w = document.createElement('div');
+    w.innerHTML = '<div class="cap">' + cap + '</div>';
+    const face = document.createElement('div');
+    face.className = 'face';
+    face.style.width = (360 * S) + 'px';
+    const f = document.createElement('iframe');
+    f.style.transform = 'scale(' + S + ')';
+    f.addEventListener('load', () => {
+      const d = f.contentDocument;
+      if (open) d.querySelectorAll('details.lc-plate').forEach((x) => (x.open = true));
+      const fit = () => {
+        const h = d.documentElement.offsetHeight;
+        const top = from && d.querySelector(from) ? d.querySelector(from).getBoundingClientRect().top - 18 : 0;
+        f.style.height = h + 'px';
+        f.style.marginTop = (-top * S) + 'px';
+        face.style.height = (Math.min(h - top, max || h) * S) + 'px';
+      };
+      fit();
+      new ResizeObserver(fit).observe(d.documentElement);
+    });
+    f.srcdoc = doc(card, side, night);
+    face.appendChild(f);
+    w.appendChild(face);
+    col.appendChild(w);
+  });
+  m.appendChild(col);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lectern, 20 lectures</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Young+Serif&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2445A8}a:hover{color:#172238}
+</style>
+</helmet>
+<div style="height: 100vh; display: grid; grid-template-rows: 38px 1fr; background: #E6ECE8; color: #172238; font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; font-size: 14px; line-height: 1.45; box-sizing: border-box">
+  <div style="box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 0px 12px; background: #DCE3DF; border-bottom: 1px solid #CBD4CF; position: relative">
+    <div aria-hidden="true" style="display: flex; gap: 8px">
+      <i style="box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%; background: #E8685E; display: block"></i>
+      <i style="box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%; display: block; background: #E9B840"></i>
+      <i style="box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%; display: block; background: #5FBF55"></i>
+    </div>
+    <nav aria-label="Location" style="box-sizing: border-box; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #465267; min-width: 0px; max-width: calc(50% - 70px); white-space: nowrap; overflow: hidden">
+      <a href="Courses.dc.html" style="box-sizing: border-box; color: #465267; text-decoration: none; padding: 2px 6px; border-radius: 6px">Courses</a>
+      <span aria-hidden="true" style="color: #8D97A3">/</span>
+      <b style="box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; min-width: 0px; color: #172238; font-weight: 600">Human Physiology</b>
+    </nav>
+    <div aria-hidden="true" style="position: absolute; left: 50%; transform: translateX(-50%); font-family: 'Young Serif', Georgia, serif; font-size: 14px; letter-spacing: 0.02em; color: #172238">Lectern</div>
+  </div>
+  <main style="box-sizing: border-box; display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0px, 1fr); min-height: 0px">
+    <header style="box-sizing: border-box; display: flex; align-items: flex-end; gap: 18px; padding: 14px 20px 10px; min-height: 62px">
+      <h1 style="font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 1.1; margin: 0px; letter-spacing: -0.005em; white-space: nowrap">Human Physiology</h1>
+      <div style="box-sizing: border-box; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #465267; padding-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0px">800 cards · 116 concepts · 20 subdecks</div>
+      <ol aria-label="Setup steps" style="box-sizing: border-box; margin-left: auto; display: flex; gap: 4px; list-style: none; padding: 0px; margin-top: 0px; margin-bottom: 0px; font-size: 12.5px; flex: 0 0 auto">
+        <li style="box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; color: #465267"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid; background: #465267; border-color: #465267"></span>Files</li>
+        <li style="box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; color: #465267"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid; background: #465267; border-color: #465267"></span>Goal</li>
+        <li style="box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; color: #465267"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid; background: #465267; border-color: #465267"></span>Cards</li>
+        <li aria-current="step" style="box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; color: #FFFFFF; background: #172238"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid; border-color: #F6DF4A; background: #F6DF4A"></span>Result</li>
+        <li style="box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; color: #5F6A7A"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid"></span>Anki</li>
+      </ol>
+    </header>
+    <div style="box-sizing: border-box; display: grid; grid-template-columns: minmax(0,1fr) 344px; gap: 14px; padding: 0px 14px 14px; min-height: 0px">
+      <section aria-label="Course picture" style="box-sizing: border-box; background-color: #F8FAF8; border: 1px solid #D3DBD6; border-radius: 14px; display: grid; grid-template-rows: 1fr auto; min-height: 0px; overflow: hidden; position: relative; background-image: radial-gradient(circle at 1px 1px, rgba(23, 34, 56, 0.07) 1px, transparent 1.2px); background-size: 22px 22px">
+        <div style="box-sizing: border-box; position: relative; min-height: 0px">
+          <div aria-hidden="true" style="box-sizing: border-box; position: absolute; right: 12px; top: 10px; display: flex; gap: 12px; font-size: 12px; color: #465267; background: rgba(248, 250, 248, 0.92); padding: 4px 10px; border-radius: 8px; z-index: 2">
+            <span style="display: flex; align-items: center; gap: 5px"><i style="box-sizing: border-box; border-radius: 50%; border: 1.5px solid #172238; display: inline-block; background: #FFFFFF; width: 7px; height: 7px"></i><i style="box-sizing: border-box; border-radius: 50%; border: 1.5px solid #172238; display: inline-block; background: #FFFFFF; width: 13px; height: 13px"></i>bigger dot, more cards</span>
+            <span style="display: flex; align-items: center; gap: 5px"><i style="box-sizing: border-box; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #172238; display: inline-block; background: #FFFFFF; border-style: dashed; border-color: #5F6A7A"></i>no cards</span>
+          </div>
+          <div style="position: absolute; inset: 0px; display: grid; place-items: center">
+            <div style="position: relative; width: 712px; height: 413px">
+              <svg aria-hidden="true" viewBox="0 0 712 413" width="712" height="413" style="position: absolute; left: 0px; top: 0px; display: block; overflow: visible">
+              <g>
+                <path d="M73.664,80.15 C146.5546666666667,80.15 146.5546666666667,83.8 219.44533333333337,83.8 C285.87733333333335,83.8 285.87733333333335,87.45 352.3093333333333,87.45 C425.20000000000005,87.45 425.20000000000005,91.1 498.0906666666667,91.1 C564.5226666666667,91.1 564.5226666666667,81.975 630.9546666666668,81.975 C630.9546666666668,129.86147916666664 630.9546666666668,129.86147916666664 600.9546666666668,129.86147916666664 L114.736,129.86147916666664 C84.736,129.86147916666664 84.736,129.86147916666664 84.736,176.875 C151.168,176.875 151.168,180.525 217.60000000000002,180.525 C284.03200000000004,180.525 284.03200000000004,171.4 350.464,171.4 C423.3546666666667,171.4 423.3546666666667,175.05 496.24533333333335,175.05 C562.6773333333334,175.05 562.6773333333334,178.7 629.1093333333334,178.7 C629.1093333333334,225.05880208333332 629.1093333333334,225.05880208333332 599.1093333333334,225.05880208333332 L112.89066666666668,225.05880208333332 C82.89066666666668,225.05880208333332 82.89066666666668,225.05880208333332 82.89066666666668,273.6 C149.3226666666667,273.6 149.3226666666667,264.475 215.75466666666668,264.475 C288.6453333333333,264.475 288.6453333333333,268.125 361.536,268.125 C427.968,268.125 427.968,271.775 494.40000000000003,271.775 C560.8320000000001,271.775 560.8320000000001,262.65 627.2640000000001,262.65 C627.2640000000001,309.44528125000005 627.2640000000001,309.44528125000005 597.2640000000001,309.44528125000005 L111.04533333333333,309.44528125000005 C81.04533333333333,309.44528125000005 81.04533333333333,309.44528125000005 81.04533333333333,357.55 C147.47733333333335,357.55 147.47733333333335,361.2 213.90933333333336,361.2 C286.8,361.2 286.8,364.85 359.6906666666667,364.85 C426.1226666666667,364.85 426.1226666666667,355.725 492.5546666666667,355.725 C565.4453333333333,355.725 565.4453333333333,359.375 638.336,359.375" stroke-width="1.6" stroke-dasharray="1 6" style="fill: none; stroke: #172238; opacity: 0.35; stroke-linecap: round"></path>
+                <g>
+                  <path d="M134.5,80.2C135.5,87.1 131.8,97.2 124.4,102.3C117.0,107.3 101.3,109.2 90.1,110.5C78.9,111.9 68.4,111.9 57.2,110.5C46.0,109.2 30.4,107.3 23.0,102.3C15.6,97.2 11.8,87.1 12.8,80.2C13.9,73.2 22.1,66.3 29.2,60.7C36.4,55.2 45.4,49.3 55.8,47.0C66.1,44.8 81.2,44.8 91.6,47.0C102.0,49.3 111.0,55.2 118.1,60.7C125.3,66.3 133.4,73.2 134.5,80.2Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M286.1,83.8C285.3,90.9 273.9,98.7 265.6,104.0C257.3,109.2 247.4,112.4 236.4,115.2C225.4,118.0 211.0,122.2 199.4,120.8C187.9,119.4 173.6,112.8 167.2,106.6C160.8,100.4 160.7,91.2 161.2,83.8C161.7,76.4 163.8,68.2 170.3,62.4C176.9,56.5 189.4,50.8 200.6,48.9C211.7,47.0 225.5,49.0 237.1,51.1C248.8,53.2 262.2,56.1 270.4,61.6C278.6,67.0 286.9,76.7 286.1,83.8Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M409.4,87.5C407.7,94.4 401.5,100.2 395.1,106.1C388.8,112.0 381.9,119.9 371.5,122.9C361.1,125.8 343.6,126.2 332.7,123.7C321.8,121.2 312.5,113.8 305.9,107.7C299.3,101.7 293.4,94.4 293.1,87.5C292.8,80.5 296.8,71.6 303.8,66.3C310.8,61.0 323.9,57.9 335.1,55.7C346.3,53.5 359.3,51.5 371.0,52.9C382.7,54.3 399.1,58.5 405.5,64.2C411.9,70.0 411.1,80.5 409.4,87.5Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M550.0,91.1C550.3,98.0 552.1,106.3 546.6,112.3C541.2,118.3 528.6,125.1 517.5,127.0C506.5,129.0 491.5,126.4 480.4,123.8C469.3,121.3 457.8,117.2 450.8,111.7C443.8,106.3 438.0,97.8 438.5,91.1C439.1,84.4 446.9,77.4 453.8,71.8C460.7,66.2 469.2,60.6 480.0,57.6C490.7,54.6 507.4,51.7 518.2,53.8C529.1,56.0 539.6,64.5 544.9,70.7C550.2,76.9 549.7,84.2 550.0,91.1Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M692.6,82.0C694.2,89.1 691.5,99.5 684.4,105.3C677.2,111.1 661.8,114.7 649.7,116.6C637.6,118.6 623.6,119.1 612.0,117.0C600.4,114.9 586.4,110.0 580.0,104.2C573.6,98.4 573.2,89.2 573.5,82.0C573.9,74.7 576.2,67.2 582.2,60.7C588.3,54.2 598.5,45.2 609.8,42.9C621.1,40.5 639.3,43.1 650.2,46.4C661.1,49.7 668.0,56.8 675.0,62.7C682.1,68.7 691.1,74.9 692.6,82.0Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M149.0,176.9C149.1,183.9 140.6,192.2 133.0,197.9C125.4,203.6 114.5,208.7 103.2,211.1C92.0,213.5 76.3,214.6 65.6,212.3C54.9,209.9 45.6,202.6 39.2,196.7C32.8,190.8 28.5,184.1 27.1,176.9C25.8,169.6 24.5,159.3 30.9,153.4C37.3,147.4 53.7,142.4 65.5,141.3C77.2,140.1 90.1,143.8 101.3,146.3C112.4,148.8 124.5,150.9 132.5,156.0C140.4,161.1 149.0,169.9 149.0,176.9Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M278.4,180.5C277.8,187.9 273.5,195.9 266.6,201.9C259.7,207.9 248.2,214.7 237.1,216.6C226.0,218.5 210.8,215.9 199.9,213.3C188.9,210.6 179.6,206.1 171.4,200.7C163.2,195.2 151.9,187.7 150.9,180.5C149.9,173.4 157.1,163.0 165.4,157.7C173.7,152.5 189.0,151.0 200.7,149.2C212.4,147.5 224.2,145.6 235.7,147.1C247.3,148.5 262.9,152.1 270.0,157.7C277.1,163.2 278.9,173.2 278.4,180.5Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M408.1,171.4C408.4,178.4 406.2,187.5 399.5,192.8C392.7,198.0 378.4,201.4 367.5,202.9C356.6,204.4 345.3,203.5 334.0,201.9C322.7,200.3 307.5,198.6 299.8,193.5C292.1,188.4 286.5,178.2 287.9,171.4C289.2,164.6 300.0,157.9 307.6,152.7C315.2,147.5 323.2,142.8 333.5,140.0C343.8,137.3 358.7,134.6 369.4,136.5C380.0,138.3 391.1,145.0 397.5,150.9C404.0,156.7 407.7,164.4 408.1,171.4Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M559.5,175.1C559.3,182.0 551.0,190.4 543.2,195.6C535.5,200.7 524.2,203.5 513.1,206.2C502.0,208.9 488.2,212.8 476.5,211.5C464.8,210.2 448.9,204.4 442.9,198.3C436.8,192.3 438.9,182.2 440.2,175.1C441.5,167.9 444.7,161.2 450.8,155.2C456.9,149.2 466.1,141.6 476.8,139.1C487.5,136.7 503.7,138.0 515.0,140.5C526.2,142.9 537.1,148.2 544.5,154.0C551.9,159.8 559.7,168.1 559.5,175.1Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M686.7,178.7C685.4,185.4 678.1,191.5 671.7,197.3C665.2,203.1 658.4,210.4 648.0,213.5C637.5,216.6 619.7,218.4 609.0,215.9C598.3,213.3 589.6,204.6 583.9,198.4C578.2,192.2 575.4,185.6 574.8,178.7C574.1,171.8 573.9,162.9 580.0,157.2C586.0,151.6 599.6,146.8 610.8,144.9C622.0,142.9 635.6,143.6 647.0,145.6C658.4,147.6 672.7,151.3 679.3,156.8C685.9,162.3 688.0,172.0 686.7,178.7Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M138.4,273.6C138.5,281.0 139.7,289.3 134.1,295.9C128.4,302.5 116.0,311.2 104.4,313.3C92.7,315.4 75.5,311.5 64.1,308.3C52.8,305.0 43.9,299.7 36.4,293.9C28.9,288.1 19.8,280.7 19.0,273.6C18.3,266.5 24.5,257.2 32.0,251.4C39.5,245.5 52.1,241.2 63.9,238.6C75.8,236.0 91.8,233.7 103.3,235.8C114.9,238.0 127.4,245.3 133.3,251.6C139.1,257.9 138.2,266.2 138.4,273.6Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M275.2,264.5C277.1,271.6 276.9,282.5 270.0,288.2C263.2,293.9 246.2,297.4 234.3,298.7C222.4,300.0 210.0,298.2 198.6,296.1C187.3,294.0 173.7,291.3 166.4,286.0C159.1,280.7 154.7,271.5 155.0,264.5C155.3,257.4 161.3,249.8 168.2,243.7C175.0,237.6 185.0,230.4 196.0,228.0C207.1,225.7 224.2,226.5 234.7,229.5C245.2,232.4 252.3,239.8 259.0,245.6C265.8,251.4 273.4,257.4 275.2,264.5Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M429.2,268.1C429.6,275.2 420.0,284.6 411.6,290.0C403.3,295.3 390.4,298.1 378.9,300.2C367.4,302.4 353.8,304.8 342.6,303.1C331.4,301.3 318.5,295.7 311.8,289.8C305.1,284.0 302.8,275.5 302.4,268.1C302.0,260.7 302.8,251.4 309.4,245.4C316.0,239.4 330.5,233.4 342.0,232.0C353.5,230.6 367.2,234.5 378.3,237.0C389.5,239.6 400.5,242.2 409.0,247.4C417.5,252.6 428.7,261.0 429.2,268.1Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M558.3,271.8C556.8,279.1 548.2,286.1 540.7,292.0C533.2,297.8 524.3,304.3 513.4,306.9C502.5,309.4 486.4,309.7 475.2,307.3C464.0,305.0 453.9,298.7 446.3,292.8C438.7,286.8 430.4,279.1 429.6,271.8C428.8,264.4 433.8,254.1 441.7,248.8C449.7,243.5 465.4,241.7 477.2,240.0C489.0,238.3 500.3,237.4 512.3,238.7C524.3,240.0 541.6,242.3 549.3,247.8C557.0,253.3 559.7,264.4 558.3,271.8Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M681.0,262.6C680.5,269.5 679.1,277.2 673.2,282.7C667.2,288.2 655.6,293.8 645.1,295.7C634.7,297.6 621.3,296.0 610.3,294.0C599.3,292.0 586.4,289.0 579.0,283.7C571.5,278.5 564.8,269.3 565.8,262.6C566.8,256.0 577.2,249.1 584.8,244.1C592.3,239.1 600.7,235.4 611.0,232.6C621.3,229.8 635.7,225.6 646.5,227.1C657.3,228.5 670.3,235.4 676.1,241.4C681.8,247.3 681.4,255.8 681.0,262.6Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M139.7,357.6C140.2,364.4 136.5,373.4 129.6,378.8C122.8,384.1 109.8,387.6 98.5,389.9C87.3,392.2 73.7,394.1 62.1,392.5C50.5,391.0 34.8,386.2 28.7,380.4C22.6,374.5 23.9,364.5 25.4,357.6C26.9,350.6 31.7,344.7 37.7,338.6C43.7,332.6 50.9,324.1 61.4,321.2C71.9,318.4 89.8,318.6 100.6,321.3C111.5,324.1 120.1,331.6 126.6,337.6C133.1,343.7 139.2,350.7 139.7,357.6Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M274.1,361.2C273.8,368.0 266.4,375.3 259.5,381.1C252.5,386.8 243.5,392.8 232.6,395.7C221.6,398.6 204.5,400.9 193.7,398.5C182.9,396.1 173.3,387.5 167.9,381.3C162.4,375.1 161.8,368.2 161.0,361.2C160.3,354.2 158.0,345.3 163.5,339.2C169.0,333.1 182.8,326.4 194.1,324.7C205.5,322.9 220.4,326.0 231.5,328.6C242.7,331.3 254.1,335.1 261.2,340.6C268.3,346.0 274.4,354.4 274.1,361.2Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M416.5,364.9C416.4,372.0 414.4,379.7 408.3,386.1C402.3,392.4 391.4,400.7 380.2,402.8C369.1,404.9 352.0,401.8 341.4,398.6C330.9,395.4 324.0,389.2 316.7,383.6C309.5,378.0 299.6,371.8 298.0,364.9C296.3,357.9 299.8,347.4 307.0,341.9C314.3,336.3 329.8,333.2 341.6,331.4C353.4,329.7 366.7,329.1 377.9,331.1C389.2,333.1 402.7,337.7 409.1,343.3C415.5,348.9 416.6,357.7 416.5,364.9Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+                <g>
+                  <path d="M548.7,355.7C550.0,362.6 550.2,372.6 543.8,378.1C537.4,383.6 521.5,387.6 510.4,388.7C499.2,389.8 487.7,386.6 477.0,384.5C466.3,382.4 453.8,380.8 446.1,376.0C438.3,371.2 430.4,362.4 430.6,355.7C430.7,349.0 439.6,341.2 447.0,335.8C454.4,330.5 464.6,325.9 475.2,323.6C485.8,321.4 500.4,320.2 510.6,322.4C520.8,324.5 529.9,331.1 536.3,336.6C542.6,342.2 547.5,348.8 548.7,355.7Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+                </g>
+                <g>
+                  <path d="M697.4,359.4C698.0,365.7 690.5,374.4 683.1,378.9C675.7,383.4 663.2,384.7 653.0,386.5C642.8,388.2 632.3,390.5 622.1,389.4C611.8,388.3 597.7,384.8 591.5,379.8C585.3,374.8 584.3,365.9 585.0,359.4C585.7,352.9 589.7,346.0 595.8,340.8C601.8,335.6 611.7,329.7 621.4,328.0C631.1,326.3 644.2,328.2 654.0,330.4C663.8,332.6 672.8,336.3 680.1,341.2C687.3,346.0 696.9,353.1 697.4,359.4Z" stroke-width="1.2" style="fill: #E9F0EB; stroke: #B9C8BF; stroke-width: 1.2"></path>
+      
+      
+      
+                </g>
+              </g>
+              </svg>
+              <div style="position: absolute; left: 20.38px; top: 44.01px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">01</div>
+              <div style="position: absolute; left: -26.34px; top: 66.15px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Cells and</div>
+              <div style="position: absolute; left: -26.34px; top: 78.15px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">membranes</div>
+              <div style="position: absolute; left: 163.48px; top: 46.3px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">02</div>
+              <div style="position: absolute; left: 119.45px; top: 69.8px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Membrane</div>
+              <div style="position: absolute; left: 119.45px; top: 81.8px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">transport</div>
+              <div style="position: absolute; left: 297.69px; top: 50.63px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">03</div>
+              <div style="position: absolute; left: 252.31px; top: 73.45px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Resting</div>
+              <div style="position: absolute; left: 252.31px; top: 85.45px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">potential</div>
+              <div style="position: absolute; left: 444.14px; top: 54.62px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">04</div>
+              <div style="position: absolute; left: 398.09px; top: 77.1px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Cell</div>
+              <div style="position: absolute; left: 398.09px; top: 89.1px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">division</div>
+              <div style="position: absolute; left: 574.33px; top: 44.13px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">05</div>
+              <div style="position: absolute; left: 530.95px; top: 67.97px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Action</div>
+              <div style="position: absolute; left: 530.95px; top: 79.97px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">potential</div>
+              <div style="position: absolute; left: 29.44px; top: 139.71px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">06</div>
+              <div style="position: absolute; left: -15.26px; top: 168.88px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Synapses</div>
+              <div style="position: absolute; left: 161.64px; top: 143.02px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">07</div>
+              <div style="position: absolute; left: 117.6px; top: 172.52px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Muscle</div>
+              <div style="position: absolute; left: 297.18px; top: 135.26px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">08</div>
+              <div style="position: absolute; left: 250.46px; top: 157.4px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Autonomic</div>
+              <div style="position: absolute; left: 250.46px; top: 169.4px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">nervous system</div>
+              <div style="position: absolute; left: 440.95px; top: 137.89px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">09</div>
+              <div style="position: absolute; left: 396.25px; top: 161.05px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Acid-base</div>
+              <div style="position: absolute; left: 396.25px; top: 173.05px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">balance</div>
+              <div style="position: absolute; left: 575.15px; top: 142.22px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">10</div>
+              <div style="position: absolute; left: 529.11px; top: 170.7px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Blood</div>
+              <div style="position: absolute; left: 25.59px; top: 235.42px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">11</div>
+              <div style="position: absolute; left: -17.11px; top: 265.6px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Heart</div>
+              <div style="position: absolute; left: 160.46px; top: 227.31px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">12</div>
+              <div style="position: absolute; left: 115.75px; top: 256.48px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Circulation</div>
+              <div style="position: absolute; left: 305.58px; top: 230.62px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">13</div>
+              <div style="position: absolute; left: 261.54px; top: 260.12px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Respiration</div>
+              <div style="position: absolute; left: 437.77px; top: 233.93px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">14</div>
+              <div style="position: absolute; left: 394.4px; top: 263.77px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Kidney</div>
+              <div style="position: absolute; left: 574.65px; top: 226.85px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">15</div>
+              <div style="position: absolute; left: 527.26px; top: 248.65px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Fluid</div>
+              <div style="position: absolute; left: 527.26px; top: 260.65px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">balance</div>
+              <div style="position: absolute; left: 26.42px; top: 320.73px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">16</div>
+              <div style="position: absolute; left: -18.95px; top: 349.55px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Digestion</div>
+              <div style="position: absolute; left: 159.29px; top: 324.38px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">17</div>
+              <div style="position: absolute; left: 113.91px; top: 353.2px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Metabolism</div>
+              <div style="position: absolute; left: 304.4px; top: 327.69px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">18</div>
+              <div style="position: absolute; left: 259.69px; top: 350.85px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Endocrine</div>
+              <div style="position: absolute; left: 259.69px; top: 362.85px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">system</div>
+              <div style="position: absolute; left: 439.94px; top: 319.93px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">19</div>
+              <div style="position: absolute; left: 392.55px; top: 347.73px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Reproduction</div>
+              <div style="position: absolute; left: 589.06px; top: 325.28px; width: 200px; line-height: 12px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; color: #5F6A7A; text-align: left; white-space: nowrap">20</div>
+              <div style="position: absolute; left: 538.34px; top: 345.38px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">Temperature</div>
+              <div style="position: absolute; left: 538.34px; top: 357.38px; width: 200px; line-height: 16px; font-family: 'Young Serif', Georgia, serif; font-size: 11px; color: #172238; text-align: center; white-space: nowrap">regulation</div>
+              <svg aria-hidden="true" viewBox="0 0 712 413" width="712" height="413" style="position: absolute; left: 0px; top: 0px; display: block; overflow: visible">
+              <g>
+                <g>
+                  <circle cx="20.796347474534528" cy="65.93724116466697" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="73.664" cy="45.356375000000014" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="126.53165252546549" cy="65.93724116466697" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="20.796347474534528" cy="94.36275883533304" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="126.53165252546549" cy="94.36275883533304" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="163.92482369189472" cy="68.87405613350329" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="219.44533333333337" cy="47.26045833333333" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="274.96584297477204" cy="68.87405613350329" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="163.92482369189472" cy="98.7259438664967" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="219.44533333333337" cy="120.33954166666666" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="274.96584297477204" cy="98.7259438664967" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="298.1152522498812" cy="72.88064864908513" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="352.3093333333333" cy="51.783416666666675" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="406.5034144167854" cy="72.88064864908513" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="298.1152522498812" cy="102.01935135091487" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="406.5034144167854" cy="102.01935135091487" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="444.55979986220797" cy="76.70894490687604" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="498.0906666666667" cy="55.86989583333333" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="551.6215334711255" cy="76.70894490687604" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="444.55979986220797" cy="105.49105509312395" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="498.0906666666667" cy="126.33010416666666" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="551.6215334711255" cy="105.49105509312395" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="574.7709427462348" cy="66.87075987571238" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="630.9546666666668" cy="44.99897916666667" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="687.1383905870987" cy="66.87075987571238" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="574.7709427462348" cy="97.07924012428761" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="630.9546666666668" cy="118.95102083333332" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="687.1383905870987" cy="97.07924012428761" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="29.87870463755464" cy="162.1273523912942" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="84.736" cy="140.7719375" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="139.59329536244536" cy="162.1273523912942" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="29.87870463755464" cy="191.6226476087058" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="84.736" cy="212.9780625" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="139.59329536244536" cy="191.6226476087058" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="162.07949035856137" cy="165.5990561335033" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="194.84992815675054" cy="146.63738583320247" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="240.3500718432495" cy="146.63738583320247" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="273.1205096414387" cy="165.5990561335033" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="162.07949035856137" cy="195.45094386649671" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="217.60000000000002" cy="217.06454166666668" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="273.1205096414387" cy="195.45094386649671" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="297.5963474745345" cy="157.18724116466697" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="350.464" cy="136.606375" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="403.3316525254655" cy="157.18724116466697" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="297.5963474745345" cy="185.61275883533304" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="403.3316525254655" cy="185.61275883533304" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="441.388037970888" cy="160.30235239129422" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="496.24533333333335" cy="138.94693750000002" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="551.1026286957788" cy="160.30235239129422" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="441.388037970888" cy="189.7976476087058" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="496.24533333333335" cy="211.1530625" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="551.1026286957788" cy="189.7976476087058" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="575.5784665288746" cy="164.30894490687604" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="629.1093333333334" cy="143.46989583333334" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="682.6402001377922" cy="164.30894490687604" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="575.5784665288746" cy="193.09105509312394" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="629.1093333333334" cy="213.93010416666664" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="682.6402001377922" cy="193.09105509312394" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="26.04372846724143" cy="258.3174636179215" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="59.59707774866378" cy="238.90278412955888" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="106.18425558466957" cy="238.90278412955888" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="139.73760486609194" cy="258.3174636179215" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="26.04372846724143" cy="288.88253638207857" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="82.89066666666668" cy="311.01250000000005" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="139.73760486609194" cy="288.88253638207857" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="160.8973713042213" cy="249.72735239129423" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="215.75466666666668" cy="228.37193750000003" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="270.6119620291121" cy="249.72735239129423" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="160.8973713042213" cy="279.2226476087058" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="215.75466666666668" cy="300.5780625" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="270.6119620291121" cy="279.2226476087058" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="306.01549035856135" cy="253.1990561335033" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="361.536" cy="231.58545833333335" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="417.05650964143865" cy="253.1990561335033" r="5.6" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="306.01549035856135" cy="283.0509438664967" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="361.536" cy="304.66454166666665" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="417.05650964143865" cy="283.0509438664967" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="438.2162760795681" cy="256.67075987571235" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="494.40000000000003" cy="234.79897916666664" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="550.583723920432" cy="256.67075987571235" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="438.2162760795681" cy="286.8792401242876" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="494.40000000000003" cy="308.7510208333333" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="550.583723920432" cy="286.8792401242876" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="575.059561753528" cy="248.61553742245786" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="627.2640000000001" cy="228.29285416666664" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="679.4684382464723" cy="248.61553742245786" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="575.059561753528" cy="276.6844625775421" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="679.4684382464723" cy="276.6844625775421" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="26.851252249881263" cy="342.98064864908514" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="81.04533333333333" cy="321.8834166666667" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="135.2394144167854" cy="342.98064864908514" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="26.851252249881263" cy="372.1193513509149" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="81.04533333333333" cy="393.21658333333335" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="135.2394144167854" cy="372.1193513509149" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="159.7152522498813" cy="346.6306486490851" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="213.90933333333336" cy="325.53341666666665" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="268.1034144167854" cy="346.6306486490851" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="159.7152522498813" cy="375.76935135091486" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="213.90933333333336" cy="396.8665833333333" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="268.1034144167854" cy="375.76935135091486" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="304.8333713042213" cy="350.10235239129423" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="359.6906666666667" cy="328.74693750000006" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="414.54796202911206" cy="350.10235239129423" r="4.96" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="304.8333713042213" cy="379.5976476087058" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="359.6906666666667" cy="400.9530625" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="414.54796202911206" cy="379.5976476087058" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="440.3502284201945" cy="341.6905374224579" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="492.5546666666667" cy="321.3678541666667" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="544.7591049131389" cy="341.6905374224579" r="5.279999999999999" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="440.3502284201945" cy="369.75946257754214" r="4.640000000000001" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="544.7591049131389" cy="369.75946257754214" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="589.4476331484943" cy="346.2320187114125" r="4.32" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="638.336" cy="327.20025" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="687.2243668515057" cy="346.2320187114125" r="3.6799999999999997" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="589.4476331484943" cy="372.5179812885875" r="4" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+                <g>
+                  <circle cx="687.2243668515057" cy="372.5179812885875" r="3.6799999999999997" stroke-width="1.4" style="stroke: #172238; fill: #FFFFFF"></circle>
+                </g>
+              </g>
+              <g>
+                <g>
+                  <circle cx="132.7146666666667" cy="239.92875000000004" r="8" style="fill: #172238"></circle>
+                  <text x="132.7146666666667" y="243.22875000000005" text-anchor="middle" font-size="9.5" style="fill: #FFFFFF; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-weight: 600">1</text>
+                </g>
+                <g>
+                  <circle cx="544.3254933333334" cy="142.55724375000003" r="8" style="fill: #172238"></circle>
+                  <text x="544.3254933333334" y="145.85724375000004" text-anchor="middle" font-size="9.5" style="fill: #FFFFFF; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-weight: 600">2</text>
+                </g>
+                <g>
+                  <circle cx="681.1846400000001" cy="330.417725" r="8" style="fill: #172238"></circle>
+                  <text x="681.1846400000001" y="333.71772500000003" text-anchor="middle" font-size="9.5" style="fill: #FFFFFF; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-weight: 600">3</text>
+                </g>
+              </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div style="box-sizing: border-box; border-top: 1px solid #D3DBD6; background: rgba(255, 255, 255, 0.72); padding: 8px 14px 4px; height: 136px; display: grid; grid-template-rows: auto minmax(0px, 1fr); gap: 4px; min-height: 0px">
+          <div style="box-sizing: border-box; display: flex; align-items: baseline; gap: 12px; min-width: 0px">
+            <span style="font-family: 'Young Serif', Georgia, serif; font-size: 14px; white-space: nowrap">Your deck</span>
+            <span style="box-sizing: border-box; font-size: 12.5px; color: #465267; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0px"><b style="color: #172238; font-weight: 700">800 cards</b> in 20 subdecks, one per lecture, in course order · click a bar to open it</span>
+          </div>
+          <div style="position: relative; min-height: 0px; display: grid; place-items: center">
+            <div style="position: relative; width: 684px; height: 67px">
+              <svg aria-hidden="true" viewBox="0 0 684 67" width="684" height="67" style="position: absolute; left: 0px; top: 0px; display: block; overflow: visible">
+              <line x1="2" y1="50.5" x2="682" y2="50.5" style="stroke: #B8C3BD"></line>
+              <g>
+                <rect x="10.421999999999999" y="28.785714285714285" width="20.956" height="21.214285714285715" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="44.221999999999994" y="24.071428571428573" width="20.956" height="25.928571428571427" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="78.02199999999999" y="26.428571428571427" width="20.956" height="23.571428571428573" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="111.82199999999999" y="27.607142857142858" width="20.956" height="22.392857142857142" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="145.62199999999999" y="22.892857142857142" width="20.956" height="27.107142857142858" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="179.422" y="25.25" width="20.956" height="24.75" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="213.22199999999998" y="24.071428571428573" width="20.956" height="25.928571428571427" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="247.02199999999996" y="28.785714285714285" width="20.956" height="21.214285714285715" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="280.822" y="25.25" width="20.956" height="24.75" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="314.622" y="27.607142857142858" width="20.956" height="22.392857142857142" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="348.422" y="21.714285714285715" width="20.956" height="28.285714285714285" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="382.222" y="25.25" width="20.956" height="24.75" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="416.022" y="24.071428571428573" width="20.956" height="25.928571428571427" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="449.822" y="22.892857142857142" width="20.956" height="27.107142857142858" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="483.62199999999996" y="29.964285714285715" width="20.956" height="20.035714285714285" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="517.4219999999999" y="26.428571428571427" width="20.956" height="23.571428571428573" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="551.222" y="26.428571428571427" width="20.956" height="23.571428571428573" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="585.0219999999999" y="25.25" width="20.956" height="24.75" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="618.822" y="29.964285714285715" width="20.956" height="20.035714285714285" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              <g>
+                <rect x="652.622" y="35.85714285714286" width="20.956" height="14.142857142857142" rx="2" style="fill: #D5E0D9; stroke: #172238; stroke-width: 1"></rect>
+    
+    
+              </g>
+              </svg>
+              <div style="position: absolute; left: -79.1px; top: 14.74px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">36</div>
+              <div style="position: absolute; left: -79.1px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">01</div>
+              <div style="position: absolute; left: -45.3px; top: 10.03px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">44</div>
+              <div style="position: absolute; left: -45.3px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">02</div>
+              <div style="position: absolute; left: -11.5px; top: 12.38px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">40</div>
+              <div style="position: absolute; left: -11.5px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">03</div>
+              <div style="position: absolute; left: 22.3px; top: 13.56px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">38</div>
+              <div style="position: absolute; left: 22.3px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">04</div>
+              <div style="position: absolute; left: 56.1px; top: 8.85px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">46</div>
+              <div style="position: absolute; left: 56.1px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">05</div>
+              <div style="position: absolute; left: 89.9px; top: 11.21px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">42</div>
+              <div style="position: absolute; left: 89.9px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">06</div>
+              <div style="position: absolute; left: 123.7px; top: 10.03px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">44</div>
+              <div style="position: absolute; left: 123.7px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">07</div>
+              <div style="position: absolute; left: 157.5px; top: 14.74px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">36</div>
+              <div style="position: absolute; left: 157.5px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">08</div>
+              <div style="position: absolute; left: 191.3px; top: 11.21px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">42</div>
+              <div style="position: absolute; left: 191.3px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">09</div>
+              <div style="position: absolute; left: 225.1px; top: 13.56px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">38</div>
+              <div style="position: absolute; left: 225.1px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">10</div>
+              <div style="position: absolute; left: 258.9px; top: 7.67px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">48</div>
+              <div style="position: absolute; left: 258.9px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">11</div>
+              <div style="position: absolute; left: 292.7px; top: 11.21px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">42</div>
+              <div style="position: absolute; left: 292.7px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">12</div>
+              <div style="position: absolute; left: 326.5px; top: 10.03px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">44</div>
+              <div style="position: absolute; left: 326.5px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">13</div>
+              <div style="position: absolute; left: 360.3px; top: 8.85px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">46</div>
+              <div style="position: absolute; left: 360.3px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">14</div>
+              <div style="position: absolute; left: 394.1px; top: 15.92px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">34</div>
+              <div style="position: absolute; left: 394.1px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">15</div>
+              <div style="position: absolute; left: 427.9px; top: 12.38px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">40</div>
+              <div style="position: absolute; left: 427.9px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">16</div>
+              <div style="position: absolute; left: 461.7px; top: 12.38px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">40</div>
+              <div style="position: absolute; left: 461.7px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">17</div>
+              <div style="position: absolute; left: 495.5px; top: 11.21px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">42</div>
+              <div style="position: absolute; left: 495.5px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">18</div>
+              <div style="position: absolute; left: 529.3px; top: 15.92px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">34</div>
+              <div style="position: absolute; left: 529.3px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">19</div>
+              <div style="position: absolute; left: 563.1px; top: 21.81px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">24</div>
+              <div style="position: absolute; left: 563.1px; top: 51.96px; width: 200px; line-height: 13.06px; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #465267; text-align: center; white-space: nowrap">20</div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <aside aria-live="polite" style="box-sizing: border-box; background: #FFFFFF; border: 1px solid #D3DBD6; border-radius: 14px; display: flex; flex-direction: column; min-height: 0px; overflow: hidden">
+        <div style="box-sizing: border-box; flex: 1 1 0%; overflow: auto; padding: 20px 20px 12px; min-height: 0px">
+          <p style="font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 11.5px; letter-spacing: 0.02em; margin: 0px 0px 10px; color: #465267">Step 4 of 5 · done</p>
+          <h2 style="font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 1.18; margin: 0px 0px 8px; letter-spacing: -0.005em">800 cards for a top grade</h2>
+          <p style="margin: 0px 0px 10px; color: #465267; font-size: 13px">Every concept in your 20 lectures has cards. Bigger dots on the map have more of them.</p>
+          <h3 style="font-size: 13px; font-weight: 700; margin: 16px 0px 6px; color: #172238">What I decided</h3>
+          <ul style="box-sizing: border-box; list-style: none; margin: 0px; padding: 0px; display: flex; flex-direction: column; gap: 1px">
+            <li style="display: flex; align-items: flex-start; border-radius: 8px; position: relative">
+              <button type="button" style="box-sizing: border-box; font: inherit; display: flex; gap: 10px; flex: 1 1 0%; text-align: left; background: transparent; border: 0px; padding: 5px 6px; border-radius: 8px; font-size: 13px; color: #172238; line-height: 1.4">
+                <span aria-hidden="true" style="box-sizing: border-box; flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: #172238; color: #FFFFFF; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 11px; display: grid; place-items: center; margin-top: 1px">1</span>
+                <span>Heart got the most cards, 48: seven concepts, each with a curve or a cycle to explain.</span>
+              </button>
+            </li>
+            <li style="display: flex; align-items: flex-start; border-radius: 8px; position: relative">
+              <button type="button" style="box-sizing: border-box; font: inherit; display: flex; gap: 10px; flex: 1 1 0%; text-align: left; background: transparent; border: 0px; padding: 5px 6px; border-radius: 8px; font-size: 13px; color: #172238; line-height: 1.4">
+                <span aria-hidden="true" style="box-sizing: border-box; flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: #172238; color: #FFFFFF; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 11px; display: grid; place-items: center; margin-top: 1px">2</span>
+                <span>Acid-base balance gets case cards: a blood value, then the disorder it shows.</span>
+              </button>
+            </li>
+            <li style="display: flex; align-items: flex-start; border-radius: 8px; position: relative">
+              <button type="button" style="box-sizing: border-box; font: inherit; display: flex; gap: 10px; flex: 1 1 0%; text-align: left; background: transparent; border: 0px; padding: 5px 6px; border-radius: 8px; font-size: 13px; color: #172238; line-height: 1.4">
+                <span aria-hidden="true" style="box-sizing: border-box; flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: #172238; color: #FFFFFF; font-family: 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace; font-size: 11px; display: grid; place-items: center; margin-top: 1px">3</span>
+                <span>Temperature regulation got 24 cards: a short lecture with five concepts.</span>
+              </button>
+            </li>
+          </ul>
+          <p style="font-size: 12.5px; line-height: 1.45; margin: 0px 0px 10px; color: #465267"><b style="color: #465267; font-weight: 600">Click a lecture</b> to read its cards and the slide behind each one.</p>
+        </div>
+        <div style="box-sizing: border-box; padding: 12px 20px 16px; border-top: 1px solid #D3DBD6; display: flex; flex-direction: column; gap: 8px; background: #FFFFFF">
+          <a href="Sent.dc.html" style="box-sizing: border-box; font: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; border: 1px solid transparent; padding: 10px 16px; font-weight: 700; font-size: 14px; text-decoration: none; background: #2445A8; color: #FFFFFF; width: 100%">Send 800 cards to Anki</a>
+          <p style="font-size: 12px; text-align: center; margin: 0px 0px 10px; color: #465267">One subdeck per lecture. Nothing else in Anki changes.</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1100,"height":720}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

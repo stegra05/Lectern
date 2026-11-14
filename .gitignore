@@ -4,3 +4,6 @@ dist
 *.local
 .playwright-mcp
 eval-results
+
+# v3 design explorations that were superseded, kept locally only
+design/v3/archive/

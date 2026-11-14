@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lectern cards: Native overview</title>
+<style>
+  html, body { margin: 0; }
+  body {
+    width: 1600px; height: 1000px; overflow: hidden; box-sizing: border-box;
+    padding: 30px 32px 0;
+    background: #dcdce1; color: #1d1d1f;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { display: flex; align-items: baseline; gap: 22px; height: 58px; }
+  h1 { margin: 0; font-size: 40px; line-height: 1; font-weight: 700; letter-spacing: -0.02em; }
+  header p { margin: 0; font-size: 17px; color: #48484a; }
+  header p b { color: #0064d2; font-weight: 600; }
+  header .meta { margin-left: auto; font-size: 13px; color: #636366; }
+  .cols { display: flex; gap: 20px; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 12px; width: 234px; }
+  figure { margin: 0; }
+  figcaption { font-size: 12px; line-height: 16px; font-weight: 600; color: #3a3a3c; margin: 0 0 4px 2px; }
+  figcaption span { font-weight: 400; color: #636366; }
+  .face { zoom: 0.65; border-radius: 22px; overflow: hidden; box-shadow: 0 0 0 1.5px rgba(0,0,0,0.08), 0 6px 18px rgba(0,0,0,0.07); }
+  iframe { display: block; width: 360px; border: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Native</h1>
+  <p>The card as a well-made system screen: grouped rows, hairlines, and <b>one blue that means this is the answer</b>.</p>
+  <span class="meta">360 px phone width · rendered by Anki's template engine</span>
+</header>
+<div class="cols" id="cols"></div>
+<script>
+const CARDS = /*CARDS*/[];
+const REVIEWER_CSS = `
+body { margin: 20px; overflow-wrap: break-word; }
+body.nightMode { background-color: var(--canvas); color: var(--fg); }
+:root { --canvas: #2c2c2c; --fg: #fcfcfc; }
+img { max-width: 100%; max-height: 95vh; }
+li { text-align: start; }
+#typeans { width: 100%; box-sizing: border-box; line-height: 1.75; }
+code#typeans { white-space: pre-wrap; font-variant-ligatures: none; }
+`;
+const MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],displayMath:[["\\\\[","\\\\]"]]},chtml:{scale:1}};<\/script>' +
+  '<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"><\/script>';
+const NAMES = { '3': 'Contrast', '5': 'Cloze list', '7': 'Formula', '9': 'Code', '10t': 'Typed cloze', '12t': 'Typed term' };
+// [card, side, night] per column
+const LAYOUT = [
+  [['3', 'front', 0], ['3', 'back', 0]],
+  [['5', 'front', 0], ['5', 'back', 0]],
+  [['7', 'front', 0], ['7', 'back', 0], ['7', 'back', 1]],
+  [['9', 'front', 0], ['10t', 'back', 1]],
+  [['9', 'back', 0]],
+  [['12t', 'front', 0], ['12t', 'back', 0], ['3', 'front', 1]],
+];
+function doc(card, side, night) {
+  const html = side === 'front' ? card.front : card.back;
+  const math = /\\[(\[]/.test(html) ? MATHJAX : '';
+  return '<!doctype html><html class="mobile"><head><meta charset="utf-8"><style>' + REVIEWER_CSS + '</style>' +
+    '<link rel="stylesheet" href="../../anki/style-native.css">' + math + '</head>' +
+    '<body class="card card' + card.ord + (night ? ' nightMode night_mode' : '') + '"><div id="qa">' + html + '</div></body></html>';
+}
+const byId = Object.fromEntries(CARDS.map((c) => [c.id, c]));
+const cols = document.getElementById('cols');
+LAYOUT.forEach((col) => {
+  const el = document.createElement('div');
+  el.className = 'col';
+  col.forEach(([id, side, night]) => {
+    const fig = document.createElement('figure');
+    fig.innerHTML = '<figcaption>' + NAMES[id] + ' <span>' + side + (night ? ', night' : '') + '</span></figcaption>';
+    const face = document.createElement('div');
+    face.className = 'face';
+    const f = document.createElement('iframe');
+    f.addEventListener('load', () => {
+      const d = f.contentDocument;
+      const fit = () => { f.style.height = d.documentElement.offsetHeight + 'px'; };
+      fit();
+      new ResizeObserver(fit).observe(d.documentElement);
+    });
+    f.srcdoc = doc(byId[id], side, night);
+    face.appendChild(f);
+    fig.appendChild(face);
+    el.appendChild(fig);
+  });
+  cols.appendChild(el);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Helvetica, Arial, sans-serif">
+<rect width="1600" height="900" fill="#ffffff"/>
+<rect width="1600" height="14" fill="#7a2e8c"/>
+<text x="64" y="150" font-size="64" font-weight="700" fill="#1d2433">Theorem 3.4 (Cauchy-Schwarz)</text>
+<rect x="64" y="182" width="120" height="6" fill="#7a2e8c"/>
+<circle cx="78" cy="262" r="7" fill="#7a2e8c"/><text x="104" y="274" font-size="36" fill="#333">Let V be an inner product space, u, v in V.</text><rect x="64" y="324" width="1472" height="150" rx="8" fill="#7a2e8c" fill-opacity="0.09" stroke="#7a2e8c" stroke-width="3"/><text x="800" y="419" font-size="44" text-anchor="middle" fill="#222" font-family="Georgia, serif">|⟨u, v⟩| ≤ ‖u‖ ‖v‖</text>
+<line x1="64" y1="820" x2="1536" y2="820" stroke="#dddddd" stroke-width="2"/>
+<text x="64" y="862" font-size="28" fill="#777">Analysis 2 · Lecture 3</text>
+<text x="1536" y="862" font-size="28" fill="#777" text-anchor="end">12</text>
+</svg>

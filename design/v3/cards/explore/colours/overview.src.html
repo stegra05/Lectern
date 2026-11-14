@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture colours: overview</title>
+<style>
+  html, body { margin: 0; }
+  body { width: 1600px; height: 1000px; overflow: hidden; background: #efeff2; color: #1d1d1f; font-family: -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 28px; height: 112px; padding: 0 28px; }
+  h1 { margin: 0; font: 800 44px/1 "Arial Rounded MT Bold", ui-rounded, sans-serif; letter-spacing: -0.02em; white-space: nowrap; }
+  .idea { margin: 0; max-width: 520px; font-size: 16px; line-height: 1.38; color: #3a3a3c; }
+  .idea b { color: #1d1d1f; }
+  .track { margin-left: auto; display: grid; grid-template-columns: repeat(12, 32px); gap: 5px; }
+  .track span { height: 26px; border: 2px solid #1d1d1f; border-radius: 9px; font: 700 12px/22px "Arial Rounded MT Bold", ui-rounded, sans-serif; text-align: center; }
+  main { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0 14px; padding: 0 28px; }
+  .col { display: flex; flex-direction: column; gap: 6px; }
+  .cap { font: 700 12px/1.2 -apple-system, sans-serif; color: #3a3a3c; height: 15px; white-space: nowrap; overflow: hidden; }
+  .cap i { font-style: normal; font-weight: 500; color: #6e6e73; }
+  .face { position: relative; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 1px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06); }
+  .face iframe { position: absolute; top: 0; left: 0; width: 360px; border: 0; transform-origin: 0 0; }
+  .face.cut::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; background: linear-gradient(transparent, var(--fade)); }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .wide { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; align-content: start; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lecture colours</h1>
+  <p class="idea"><b>Every card wears the colour of its lecture</b>: a pale tint of the hue its stop has on the course track, the full colour only on the numeral. After a few weeks you know where a card belongs before you read it.</p>
+  <div class="track" aria-label="Lecture colours 01 to 24"></div>
+</header>
+<main id="out"></main>
+<script>
+const CARDS = /*CARDS*/[];
+const REVIEWER_CSS = `
+hr { background-color: #c0c0c0; margin: 1em 0; border: none; height: 1px; }
+body { margin: 20px; overflow-wrap: break-word; }
+body.nightMode { background-color: var(--canvas); color: var(--fg); }
+:root { --canvas: #2c2c2c; --fg: #fcfcfc; }
+img { max-width: 100%; max-height: 95vh; }
+li { text-align: start; }
+pre { text-align: left; }
+#typeans { width: 100%; box-sizing: border-box; line-height: 1.75; }
+code#typeans { white-space: pre-wrap; font-variant-ligatures: none; }
+.typeGood { background: #afa; color: black; }
+.typeBad { color: black; background: #faa; }
+.typeMissed { color: black; background: #ccc; }
+`;
+const MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],displayMath:[["\\\\[","\\\\]"]]},chtml:{scale:1}};<\/script>' +
+  '<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"><\/script>';
+const KIT = ['#FFC629','#FF7A33','#FFA3D1','#A487FF','#7FD0FF','#FF6B6B','#B6E33A','#1FB5B0','#56E0B0','#7B93FF','#DDB3FF','#E8C39E'];
+for (let n = 1; n <= 24; n++) document.querySelector('.track').insertAdjacentHTML('beforeend',
+  '<span style="background:' + KIT[(n - 1) % 12] + '">' + String(n).padStart(2, '0') + '</span>');
+
+const SCALE = 0.655;
+
+function doc(card, side, night) {
+  const html = side === 'front' ? card.front : card.back;
+  const math = /\\[(\[]/.test(html) ? MATHJAX : '';
+  return '<!doctype html><html class="mobile"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1"><style>' + REVIEWER_CSS + '</style>' +
+    '<link rel="stylesheet" href="../../anki/style-colours.css">' + math + '</head>' +
+    '<body class="card card' + card.ord + (night ? ' nightMode night_mode' : '') + '"><div id="qa">' + html + '</div></body></html>';
+}
+
+// One face: caption, then the card at 360 px scaled down, showing at most h card pixels.
+function face(id, side, mode, h, name, what) {
+  const c = CARDS.find((x) => x.id === id);
+  const box = document.createElement('div');
+  box.className = 'col';
+  box.insertAdjacentHTML('beforeend', '<div class="cap">' + name + ' <i>' + side + (what ? ', ' + what : '') + '</i></div>');
+  const fr = document.createElement('div');
+  fr.className = 'face';
+  fr.style.width = Math.round(360 * SCALE) + 'px';
+  fr.style.setProperty('--fade', mode === 'night' ? '#1c1c1e' : '#ffffff');
+  const f = document.createElement('iframe');
+  f.style.height = h + 'px';
+  f.style.transform = 'scale(' + SCALE + ')';
+  f.addEventListener('load', () => {
+    const d = f.contentDocument;
+    const fit = () => {
+      const full = d.documentElement.offsetHeight;
+      fr.style.height = Math.round(Math.min(full, h) * SCALE) + 'px';
+      fr.classList.toggle('cut', full > h);
+    };
+    fit();
+    new ResizeObserver(fit).observe(d.documentElement);
+  });
+  f.srcdoc = doc(c, side, mode === 'night');
+  fr.appendChild(f);
+  box.appendChild(fr);
+  return box;
+}
+
+const out = document.getElementById('out');
+// Four columns: front above back.
+[
+  ['3', 'Contrast', 'two labelled sides'],
+  ['5', 'Cloze list', 'the asked row is the slot'],
+  ['7', 'Formula', 'statement and condition'],
+  ['2t', 'Typed answer', 'checked against the term'],
+].forEach(([id, name, what]) => {
+  const col = document.createElement('div');
+  col.className = 'stack';
+  col.appendChild(face(id, 'front', 'light', 600, name, what));
+  col.appendChild(face(id, 'back', 'light', 620, name, ''));
+  out.appendChild(col);
+});
+// Two columns wide: chain in night mode, then the code card, front beside back.
+const wide = document.createElement('div');
+wide.className = 'wide';
+wide.appendChild(face('4', 'front', 'night', 470, 'Chain, night', 'the track in small'));
+wide.appendChild(face('4', 'back', 'night', 470, 'Chain, night', ''));
+wide.appendChild(face('9', 'front', 'light', 760, 'Code', 'two parts under a listing'));
+wide.appendChild(face('9', 'back', 'light', 760, 'Code', ''));
+out.appendChild(wide);
+</script>
+</body>
+</html>
