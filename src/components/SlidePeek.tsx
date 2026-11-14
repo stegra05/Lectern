@@ -9,23 +9,22 @@ import { getCurrentPdfDoc, useLectern } from '../state/store'
  *  to a ~550px panel. CSS scales it to the panel from there. */
 const SLIDE_RENDER_WIDTH = 1100
 
-/** The panel's width, dragged or picked from the presets, kept per viewer. */
+/** The width the panel was dragged to, kept per viewer. It is only the
+ *  panel's flex basis: the layout shrinks it whenever the card column would
+ *  drop below its minimum, so no stored width can squeeze the cards out. */
 const PEEK_WIDTH_KEY = 'lectern.slidePeekWidth'
-const DEFAULT_PEEK_WIDTH = 480
+/** Until the panel is dragged, it keeps its original size. */
+const DEFAULT_PEEK_WIDTH = 'min(36vw, 480px)'
+/** Matches `min-w-80` on the panel. */
 const MIN_PEEK_WIDTH = 320
-/** Leaves the card column room to stay usable. */
-const MAX_PEEK_SHARE = 0.78
-
-const clampWidth = (width: number) =>
-  Math.round(Math.max(MIN_PEEK_WIDTH, Math.min(window.innerWidth * MAX_PEEK_SHARE, width)))
 
 // Storage can be missing or blocked; the panel then opens at its default.
-function readPeekWidth(): number {
+function readPeekWidth(): number | null {
   try {
     const stored = Number(localStorage.getItem(PEEK_WIDTH_KEY))
-    return stored >= MIN_PEEK_WIDTH ? clampWidth(stored) : DEFAULT_PEEK_WIDTH
+    return stored >= MIN_PEEK_WIDTH ? stored : null
   } catch {
-    return DEFAULT_PEEK_WIDTH
+    return null
   }
 }
 
@@ -73,6 +72,7 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   // Where the floating action sits, above the selection, in slide coordinates.
   const [pillAt, setPillAt] = useState<{ x: number; y: number } | null>(null)
   const [width, setWidth] = useState(readPeekWidth)
+  const panelRef = useRef<HTMLElement>(null)
   const [resizing, setResizing] = useState(false)
   // The text of the rendered slide, tagged with its page so a slide that has
   // not finished rendering never shows the previous one's text.
@@ -168,22 +168,22 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault()
     setResizing(true)
-    const widthAt = (x: number) => clampWidth(window.innerWidth - x)
-    const onMove = (move: MouseEvent) => setWidth(widthAt(move.clientX))
-    const onUp = (up: MouseEvent) => {
+    const onMove = (move: MouseEvent) =>
+      setWidth(Math.max(MIN_PEEK_WIDTH, Math.round(window.innerWidth - move.clientX)))
+    const onUp = () => {
       setResizing(false)
-      setWidth(widthAt(up.clientX))
-      writePeekWidth(widthAt(up.clientX))
+      // Remember the width the layout settled on, not where the pointer
+      // ended up past the card column's minimum.
+      const settled = Math.round(panelRef.current?.getBoundingClientRect().width ?? 0)
+      if (settled >= MIN_PEEK_WIDTH) {
+        setWidth(settled)
+        writePeekWidth(settled)
+      }
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
-  }
-  const pickWidth = (share: number) => {
-    const picked = clampWidth(window.innerWidth * share)
-    setWidth(picked)
-    writePeekWidth(picked)
   }
 
   if (page === null || !pdfInfo) return null
@@ -219,8 +219,9 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
   return (
     <aside
       aria-label={`Slide ${page} of ${pageCount}`}
-      style={{ width }}
-      className={`border-desk-edge/60 rise-in relative flex shrink-0 flex-col border-l ${
+      ref={panelRef}
+      style={{ flexBasis: width ?? DEFAULT_PEEK_WIDTH }}
+      className={`border-desk-edge/60 rise-in relative flex min-w-80 flex-col border-l ${
         resizing ? 'select-none' : ''
       }`}
     >
@@ -232,29 +233,15 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
         <div className="group-hover:bg-lamp mx-auto h-full w-0.5 transition-colors" />
       </div>
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <span className="eyebrow">
+        {/* At the panel's narrowest the slide number stays on one line and
+            the card count gives way. */}
+        <span className="eyebrow shrink-0 whitespace-nowrap">
           Slide {page} / {pageCount}
         </span>
-        <span className="font-data text-chalk-dim text-2xs">
+        <span className="font-data text-chalk-dim min-w-0 truncate text-2xs">
           · {cardsHere > 0 ? count(cardsHere, 'card') : 'no cards yet'}
         </span>
         <div className="flex-1" />
-        <div
-          className="border-desk-edge/70 flex rounded-sm border"
-          role="group"
-          aria-label="Panel width"
-        >
-          {[0.35, 0.5, 0.7].map((share) => (
-            <button
-              key={share}
-              onClick={() => pickWidth(share)}
-              className="font-data text-chalk-dim hover:text-chalk px-1.5 py-0.5 text-2xs"
-              title={`Panel at ${share * 100}% of the window`}
-            >
-              {share * 100}%
-            </button>
-          ))}
-        </div>
         <button
           onClick={newCard}
           className="btn-secondary px-2 py-0.5 text-xs text-lamp border-lamp/40 hover:border-lamp"
@@ -297,6 +284,9 @@ export function SlidePeek({ interactive }: { interactive: boolean }) {
         <div ref={slideRef} className="relative">
           <div className="bg-paper shadow-card overflow-hidden rounded-md">
             <SlideCanvas
+              // A fresh canvas and text layer per page: a page left before its
+              // render landed can never leave its state on the next one.
+              key={page}
               page={page}
               fallback={image}
               quotes={quotes}
@@ -401,7 +391,7 @@ function SlideCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const marksRef = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState<{ page: number; width: number; height: number } | null>(null)
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [selection, setSelection] = useState<Box[]>([])
   const [hoveredUid, setHoveredUid] = useState<string | null>(null)
 
@@ -417,7 +407,7 @@ function SlideCanvas({
     render.promise
       .then((dims) => {
         if (!current) return
-        setSize({ page, ...dims })
+        setSize(dims)
         onText({ page, text: readTextLayer(text).text })
       })
       .catch(() => {}) // thumbnail stays
@@ -461,7 +451,7 @@ function SlideCanvas({
     return () => document.removeEventListener('selectionchange', onSelectionChange)
   }, [])
 
-  const ready = size?.page === page
+  const ready = size !== null
 
   // Marks are drawn like the text layer itself: outside React, once per
   // render or change of quotes, in percent of the frame so they scale with it.

@@ -67,7 +67,7 @@ export function SessionView() {
       <Filmstrip streaming={!reviewable} />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
-        <section className="relative flex min-w-0 flex-1 flex-col">
+        <section className="relative flex min-w-90 flex-1 flex-col">
           {isError && <ErrorBanner />}
           <CardColumn />
           {reviewable && hasCards && <SyncBar />}
