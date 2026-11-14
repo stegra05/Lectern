@@ -58,6 +58,21 @@ export function memoryAnki(): MemoryAnki {
       }),
     // As Anki 26 does: the file is written under its name in lowercase.
     storeMedia: (name, data) => answer(() => void media.set(name.toLowerCase(), data)),
+    updateNote: (id, fields) =>
+      answer(() => {
+        const note = notes.find((n) => n.id === id)
+        if (!note) throw new Error(`note was not found: ${id}`)
+        const unknown = Object.keys(fields).filter((f) => !typeOf(note.noteType).fields.includes(f))
+        if (unknown.length > 0) throw new Error(`fields were not found: ${unknown.join(', ')}`)
+        note.fields = { ...note.fields, ...fields }
+      }),
+    deleteNotes: (ids) =>
+      answer(() => {
+        for (const id of ids) {
+          const at = notes.findIndex((n) => n.id === id)
+          if (at >= 0) notes.splice(at, 1)
+        }
+      }),
     existingNotes: (ids) => answer(() => ids.filter((id) => notes.some((note) => note.id === id))),
     addNote: (note) =>
       answer(() => {

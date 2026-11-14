@@ -64,6 +64,12 @@ export function ankiConnect(url = 'http://127.0.0.1:8765'): AnkiPort {
     async storeMedia(name, data) {
       await call('storeMediaFile', { filename: name, data })
     },
+    async updateNote(id, fields) {
+      await call('updateNoteFields', { note: { id, fields } })
+    },
+    async deleteNotes(ids) {
+      await call('deleteNotes', { notes: ids })
+    },
     existingNotes: async (ids) =>
       ids.length === 0
         ? []

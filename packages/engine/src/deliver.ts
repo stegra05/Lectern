@@ -163,9 +163,42 @@ function fieldsForAnki(course: string, card: CardFile): Record<string, string> {
   )
 }
 
-/** Tags are hierarchical in Anki: `entrepreneurship::lecture::02`, `entrepreneurship::role::case`. */
+/**
+ * Tags are hierarchical in Anki: `entrepreneurship::lecture::02`, `entrepreneurship::role::case`,
+ * and `entrepreneurship::own` on a card the student wrote.
+ */
 function tags(course: string, lecture: number, card: CardFile): string[] {
-  return [`${course}::lecture::${two(lecture)}`, `${course}::role::${card.fields.Role}`]
+  return [
+    `${course}::lecture::${two(lecture)}`,
+    `${course}::role::${card.fields.Role}`,
+    ...(card.own ? [`${course}::own`] : []),
+  ]
+}
+
+/**
+ * The student changed a card. When it is in Anki, its note takes the new wording and keeps its
+ * progress. A note the student has deleted there is forgotten, so the card counts as not sent.
+ */
+export async function updateSent({ store, anki }: Ports, course: string, card: CardFile) {
+  const delivery = await readDelivery(store, course)
+  const note = delivery.notes[card.id]
+  if (note === undefined) return
+  if ((await anki.existingNotes([note])).length > 0) {
+    await anki.updateNote(note, fieldsForAnki(course, card))
+  } else {
+    delete delivery.notes[card.id]
+    await writeJson(store, paths.anki(course), delivery)
+  }
+}
+
+/** The student removed a card. When it is in Anki, its note goes too. */
+export async function removeSent({ store, anki }: Ports, course: string, card: string) {
+  const delivery = await readDelivery(store, course)
+  const note = delivery.notes[card]
+  if (note === undefined) return
+  await anki.deleteNotes([note])
+  delete delivery.notes[card]
+  await writeJson(store, paths.anki(course), delivery)
 }
 
 export async function send(

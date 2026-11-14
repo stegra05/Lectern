@@ -5,8 +5,10 @@
 
 import { z } from 'zod'
 import { build, estimateCourse } from './build.ts'
-import { GOALS } from './cards/roles.ts'
+import { GOALS, ROLES } from './cards/roles.ts'
+import { OWN_ROLES, type Problem, type Slots } from './cards/slots.ts'
 import { restyle, send } from './deliver.ts'
+import { edit, remove, slots, write } from './edit.ts'
 import { DESIGNS } from './designs.ts'
 import { CALIBRATIONS, PROFILE_KINDS, type Calibrations, type ProfileKind } from './decide.ts'
 import type { CardFile } from './cards/assemble.ts'
@@ -29,6 +31,18 @@ import { PRESET_IDS } from './presets.ts'
 const course = z.string().min(1)
 /** Asked once per course. Kept in `course.json`; `good` when never given. */
 const goal = z.enum(GOALS).optional()
+
+const lecture = z.number().int().positive()
+/** A card as a form holds it: the slots of its role in plain text. */
+const slotsSchema = z.object({
+  role: z.enum(ROLES),
+  front: z.string(),
+  answers: z.array(z.object({ text: z.string(), key: z.string() })),
+  labels: z.array(z.string()),
+  hidden: z.array(z.string()),
+  extra: z.string(),
+  code: z.string(),
+})
 
 const CommandSchema = z.discriminatedUnion('type', [
   z.object({
@@ -70,6 +84,20 @@ const CommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('send'), course, design: z.enum(DESIGNS) }),
   /** Gives the cards already in Anki the look of the design. Changes nothing before a first send. */
   z.object({ type: z.literal('restyle'), design: z.enum(DESIGNS) }),
+  /** A card as a form holds it. Without `card`: empty slots for a card of the student's own. */
+  z.object({
+    type: z.literal('slots'),
+    course,
+    lecture,
+    card: z.string().optional(),
+    role: z.enum(OWN_ROLES).optional(),
+  }),
+  /** Changes the wording of a card, in Anki too when it is there. */
+  z.object({ type: z.literal('edit'), course, lecture, card: z.string(), slots: slotsSchema }),
+  /** Removes a card, from Anki too when it is there. */
+  z.object({ type: z.literal('remove'), course, lecture, card: z.string() }),
+  /** A card of the student's own on a concept of the lecture. */
+  z.object({ type: z.literal('write'), course, lecture, concept: z.string(), slots: slotsSchema }),
 ])
 
 export type Command = z.infer<typeof CommandSchema>
@@ -119,6 +147,18 @@ export type Event =
   | { type: 'sent'; deck: string; cards: number; lectures: number[] }
   /** The note types in Anki that took the design. Empty when Lectern has none there. */
   | { type: 'restyled'; noteTypes: string[] }
+  /** `limits` are the word limits a form shows. `card` is missing for a card not written yet. */
+  | {
+      type: 'slots'
+      card?: string
+      slots: Slots
+      limits: { front: number; answer: number; extra: number; gapSentence: number }
+    }
+  | { type: 'edited'; card: CardFile }
+  | { type: 'removed'; card: string }
+  | { type: 'written'; card: CardFile }
+  /** The card was not taken. Each problem names the field of the form it is about. */
+  | { type: 'refused'; problems: Problem[] }
   | { type: 'failed'; message: string; fix: string }
 
 export type Emit = (event: Event) => void
@@ -183,6 +223,14 @@ export function createEngine(ports: Ports, options: Options = {}): Engine {
             return await send(ports, known, emit)
           case 'restyle':
             return await restyle(ports, known.design, emit)
+          case 'slots':
+            return await slots(ports, known, emit)
+          case 'edit':
+            return await edit(ports, known, emit)
+          case 'remove':
+            return await remove(ports, known, emit)
+          case 'write':
+            return await write(ports, known, emit)
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -197,6 +245,7 @@ export { EngineError } from './errors.ts'
 export type * from './ports.ts'
 export type { Design } from './designs.ts'
 export type { CardFile } from './cards/assemble.ts'
+export type { Problem, Slots } from './cards/slots.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
 export type { Calibrations } from './decide.ts'
 export type { CourseState, CourseSummary, LectureState, PendingLecture } from './library.ts'

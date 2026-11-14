@@ -135,6 +135,10 @@ export interface AnkiPort {
   storeMedia(name: string, data: string): Promise<void>
   /** Adds one note and returns Anki's id for it. */
   addNote(note: Note): Promise<number>
+  /** Replaces the fields of a note. Its cards keep their progress. */
+  updateNote(id: number, fields: Record<string, string>): Promise<void>
+  /** Deletes notes with their cards and their progress. A note that is not there is passed over. */
+  deleteNotes(ids: number[]): Promise<void>
   /** Which of these notes are in Anki. */
   existingNotes(ids: number[]): Promise<number[]>
 }

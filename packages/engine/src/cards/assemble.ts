@@ -20,6 +20,8 @@ export interface CardFile {
   diagram?: Diagram
   /** What an uncalibrated check noticed. Shown, never acted on. */
   flags?: string[]
+  /** The student wrote this card. */
+  own?: true
 }
 
 export interface Placement {
