@@ -30,7 +30,7 @@ PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 | Run | Result |
 |---|---|
-| Engine tests | 158 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
+| Engine tests | 162 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
 | Live OpenAI tests, run once with a key | 2 passed |
 | Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
@@ -170,7 +170,11 @@ How the seven steps run:
 `presets.ts` holds **one placeholder preset** used for every kind of lecture. Its plan table is
 my guess, its examples are seven of the sample cards from `design/v3/samples.md`, its rules are
 five lines. It exists so the pipeline runs. It is not one of the four presets Steffen will
-approve, and no result from it should be read as the quality of the method. The roles `why`,
+approve, and no result from it should be read as the quality of the method.
+
+A draft of the preset for concept courses now sits beside it as `concept-draft`, written from
+the Entrepreneurship study kit and waiting for review: `engine-profile-concept.md`. A build uses
+it only when the command names it. The roles `why`,
 `name-two` and `cloze` validate but the placeholder never plans them.
 
 Nothing is calibrated. Every check that goes through the decision model only flags.
