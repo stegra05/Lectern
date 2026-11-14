@@ -74,8 +74,8 @@ export interface CourseFile {
   format: 1
   name: string
   goal: Goal
-  /** The kind of lecture, which picks the preset. Confidence is null when the student set it. */
-  profile: { kind: ProfileKind; confidence: number | null }
+  /** The kind of lecture, which picks the preset. Set by the first build. Confidence is null when the student set it. */
+  profile?: { kind: ProfileKind; confidence: number | null }
   lectures: { number: number; title: string; file: string; sha256: string; slides: number }[]
 }
 

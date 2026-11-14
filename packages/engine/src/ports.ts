@@ -84,8 +84,10 @@ export interface Store {
   readBytes(path: string): Promise<Uint8Array>
   /** Writes the file and creates missing folders. */
   write(path: string, text: string): Promise<void>
-  /** The names inside a folder, or an empty list when it does not exist. */
+  /** The names inside a folder, or an empty list when it does not exist. `''` is the root. */
   list(dir: string): Promise<string[]>
+  /** Copies a file from outside the store (a path on the student's disk) into it. */
+  copyIn(source: string, path: string): Promise<void>
 }
 
 export interface Ports {

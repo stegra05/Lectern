@@ -7,7 +7,17 @@ import { z } from 'zod'
 import { build, estimateCourse } from './build.ts'
 import { GOALS } from './cards/roles.ts'
 import { CALIBRATIONS, PROFILE_KINDS, type Calibrations, type ProfileKind } from './decide.ts'
+import type { CardFile } from './cards/assemble.ts'
 import { EngineError } from './errors.ts'
+import {
+  addSlides,
+  createCourse,
+  listCourses,
+  readCourse,
+  readLectureCards,
+  type CourseState,
+  type CourseSummary,
+} from './library.ts'
 import { outline } from './outline.ts'
 import type { Ports } from './ports.ts'
 
@@ -27,6 +37,16 @@ const CommandSchema = z.discriminatedUnion('type', [
   /** What a build of the new lectures would cost. Reads the PDFs, calls no model. */
   z.object({ type: z.literal('estimate'), course, goal }),
   z.object({ type: z.literal('outline'), course }),
+  /** Every course in the library. */
+  z.object({ type: z.literal('courses') }),
+  /** One course as the interface shows it: its lectures, what was decided, what it cost. */
+  z.object({ type: z.literal('course'), course }),
+  /** The cards of one lecture, with all their fields. */
+  z.object({ type: z.literal('cards'), course, lecture: z.number().int().positive() }),
+  /** A new, empty course. The reply names its folder. */
+  z.object({ type: z.literal('create'), name: z.string().trim().min(1), goal }),
+  /** Copies PDFs from the student's disk into the course. They are built by the next `build`. */
+  z.object({ type: z.literal('add'), course, files: z.array(z.string().min(1)).min(1) }),
 ])
 
 export type Command = z.infer<typeof CommandSchema>
@@ -61,6 +81,12 @@ export type Event =
       durationMs: number
     }
   | { type: 'outline'; markdown: string }
+  | { type: 'courses'; courses: CourseSummary[] }
+  | { type: 'course'; course: CourseState }
+  | { type: 'cards'; lecture: number; cards: CardFile[] }
+  | { type: 'created'; course: string }
+  /** The file names as they now are in the course. */
+  | { type: 'added'; course: string; files: string[] }
   | { type: 'failed'; message: string; fix: string }
 
 export type Emit = (event: Event) => void
@@ -88,9 +114,36 @@ export function createEngine(ports: Ports, options: Options = {}): Engine {
           )
         }
         const known = parsed.data
-        if (known.type === 'build') await build(ports, calibrations, known, emit)
-        else if (known.type === 'estimate') await estimateCourse(ports, known, emit)
-        else emit({ type: 'outline', markdown: await outline(ports.store, known.course) })
+        const { store } = ports
+        switch (known.type) {
+          case 'build':
+            return await build(ports, calibrations, known, emit)
+          case 'estimate':
+            return await estimateCourse(ports, known, emit)
+          case 'outline':
+            return emit({ type: 'outline', markdown: await outline(store, known.course) })
+          case 'courses':
+            return emit({ type: 'courses', courses: await listCourses(store) })
+          case 'course':
+            return emit({ type: 'course', course: await readCourse(store, known.course) })
+          case 'cards':
+            return emit({
+              type: 'cards',
+              lecture: known.lecture,
+              cards: await readLectureCards(store, known.course, known.lecture),
+            })
+          case 'create':
+            return emit({
+              type: 'created',
+              course: await createCourse(store, known.name, known.goal ?? 'good'),
+            })
+          case 'add':
+            return emit({
+              type: 'added',
+              course: known.course,
+              files: await addSlides(store, known.course, known.files),
+            })
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         const fix = error instanceof EngineError ? error.fix : 'Run the command again.'
@@ -105,3 +158,4 @@ export type * from './ports.ts'
 export type { CardFile } from './cards/assemble.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
 export type { Calibrations } from './decide.ts'
+export type { CourseState, CourseSummary, LectureState } from './library.ts'

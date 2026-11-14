@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import type { Store } from '../ports.ts'
 
@@ -9,7 +9,8 @@ export function nodeStore(root: string): Store {
   const base = resolve(root)
   const at = (path: string) => {
     const full = resolve(base, path)
-    if (!full.startsWith(base + sep)) throw new Error(`Path outside the course library: ${path}`)
+    if (full !== base && !full.startsWith(base + sep))
+      throw new Error(`Path outside the course library: ${path}`)
     return full
   }
   return {
@@ -25,6 +26,10 @@ export function nodeStore(root: string): Store {
     async write(path, text) {
       await mkdir(dirname(at(path)), { recursive: true })
       await writeFile(at(path), text)
+    },
+    async copyIn(source, path) {
+      await mkdir(dirname(at(path)), { recursive: true })
+      await copyFile(source, at(path))
     },
     async list(dir) {
       try {

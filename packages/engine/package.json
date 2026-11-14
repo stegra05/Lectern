@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "exports": "./src/api.ts",
+  "exports": {
+    ".": "./src/api.ts",
+    "./adapters/*": "./src/adapters/*.ts"
+  },
   "scripts": {
     "cli": "node src/cli.ts",
     "test": "vitest run",

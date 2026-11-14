@@ -516,7 +516,7 @@ export async function build(
 
   // Save. `course.json` goes last: a lecture counts as built once it is listed there.
   const decisions: Decision[] = (await readJson<Decision[]>(store, paths.decisions(course))) ?? []
-  if (!existing) {
+  if (!existing?.lectures.length) {
     const depth = GOAL_PRESETS[goal]
     const coverage = depth.coverage === 'core' ? 'the core concepts' : 'every concept'
     const facts = depth.facts === 1 ? 'one card each' : `up to ${depth.facts} cards each`
