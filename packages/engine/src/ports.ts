@@ -4,6 +4,8 @@
  * command line, in tests, inside the app and later on a server.
  */
 
+import type { Design } from './designs.ts'
+
 export type Task = 'map' | 'fill' | 'repair' | 'split'
 
 /** A slide as a picture: a PNG in base64. */
@@ -93,11 +95,61 @@ export interface Store {
   writeBytes(path: string, data: Uint8Array): Promise<void>
 }
 
+/** A note type as Anki holds it: its fields in order, one stylesheet and one card template. */
+export interface NoteType {
+  name: string
+  cloze: boolean
+  fields: readonly string[]
+  css: string
+  template: { name: string; front: string; back: string }
+}
+
+export interface Note {
+  deck: string
+  noteType: string
+  fields: Record<string, string>
+  tags: string[]
+}
+
+/**
+ * The one way into the student's Anki. Every call fails with an error the student can act on
+ * when Anki is not running or does not answer.
+ */
+export interface AnkiPort {
+  /** The names of all note types. Also the first sign of whether Anki is there. */
+  noteTypes(): Promise<string[]>
+  /** The stylesheet of a note type as it is in Anki now. */
+  styling(noteType: string): Promise<string>
+  createNoteType(type: NoteType): Promise<void>
+  /** Replaces the stylesheet and the template of a note type. Its notes keep their fields. */
+  restyle(type: Pick<NoteType, 'name' | 'css' | 'template'>): Promise<void>
+  /** Creates the deck and its parents. A deck that exists stays as it is. */
+  createDeck(name: string): Promise<void>
+  /** Puts a file into Anki's media folder. `data` is base64. A file of that name is replaced. */
+  storeMedia(name: string, data: string): Promise<void>
+  /** Adds one note and returns Anki's id for it. */
+  addNote(note: Note): Promise<number>
+}
+
+/** What a card design is made of: the four shared templates and the design's own stylesheet. */
+export interface DesignFiles {
+  templates: { front: string; back: string; clozeFront: string; clozeBack: string }
+  css: string
+  /** The fonts the stylesheet names, as they go into Anki's media folder. `data` is base64. */
+  fonts: { name: string; data: string }[]
+}
+
+export interface DesignsPort {
+  load(design: Design): Promise<DesignFiles>
+}
+
 export interface Ports {
   store: Store
   pdf: PdfPort
   model: ModelPort
   decisions: DecisionsPort
+  anki: AnkiPort
+  designs: DesignsPort
   /** Milliseconds since the epoch. */
   now: () => number
 }

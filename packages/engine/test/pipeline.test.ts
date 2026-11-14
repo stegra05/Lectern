@@ -10,6 +10,7 @@ import {
   type ScriptedDecisions,
   type ScriptedModel,
 } from '../src/adapters/fake.ts'
+import { memoryAnki } from '../src/adapters/memory-anki.ts'
 import { nodeStore } from '../src/adapters/node-store.ts'
 import { pdfjsReader } from '../src/adapters/pdfjs.ts'
 import {
@@ -23,7 +24,7 @@ import {
   type Run,
 } from '../src/api.ts'
 import { decisions, script, SLIDES } from './fixtures.ts'
-import { addSlides, snapshot, tempRoot } from './helpers.ts'
+import { addSlides, designs, snapshot, tempRoot } from './helpers.ts'
 
 let root: string
 let model: ScriptedModel
@@ -48,6 +49,8 @@ async function run(
     pdf: pdfjsReader,
     model,
     decisions: decider,
+    anki: memoryAnki(),
+    designs,
     now: () => (clock += 1000),
   }
   const events: Event[] = []

@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { memoryAnki } from '../src/adapters/memory-anki.ts'
 import { nodeStore } from '../src/adapters/node-store.ts'
 import { offlineDecisions, offlineModel } from '../src/adapters/offline.ts'
 import { pdfjsReader } from '../src/adapters/pdfjs.ts'
@@ -13,7 +14,7 @@ import {
 } from '../src/api.ts'
 import { validateDraft } from '../src/cards/validate.ts'
 import { SLIDES } from './fixtures.ts'
-import { makePdf, tempRoot } from './helpers.ts'
+import { designs, makePdf, tempRoot } from './helpers.ts'
 
 let root: string
 const pdfs = new Map<string, string>()
@@ -26,6 +27,8 @@ async function run(command: unknown): Promise<Event[]> {
     pdf: pdfjsReader,
     model: offlineModel(),
     decisions: offlineDecisions(),
+    anki: memoryAnki(),
+    designs,
     now: () => (clock += 1000),
   }
   const events: Event[] = []

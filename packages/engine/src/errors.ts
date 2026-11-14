@@ -7,3 +7,11 @@ export class EngineError extends Error {
     this.fix = fix
   }
 }
+
+/** Anki is closed, or its AnkiConnect add-on is not running. The two look the same from here. */
+export function ankiNotOpen(): EngineError {
+  return new EngineError(
+    'Anki is not open.',
+    'Open Anki and wait until you see your decks, then try again. If Anki is open, restart it once so the AnkiConnect add-on starts.',
+  )
+}

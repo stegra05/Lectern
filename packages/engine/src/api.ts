@@ -6,6 +6,8 @@
 import { z } from 'zod'
 import { build, estimateCourse } from './build.ts'
 import { GOALS } from './cards/roles.ts'
+import { restyle, send } from './deliver.ts'
+import { DESIGNS } from './designs.ts'
 import { CALIBRATIONS, PROFILE_KINDS, type Calibrations, type ProfileKind } from './decide.ts'
 import type { CardFile } from './cards/assemble.ts'
 import { EngineError } from './errors.ts'
@@ -64,6 +66,10 @@ const CommandSchema = z.discriminatedUnion('type', [
     course,
     files: z.array(z.object({ name: z.string().min(1), data: z.string().min(1) })).min(1),
   }),
+  /** Sends the cards that are not in Anki yet, as notes in the given card design. */
+  z.object({ type: z.literal('send'), course, design: z.enum(DESIGNS) }),
+  /** Gives the cards already in Anki the look of the design. Changes nothing before a first send. */
+  z.object({ type: z.literal('restyle'), design: z.enum(DESIGNS) }),
 ])
 
 export type Command = z.infer<typeof CommandSchema>
@@ -107,6 +113,11 @@ export type Event =
   | { type: 'created'; course: string }
   /** The file names as they now are in the course. */
   | { type: 'added'; course: string; files: string[] }
+  /** After each card that reached Anki. `lecture` is the lecture being sent. */
+  | { type: 'sending'; lecture: number; done: number; total: number }
+  | { type: 'sent'; cards: number; lectures: number[] }
+  /** The note types in Anki that took the design. Empty when Lectern has none there. */
+  | { type: 'restyled'; noteTypes: string[] }
   | { type: 'failed'; message: string; fix: string }
 
 export type Emit = (event: Event) => void
@@ -167,6 +178,10 @@ export function createEngine(ports: Ports, options: Options = {}): Engine {
               course: known.course,
               files: await addSlides(store, known.course, known.files),
             })
+          case 'send':
+            return await send(ports, known, emit)
+          case 'restyle':
+            return await restyle(ports, known.design, emit)
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -179,6 +194,7 @@ export function createEngine(ports: Ports, options: Options = {}): Engine {
 
 export { EngineError } from './errors.ts'
 export type * from './ports.ts'
+export type { Design } from './designs.ts'
 export type { CardFile } from './cards/assemble.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
 export type { Calibrations } from './decide.ts'

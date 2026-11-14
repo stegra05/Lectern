@@ -2,6 +2,10 @@ import { mkdtemp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
+import { nodeDesigns } from '../src/adapters/node-designs.ts'
+
+/** The card designs that ship, from the folder the app reads them from too. */
+export const designs = nodeDesigns(join(import.meta.dirname, '../../../design/v3/cards/anki'))
 
 /** A PDF with one page per slide and one drawn text line per entry. An empty list is a blank slide. */
 export async function makePdf(slides: string[][]): Promise<Uint8Array> {

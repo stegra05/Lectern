@@ -22,6 +22,7 @@ import {
   type Lecture,
   type Run,
 } from './course.ts'
+import { sentCards } from './deliver.ts'
 import { EngineError } from './errors.ts'
 import type { Ports, SlideImage, Store } from './ports.ts'
 
@@ -39,6 +40,8 @@ export interface CourseSummary {
 
 export interface LectureState extends Omit<Lecture, 'topics'> {
   cards: number
+  /** How many of its cards are in Anki. */
+  sent: number
   topics: { name: string; concepts: (Concept & { cards: number })[] }[]
 }
 
@@ -100,6 +103,7 @@ export async function listCourses(store: Store): Promise<CourseSummary[]> {
 export async function readCourse({ store, pdf }: Ports, course: string): Promise<CourseState> {
   const file = await courseFile(store, course)
   const lectures: LectureState[] = []
+  const inAnki = await sentCards(store, course)
   for (const { number } of file.lectures) {
     const lecture = (await readJson<Lecture>(store, paths.lecture(course, number)))!
     const cards = await readCards(store, course, number)
@@ -107,6 +111,7 @@ export async function readCourse({ store, pdf }: Ports, course: string): Promise
     lectures.push({
       ...lecture,
       cards: cards.length,
+      sent: cards.filter((card) => inAnki.has(card.id)).length,
       topics: lecture.topics.map((topic) => ({
         name: topic.name,
         concepts: topic.concepts.map((concept) => ({ ...concept, cards: count(concept.id) })),

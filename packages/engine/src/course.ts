@@ -7,6 +7,7 @@
  *   <course>/lectures/02/cards.yaml    CardFile[], one readable file per lecture
  *   <course>/decisions.json            Decision[]
  *   <course>/runs/001.json             Run
+ *   <course>/anki.json                 which Anki note each sent card became
  */
 
 import { parse, stringify } from 'yaml'
@@ -120,6 +121,7 @@ export const paths = {
   cards: (course: string, n: number) => `${course}/lectures/${two(n)}/cards.yaml`,
   decisions: (course: string) => `${course}/decisions.json`,
   runs: (course: string) => `${course}/runs`,
+  anki: (course: string) => `${course}/anki.json`,
 }
 
 export async function readJson<T>(store: Store, path: string): Promise<T | null> {
@@ -152,7 +154,11 @@ export function writeCards(
 
 /** A lecture's name guessed from its file name, until the map gives the real one. */
 export function titleFromFile(file: string, number: number): string {
-  return file.replace(/\.pdf$/i, '').replace(/^[\d\s._-]+/, '') || `Lecture ${number}`
+  const name = file
+    .replace(/\.pdf$/i, '')
+    .replace(/^[\d\s._-]+/, '')
+    .replace(/_+/g, ' ')
+  return name || `Lecture ${number}`
 }
 
 /** Lecture PDFs in course order: by file name, numbers compared as numbers. */
