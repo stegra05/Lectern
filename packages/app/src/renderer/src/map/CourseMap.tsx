@@ -8,9 +8,9 @@ import {
   type CSSProperties,
   type PointerEvent,
 } from 'react'
-import type { Lecture, Pending } from '../../../shared/contract.ts'
+import type { Lecture, Pending, Phase } from '../../../shared/contract.ts'
 import { lectureColour, plural, two } from '../lecture.ts'
-import { useStore } from '../store.ts'
+import { currentPhase, useStore } from '../store.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { MapTools } from './MapTools.tsx'
 import type { Box, Frame, Measure, Rings } from './rings.ts'
@@ -29,6 +29,14 @@ const TOOLS_BOTTOM = TITLEBAR + 12 + 30 + 6
 const ZOOM_STEP = 1.25
 
 type Stop = { kind: 'lecture'; lecture: Lecture } | { kind: 'pending'; pending: Pending }
+
+/** What a stop says while the engine is on its lecture. */
+const NOW: Record<Phase, string> = {
+  read: 'Reading now',
+  map: 'Finding its topics',
+  write: 'Writing its cards',
+  check: 'Checking its cards',
+}
 
 /** The user's own zoom and pan on top of the fitted view. It belongs to one view and panel. */
 interface Adjust {
@@ -52,6 +60,10 @@ export function CourseMap() {
   const selectConcept = useStore((s) => s.selectConcept)
   const showCourse = useStore((s) => s.showCourse)
   const addFiles = useStore((s) => s.addFiles)
+  const run = useStore((s) => s.run)
+  // During a run of this course the engine names the lecture it is on.
+  const phase = run && run.course === course?.id ? currentPhase(run) : null
+  const now = run?.lecture && phase ? { lecture: run.lecture, phase } : null
 
   const root = useRef<HTMLElement>(null)
   const [size, setSize] = useState(REFERENCE)
@@ -247,7 +259,14 @@ export function CourseMap() {
         className="map-layer map-enter-out"
         style={{ transformOrigin: `${origin.x}px ${origin.y}px` }}
       >
-        <TrackView stops={stops} track={track} k={k} toScreen={toScreen} onOpen={openLecture} />
+        <TrackView
+          stops={stops}
+          track={track}
+          k={k}
+          toScreen={toScreen}
+          onOpen={openLecture}
+          now={now}
+        />
       </div>
     )
   }
@@ -321,12 +340,15 @@ function TrackView({
   k,
   toScreen,
   onOpen,
+  now,
 }: {
   stops: Stop[]
   track: Track
   k: number
   toScreen: (p: Point) => Point
   onOpen: (lecture: number) => void
+  /** During a run: the lecture the engine is on, and what it is doing there. */
+  now: { lecture: number; phase: Phase } | null
 }) {
   const width = labelWidth(k, track.step)
   return (
@@ -338,17 +360,26 @@ function TrackView({
         const p = toScreen(track.stops[i]!)
         if (stop.kind === 'pending') {
           const { number, title, slides } = stop.pending
+          const phase = now?.lecture === number ? now.phase : null
           return (
             <div
               key={`p${number}`}
-              className="map-stop map-move"
+              className={phase ? 'map-stop map-move map-stop-now' : 'map-stop map-move'}
               style={{ ...at(p), ...colourOf(number) }}
               role="img"
-              aria-label={`Lecture ${two(number)} ${title}, ${plural(slides, 'slide')}, no cards yet`}
+              aria-label={
+                phase
+                  ? `Lecture ${two(number)} ${title}, ${NOW[phase]}`
+                  : `Lecture ${two(number)} ${title}, ${plural(slides, 'slide')}, no cards yet`
+              }
               title={measure(title, 600) > width ? title : undefined}
             >
               <span className="map-square">{two(number)}</span>
-              <StopLabel title={title} caption={plural(slides, 'slide')} width={width} />
+              <StopLabel
+                title={title}
+                caption={phase ? NOW[phase] : plural(slides, 'slide')}
+                width={width}
+              />
             </div>
           )
         }

@@ -421,3 +421,16 @@ button.map-neighbour:hover {
   margin-bottom: 8px;
   color: var(--label-2);
 }
+
+/* The lecture the engine is on during a run: a calm halo and its caption in the accent. */
+.map-stop-now::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 18px;
+  background: var(--selection);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-text) 35%, transparent);
+}
+.map-stop-now .map-stop-caption {
+  color: var(--accent-text);
+}

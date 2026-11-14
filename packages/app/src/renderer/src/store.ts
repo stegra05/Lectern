@@ -42,6 +42,8 @@ export interface RunState {
   startedAt: number
   /** When the phase that is running now started, for the time left. */
   phaseStartedAt: number
+  /** The lecture the engine is working on, when it says so. */
+  lecture: number | null
 }
 
 /** Where the map is: the whole course, or inside one lecture with an optional selection. */
@@ -98,7 +100,7 @@ function freshRun(course: string, now: number): RunState {
   const phases = Object.fromEntries(
     PHASES.map((p) => [p, { status: 'waiting', done: 0, total: 0 }]),
   ) as Record<Phase, PhaseState>
-  return { course, phases, startedAt: now, phaseStartedAt: now }
+  return { course, phases, startedAt: now, phaseStartedAt: now, lecture: null }
 }
 
 /** Runs a command and hands back its events once it has finished. */
@@ -276,12 +278,19 @@ export const useStore = create<State>((set, get) => {
               ...current,
               phases: { ...current.phases, [event.phase]: phase },
               phaseStartedAt: event.status === 'started' ? Date.now() : current.phaseStartedAt,
+              lecture: null,
             },
           })
         }
         if (event.type === 'progress') {
           const phase: PhaseState = { status: 'started', done: event.done, total: event.total }
-          set({ run: { ...current, phases: { ...current.phases, [event.phase]: phase } } })
+          set({
+            run: {
+              ...current,
+              phases: { ...current.phases, [event.phase]: phase },
+              lecture: event.lecture ?? null,
+            },
+          })
         }
       })
       const failure = failureOf(events)
@@ -342,6 +351,11 @@ export const useStore = create<State>((set, get) => {
     },
   }
 })
+
+/** The phase running now, or null before the first starts. */
+export function currentPhase(run: RunState): Phase | null {
+  return PHASES.find((p) => run.phases[p].status === 'started') ?? null
+}
 
 /** Where the open course stands. */
 export function stageOf(course: CourseView, run: RunState | null): Stage {

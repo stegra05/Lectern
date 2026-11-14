@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import type { Panel } from '../store.ts'
-import { cardCount, conceptCount, stageOf, useStore } from '../store.ts'
-import { plural } from '../lecture.ts'
+import { cardCount, conceptCount, currentPhase, stageOf, useStore } from '../store.ts'
+import { plural, two } from '../lecture.ts'
 import { Icon } from '../ui/Icon.tsx'
-import { currentPhase, PHASE_NOW, timeLeft, useTick } from './panels/RunPanel.tsx'
+import { PHASE_NOW, timeLeft, useTick } from './panels/RunPanel.tsx'
 import './bar.css'
 
 export function dollars(usd: number): string {
@@ -73,9 +73,12 @@ export function BottomBar() {
   } else if (stage === 'running' && run) {
     const phase = currentPhase(run)
     const write = run.phases.write
+    const on = course.pending.find((p) => p.number === run.lecture)
     const first =
       phase === 'write' && write.done > 0
-        ? `Writing your cards, ${write.done} so far`
+        ? on
+          ? `Writing cards for ${two(on.number)} ${on.title}, ${write.done} so far`
+          : `Writing your cards, ${write.done} so far`
         : phase
           ? PHASE_NOW[phase]
           : 'Getting ready'

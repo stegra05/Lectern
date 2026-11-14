@@ -525,7 +525,7 @@ export function installFixture(): void {
         }
         emit({ type: 'phase', phase: 'map', status: 'done', total: 11 })
         emit({ type: 'phase', phase: 'write', status: 'started', total: 410 })
-        emit({ type: 'progress', phase: 'write', done: 187, total: 410 })
+        emit({ type: 'progress', phase: 'write', done: 187, total: 410, lecture: 5 })
         // Stays midway for the picture.
         return new Promise(() => {})
       case 'outline':

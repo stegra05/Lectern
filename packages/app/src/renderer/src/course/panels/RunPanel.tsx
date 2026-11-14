@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { Goal, Phase } from '../../../../shared/contract.ts'
 import { PHASES } from '../../../../shared/contract.ts'
 import type { PhaseState, RunState } from '../../store.ts'
-import { useStore } from '../../store.ts'
-import { plural } from '../../lecture.ts'
+import { currentPhase, useStore } from '../../store.ts'
+import { plural, two } from '../../lecture.ts'
 import { Icon } from '../../ui/Icon.tsx'
 import './panels.css'
 
@@ -19,11 +19,6 @@ const GOAL_FOR: Record<Goal, string> = {
   pass: 'For a pass',
   good: 'For a good grade',
   top: 'For a top grade',
-}
-
-/** The phase running now, or null before the first starts. */
-export function currentPhase(run: RunState): Phase | null {
-  return PHASES.find((p) => run.phases[p].status === 'started') ?? null
 }
 
 /**
@@ -93,6 +88,9 @@ export function RunPanel({ close }: { close: ReactNode }) {
   const slides = course.pending.reduce((n, p) => n + p.slides, 0)
   const left = timeLeft(run)
   const phase = currentPhase(run)
+  // The lecture the engine is on, as the map names it.
+  const on = course.pending.find((p) => p.number === run.lecture)
+  const now = on ? `${two(on.number)} ${on.title}` : null
 
   return (
     <>
@@ -110,7 +108,14 @@ export function RunPanel({ close }: { close: ReactNode }) {
         </p>
         <ol className="panel-group run-steps" aria-label="What Lectern is doing">
           {PHASES.map((p) => (
-            <Step key={p} phase={p} state={run.phases[p]} lectures={lectures} slides={slides} />
+            <Step
+              key={p}
+              phase={p}
+              state={run.phases[p]}
+              lectures={lectures}
+              slides={slides}
+              now={p === phase ? now : null}
+            />
           ))}
         </ol>
         {left && phase && (
@@ -129,11 +134,14 @@ function Step({
   state,
   lectures,
   slides,
+  now,
 }: {
   phase: Phase
   state: PhaseState
   lectures: number
   slides: number
+  /** The lecture this step is on, when the engine says so. */
+  now: string | null
 }) {
   const { status, done, total } = state
   const running = status === 'started'
@@ -166,7 +174,8 @@ function Step({
       phase === 'map'
         ? 'For every lecture'
         : `${plural(total, 'card')} ${phase === 'write' ? 'written' : 'checked'}`
-  else if (counting && phase === 'map') note = `${done} of ${plural(total, 'lecture')}`
+  else if (counting && phase === 'map')
+    note = now ? `${done} of ${total}, now ${now}` : `${done} of ${plural(total, 'lecture')}`
   else if (counting && phase === 'check') note = `${done} of ${plural(total, 'card')}`
   else note = 'Working on it now'
 
@@ -186,6 +195,7 @@ function Step({
           )}
         </span>
         {!(phase === 'write' && counting) && <span className="panel-note">{note}</span>}
+        {phase === 'write' && counting && now && <span className="panel-note">Now for {now}</span>}
         {phase === 'write' && counting && (
           <span className="run-progress" aria-hidden="true">
             <i style={{ width: `${Math.min(100, (done / total) * 100)}%` }} />
