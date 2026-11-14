@@ -175,10 +175,9 @@ No criterion was given up on.
 - **Content.** Admin and recap slides get cards ("At what time does the class start?"), 295
   concepts for 356 slides is too fine, and lecture titles are cut at 32 characters. Engine
   work, reported to the engine session and now first on its list.
-- **The card estimate shown to the student is too high**: "About 1068 cards" for decks that
-  give about 600 to 660. Reported to the engine session.
-- **The run screen cannot show which lecture is being written.** The engine's events carry
-  counts per phase only. The canvas frame with "writing now" on a stop is not built.
+- **The run screen marks the lecture being worked on, but not the finished ones.** Topics
+  and card counts of a lecture appear only when the whole run has ended, because the engine
+  saves nothing before that. The canvas shows them arriving lecture by lecture.
 - **Dense lectures stay cramped.** Topic pills are cut short ("Support net..."), and in a
   51 concept lecture about half the concepts show as dots only at the fitted zoom.
 - **Not built, by scope:** sending to Anki (the flag stop always says "Not sent yet" and there
@@ -186,6 +185,21 @@ No criterion was given up on.
   the feedback loop. Editing, removing and adding a card are in the brief's base product but
   not in this goal, so they are missing too.
 - **In fake mode** the settings say the key is stored, while it is only kept in memory.
+
+## After the first version of this report
+
+The engine session closed two gaps I had reported, and I used both the same day (engine
+`73347f8`):
+
+- **The card estimate** is fitted to the two real runs: the files screen now says "About 683
+  cards" for the 11 decks instead of 1068.
+- **Progress names the lecture.** During a run the stop of the lecture being worked on is
+  marked on the map ("Writing its cards"), and the run panel and the bottom bar name it.
+  Pictures 04 and 05 are retaken.
+
+Checked on the working tree after that change: app typecheck and lint clean, 53 unit tests and
+the Playwright test pass. Not rerun in a clean checkout, because the engine session has
+unfinished edits in `packages/engine` again.
 
 ## Decisions I took
 
@@ -216,8 +230,8 @@ No criterion was given up on.
 2. **App: the rest of the base product.** Sending through the add-on with the card design
    offered once before the first send, editing, removing and adding a card, a real build
    started from the app with a real key, and committed tests for adding a lecture later.
-   Alongside: an honest card estimate and per-lecture progress events from the engine, so the
-   run screen can show what the canvas draws.
+   Alongside: lectures that show their topics as soon as their cards are written, which
+   needs the engine to save or report a lecture before the whole run ends.
 
 Done when the 11 lecture course goes from the app into Anki, Steffen prefers or cannot tell
 apart a sample of its cards from his reference deck, and adding lecture 12 creates only new

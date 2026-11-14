@@ -67,8 +67,7 @@ Details and what is unverified: `docs/v3/prototype-report.md`.
    real runs. Open with Steffen: a calibrated slide label, a rule in the preset, or both.
 3. **The app after the prototype:** sending through the add-on with the card design offered
    once before the first send, editing, removing and adding a card, a real build started from
-   inside the app, and tests for adding a lecture later. From the engine it needs an honest
-   card estimate and progress per lecture for the run screen.
+   inside the app, and tests for adding a lecture later.
 4. **Then:** evals on the two extra courses.
 
 Paid runs: only the engine session starts them (agreed between the engine and the prototype
