@@ -3,7 +3,7 @@
  * The engine from a command line.
  *
  *   node src/cli.ts estimate <course folder> [--goal pass|good|top] [--model gpt-6-luna]
- *   node src/cli.ts build <course folder> [--goal pass|good|top] [--profile concept|formula|programming|fact-heavy] [--model gpt-6-luna]
+ *   node src/cli.ts build <course folder> [--goal pass|good|top] [--profile concept|formula|programming|fact-heavy] [--model gpt-6-luna] [--cap dollars]
  *   node src/cli.ts outline <course folder>
  *
  * `estimate` and `build` print every event as one JSON line. `outline` prints the Markdown.
@@ -19,7 +19,12 @@ import { createEngine, EngineError } from './api.ts'
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
-  options: { goal: { type: 'string' }, profile: { type: 'string' }, model: { type: 'string' } },
+  options: {
+    goal: { type: 'string' },
+    profile: { type: 'string' },
+    model: { type: 'string' },
+    cap: { type: 'string' },
+  },
 })
 const [type, folder] = positionals
 if (!type || !['estimate', 'build', 'outline'].includes(type) || !folder) {
@@ -34,7 +39,9 @@ const command = {
   type,
   course: basename(path),
   ...(type === 'outline' ? {} : { goal: values.goal }),
-  ...(type === 'build' ? { profile: values.profile } : {}),
+  ...(type === 'build'
+    ? { profile: values.profile, capUsd: values.cap ? Number(values.cap) : undefined }
+    : {}),
 }
 try {
   const engine = createEngine({

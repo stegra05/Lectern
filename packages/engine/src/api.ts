@@ -34,6 +34,8 @@ const CommandSchema = z.discriminatedUnion('type', [
     goal,
     /** The student's correction of the kind of course. Without it the engine decides. */
     profile: z.enum(PROFILE_KINDS).optional(),
+    /** A spending limit in dollars for this build. Without it: three times the estimate. */
+    capUsd: z.number().positive().optional(),
   }),
   /** What a build of the new lectures would cost. Reads the PDFs, calls no model. */
   z.object({ type: z.literal('estimate'), course, goal }),

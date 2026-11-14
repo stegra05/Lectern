@@ -727,6 +727,19 @@ describe('goal, profile and cost', () => {
     expect(await readdir(join(root, 'course'))).toEqual(['slides'])
   })
 
+  it('takes a spending limit from the command instead of its own cap', async () => {
+    await courseOf('01 Risk.pdf')
+    const events = await run(
+      { type: 'build', course: 'course', capUsd: 0.1 },
+      { costPerCall: 0.06 },
+    )
+    expect(events.find((e) => e.type === 'estimate')).toMatchObject({ capUsd: 0.1 })
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      message: 'The run was stopped at 0.12 dollars, above its cap of 0.10 dollars.',
+    })
+  })
+
   it('stops a build whose real cost passes the cap, starts no further call and saves nothing', async () => {
     await courseOf('01 Risk.pdf')
     const events = await run({ type: 'build', course: 'course', goal: 'top' }, { costPerCall: 0.2 })

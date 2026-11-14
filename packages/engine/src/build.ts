@@ -196,8 +196,9 @@ export async function build(
     })
     return
   }
-  emit({ type: 'estimate', ...estimated })
-  const { model: askModel, decide } = createAsk(ports, meter, estimated.capUsd)
+  const capUsd = command.capUsd ?? estimated.capUsd
+  emit({ type: 'estimate', ...estimated, capUsd })
+  const { model: askModel, decide } = createAsk(ports, meter, capUsd)
 
   // Step 1: the profile of the course, once. It picks the preset.
   let profile = existing?.profile
