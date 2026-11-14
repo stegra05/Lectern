@@ -144,6 +144,49 @@ drafts). Its strategy and prompts are provisional until Steffen's input on how c
 created arrives. Everything else (folder, tree, validators, ports, fake model, CLI, outline)
 does not depend on it.
 
+## Milestone 2: code plans, the model fills
+
+Written 2026-11-14 before the code, after the section "How cards are created" of
+`engine-decisions.md`. Done when all of these hold:
+
+1. Cards live in `lectures/NN/cards.yaml`, dropped cards are listed in `lecture.json` with
+   concept and problems, and adding a lecture leaves earlier files byte-identical (tested).
+2. One `DecisionsPort` carries every closed-set judgement, with questions batched per shared
+   input. A scripted fake drives the tests; the real adapter uses OpenAI's Decisions API.
+3. Every check has a calibration entry. Uncalibrated it only flags, calibrated it drops or
+   merges. Both paths are tested. Nothing is calibrated yet.
+4. The seven steps below run end to end offline, with one placeholder preset.
+5. The plan step is a pure function with tests: fact kinds, goal and preset in, card slots out.
+6. An OpenAI model adapter (Responses API, strict JSON schema, slide images) exists, with a
+   live test that runs only with `LECTERN_LIVE=1`.
+7. `estimate` is a command, every build emits the estimate first, and a build stops when the
+   real cost passes the cap (tested with a fake that charges).
+8. All twelve roles of the field contract validate; `code` and `diagram` have their own checks.
+9. Tests, typecheck and lint pass with one command each.
+10. The first real run on the Entrepreneurship decks happens only after Steffen says yes in
+    this session. The report is updated either way.
+
+### The seven steps on the four phases
+
+| Phase (event) | Step | Who | What happens |
+|---|---|---|---|
+| read | | code | Text per slide. Slides under 100 characters are also rendered as pictures |
+| read | 1 Profile | decision | Once per course: the kind of lecture, from a closed list. Emitted as `profile` for the student's one line, stored in `course.json`, picks the preset. A command may override it |
+| read | 2 Kind of slide | decision | One question per slide, the whole lecture as shared input. The label is the reason when a slide is left out |
+| map | 3 Map | model | One call per lecture: topics, concepts, facts with their slide. Code checks it (slides exist, names unique, every content slide used) and asks once more with the problems |
+| map | 3 Checks | decision | Does each concept belong to the lecture. Is a concept the same as an earlier one (code picks the look-alike pairs; an identical name is merged by code) |
+| map | 4 Kind of fact | decision | One choice per fact from the closed list. Then code plans the cards: kind and preset pick the role, the goal picks how many facts of a concept get a card |
+| write | 5 Fill | model | One call per planned card: the whole lecture, then one small form for that role with its limits and the preset's examples. Low reasoning effort |
+| check | 6 Gate | code, decision, model | Hard limits, the copy check (flags), the slide check (rule, then decision). A card that is too long is split into atomic cards. Other failures are repaired with the full list, twice at most. The rest is dropped and listed |
+| check | 7 End | code, decision | Code pairs cards that look alike across the course, a decision says whether they test the same thing. An identical question is dropped by code. No rewriting pass |
+
+Events: `phase` and `progress` as before, plus `profile` (kind and confidence) and `estimate`
+(cards, cost, cap). Flags from uncalibrated checks are stored on the concept or the card
+(`flags`), so the interface can show them and calibration can later turn them into drops.
+
+Placeholder: one preset (`presets.ts`) serves every kind of lecture until the four real ones
+are written and approved. It is not a quality statement.
+
 ## Open questions
 
 - PDFs live in `slides/` inside the course folder, and a command carries the course as a
