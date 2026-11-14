@@ -26,6 +26,8 @@ const courses = process.env.LECTERN_COURSES ?? join(app.getPath('userData'), 'co
 // The card designs are read from the repository, as the interface reads them for its previews.
 const designs = join(app.getAppPath(), '../../design/v3/cards/anki')
 const settings = settingsStore(app.getPath('userData'), fake)
+// Rendered from design/v3/icon/master.py by design/v3/icon/export.sh.
+const icon = join(app.getAppPath(), 'resources/icon.png')
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -36,6 +38,7 @@ function createWindow(): void {
     useContentSize: true,
     show: false,
     title: 'Lectern',
+    icon,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 14, y: 12 },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1C1C1E' : '#EFEFF2',
@@ -69,6 +72,8 @@ ipcMain.handle('settings:design', (_, design: Design) => settings.setDesign(desi
 ipcMain.handle('key:save', (_, key: string) => settings.saveKey(key))
 
 void app.whenReady().then(() => {
+  // Until the app is packaged, macOS would show Electron's own icon in the Dock.
+  app.dock?.setIcon(icon)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

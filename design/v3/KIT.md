@@ -144,6 +144,15 @@ dropped. The choice is made in settings and offered once before the first send, 
 On the Lecture colours card the colours are softer than on the app's track: the same twelve
 hues, toned down for daily review. The app's track keeps the full colours.
 
+## App icon
+
+The hand of stops: four lecture stops (02 to 05, in course order left to right) fanned like a
+hand of cards behind the 01 stop, whose face is a card with a cloze gap. White ground in light,
+`#1C1C1E` in dark, greyscale for tinted. Master and generator: `design/v3/icon/master.py`,
+output in `design/v3/icon/master/` (masked SVGs plus unmasked layers for Icon Composer).
+Picked by Steffen on 2026-11-14 over five rounds; rejected: dots on stalks (reads as a virus),
+the flat lamp (reads as a figure in a hat when small), the track, rings and a plain deck.
+
 ## Copy for chat
 
 The copied text is a tutoring prompt followed by the course as a Markdown outline: lectures,

@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { version } from '../../../../package.json'
+import appIcon from '../assets/icon.svg'
+import appIconDark from '../assets/icon-dark.svg'
 import type { CourseView, Design } from '../../../shared/contract.ts'
 import { CARD_DESIGNS } from '../cards/designs.ts'
 import { DesignCarousel } from './DesignCarousel.tsx'
@@ -236,11 +238,13 @@ function AboutPane() {
       <header className="set-head">
         <h2 className="t-title">About</h2>
       </header>
-      <div className="set-group set-rows">
-        <div className="set-row">
-          <span>Lectern</span>
-          <span className="t-secondary num">Version {version}</span>
-        </div>
+      <div className="set-group set-about">
+        <picture>
+          <source srcSet={appIconDark} media="(prefers-color-scheme: dark)" />
+          <img src={appIcon} width={96} height={96} alt="" />
+        </picture>
+        <span className="t-heading">Lectern</span>
+        <span className="t-secondary num">Version {version}</span>
       </div>
     </>
   )
