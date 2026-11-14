@@ -17,6 +17,11 @@ const QUESTIONS_PER_REQUEST = 200
 const IMAGES_PER_REQUEST = 128
 const DECISION_MODEL = 'gpt-6-luna'
 const DECISION_PRICE = 0.1
+/**
+ * A run makes hundreds of calls and saves nothing until the end, so one dropped connection must
+ * not end it. The SDK waits longer between each of these tries.
+ */
+const RETRIES = 6
 
 export interface OpenAIOptions {
   /** Defaults to the environment (`OPENAI_API_KEY`). */
@@ -66,7 +71,7 @@ export function openaiModel(model = 'gpt-6-luna', options: OpenAIOptions = {}): 
     model,
     price,
     async complete(request) {
-      client ??= new OpenAI(options)
+      client ??= new OpenAI({ ...options, maxRetries: RETRIES })
       const response = await client.responses
         .create({
           model,
@@ -129,7 +134,7 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
     model: DECISION_MODEL,
     price: { input: DECISION_PRICE },
     async decide(request) {
-      client ??= new OpenAI(options)
+      client ??= new OpenAI({ ...options, maxRetries: RETRIES })
       const content = shared(request.context, request.images.slice(0, IMAGES_PER_REQUEST), false)
       const answers: Answer[] = []
       let inputTokens = 0

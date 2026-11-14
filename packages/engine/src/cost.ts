@@ -1,6 +1,7 @@
 /**
  * The estimate before a run and the cap that stops one. Pure. The constants were set against
- * the first real run (one deck of 16 slides, gpt-6-luna, 2026-11-14) and stay rough.
+ * the first real runs (gpt-6-luna, 2026-11-14) and stay rough. The card count is shown to the
+ * student, so it is fitted to what the runs made: 596 and 658 cards from 356 slides.
  */
 
 import { GOAL_PRESETS, type Goal } from './cards/roles.ts'
@@ -20,11 +21,12 @@ const TOKENS = {
   mapReplyPerSlide: 250,
   fillPrompt: 600,
   fillReply: 120,
-  conceptsPerSlide: 1,
-  /** A concept rarely has more facts than this, whatever the goal asks for. */
-  factsPerConcept: 3,
-  /** Share of concepts that are core, for the goal that only covers those. */
-  coreShare: 0.5,
+  /** Measured on the two full runs of 2026-11-14: 268 and 295 concepts on 356 slides. */
+  conceptsPerSlide: 0.8,
+  /** The map found 2.4 facts per concept on average, whatever the goal asks for. */
+  factsPerConcept: 2.4,
+  /** Share of concepts that are core, for the goal that only covers those: 173 of 268. */
+  coreShare: 0.65,
   /** Repairs and splits on top of the fill calls. */
   reworkShare: 0.25,
   /** Calls per lecture that read the lecture at full price: the cache is kept per card type. */

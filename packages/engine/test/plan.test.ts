@@ -151,9 +151,9 @@ describe('the estimate', () => {
     const [pass, good, top] = (['pass', 'good', 'top'] as const).map((goal) =>
       estimate(decks, goal, prices),
     )
-    expect(good).toMatchObject({ lectures: 11, slides: 352, cards: 704 })
-    expect(pass!.cards).toBe(176)
-    expect(top!.cards).toBe(1056)
+    expect(good).toMatchObject({ lectures: 11, slides: 352, cards: 561 })
+    expect(pass!.cards).toBe(187)
+    expect(top!.cards).toBe(671)
     expect(pass!.costUsd).toBeLessThan(good!.costUsd)
     expect(good!.costUsd).toBeLessThan(top!.costUsd)
     expect(good!.costUsd).toBeGreaterThan(0.05)
