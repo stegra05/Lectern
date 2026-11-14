@@ -9,6 +9,7 @@ Written 2026-11-14 for the next session. Branch `v3`, local only, nothing pushed
 3. `design/v3/KIT.md`: the binding design kit (tokens, lecture colours, frame, map, cards).
 4. `docs/v3/engine-decisions.md`: his engine decisions, including how cards are created.
 5. `docs/v3/engine-report.md` and `docs/v3/engine-plan.md`: what the engine can do today.
+6. `docs/v3/prototype-report.md` and `packages/app/README.md`: what the app can do today.
 
 ## Where things are
 
@@ -21,6 +22,9 @@ Written 2026-11-14 for the next session. Branch `v3`, local only, nothing pushed
 | Brief for designers of canvas screens | `design/v3/V2-BRIEF.md` |
 | Personality references | `design/v3/personality/moodboard.html` |
 | Engine | `packages/engine` |
+| App (Electron) | `packages/app`, start with `pnpm --filter @lectern/app start` |
+| Pictures of every base screen, light and dark | `docs/v3/shots/` |
+| The real run's course and log (not in git) | `eval-results/v3-courses/` |
 | Superseded explorations, local only, not in git | `design/v3/archive/` |
 | v2 app, still the shipping product on `main` | `src/`, `src-tauri/` |
 
@@ -44,8 +48,14 @@ first real runs happened on 2026-11-14: the 11 Entrepreneurship decks became 596
 course administration gets cards, and some cards are thin. Figures and findings are in
 `docs/v3/engine-report.md`, section "First real runs". About 70 cents of the 50 dollars are used.
 
-**App.** `packages/app` exists and is built by the prototype session on the engine's boundary.
-Its state is described in its own report and commits.
+**App.** The base prototype is done and committed (app code up to `99ff4ab`): an Electron app
+on the engine's one boundary, with first run, courses, files and goal, the run with the real
+phases, the result track, a lecture as rings, cards in the side panel, course details and
+settings with the card design carousel, in light and dark. 53 unit tests and one Playwright
+test from a new course to its cards pass on the offline models. It was checked on the real
+Entrepreneurship course. Not built yet: sending to Anki, editing or adding a card, themes. A
+real build has only been started from the engine's command line, never from inside the app.
+Details and what is unverified: `docs/v3/prototype-report.md`.
 
 ## Next steps
 
@@ -55,11 +65,14 @@ Its state is described in its own report and commits.
    a blind comparison of a run against his reference deck, the measure of success in the brief.
 2. **Keeping course administration out of the cards.** The largest visible defect of the first
    real runs. Open with Steffen: a calibrated slide label, a rule in the preset, or both.
-3. **The prototype** in `packages/app`, in progress in its own session.
-4. **Then:** Anki delivery through the add-on, evals on the two extra courses.
+3. **The app after the prototype:** sending through the add-on with the card design offered
+   once before the first send, editing, removing and adding a card, a real build started from
+   inside the app, and tests for adding a lecture later. From the engine it needs an honest
+   card estimate and progress per lecture for the run screen.
+4. **Then:** evals on the two extra courses.
 
-Paid runs: only one session starts them (to be agreed between the engine and the prototype
-session, see their messages), on OpenAI only, within the 50 dollars.
+Paid runs: only the engine session starts them (agreed between the engine and the prototype
+session on 2026-11-14), on OpenAI only, within the 50 dollars.
 
 ## Open with Steffen
 
