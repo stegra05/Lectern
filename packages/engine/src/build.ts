@@ -460,7 +460,9 @@ export async function build(
         })
       }
       for (const item of passing) (item.problems.length > 0 ? failing : accepted).push(item)
-      emit({ type: 'progress', phase: 'check', done: accepted.length, total: items.length })
+      // A split adds cards, so the total is what is in play now, never less than what is done.
+      const total = accepted.length + failing.length + dropped.length
+      emit({ type: 'progress', phase: 'check', done: accepted.length, total })
       if (round === REPAIRS) {
         dropped.push(...failing)
         break

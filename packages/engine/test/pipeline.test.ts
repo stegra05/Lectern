@@ -104,6 +104,15 @@ describe('building a course of two lectures, offline', () => {
     for (const event of events) expect(JSON.parse(JSON.stringify(event))).toEqual(event)
   })
 
+  it('never reports more done than in total, also when a split adds cards', () => {
+    const checks = events.filter((e) => e.type === 'progress' && e.phase === 'check')
+    expect(checks.map((e) => (e.type === 'progress' ? [e.done, e.total] : []))).toEqual([
+      [5, 8],
+      [8, 9],
+      [8, 9],
+    ])
+  })
+
   it('writes the course file with the profile', async () => {
     expect(await json('course.json')).toEqual({
       format: 1,
