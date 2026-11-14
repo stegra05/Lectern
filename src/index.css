@@ -100,6 +100,8 @@ body {
 [role='alert'],
 .log-quote,
 .log-line,
+.textLayer,
+.textLayer *,
 input,
 textarea {
   user-select: text;
@@ -382,4 +384,76 @@ article.bg-paper:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* PDF.js text layer overlay for native text selection on rendered slides. */
+.textLayer {
+  color-scheme: only light;
+  position: absolute;
+  text-align: initial;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 10;
+  pointer-events: auto;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --user-unit: 1;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor, 1) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  pointer-events: auto;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor, 1) * var(--font-height, 14px));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.textLayer span[role='img'] {
+  user-select: none;
+  cursor: default;
+}
+
+/* The browser paints a selection span by span: overlapping spans darken the
+   spaces and the gaps between them stay white. The slide draws the selection
+   itself instead, one box per line (see SlideCanvas). */
+.textLayer ::selection {
+  background: transparent !important;
+  color: transparent !important;
+}
+
+.textLayer ::-moz-selection {
+  background: transparent !important;
+  color: transparent !important;
+}
+
+/* Over a card's quoted wording, the slide text reads as a link to that card. */
+.textLayer[data-over-quote] :is(span, br) {
+  cursor: pointer;
 }
