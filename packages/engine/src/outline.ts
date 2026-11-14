@@ -20,11 +20,9 @@ export async function outline(store: Store, course: string): Promise<string> {
     for (const topic of lecture.topics) {
       lines.push('', `### ${topic.name}`)
       for (const concept of topic.concepts) {
-        lines.push('', `#### ${concept.name}`, '')
-        for (const card of cards.filter((c) => c.concept === concept.id)) {
-          const { question, answer } = questionAndAnswer(card)
-          lines.push(`- Q: ${question}`, `  A: ${answer}`)
-        }
+        const own = cards.filter((c) => c.concept === concept.id).map(questionAndAnswer)
+        lines.push('', `#### ${concept.name}`, ...(own.length > 0 ? [''] : []))
+        for (const { question, answer } of own) lines.push(`- Q: ${question}`, `  A: ${answer}`)
       }
     }
   }
@@ -43,6 +41,10 @@ export function questionAndAnswer(card: CardFile): { question: string; answer: s
   const answer =
     items.length === 0
       ? htmlToText(f.Back!)
-      : items.map((item, i) => (f.Role === 'contrast' ? `${labels[i]}: ${item}` : item)).join('; ')
+      : items
+          .map((item, i) =>
+            f.Role === 'contrast' || f.Role === 'code' ? `${labels[i]}: ${item}` : item,
+          )
+          .join('; ')
   return { question: htmlToText(f.Front!), answer }
 }

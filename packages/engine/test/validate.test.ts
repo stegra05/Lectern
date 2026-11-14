@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { ROLE_SPECS, type Draft } from '../src/cards/roles.ts'
-import { isYesNo, validateDraft, type Source } from '../src/cards/validate.ts'
+import { ROLE_SPECS, type Diagram, type Draft } from '../src/cards/roles.ts'
+import {
+  copiedRun,
+  groundedByRule,
+  isYesNo,
+  tooLong,
+  validateDiagram,
+  validateDraft,
+  type Source,
+} from '../src/cards/validate.ts'
 
 const slides: Record<number, string> = {
   14: 'Risk (Knight 1921)\nAn outcome whose probability can be calculated or known',
   20: 'Effectual principles\nBird in hand\nAffordable loss\nCrazy quilt\nLemonade\nPilot in the plane',
   25: 'Causation: expected return\nEffectuation: affordable loss',
 }
-const source: Source = { slides: [14, 20, 25], slideText: (n) => slides[n] }
+const source: Source = {
+  slides: [14, 20, 25, 30],
+  slideText: (n) => slides[n],
+  seenAsImage: (n) => n === 30,
+}
 
 const draft = (over: Partial<Draft>): Draft => ({
   concept: 'risk',
@@ -17,6 +29,8 @@ const draft = (over: Partial<Draft>): Draft => ({
   answers: ['An outcome whose ==probability can be calculated or known==.'],
   labels: [],
   extra: '',
+  code: '',
+  diagram: null,
   ...over,
 })
 const problems = (over: Partial<Draft>) => validateDraft(draft(over), source)
@@ -187,11 +201,6 @@ describe('roles', () => {
     )
   })
 
-  it('rejects roles that are in the field contract but not built yet', () => {
-    expect(problems({ role: 'diagram' })).toHaveLength(1)
-    expect(problems({ role: 'code' })).toHaveLength(1)
-  })
-
   it('rejects an answer that does not have the shape the role promises', () => {
     const contrast = { role: 'contrast', slide: 25, labels: ['Causation', 'Effectuation'] }
     expect(problems({ ...contrast, answers: ['expected return versus affordable loss'] })).toEqual([
@@ -315,13 +324,251 @@ describe('cloze rules', () => {
 describe('provenance', () => {
   it('rejects a slide that does not belong to the concept', () => {
     expect(problems({ slide: 99 })).toEqual([
-      'slide 99 is not a slide of this concept; use one of: 14, 20, 25',
+      'slide 99 is not a slide of this concept; use one of: 14, 20, 25, 30',
+    ])
+  })
+})
+
+describe('code cards', () => {
+  const listing = 'def find(xs, target):\n    lo, hi = 0, len(xs) - 1\n    return -1'
+  const code = (over: Partial<Draft> = {}) =>
+    problems({
+      role: 'code',
+      slide: 40,
+      front: 'What does this function return, and in what time?',
+      labels: ['Returns', 'Time'],
+      answers: ['the index of target or -1', 'O(log n)'],
+      code: listing,
+      ...over,
+    })
+  const withCode: Source = {
+    slides: [40, 41],
+    slideText: (n) =>
+      n === 40
+        ? 'Binary search\ndef find(xs, target):\nlo, hi = 0, len(xs) - 1\nreturn -1'
+        : undefined,
+    seenAsImage: (n) => n === 41,
+  }
+  const check = (over: Partial<Draft> = {}) =>
+    validateDraft(
+      draft({
+        role: 'code',
+        slide: 40,
+        front: 'What does this return?',
+        labels: ['Returns'],
+        answers: ['the index or -1'],
+        code: listing,
+        ...over,
+      }),
+      withCode,
+    )
+
+  it('pass with a listing copied from the slide, indentation aside', () => {
+    expect(check()).toEqual([])
+  })
+
+  it('need the listing, and only they may have one', () => {
+    expect(check({ code: '' })).toEqual(['a code card needs the listing in the code slot'])
+    expect(problems({ code: 'x = 1' })).toEqual([
+      'only the role code takes a listing; leave code empty',
     ])
   })
 
-  it('rejects an answer with no term on the cited slide', () => {
-    expect(problems({ answers: ['A ==venture== without customers.'] })).toEqual([
-      'no term of the answer appears on slide 14; answer from the slide text',
+  it('reject a listing that is not on the slide', () => {
+    expect(check({ code: 'while True:\n    pass' })).toEqual([
+      'copy the listing from slide 40 line by line; a line is not on the slide',
     ])
+    expect(check({ slide: 41, code: 'while True:\n    pass' })).toEqual([])
+  })
+
+  it('limit the listing to 16 lines of 60 characters', () => {
+    const lines = (n: number) => Array.from({ length: n }, () => 'return -1').join('\n')
+    expect(check({ code: lines(16) })).toEqual([])
+    expect(check({ code: lines(17) })).toEqual(['the listing has 17 lines; the limit is 16'])
+    expect(check({ slide: 41, code: 'x'.repeat(61) })).toEqual([
+      'a line of the listing has more than 60 characters',
+    ])
+  })
+
+  it('need one label per answer', () => {
+    expect(code()).toContain('slide 40 is not a slide of this concept; use one of: 14, 20, 25, 30')
+    expect(check({ labels: ['Returns', 'Time'] })).toEqual([
+      'give one label per answer: 2 labels, 1 answers',
+    ])
+  })
+})
+
+describe('diagram cards', () => {
+  const matrix: Diagram = {
+    type: 'matrix',
+    columns: ['Weak appropriability', 'Tight appropriability'],
+    rows: ['Assets free', 'Assets held'],
+    cells: ['Imitators win', 'Innovator wins', 'Asset holders win', 'Innovator wins'],
+    key: [2],
+  }
+  const diagram = (over: Partial<Draft> = {}) =>
+    problems({
+      role: 'diagram',
+      front: 'Draw the Teece matrix.',
+      answers: ['It shows who captures the ==probability== of profit.'],
+      diagram: matrix,
+      ...over,
+    })
+
+  it('pass with a matrix, a sequence or a cycle', () => {
+    expect(diagram()).toEqual([])
+    expect(
+      validateDiagram({
+        type: 'cycle',
+        columns: [],
+        rows: [],
+        cells: ['Build', 'Measure', 'Learn'],
+        key: [1],
+      }),
+    ).toEqual([])
+    expect(
+      validateDiagram({
+        type: 'sequence',
+        columns: [],
+        rows: [],
+        cells: ['Seed', 'Series A'],
+        key: [0, 1],
+      }),
+    ).toEqual([])
+  })
+
+  it('need the drawing, and only they may have one', () => {
+    expect(diagram({ diagram: null })).toEqual(['a diagram card needs the diagram slot'])
+    expect(problems({ diagram: matrix })).toEqual([
+      'only the role diagram takes a diagram; leave the slot null',
+    ])
+  })
+
+  it('reject a type outside the closed set', () => {
+    expect(validateDiagram({ ...matrix, type: 'mindmap' as 'matrix' })).toEqual([
+      'diagram type "mindmap" does not exist; use one of: matrix, sequence, cycle',
+    ])
+  })
+
+  it('check that the cells fill the matrix', () => {
+    expect(validateDiagram({ ...matrix, cells: matrix.cells.slice(0, 3) })).toEqual(
+      [
+        'a matrix of 2 rows and 2 columns takes 4 cells, got 3',
+        'key lists the cells that answer the question: at least one index into cells, each once',
+      ].slice(0, 1),
+    )
+    expect(validateDiagram({ ...matrix, rows: [] })).toEqual([
+      'a matrix takes 1 to 4 column labels and 1 to 4 row labels',
+    ])
+  })
+
+  it('limit a sequence to 8 steps without axis labels', () => {
+    const steps = (n: number) => Array.from({ length: n }, (_, i) => `step ${i}`)
+    expect(
+      validateDiagram({ type: 'sequence', columns: [], rows: [], cells: steps(9), key: [0] }),
+    ).toEqual(['a sequence takes 2 to 8 steps, got 9'])
+    expect(
+      validateDiagram({ type: 'cycle', columns: ['x'], rows: [], cells: steps(3), key: [0] }),
+    ).toEqual(['a cycle has no column or row labels'])
+  })
+
+  it('keep labels short and the key inside the cells', () => {
+    expect(
+      validateDiagram({ ...matrix, cells: ['one two three four five', 'b', 'c', 'd'] }),
+    ).toEqual(['a label of the diagram has more than 4 words'])
+    const message =
+      'key lists the cells that answer the question: at least one index into cells, each once'
+    expect(validateDiagram({ ...matrix, key: [] })).toEqual([message])
+    expect(validateDiagram({ ...matrix, key: [4] })).toEqual([message])
+    expect(validateDiagram({ ...matrix, key: [1, 1] })).toEqual([message])
+  })
+})
+
+describe('the free slide check', () => {
+  const text = slides[14]!
+  it('passes a card when at least half of its answer terms are on the slide', () => {
+    expect(groundedByRule(draft({}), text)).toBe(true)
+    expect(
+      groundedByRule(draft({ answers: ['A ==probability== that insurers price.'] }), text),
+    ).toBe(false)
+    expect(groundedByRule(draft({ answers: ['A ==venture== without customers.'] }), text)).toBe(
+      false,
+    )
+  })
+
+  it('reads the hidden items of a cloze, and never settles a formula', () => {
+    expect(
+      groundedByRule(
+        draft({
+          role: 'cloze',
+          front: 'Risk has a {{c1::probability}} that is known.',
+          answers: [],
+        }),
+        text,
+      ),
+    ).toBe(true)
+    expect(
+      groundedByRule(
+        draft({ role: 'formula', answers: ['p = 1', 'When the outcome is known.'] }),
+        text,
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('too long', () => {
+  it('is a card whose question or answer breaks a length limit', () => {
+    expect(tooLong(draft({}))).toBe(false)
+    expect(tooLong(draft({ front: `What ${words(20)}` }))).toBe(true)
+    expect(tooLong(draft({ answers: [words(26)] }))).toBe(true)
+    expect(tooLong(draft({ role: 'cloze-list', answers: ['a', 'b', 'c', 'd', 'e', 'f'] }))).toBe(
+      true,
+    )
+    expect(
+      tooLong(draft({ role: 'cloze', front: `Risk is {{c1::known}} ${words(45)}.`, answers: [] })),
+    ).toBe(true)
+  })
+
+  it('is not a card with another kind of problem', () => {
+    expect(tooLong(draft({ front: 'Is risk known?' }))).toBe(false)
+    expect(tooLong(draft({ role: 'reverse', answers: ['one two three four five six'] }))).toBe(
+      false,
+    )
+  })
+})
+
+describe('the copy check', () => {
+  const slide = 'An outcome whose probability can be calculated or known by the decision maker'
+  it('counts the longest run of slide words in a sentence', () => {
+    expect(
+      copiedRun(
+        draft({
+          answers: ['An outcome whose ==probability can be calculated== or known by anyone.'],
+        }),
+        slide,
+      ),
+    ).toBe(10)
+    expect(
+      copiedRun(draft({ answers: ['A result with a ==probability== one can work out.'] }), slide),
+    ).toBe(1)
+  })
+
+  it('leaves terms and list items alone: they are meant to match the slide', () => {
+    const items = [
+      'an outcome whose probability can be calculated or known by the decision maker',
+      'x',
+    ]
+    expect(copiedRun(draft({ role: 'name-two', answers: items }), slide)).toBe(0)
+    expect(
+      copiedRun(
+        draft({
+          role: 'cloze',
+          front:
+            'An outcome whose {{c1::probability}} can be calculated or known by the decision maker.',
+          answers: [],
+        }),
+        slide,
+      ),
+    ).toBe(13)
   })
 })

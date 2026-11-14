@@ -4,40 +4,59 @@
  */
 
 import { z } from 'zod'
-import { build } from './build.ts'
+import { build, estimateCourse } from './build.ts'
 import { GOALS } from './cards/roles.ts'
+import { CALIBRATIONS, PROFILE_KINDS, type Calibrations, type ProfileKind } from './decide.ts'
 import { EngineError } from './errors.ts'
 import { outline } from './outline.ts'
 import type { Ports } from './ports.ts'
 
+/** The course folder inside the store. */
+const course = z.string().min(1)
+/** Asked once per course. Kept in `course.json`; `good` when never given. */
+const goal = z.enum(GOALS).optional()
+
 const CommandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('build'),
-    /** The course folder inside the store. */
-    course: z.string().min(1),
-    /** Asked once per course. Kept in `course.json`; `good` when never given. */
-    goal: z.enum(GOALS).optional(),
+    course,
+    goal,
+    /** The student's correction of the kind of course. Without it the engine decides. */
+    profile: z.enum(PROFILE_KINDS).optional(),
   }),
-  z.object({ type: z.literal('outline'), course: z.string().min(1) }),
+  /** What a build of the new lectures would cost. Reads the PDFs, calls no model. */
+  z.object({ type: z.literal('estimate'), course, goal }),
+  z.object({ type: z.literal('outline'), course }),
 ])
 
 export type Command = z.infer<typeof CommandSchema>
 export type BuildCommand = Extract<Command, { type: 'build' }>
+export type EstimateCommand = Extract<Command, { type: 'estimate' }>
+
+type Phase = 'read' | 'map' | 'write' | 'check'
 
 export type Event =
+  | { type: 'phase'; phase: Phase; status: 'started' | 'done'; total: number }
+  | { type: 'progress'; phase: Phase; done: number; total: number }
+  /** Before the first paid call of a build, and the whole answer to `estimate`. */
   | {
-      type: 'phase'
-      phase: 'read' | 'map' | 'write' | 'check'
-      status: 'started' | 'done'
-      total: number
+      type: 'estimate'
+      lectures: number
+      slides: number
+      cards: number
+      costUsd: number
+      capUsd: number
     }
-  | { type: 'progress'; phase: 'read' | 'map' | 'write' | 'check'; done: number; total: number }
+  /** The kind of course, for the student's one line to confirm. Confidence is null when they set it. */
+  | { type: 'profile'; kind: ProfileKind; confidence: number | null }
   | {
       type: 'built'
       /** The lectures this build added. Empty when nothing was new. */
       lectures: { number: number; title: string; concepts: number; cards: number }[]
       cards: number
       dropped: number
+      /** Cards an uncalibrated check has a remark on. They are kept. */
+      flagged: number
       costUsd: number
       durationMs: number
     }
@@ -51,7 +70,13 @@ export interface Engine {
   run(command: unknown, emit: Emit): Promise<void>
 }
 
-export function createEngine(ports: Ports): Engine {
+export interface Options {
+  /** Which checks have been measured on labelled data. Unmeasured checks only flag. */
+  calibrations?: Partial<Calibrations>
+}
+
+export function createEngine(ports: Ports, options: Options = {}): Engine {
+  const calibrations = { ...CALIBRATIONS, ...options.calibrations }
   return {
     async run(command, emit) {
       try {
@@ -62,8 +87,10 @@ export function createEngine(ports: Ports): Engine {
             z.prettifyError(parsed.error),
           )
         }
-        if (parsed.data.type === 'build') await build(ports, parsed.data, emit)
-        else emit({ type: 'outline', markdown: await outline(ports.store, parsed.data.course) })
+        const known = parsed.data
+        if (known.type === 'build') await build(ports, calibrations, known, emit)
+        else if (known.type === 'estimate') await estimateCourse(ports, known, emit)
+        else emit({ type: 'outline', markdown: await outline(ports.store, known.course) })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         const fix = error instanceof EngineError ? error.fix : 'Run the command again.'
@@ -74,6 +101,7 @@ export function createEngine(ports: Ports): Engine {
 }
 
 export { EngineError } from './errors.ts'
-export type { Ports, ModelPort, ModelRequest, PdfPort, Store, Usage } from './ports.ts'
+export type * from './ports.ts'
 export type { CardFile } from './cards/assemble.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
+export type { Calibrations } from './decide.ts'

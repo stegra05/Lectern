@@ -5,17 +5,21 @@
  */
 
 import { CLOZE, contentWords, escapeHtml, two, words } from './words.ts'
-import { ROLE_SPECS, type Draft, type Role } from './roles.ts'
+import { ROLE_SPECS, type Diagram, type Draft, type Role } from './roles.ts'
 import { typedField } from './typed.ts'
 
+/** One card as it is stored in the `cards.yaml` of its lecture. */
 export interface CardFile {
   id: string
   note: 'qa' | 'cloze'
-  lecture: number
   /** Id of the concept in the lecture's tree. */
   concept: string
   slide: number
   fields: Record<string, string>
+  /** The drawing of a diagram card as data, kept for the renderer to come. */
+  diagram?: Diagram
+  /** What an uncalibrated check noticed. Shown, never acted on. */
+  flags?: string[]
 }
 
 export interface Placement {
@@ -96,10 +100,10 @@ export function assemble(draft: Draft, place: Placement): CardFile {
   const deletions = [...draft.front.matchAll(CLOZE)].map((m) => m[2]!)
   const hidden = role === 'cloze' ? deletions : answers
   const expected = spec.back === 'term' ? [term(answers[0]!)] : hidden
+  const slideImage = `<img src="l${two(lecture)}-s${two(draft.slide)}.png">`
 
-  const shared = {
-    Role: role,
-    Typed: typedField(role, expected, place.concept.name),
+  const typed = typedField(role, expected, place.concept.name)
+  const provenance = {
     Lecture: two(lecture),
     Topic: place.lecture.title,
     Source: `Lecture ${lecture}, slide ${draft.slide}`,
@@ -107,29 +111,30 @@ export function assemble(draft: Draft, place: Placement): CardFile {
     Part: '',
     Extra: toHtml(draft.extra),
     Excerpt: escapeHtml(excerpt(place.slideLines, hidden.join(' '))),
-    Slide: `<img src="l${two(lecture)}-s${two(draft.slide)}.png">`,
-    Diagram: '',
+    Slide: slideImage,
+    // No renderer yet: a diagram card shows its slide, the fallback of the field contract.
+    Diagram: role === 'diagram' ? slideImage : '',
     Key: place.concept.name,
   }
-  const { Role: roleField, Typed, ...provenance } = shared
   const fields =
     spec.note === 'cloze'
-      ? { Text: clozeText(role, draft.front, answers), Role: roleField, Typed, ...provenance }
+      ? { Text: clozeText(role, draft.front, answers), Role: role, Typed: typed, ...provenance }
       : {
           Front: toHtml(draft.front),
           Back: back(role, answers),
-          Role: roleField,
+          Role: role,
           Slots: slots(role, labels, answers),
-          Code: '',
-          Typed,
+          Code: escapeHtml(draft.code.replace(/\s+$/, '')),
+          Typed: typed,
           ...provenance,
         }
-  return {
+  const card: CardFile = {
     id: place.id,
     note: spec.note,
-    lecture,
     concept: place.concept.id,
     slide: draft.slide,
     fields,
   }
+  if (role === 'diagram' && draft.diagram) card.diagram = draft.diagram
+  return card
 }

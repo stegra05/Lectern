@@ -1,131 +1,159 @@
 import { describe, expect, it } from 'vitest'
 import { assignNumbers, inCourseOrder } from '../src/course.ts'
-import { settleMap, type MapContext, type MapOutput } from '../src/tree.ts'
+import type { SlideKind } from '../src/decide.ts'
+import { FACTS_PER_CONCEPT, settleMap, type MapContext, type MapOutput } from '../src/tree.ts'
 
+const kinds: SlideKind[] = ['title', 'content', 'content', 'agenda', 'content', 'content']
 const ctx: MapContext = {
-  slideCount: 6,
-  emptySlides: [4],
-  earlier: new Map([['risk', 1]]),
+  kinds,
+  contentOnly: false,
+  earlier: new Map([['risk', { name: 'risk', lecture: 1 }]]),
   fallbackTitle: 'Slides',
 }
+const fact = (slide: number, text = `A fact on slide ${slide}.`) => ({ text, slide })
+const concept = (name: string, slides: number[], core = true) => ({
+  name,
+  core,
+  facts: slides.map((s) => fact(s)),
+})
 const good: MapOutput = {
   title: 'Effectuation',
   topics: [
     {
       name: 'Principles',
-      concepts: [
-        { name: 'effectual principles', slides: [2] },
-        { name: 'bird in hand', slides: [3, 2] },
-      ],
+      concepts: [concept('effectual principles', [2]), concept('bird in hand', [3, 2], false)],
     },
-  ],
-  leftOut: [
-    { slides: [1], reason: 'Title slide' },
-    { slides: [5, 6], reason: 'Organisational' },
+    { name: 'More', concepts: [concept('affordable loss', [5, 6])] },
   ],
 }
 
 describe('settleMap', () => {
-  it('keeps a clean map and adds the reason for slides without text', () => {
+  it('keeps a clean map: concepts with their facts and the slides those sit on', () => {
     const settled = settleMap(good, ctx)
     expect(settled.problems).toEqual([])
     expect(settled.title).toBe('Effectuation')
-    expect(settled.topics).toEqual([
-      {
-        name: 'Principles',
-        concepts: [
-          { id: 'effectual-principles', name: 'effectual principles', slides: [2] },
-          { id: 'bird-in-hand', name: 'bird in hand', slides: [2, 3] },
-        ],
-      },
-    ])
-    expect(settled.leftOut).toEqual([
+    expect(settled.topics[0]).toEqual({
+      name: 'Principles',
+      concepts: [
+        {
+          id: 'effectual-principles',
+          name: 'effectual principles',
+          slides: [2],
+          core: true,
+          facts: [{ text: 'A fact on slide 2.', slide: 2, kind: 'definition' }],
+        },
+        {
+          id: 'bird-in-hand',
+          name: 'bird in hand',
+          slides: [2, 3],
+          core: false,
+          facts: [
+            { text: 'A fact on slide 3.', slide: 3, kind: 'definition' },
+            { text: 'A fact on slide 2.', slide: 2, kind: 'definition' },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('leaves out every unused slide, with its kind as the reason', () => {
+    expect(settleMap(good, ctx).leftOut).toEqual([
       { slide: 1, reason: 'Title slide' },
-      { slide: 4, reason: 'No readable text on this slide' },
-      { slide: 5, reason: 'Organisational' },
-      { slide: 6, reason: 'Organisational' },
+      { slide: 4, reason: 'Agenda slide' },
     ])
   })
 
-  it('accounts for every slide: unassigned slides are a problem and get a reason from code', () => {
-    const settled = settleMap({ ...good, leftOut: [{ slides: [1], reason: 'Title slide' }] }, ctx)
-    expect(settled.problems).toEqual([
-      'slides 5 to 6: neither used by a concept nor left out with a reason',
-    ])
+  it('reports content slides without a fact and gives them a reason from code', () => {
+    const settled = settleMap({ ...good, topics: good.topics.slice(0, 1) }, ctx)
+    expect(settled.problems).toEqual(['slides 5 to 6: content slides without any fact'])
     expect(settled.leftOut.slice(-2)).toEqual([
-      { slide: 5, reason: 'No concept found on this slide' },
-      { slide: 6, reason: 'No concept found on this slide' },
+      { slide: 5, reason: 'No testable fact found on this slide' },
+      { slide: 6, reason: 'No testable fact found on this slide' },
     ])
   })
 
-  it('drops a concept an earlier lecture covers and leaves its slides out with that reason', () => {
-    const out = { ...good, leftOut: good.leftOut.slice(0, 1) }
-    out.topics = [
-      {
-        name: 'Principles',
-        concepts: [...good.topics[0]!.concepts, { name: 'Risk', slides: [5, 6] }],
-      },
-    ]
-    const settled = settleMap(out, ctx)
-    expect(settled.problems).toEqual([])
-    expect(settled.covered).toEqual([{ name: 'Risk', lecture: 1 }])
-    expect(settled.topics[0]!.concepts.map((c) => c.id)).toEqual([
-      'effectual-principles',
-      'bird-in-hand',
-    ])
-    expect(settled.leftOut.at(-1)).toEqual({ slide: 6, reason: 'Already covered in lecture 1' })
+  it('keeps one vocabulary: a concept an earlier lecture has takes its id, name and lecture', () => {
+    const out = {
+      ...good,
+      topics: [...good.topics, { name: 'Again', concepts: [concept('Risk', [3])] }],
+    }
+    const again = settleMap(out, ctx).topics.at(-1)!.concepts[0]!
+    expect(again).toMatchObject({ id: 'risk', name: 'risk', since: 1, slides: [3] })
   })
 
-  it('reports and repairs slide numbers that do not exist or have no text', () => {
+  it('lets facts sit on any slide until the slide labels are calibrated', () => {
     const out = {
       ...good,
       topics: [
-        {
-          name: 'T',
-          concepts: [
-            { name: 'a', slides: [2, 4, 9] },
-            { name: 'b', slides: [7] },
-            { name: 'c', slides: [3] },
-          ],
-        },
+        { name: 'T', concepts: [concept('a', [1, 2]), concept('b', [4]), concept('c', [3, 5, 6])] },
+      ],
+    }
+    expect(settleMap(out, ctx).problems).toEqual([])
+    const strict = settleMap(out, { ...ctx, contentOnly: true })
+    expect(strict.problems).toEqual([
+      'concept "a" takes facts from slide 1, which are not content slides',
+      'concept "b" takes facts from slide 4, which are not content slides',
+      'concept "b" has no fact',
+    ])
+    expect(strict.topics[0]!.concepts.map((c) => [c.id, c.slides])).toEqual([
+      ['a', [2]],
+      ['c', [3, 5, 6]],
+    ])
+  })
+
+  it('reports and drops facts on slides the lecture does not have', () => {
+    const out = {
+      ...good,
+      topics: [
+        { name: 'T', concepts: [concept('a', [2, 9]), concept('b', [7]), concept('c', [3, 5, 6])] },
       ],
     }
     const settled = settleMap(out, ctx)
     expect(settled.problems).toEqual([
-      'concept "a" names slides 4 and 9 without readable text',
-      'concept "b" names slide 7 without readable text',
-      'concept "b" has no slide',
-    ])
-    expect(settled.topics[0]!.concepts).toEqual([
-      { id: 'a', name: 'a', slides: [2] },
-      { id: 'c', name: 'c', slides: [3] },
+      'concept "a" takes facts from slide 9, which the lecture does not have',
+      'concept "b" takes facts from slide 7, which the lecture does not have',
+      'concept "b" has no fact',
     ])
   })
 
-  it('reports a repeated concept, an empty topic, a long name and a missing reason', () => {
+  it('cuts a concept with too many facts: a map split too finely', () => {
+    const out = {
+      ...good,
+      topics: [{ name: 'T', concepts: [concept('a', [2, 2, 2, 3, 3, 3, 5, 5, 6])] }],
+    }
+    const kept = settleMap(out, ctx).topics[0]!.concepts[0]!
+    expect(kept.facts).toHaveLength(FACTS_PER_CONCEPT)
+    expect(kept.slides).toEqual([2, 3])
+  })
+
+  it('reports a repeated concept, an empty topic and a long name', () => {
     const out: MapOutput = {
       title: 'Effectuation',
       topics: [
-        {
-          name: 'A',
-          concepts: [
-            { name: 'Bird in hand', slides: [2] },
-            { name: 'bird in hand', slides: [3] },
-          ],
-        },
+        { name: 'A', concepts: [concept('Bird in hand', [2]), concept('bird in hand', [3])] },
         { name: 'B', concepts: [] },
-        { name: 'C', concepts: [{ name: 'one two three four five six seven', slides: [3] }] },
+        { name: 'C', concepts: [concept('one two three four five six seven', [3, 5, 6])] },
       ],
-      leftOut: [{ slides: [1, 5, 6], reason: ' ' }],
     }
     const settled = settleMap(out, ctx)
     expect(settled.problems).toEqual([
       'concept "bird in hand" appears twice',
       'topic "B" has no concepts',
       'concept "one two three four five six seven" has more than 6 words',
-      'slides 1 and 5 to 6 left out without a reason',
     ])
     expect(settled.topics.map((t) => t.name)).toEqual(['A', 'C'])
+  })
+
+  it('needs a core: when nothing is marked, everything counts as core', () => {
+    const out = {
+      ...good,
+      topics: [{ name: 'T', concepts: [concept('a', [2, 3], false), concept('b', [5, 6], false)] }],
+    }
+    const settled = settleMap(out, ctx)
+    expect(settled.problems).toEqual([
+      'no concept is marked as core; mark the ones a student needs to pass',
+    ])
+    expect(settled.topics[0]!.concepts.every((c) => c.core)).toBe(true)
   })
 
   it('keeps the title within 32 characters', () => {
@@ -139,7 +167,7 @@ describe('settleMap', () => {
   })
 
   it('says so when there is nothing to learn', () => {
-    const settled = settleMap({ title: 'Welcome', topics: [], leftOut: [] }, ctx)
+    const settled = settleMap({ title: 'Welcome', topics: [] }, ctx)
     expect(settled.problems).toContain('the map has no concepts')
     expect(settled.leftOut).toHaveLength(6)
   })

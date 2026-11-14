@@ -53,6 +53,8 @@ const draft = (over: Partial<Draft>): Draft => ({
   answers: ['Bird in hand'],
   labels: [],
   extra: '',
+  code: '',
+  diagram: null,
   ...over,
 })
 const fields = (over: Partial<Draft>) => assemble(draft(over), place).fields
@@ -64,7 +66,6 @@ describe('assemble', () => {
     expect(card).toMatchObject({
       id: place.id,
       note: 'qa',
-      lecture: 2,
       concept: 'bird-in-hand',
       slide: 21,
     })
@@ -145,6 +146,42 @@ describe('assemble', () => {
     expect(f.Back).toBe(
       '\\[ |&lt;u,v&gt;| \\le \\|u\\|\\|v\\| \\] Equality when u and v are <mark>linearly dependent</mark>.',
     )
+  })
+
+  it('puts the listing of a code card into Code, escaped, with its labels as slots', () => {
+    const f = fields({
+      role: 'code',
+      front: 'What does this return?',
+      labels: ['Returns', 'Time'],
+      answers: ['the index or -1', 'O(log n)'],
+      code: 'if xs[mid] < target:\n    lo = mid + 1\n',
+    })
+    expect(f.Code).toBe('if xs[mid] &lt; target:\n    lo = mid + 1')
+    expect(f.Slots).toBe('<span>Returns</span><span>Time</span>')
+    expect(f.Back).toBe('<ul><li>the index or -1</li><li>O(log n)</li></ul>')
+  })
+
+  it('keeps the drawing of a diagram card as data and shows the slide until a renderer exists', () => {
+    const diagram = {
+      type: 'cycle' as const,
+      columns: [],
+      rows: [],
+      cells: ['Build', 'Measure', 'Learn'],
+      key: [1],
+    }
+    const card = assemble(
+      draft({
+        role: 'diagram',
+        front: 'Draw the lean loop.',
+        answers: ['It ==repeats==.'],
+        diagram,
+      }),
+      place,
+    )
+    expect(card.diagram).toEqual(diagram)
+    expect(card.fields.Diagram).toBe('<img src="l02-s21.png">')
+    expect(assemble(draft({}), place)).not.toHaveProperty('diagram')
+    expect(fields({}).Diagram).toBe('')
   })
 
   it('quotes the slide line that matches the answer, at most 30 words', () => {

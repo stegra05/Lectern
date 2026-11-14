@@ -5,7 +5,15 @@
  */
 
 import { CLOZE, contentWords, words } from './words.ts'
-import { isRole, ROLES, ROLE_SPECS, type Draft } from './roles.ts'
+import {
+  DIAGRAM_TYPES,
+  isRole,
+  ROLES,
+  ROLE_SPECS,
+  type Diagram,
+  type Draft,
+  type RoleSpec,
+} from './roles.ts'
 
 export const LIMITS = {
   frontWords: 20,
@@ -17,6 +25,10 @@ export const LIMITS = {
   deletions: 5,
   deletionWords: 8,
   slotWords: 4,
+  codeLines: 16,
+  codeChars: 60,
+  diagramAxis: 4,
+  diagramSteps: 8,
 } as const
 
 /**
@@ -41,6 +53,8 @@ export interface Source {
   slides: number[]
   /** The text of one slide, 1-based. Undefined when the slide does not exist. */
   slideText: (slide: number) => string | undefined
+  /** True when the model saw the slide as a picture, so its text cannot settle what is on it. */
+  seenAsImage: (slide: number) => boolean
 }
 
 export function validateDraft(draft: Draft, source: Source): string[] {
@@ -70,13 +84,30 @@ export function validateDraft(draft: Draft, source: Source): string[] {
   if (spec.note === 'cloze') {
     problems.push(...(draft.role === 'cloze' ? clozeSentence(front) : clozeList(front, answers)))
   } else {
-    problems.push(...question(front), ...answer(draft, answers, labels))
+    problems.push(...question(front), ...answer(spec, answers, labels))
   }
-
   if (words(draft.extra) > LIMITS.extraWords) {
     problems.push(`extra has ${words(draft.extra)} words; the limit is ${LIMITS.extraWords}`)
   }
-  problems.push(...provenance(draft, answers, source))
+
+  if (!source.slides.includes(draft.slide)) {
+    problems.push(
+      `slide ${draft.slide} is not a slide of this concept; use one of: ${source.slides.join(', ')}`,
+    )
+  }
+  if (draft.role === 'code' && labels.length !== answers.length) {
+    problems.push(`give one label per answer: ${labels.length} labels, ${answers.length} answers`)
+  }
+  problems.push(...listing(draft, source))
+  if (draft.role === 'diagram') {
+    problems.push(
+      ...(draft.diagram
+        ? validateDiagram(draft.diagram)
+        : ['a diagram card needs the diagram slot']),
+    )
+  } else if (draft.diagram) {
+    problems.push('only the role diagram takes a diagram; leave the slot null')
+  }
   return problems
 }
 
@@ -111,8 +142,7 @@ function question(front: string): string[] {
   return problems
 }
 
-function answer(draft: Draft, answers: string[], labels: string[]): string[] {
-  const spec = ROLE_SPECS[draft.role as keyof typeof ROLE_SPECS]
+function answer(spec: RoleSpec, answers: string[], labels: string[]): string[] {
   const problems: string[] = []
   const spoken = spec.back === 'formula' ? answers.slice(1) : answers
   const total = spoken.reduce((sum, a) => sum + words(a), 0)
@@ -185,20 +215,132 @@ function clozeList(lead: string, items: string[]): string[] {
   return problems
 }
 
-/** The card must come from a slide of its concept, and its answer must be found there. */
-function provenance(draft: Draft, answers: string[], source: Source): string[] {
-  if (!source.slides.includes(draft.slide)) {
+/** The listing of a code card: short, and copied from the slide, not invented. */
+function listing(draft: Draft, source: Source): string[] {
+  const lines = draft.code.split('\n').filter((line) => line.trim() !== '')
+  if (draft.role !== 'code')
+    return lines.length > 0 ? ['only the role code takes a listing; leave code empty'] : []
+  const problems: string[] = []
+  if (lines.length === 0) problems.push('a code card needs the listing in the code slot')
+  if (lines.length > LIMITS.codeLines) {
+    problems.push(`the listing has ${lines.length} lines; the limit is ${LIMITS.codeLines}`)
+  }
+  if (lines.some((line) => line.length > LIMITS.codeChars)) {
+    problems.push(`a line of the listing has more than ${LIMITS.codeChars} characters`)
+  }
+  const squeeze = (text: string) => text.replace(/\s+/g, '')
+  const slide = squeeze(source.slideText(draft.slide) ?? '')
+  if (!source.seenAsImage(draft.slide) && lines.some((line) => !slide.includes(squeeze(line)))) {
+    problems.push(
+      `copy the listing from slide ${draft.slide} line by line; a line is not on the slide`,
+    )
+  }
+  return problems
+}
+
+/** The shape of a drawing: a known type, the right number of cells, short labels, a marked answer. */
+export function validateDiagram(diagram: Diagram): string[] {
+  if (!(DIAGRAM_TYPES as readonly string[]).includes(diagram.type)) {
     return [
-      `slide ${draft.slide} is not a slide of this concept; use one of: ${source.slides.join(', ')}`,
+      `diagram type "${diagram.type}" does not exist; use one of: ${DIAGRAM_TYPES.join(', ')}`,
     ]
   }
-  if (draft.role === 'formula') return []
-  const hidden =
-    draft.role === 'cloze' ? [...draft.front.matchAll(CLOZE)].map((m) => m[2]!) : answers
-  const terms = contentWords(hidden.join(' '))
-  const slide = (source.slideText(draft.slide) ?? '').toLowerCase()
-  if (terms.length > 0 && !terms.some((t) => slide.includes(t.slice(0, 5)))) {
-    return [`no term of the answer appears on slide ${draft.slide}; answer from the slide text`]
+  const problems: string[] = []
+  const { columns, rows, cells, key } = diagram
+  if (diagram.type === 'matrix') {
+    const fits = (axis: string[]) => axis.length >= 1 && axis.length <= LIMITS.diagramAxis
+    if (!fits(columns) || !fits(rows)) {
+      problems.push(
+        `a matrix takes 1 to ${LIMITS.diagramAxis} column labels and 1 to ${LIMITS.diagramAxis} row labels`,
+      )
+    } else if (cells.length !== columns.length * rows.length) {
+      problems.push(
+        `a matrix of ${rows.length} rows and ${columns.length} columns takes ${rows.length * columns.length} cells, got ${cells.length}`,
+      )
+    }
+  } else {
+    if (columns.length > 0 || rows.length > 0)
+      problems.push(`a ${diagram.type} has no column or row labels`)
+    if (cells.length < 2 || cells.length > LIMITS.diagramSteps) {
+      problems.push(
+        `a ${diagram.type} takes 2 to ${LIMITS.diagramSteps} steps, got ${cells.length}`,
+      )
+    }
   }
-  return []
+  const labels = [...columns, ...rows, ...cells].map((l) => l.trim())
+  if (labels.some((l) => l === '')) problems.push('a label of the diagram is empty')
+  if (labels.some((l) => words(l) > LIMITS.slotWords)) {
+    problems.push(`a label of the diagram has more than ${LIMITS.slotWords} words`)
+  }
+  const valid = (i: number) => Number.isInteger(i) && i >= 0 && i < cells.length
+  if (key.length === 0 || !key.every(valid) || new Set(key).size !== key.length) {
+    problems.push(
+      'key lists the cells that answer the question: at least one index into cells, each once',
+    )
+  }
+  return problems
+}
+
+/**
+ * The free check of a card against its slide: true when at least half of the terms of the
+ * answer are found in the slide text. False means "not sure", and the card goes to the
+ * checking port. Formulas and slides the model saw as a picture are never settled by text.
+ */
+export function groundedByRule(draft: Draft, slideText: string): boolean {
+  if (draft.role === 'formula') return false
+  const hidden =
+    draft.role === 'cloze' ? [...draft.front.matchAll(CLOZE)].map((m) => m[2]!) : draft.answers
+  const terms = contentWords(hidden.join(' '))
+  const slide = slideText.toLowerCase()
+  const found = terms.filter((t) => slide.includes(t.slice(0, 5))).length
+  return terms.length > 0 && found * 2 >= terms.length
+}
+
+/**
+ * True when a draft breaks a length limit of its question or answer. Such a card holds more
+ * than one fact, so it is split into atomic cards instead of being shortened.
+ */
+export function tooLong(draft: Draft): boolean {
+  if (!isRole(draft.role)) return false
+  const spec = ROLE_SPECS[draft.role]
+  const front = draft.front.trim()
+  if (draft.role === 'cloze') {
+    return words(front) > LIMITS.clozeWords || [...front.matchAll(CLOZE)].length > LIMITS.deletions
+  }
+  if (draft.role === 'cloze-list') return draft.answers.length > LIMITS.deletions
+  const spoken = spec.back === 'formula' ? draft.answers.slice(1) : draft.answers
+  const total = spoken.reduce((sum, a) => sum + words(a), 0)
+  return (
+    words(front) > LIMITS.frontWords ||
+    total > LIMITS.answerWords ||
+    (spec.back === 'list' && draft.answers.length > LIMITS.bullets)
+  )
+}
+
+/** A sentence that repeats this many slide words in a row is copied, not reworded. */
+export const COPY_RUN = 8
+
+/**
+ * The longest run of words a card's sentence takes over from the slide, word for word.
+ * Only sentences count: terms and list items are meant to appear exactly as on the slide.
+ */
+export function copiedRun(draft: Draft, slideText: string): number {
+  const sentence =
+    draft.role === 'definition' || draft.role === 'diagram' || draft.role === 'why'
+      ? draft.answers.join(' ')
+      : draft.role === 'formula'
+        ? (draft.answers[1] ?? '')
+        : draft.role === 'cloze'
+          ? draft.front.replace(CLOZE, '$2')
+          : ''
+  const norm = (text: string) => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  const a = norm(sentence.replace(/==/g, ''))
+  const slide = ` ${norm(slideText).join(' ')} `
+  let longest = 0
+  for (let start = 0; start < a.length; start++) {
+    let end = start + longest + 1
+    while (end <= a.length && slide.includes(` ${a.slice(start, end).join(' ')} `)) end++
+    longest = Math.max(longest, end - 1 - start)
+  }
+  return longest
 }

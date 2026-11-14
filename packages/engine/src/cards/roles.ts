@@ -1,7 +1,6 @@
 /**
  * The closed set of card roles. A role is a slot template: it says which slots the model
  * fills and how many, and `assemble.ts` builds every card field from those slots.
- * `code` and `diagram` from the field contract are not built yet.
  */
 
 export const ROLES = [
@@ -13,6 +12,8 @@ export const ROLES = [
   'why',
   'case',
   'formula',
+  'code',
+  'diagram',
   'cloze',
   'cloze-list',
 ] as const
@@ -38,6 +39,27 @@ export interface Draft {
   labels: string[]
   /** Optional context shown after the answer. Empty when there is none. */
   extra: string
+  /** The listing of a `code` card, copied from the slide. Empty for every other role. */
+  code: string
+  /** The drawing of a `diagram` card. Null for every other role. */
+  diagram: Diagram | null
+}
+
+export const DIAGRAM_TYPES = ['matrix', 'sequence', 'cycle'] as const
+
+/**
+ * A drawing as data, from a small set of types that code can render. No renderer exists yet;
+ * until one is benchmarked the card shows the slide image instead.
+ * matrix: `cells` row by row under the `columns` and beside the `rows` labels.
+ * sequence and cycle: `cells` are the steps in order; `columns` and `rows` stay empty.
+ */
+export interface Diagram {
+  type: (typeof DIAGRAM_TYPES)[number]
+  columns: string[]
+  rows: string[]
+  cells: string[]
+  /** Indexes into `cells` of the parts that answer the question. */
+  key: number[]
 }
 
 export interface RoleSpec {
@@ -129,6 +151,24 @@ export const ROLE_SPECS: Record<Role, RoleSpec> = {
     markWhole: false,
     use: 'A formula to state. answers: first the formula in TeX without delimiters, then one sentence with its condition.',
   },
+  code: {
+    note: 'qa',
+    answers: [1, 2],
+    labels: [1, 2],
+    back: 'list',
+    markRequired: false,
+    markWhole: false,
+    use: 'What a listing does. code: the listing as on the slide, at most 16 lines. labels: one per question part, such as "Returns" and "Time". answers: one per label.',
+  },
+  diagram: {
+    note: 'qa',
+    answers: [1, 1],
+    labels: [0, 0],
+    back: 'sentence',
+    markRequired: false,
+    markWhole: false,
+    use: 'A framework to draw from memory. front: asks to draw it. diagram: the drawing as data. answers: one sentence that reads the drawing.',
+  },
   cloze: {
     note: 'cloze',
     answers: [0, 0],
@@ -149,12 +189,25 @@ export const ROLE_SPECS: Record<Role, RoleSpec> = {
   },
 }
 
-/** The student's goal sets the depth: the most cards one concept may get. */
+/** The student's goal, asked once per course. It sets coverage and depth. */
 export const GOALS = ['pass', 'good', 'top'] as const
 export type Goal = (typeof GOALS)[number]
-export const GOAL_LABEL: Record<Goal, string> = {
-  pass: 'pass',
-  good: 'good grade',
-  top: 'top grade',
+
+export interface GoalPreset {
+  label: string
+  /** Which concepts get cards: only those the map marks as core, or all. */
+  coverage: 'core' | 'all'
+  /** How many facts of one concept get a card. */
+  facts: number
+  /** Facts of these kinds get a card even beyond that number. */
+  always: readonly string[]
 }
-export const CARDS_PER_CONCEPT: Record<Goal, number> = { pass: 2, good: 3, top: 4 }
+
+export const GOAL_PRESETS: Record<Goal, GoalPreset> = {
+  pass: { label: 'pass', coverage: 'core', facts: 1, always: [] },
+  good: { label: 'good grade', coverage: 'all', facts: 2, always: [] },
+  top: { label: 'top grade', coverage: 'all', facts: 4, always: ['case', 'contrast'] },
+}
+
+/** A concept that comes up again in a later lecture gets this many more cards there. */
+export const RECURRING_CARDS = 1

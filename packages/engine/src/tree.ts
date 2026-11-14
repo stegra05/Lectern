@@ -5,23 +5,29 @@
  */
 
 import { slideRange, slug, words } from './cards/words.ts'
-import type { LeftOut, Topic } from './course.ts'
+import type { Concept, LeftOut, Topic } from './course.ts'
+import type { SlideKind } from './decide.ts'
 
 export const TITLE_CHARS = 32
 const CONCEPT_WORDS = 6
+/** More facts than this per concept means the map is split too finely; the rest is cut. */
+export const FACTS_PER_CONCEPT = 6
 
 export interface MapOutput {
   title: string
-  topics: { name: string; concepts: { name: string; slides: number[] }[] }[]
-  leftOut: { slides: number[]; reason: string }[]
+  topics: {
+    name: string
+    concepts: { name: string; core: boolean; facts: { text: string; slide: number }[] }[]
+  }[]
 }
 
 export interface MapContext {
-  slideCount: number
-  /** Slides without text. Nothing can be asked from them yet. */
-  emptySlides: number[]
-  /** Concept ids of earlier lectures, with the lecture that covers them. */
-  earlier: Map<string, number>
+  /** The kind of every slide, in slide order. Its length is the number of slides. */
+  kinds: SlideKind[]
+  /** True once the slide labels are calibrated: then only content slides may carry facts. */
+  contentOnly: boolean
+  /** The concepts earlier lectures introduced, by id: the course's vocabulary. */
+  earlier: Map<string, { name: string; lecture: number }>
   /** Used when the model gives no title. */
   fallbackTitle: string
 }
@@ -30,16 +36,23 @@ export interface Settled {
   title: string
   topics: Topic[]
   leftOut: LeftOut[]
-  /** Concepts dropped because an earlier lecture has them. */
-  covered: { name: string; lecture: number }[]
   problems: string[]
+}
+
+/** Why a slide that is not content has no cards, as the student reads it. */
+const REASON: Record<SlideKind, string> = {
+  title: 'Title slide',
+  agenda: 'Agenda slide',
+  recap: 'Recap slide',
+  'reading list': 'Reading list',
+  content: 'No testable fact found on this slide',
 }
 
 export function settleMap(out: MapOutput, ctx: MapContext): Settled {
   const problems: string[] = []
-  const empty = new Set(ctx.emptySlides)
-  const readable = (n: number) =>
-    Number.isInteger(n) && n >= 1 && n <= ctx.slideCount && !empty.has(n)
+  const count = ctx.kinds.length
+  const exists = (n: number) => Number.isInteger(n) && n >= 1 && n <= count
+  const usable = (n: number) => exists(n) && (!ctx.contentOnly || ctx.kinds[n - 1] === 'content')
 
   let title = out.title.trim()
   if (title === '') {
@@ -52,12 +65,9 @@ export function settleMap(out: MapOutput, ctx: MapContext): Settled {
   }
 
   const ids = new Set<string>()
-  const used = new Set<number>()
-  const covered: Settled['covered'] = []
-  const coveredSlides = new Map<number, number>()
   const topics: Topic[] = []
   for (const [t, topic] of out.topics.entries()) {
-    const concepts = []
+    const concepts: Concept[] = []
     for (const concept of topic.concepts) {
       const name = concept.name.trim()
       if (name === '') {
@@ -66,62 +76,66 @@ export function settleMap(out: MapOutput, ctx: MapContext): Settled {
       }
       if (words(name) > CONCEPT_WORDS)
         problems.push(`concept "${name}" has more than ${CONCEPT_WORDS} words`)
-      const slides = [...new Set(concept.slides)].filter(readable).sort((a, b) => a - b)
-      const bad = concept.slides.filter((n) => !readable(n))
-      if (bad.length > 0)
-        problems.push(`concept "${name}" names ${slideRange(bad)} without readable text`)
-      if (slides.length === 0) {
-        problems.push(`concept "${name}" has no slide`)
+      const stated = concept.facts.filter((fact) => fact.text.trim() !== '')
+      const bad = stated.filter((fact) => !usable(fact.slide)).map((fact) => fact.slide)
+      if (bad.length > 0) {
+        const why = bad.every(exists)
+          ? 'which are not content slides'
+          : 'which the lecture does not have'
+        problems.push(`concept "${name}" takes facts from ${slideRange(bad)}, ${why}`)
+      }
+      const facts = stated
+        .filter((fact) => usable(fact.slide))
+        .slice(0, FACTS_PER_CONCEPT)
+        .map((fact) => ({ text: fact.text.trim(), slide: fact.slide, kind: 'definition' as const }))
+      if (facts.length === 0) {
+        problems.push(`concept "${name}" has no fact`)
         continue
       }
       const id = slug(name) || `concept-${ids.size + 1}`
-      const earlier = ctx.earlier.get(id)
-      if (earlier !== undefined) {
-        covered.push({ name, lecture: earlier })
-        for (const s of slides) coveredSlides.set(s, earlier)
-        continue
-      }
       if (ids.has(id)) {
         problems.push(`concept "${name}" appears twice`)
         continue
       }
       ids.add(id)
-      for (const s of slides) used.add(s)
-      concepts.push({ id, name, slides })
+      const slides = [...new Set(facts.map((fact) => fact.slide))].sort((a, b) => a - b)
+      // One vocabulary: a concept that comes up again keeps the name the course already uses.
+      const known = ctx.earlier.get(id)
+      concepts.push({
+        id,
+        name: known?.name ?? name,
+        slides,
+        core: concept.core,
+        ...(known ? { since: known.lecture } : {}),
+        facts,
+      })
     }
     if (topic.concepts.length === 0) problems.push(`topic "${topic.name}" has no concepts`)
     if (concepts.length > 0) topics.push({ name: topic.name.trim() || `Topic ${t + 1}`, concepts })
   }
-  if (topics.length === 0 && covered.length === 0) problems.push('the map has no concepts')
+  const all = topics.flatMap((topic) => topic.concepts)
+  if (all.length === 0) problems.push('the map has no concepts')
+  else if (!all.some((concept) => concept.core)) {
+    problems.push('no concept is marked as core; mark the ones a student needs to pass')
+    for (const concept of all) concept.core = true
+  }
 
-  const reasons = new Map<number, string>()
-  for (const group of out.leftOut) {
-    const reason = group.reason.trim()
-    if (reason === '') problems.push(`${slideRange(group.slides)} left out without a reason`)
-    for (const s of group.slides) {
-      if (readable(s) && !reasons.has(s)) reasons.set(s, reason || 'No reason given')
-    }
-  }
-  const unaccounted: number[] = []
-  const leftOut: LeftOut[] = []
-  for (let slide = 1; slide <= ctx.slideCount; slide++) {
-    if (used.has(slide)) continue
-    const earlier = coveredSlides.get(slide)
-    if (empty.has(slide)) leftOut.push({ slide, reason: 'No readable text on this slide' })
-    else if (earlier !== undefined)
-      leftOut.push({ slide, reason: `Already covered in lecture ${earlier}` })
-    else if (reasons.has(slide)) leftOut.push({ slide, reason: reasons.get(slide)! })
-    else {
-      unaccounted.push(slide)
-      leftOut.push({ slide, reason: 'No concept found on this slide' })
-    }
-  }
-  if (unaccounted.length > 0) {
-    problems.push(
-      `${slideRange(unaccounted)}: neither used by a concept nor left out with a reason`,
-    )
-  }
-  return { title, topics, leftOut, covered, problems }
+  const leftOut = unusedSlides(topics, ctx.kinds)
+  const unused = leftOut
+    .filter(({ slide }) => ctx.kinds[slide - 1] === 'content')
+    .map(({ slide }) => slide)
+  if (unused.length > 0) problems.push(`${slideRange(unused)}: content slides without any fact`)
+  return { title, topics, leftOut, problems }
+}
+
+/** Every slide no concept uses, with the reason: its kind. */
+export function unusedSlides(topics: Topic[], kinds: SlideKind[]): LeftOut[] {
+  const used = new Set(
+    topics.flatMap((topic) => topic.concepts.flatMap((concept) => concept.slides)),
+  )
+  return kinds.flatMap((kind, i) =>
+    used.has(i + 1) ? [] : [{ slide: i + 1, reason: REASON[kind] }],
+  )
 }
 
 /** Cut a title to the limit at a word boundary. */

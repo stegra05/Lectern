@@ -1,7 +1,11 @@
+import { createCanvas } from '@napi-rs/canvas'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PdfPort } from '../ports.ts'
 
-/** Reads the text of each slide with pdf.js. Pictures and scanned slides come back empty. */
+/** Width of a rendered slide in pixels: enough to read a formula, small enough to send. */
+const WIDTH = 1024
+
+/** Reads slides with pdf.js: the text of each slide, and a picture of a slide on request. */
 export const pdfjsReader: PdfPort = {
   async readSlides(data) {
     // pdf.js takes ownership of the buffer, so it gets a copy.
@@ -27,6 +31,30 @@ export const pdfjsReader: PdfPort = {
         page.cleanup()
       }
       return slides
+    } finally {
+      await task.destroy()
+    }
+  },
+
+  async renderSlides(data, slides) {
+    const task = getDocument({ data: data.slice(), verbosity: 0 })
+    const doc = await task.promise
+    try {
+      const images = []
+      for (const slide of slides) {
+        const page = await doc.getPage(slide)
+        const viewport = page.getViewport({ scale: WIDTH / page.getViewport({ scale: 1 }).width })
+        const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
+        // pdf.js is typed for the browser canvas; the Node canvas has the same drawing surface.
+        await page.render({
+          canvas: canvas as never,
+          canvasContext: canvas.getContext('2d') as never,
+          viewport,
+        }).promise
+        images.push({ slide, png: canvas.toBuffer('image/png').toString('base64') })
+        page.cleanup()
+      }
+      return images
     } finally {
       await task.destroy()
     }
