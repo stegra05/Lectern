@@ -1,6 +1,23 @@
 # Changelog
 
-## Unreleased
+## 2.18.0 (2026-11-14)
+
+### Added
+
+- **Select slide text to start a card.** The slide next to your cards is now
+  real text. Select a passage and "+ Create card from selection" opens a new
+  card with it as the question; with a card already open, the selection
+  fills the answer. `n` and "+ New card" pick up the selection too.
+- **See what each card quotes.** The wording a card takes from its slide is
+  marked on the slide. Hover a mark to see that card's wording stand out,
+  click it to jump to the card. What is left unmarked is what the deck does
+  not cover yet.
+- **Slide text, readable.** A "Slide text" section under the slide shows the
+  page's text with the same marks, for slides too small to read.
+- **A slide panel as wide as you want.** Drag its left edge; Lectern
+  remembers the width. The filmstrip lights the slide that is open, even
+  when it has no cards. All four contributed by @leonhardmuehlmeyer (#103,
+  #104).
 
 ### Changed
 
