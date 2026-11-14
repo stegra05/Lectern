@@ -169,25 +169,54 @@ How the seven steps run:
 
 ## Sending to Anki
 
-Added 2026-11-14 by a third session, on Steffen's instruction. Never run against a real Anki:
-Anki was closed, and a first run writes into his real collection, which needs his yes.
+Added 2026-11-14 by a third session, on Steffen's instruction, and run against his real Anki
+the same evening with his yes (Anki 26.9.4 with the AnkiConnect add-on).
 
 **What it does.** The command `send` takes a course and a card design. It installs Lectern's two
-note types in that design, creates one deck per lecture under a deck named after the course
+note types in that design, creates one deck per lecture under the course's deck
 (`Entrepreneurship::02 Effectuation`, the number first so Anki lists them in course order),
 stores the slide picture of every card, and adds one note per card. Events: `sending` after
-each card, `sent` at the end. The command `restyle` gives the cards already in Anki another
-design. `course` now reports `sent` per lecture.
+each card, `sent` at the end with the course's deck. The command `restyle` gives the cards
+already in Anki another design. `course` now reports `sent` per lecture.
 
-**A card is sent once.** `<course>/anki.json` records the Anki note of every card that went. A
-later send adds only cards that are not in it. A note in Anki is never written again: not its
-wording, not its progress, and a note the student deleted does not come back. The record is
-saved even when a send breaks off, so the next send continues with the rest.
+**A card is sent once.** `<course>/anki.json` records the course's deck and the Anki note of
+every card that went. A later send adds only cards that are not in it. A note in Anki is never
+written again: not its wording, not its progress, and a note the student deleted does not come
+back. The record is saved even when a send breaks off, so the next send continues with the rest.
 
 **Where it is.** `src/deliver.ts`, the ports `anki` and `designs` in `src/ports.ts`,
 `adapters/ankiconnect.ts` (the add-on on `127.0.0.1:8765`), `adapters/memory-anki.ts` (an Anki
-in memory that refuses what the real one refuses, for tests and for the app offline),
-`adapters/node-designs.ts` (reads `design/v3/cards/anki`). Tests: `test/deliver.test.ts`, 14.
+in memory that behaves like the real one where it matters, for tests and for the app offline),
+`adapters/node-designs.ts` (reads `design/v3/cards/anki`). Tests: `test/deliver.test.ts`, 18.
+
+**The real run.** Two lectures of the first real Entrepreneurship run (03 and 09, 94 cards),
+copied into a course named "Lectern send test", from the command line.
+
+| Figure | Value |
+|---|---|
+| Cards sent | 94, into 2 subdecks, with the fields, tags and note types as planned |
+| Time | 10.9 s, slide pictures included. About 75 s for a course of 650 cards at that rate |
+| Slide pictures | 38 PNG, 4.9 MB, 130 KB on average, 540 KB the largest. About 45 MB for 350 slides at that rate |
+| Notes that Anki did not keep | 2 of 94 |
+| A second send | "Every card of this course is already in Anki." |
+| Design change to Lamp and back | Both note types changed, the Lectern 2 note types did not |
+| His reference deck | 636 notes before and after |
+
+What the real Anki taught, and what changed because of it:
+
+- **Anki can hand back a note and not keep it.** Two notes got an id and were not in the
+  collection afterwards. They arrived when sent again, so it was not their content. The cause
+  is not established. The add-on records every added note as an undo step, so an undo in Anki
+  while a send runs would do exactly this. Now the send asks Anki which notes of a lecture are
+  there, adds the missing ones again, up to three times, and fails with the count when some
+  still do not stay. Only notes found in Anki are recorded.
+- **A course named like a deck the student has.** His own deck is called "Entrepreneurship",
+  with subdecks. A course of that name would have put Lectern's cards into it. The first send
+  now takes a deck that is not there yet ("Entrepreneurship (Lectern)") and keeps it.
+- **Anki writes media under lowercase names.** `_LampSerif.woff2` became `_lampserif.woff2`,
+  which a Mac still finds and a phone does not. Fonts and pictures are now stored and named in
+  lowercase.
+- **`Lectern Cloze` was taken**, as expected: his collection has the Lectern 2 note types.
 
 **Defaults I chose, none of them in the design documents:**
 
@@ -202,14 +231,16 @@ in memory that refuses what the real one refuses, for tests and for the app offl
 
 **Open.**
 
-- The first real send, on a throwaway profile or with his yes on his own collection. The shapes
-  of the add-on calls follow the Lectern 2 client, which ran against a real Anki.
+- Nobody has looked at the cards in Anki itself yet, on the Mac or on a phone. The rendered
+  HTML was read back and is what the templates should give.
+- The send from inside the app has only run on the Anki in memory. The real run used the
+  command line, which shares the engine code and not the app's wiring.
+- A note lost after its lecture was checked (a late undo) is not noticed.
 - `FIELDS.md` wants `Key` as the sort field. The add-on cannot set a sort field when it creates
   a note type, so Anki sorts by the first field.
-- Size. A course of 350 slides stores about 330 PNG pictures in Anki's media folder, which
-  Anki then syncs. Not measured.
-- A send adds notes one call at a time, as Lectern 2 did, so each failure names its card.
-  Speed on 600 cards is not measured.
+- Left in his collection by the test, for him to delete: the decks "Lectern send test" (94
+  notes) and "Lectern send test (Lectern)" (35 notes), 53 pictures named
+  `lectern-lectern-send-test*`, and the two Lamp fonts. The two note types stay.
 
 ## Placeholder
 

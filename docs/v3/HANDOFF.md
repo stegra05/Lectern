@@ -54,8 +54,9 @@ phases, the result track, a lecture as rings, cards in the side panel, course de
 settings with the card design carousel, in light and dark. 53 unit tests and one Playwright
 test from a new course to its cards pass on the offline models. It was checked on the real
 Entrepreneurship course. Sending to Anki is built (the card design offered once before the
-first send, then only new cards with each later send) and tested on an Anki in memory, never
-on a real one: `docs/v3/engine-report.md`, section "Sending to Anki". Not built yet: editing or
+first send, then only new cards with each later send). The engine's send ran against his real
+Anki with 94 cards; the app's send has only run on an Anki in memory:
+`docs/v3/engine-report.md`, section "Sending to Anki". Not built yet: editing or
 adding a card, themes. A real build has only been started from the engine's command line,
 never from inside the app.
 Details and what is unverified: `docs/v3/prototype-report.md`.
@@ -68,8 +69,9 @@ Details and what is unverified: `docs/v3/prototype-report.md`.
    a blind comparison of a run against his reference deck, the measure of success in the brief.
 2. **Keeping course administration out of the cards.** The largest visible defect of the first
    real runs. Open with Steffen: a calibrated slide label, a rule in the preset, or both.
-3. **The app after the prototype:** a first send into a real Anki, editing, removing and
-   adding a card, and a real build started from inside the app.
+3. **The app after the prototype:** a send into a real Anki from inside the app and a look at
+   the cards there, editing, removing and adding a card, and a real build started from inside
+   the app.
 4. **Then:** evals on the two extra courses.
 
 Paid runs: only the engine session starts them (agreed between the engine and the prototype
