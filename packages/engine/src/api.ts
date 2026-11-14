@@ -74,7 +74,8 @@ type Phase = 'read' | 'map' | 'write' | 'check'
 
 export type Event =
   | { type: 'phase'; phase: Phase; status: 'started' | 'done'; total: number }
-  | { type: 'progress'; phase: Phase; done: number; total: number }
+  /** `lecture` names the lecture a step just finished for, where a step belongs to one. */
+  | { type: 'progress'; phase: Phase; done: number; total: number; lecture?: number }
   /** Before the first paid call of a build, and the whole answer to `estimate`. */
   | {
       type: 'estimate'

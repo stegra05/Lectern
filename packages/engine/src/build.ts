@@ -228,7 +228,13 @@ export async function build(
       lecture,
       answers.map((answer) => chosen(answer, SLIDE_KINDS, 'content')),
     )
-    emit({ type: 'progress', phase: 'read', done: i + 1, total: read.length })
+    emit({
+      type: 'progress',
+      phase: 'read',
+      done: i + 1,
+      total: read.length,
+      lecture: lecture.number,
+    })
   }
   phaseMs.read = ports.now() - readStart
   emit({ type: 'phase', phase: 'read', status: 'done', total: read.length })
@@ -339,7 +345,13 @@ export async function build(
       }
       planned.push(...slots.map((slot) => ({ lecture: open, ...slot })))
       out.push(open)
-      emit({ type: 'progress', phase: 'map', done: i + 1, total: read.length })
+      emit({
+        type: 'progress',
+        phase: 'map',
+        done: i + 1,
+        total: read.length,
+        lecture: lecture.number,
+      })
     }
     return out
   })
@@ -381,7 +393,13 @@ export async function build(
     }))
     const fill = async (item: Item) => {
       item.slots = await writer.fill(job(item))
-      emit({ type: 'progress', phase: 'write', done: ++done, total: drafted.length })
+      emit({
+        type: 'progress',
+        phase: 'write',
+        done: ++done,
+        total: drafted.length,
+        lecture: item.lecture.number,
+      })
     }
     // The provider caches the lecture per card type. The first card of each type in a lecture
     // goes ahead and fills that cache; the rest then read the lecture at the cached price.

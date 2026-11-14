@@ -113,6 +113,19 @@ describe('building a course of two lectures, offline', () => {
     ])
   })
 
+  it('says which lecture a step of progress belongs to', () => {
+    const steps = events.flatMap((e) =>
+      e.type === 'progress' ? [`${e.phase} ${e.lecture ?? '-'}`] : [],
+    )
+    expect(steps.filter((step) => step.startsWith('map'))).toEqual(['map 1', 'map 2'])
+    expect(new Set(steps.filter((step) => step.startsWith('write')))).toEqual(
+      new Set(['write 1', 'write 2']),
+    )
+    expect(
+      steps.filter((step) => step.startsWith('check')).every((step) => step === 'check -'),
+    ).toBe(true)
+  })
+
   it('writes the course file with the profile', async () => {
     expect(await json('course.json')).toEqual({
       format: 1,
