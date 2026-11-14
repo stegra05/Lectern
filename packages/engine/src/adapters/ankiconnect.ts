@@ -57,12 +57,17 @@ export function ankiConnect(url = 'http://127.0.0.1:8765'): AnkiPort {
       })
       await call('updateModelStyling', { model: { name, css } })
     },
+    deckNames: async () => (await call('deckNames')) as string[],
     async createDeck(name) {
       await call('createDeck', { deck: name })
     },
     async storeMedia(name, data) {
       await call('storeMediaFile', { filename: name, data })
     },
+    existingNotes: async (ids) =>
+      ids.length === 0
+        ? []
+        : ((await call('findNotes', { query: `nid:${ids.join(',')}` })) as number[]),
     addNote: async ({ deck, noteType, fields, tags }) =>
       (await call('addNote', {
         // Anki refuses a note whose first field it already has. Two courses may ask the same

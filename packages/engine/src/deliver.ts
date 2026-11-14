@@ -35,6 +35,12 @@ export const NOTE_TYPE_NAMES = { qa: 'Lectern Q&A', cloze: 'Lectern Cloze v3' } 
  */
 const OWNED = /^\/\* lectern-notetype v\d+ skin:/
 
+/**
+ * How often the cards of a lecture are added before the send gives up. Anki can hand back the
+ * id of a note that is then not there: the first send into a real Anki lost 2 of 94 that way.
+ */
+const ATTEMPTS = 3
+
 function noteTypes({ templates, css }: DesignFiles): NoteType[] {
   return [
     {
@@ -66,13 +72,21 @@ async function applyDesign(
   const existing = new Set(await anki.noteTypes())
   const files = await designs.load(design)
   const written: string[] = []
+  let css: string | null = null
   for (const type of noteTypes(files)) {
     const there = existing.has(type.name)
     if (there ? !OWNED.test(await anki.styling(type.name)) : !create) continue
-    // The fonts go first, so a card never asks for a font that is not there yet.
-    if (written.length === 0) {
-      for (const font of files.fonts) await anki.storeMedia(font.name, font.data)
+    // The fonts go first, so a card never asks for a font that is not there yet. Anki keeps
+    // media under lowercase names, so the fonts are stored and named that way.
+    if (css === null) {
+      css = files.css
+      for (const font of files.fonts) {
+        const name = font.name.toLowerCase()
+        await anki.storeMedia(name, font.data)
+        css = css.replaceAll(`url("${font.name}")`, `url("${name}")`)
+      }
     }
+    type.css = css
     await (there ? anki.restyle(type) : anki.createNoteType(type))
     written.push(type.name)
   }
@@ -92,8 +106,10 @@ export async function restyle(ports: Ports, design: Design, emit: Emit): Promise
   emit({ type: 'restyled', noteTypes: sent ? await applyDesign(ports, design, false) : [] })
 }
 
-/** Which Anki note each sent card became. */
+/** Where the course is in Anki, and which Anki note each sent card became. */
 interface Delivery {
+  /** The course's deck, chosen at the first send and kept from then on. */
+  deck?: string
   notes: Record<string, number>
 }
 
@@ -109,14 +125,29 @@ export async function sentCards(store: Store, course: string): Promise<Set<strin
 /** A deck name cannot hold `::`, which separates a deck from its subdeck, or a quote. */
 const deckPart = (name: string) => name.replace(/::+/g, ':').replace(/"/g, '').trim()
 
+/**
+ * A deck for the course that is not there yet. A student may already have a deck of that
+ * name, such as their own cards for the course, and Lectern's cards must not land in it.
+ */
+function freeDeck(decks: string[], course: string): string {
+  // Anki tells deck names apart without regard to case.
+  const taken = new Set(decks.map((deck) => deck.toLowerCase()))
+  const name = deckPart(course)
+  let deck = name
+  for (let n = 1; taken.has(deck.toLowerCase()); n++) {
+    deck = n === 1 ? `${name} (Lectern)` : `${name} (Lectern ${n})`
+  }
+  return deck
+}
+
 /** `Entrepreneurship::02 Effectuation`: the number first, so Anki lists lectures in course order. */
-export function deckName(course: string, lecture: { number: number; title: string }): string {
-  return `${deckPart(course)}::${two(lecture.number)} ${deckPart(lecture.title)}`
+function lectureDeck(course: string, lecture: { number: number; title: string }): string {
+  return `${course}::${two(lecture.number)} ${deckPart(lecture.title)}`
 }
 
 /**
  * A card names its slide picture as `l02-s14.png`. Anki keeps the pictures of all decks in one
- * folder, so the file there carries the course as well.
+ * folder, so the file there carries the course as well. All of it lowercase, as Anki keeps it.
  */
 const mediaName = (course: string, lecture: number, slide: number) =>
   `lectern-${course}-l${two(lecture)}-s${two(slide)}.png`
@@ -161,29 +192,54 @@ export async function send(
   }
 
   await applyDesign(ports, design, true)
+  if (!delivery.deck) {
+    delivery.deck = freeDeck(await anki.deckNames(), file.name)
+    // Kept before the deck exists in Anki: once it does, its name would no longer look free.
+    await writeJson(store, paths.anki(course), delivery)
+  }
   let done = 0
   try {
     for (const { lecture, cards } of waiting) {
-      const deck = deckName(file.name, lecture)
+      const deck = lectureDeck(delivery.deck, lecture)
       await anki.createDeck(deck)
       const slides = [...new Set(cards.map((card) => card.slide))].sort((a, b) => a - b)
       const pdfBytes = await store.readBytes(`${paths.slides(course)}/${lecture.file}`)
       for (const image of await pdf.renderSlides(pdfBytes, slides)) {
         await anki.storeMedia(mediaName(course, lecture.number, image.slide), image.png)
       }
-      for (const card of cards) {
-        delivery.notes[card.id] = await anki.addNote({
-          deck,
-          noteType: NOTE_TYPE_NAMES[card.note],
-          fields: fieldsForAnki(course, card),
-          tags: tags(course, lecture.number, card),
-        })
-        emit({ type: 'sending', lecture: lecture.number, done: ++done, total })
+      let missing = cards
+      for (let attempt = 1; missing.length > 0 && attempt <= ATTEMPTS; attempt++) {
+        for (const card of missing) {
+          delivery.notes[card.id] = await anki.addNote({
+            deck,
+            noteType: NOTE_TYPE_NAMES[card.note],
+            fields: fieldsForAnki(course, card),
+            tags: tags(course, lecture.number, card),
+          })
+          if (attempt === 1) emit({ type: 'sending', lecture: lecture.number, done: ++done, total })
+        }
+        // Anki's word that a note was added is not enough. Only what is found there counts.
+        const there = new Set(
+          await anki.existingNotes(missing.map((card) => delivery.notes[card.id]!)),
+        )
+        missing = missing.filter((card) => !there.has(delivery.notes[card.id]!))
+        for (const card of missing) delete delivery.notes[card.id]
+      }
+      if (missing.length > 0) {
+        throw new EngineError(
+          `${missing.length} ${missing.length === 1 ? 'card' : 'cards'} of lecture ${lecture.number} did not stay in Anki.`,
+          'Do not undo or edit in Anki while Lectern sends. Then send again: only the missing cards are added.',
+        )
       }
     }
   } finally {
     // Also after a failure: what reached Anki must never be sent a second time.
-    if (done > 0) await writeJson(store, paths.anki(course), delivery)
+    await writeJson(store, paths.anki(course), delivery)
   }
-  emit({ type: 'sent', cards: done, lectures: waiting.map(({ lecture }) => lecture.number) })
+  emit({
+    type: 'sent',
+    deck: delivery.deck,
+    cards: done,
+    lectures: waiting.map(({ lecture }) => lecture.number),
+  })
 }

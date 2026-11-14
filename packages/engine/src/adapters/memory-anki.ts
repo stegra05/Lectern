@@ -50,12 +50,15 @@ export function memoryAnki(): MemoryAnki {
         if (type.template.name !== template.name) throw new Error('template was not found')
         types.set(name, { ...type, css, template })
       }),
+    deckNames: () => answer(() => [...decks]),
     createDeck: (name) =>
       answer(() => {
         // Anki creates the parents of a subdeck with it.
         name.split('::').forEach((_, i, parts) => decks.add(parts.slice(0, i + 1).join('::')))
       }),
-    storeMedia: (name, data) => answer(() => void media.set(name, data)),
+    // As Anki 26 does: the file is written under its name in lowercase.
+    storeMedia: (name, data) => answer(() => void media.set(name.toLowerCase(), data)),
+    existingNotes: (ids) => answer(() => ids.filter((id) => notes.some((note) => note.id === id))),
     addNote: (note) =>
       answer(() => {
         const type = typeOf(note.noteType)

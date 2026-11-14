@@ -123,12 +123,20 @@ export interface AnkiPort {
   createNoteType(type: NoteType): Promise<void>
   /** Replaces the stylesheet and the template of a note type. Its notes keep their fields. */
   restyle(type: Pick<NoteType, 'name' | 'css' | 'template'>): Promise<void>
+  /** The names of all decks, subdecks as `Parent::Child`. */
+  deckNames(): Promise<string[]>
   /** Creates the deck and its parents. A deck that exists stays as it is. */
   createDeck(name: string): Promise<void>
-  /** Puts a file into Anki's media folder. `data` is base64. A file of that name is replaced. */
+  /**
+   * Puts a file into Anki's media folder. `data` is base64. A file of that name is replaced.
+   * The name must be lowercase: Anki 26 writes a new file under its name in lowercase, and a
+   * card that asks for it in another case finds it on a Mac and not on a phone.
+   */
   storeMedia(name: string, data: string): Promise<void>
   /** Adds one note and returns Anki's id for it. */
   addNote(note: Note): Promise<number>
+  /** Which of these notes are in Anki. */
+  existingNotes(ids: number[]): Promise<number[]>
 }
 
 /** What a card design is made of: the four shared templates and the design's own stylesheet. */

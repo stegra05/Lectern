@@ -115,7 +115,8 @@ export type Event =
   | { type: 'added'; course: string; files: string[] }
   /** After each card that reached Anki. `lecture` is the lecture being sent. */
   | { type: 'sending'; lecture: number; done: number; total: number }
-  | { type: 'sent'; cards: number; lectures: number[] }
+  /** `deck` is the course's deck in Anki, with one subdeck per lecture. */
+  | { type: 'sent'; deck: string; cards: number; lectures: number[] }
   /** The note types in Anki that took the design. Empty when Lectern has none there. */
   | { type: 'restyled'; noteTypes: string[] }
   | { type: 'failed'; message: string; fix: string }

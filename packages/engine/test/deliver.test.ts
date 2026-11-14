@@ -113,7 +113,12 @@ describe('sending a course to Anki', () => {
     const progress = events.filter((e) => e.type === 'sending')
     expect(progress).toHaveLength(total - 3)
     expect(progress.at(-1)).toMatchObject({ done: total - 3, total: total - 3 })
-    expect(events.at(-1)).toEqual({ type: 'sent', cards: total - 3, lectures: [1, 2] })
+    expect(events.at(-1)).toEqual({
+      type: 'sent',
+      deck: 'Entrepreneurship WS26',
+      cards: total - 3,
+      lectures: [1, 2],
+    })
     expect(anki.notes).toHaveLength(total)
   })
 
@@ -213,6 +218,7 @@ describe('sending a course to Anki', () => {
       expect(third).toMatchObject({ number: 3, sent: 0 })
       expect(await last({ type: 'send', course: COURSE, design: 'native' })).toEqual({
         type: 'sent',
+        deck: 'Entrepreneurship WS26',
         cards: third!.cards,
         lectures: [3],
       })
@@ -232,11 +238,16 @@ describe('sending a course to Anki', () => {
       expect(await run({ type: 'restyle', design: 'lamp' })).toEqual([
         { type: 'restyled', noteTypes: [QA, CLOZE] },
       ])
-      expect(anki.types.get(QA)!.css).toBe(lamp.css)
-      expect(anki.types.get(CLOZE)!.css).toBe(lamp.css)
+      // Anki stores a file under its name in lowercase, and the stylesheet follows.
+      expect(lamp.css).toContain('url("_LampSerif.woff2")')
+      const inAnki = lamp.css
+        .replaceAll('_LampSerif.woff2', '_lampserif.woff2')
+        .replaceAll('_LampMono.woff2', '_lampmono.woff2')
+      expect(anki.types.get(QA)!.css).toBe(inAnki)
+      expect(anki.types.get(CLOZE)!.css).toBe(inAnki)
       expect([...anki.media.keys()].filter((name) => name.endsWith('.woff2')).sort()).toEqual([
-        '_LampMono.woff2',
-        '_LampSerif.woff2',
+        '_lampmono.woff2',
+        '_lampserif.woff2',
       ])
     })
 
@@ -257,6 +268,110 @@ describe('sending a course to Anki', () => {
       expect(empty.types.size).toBe(0)
       expect(empty.media.size).toBe(0)
     })
+  })
+})
+
+describe('a course whose name is already a deck in Anki', () => {
+  it('gets a deck of its own and keeps it for later sends', async () => {
+    root = join(await tempRoot(), 'library')
+    anki = memoryAnki()
+    // The student's own deck for the course, with a subdeck, as Anki lists them.
+    await anki.createDeck('entrepreneurship ws26::01 What and who')
+    await run({ type: 'create', name: 'Entrepreneurship WS26' })
+    await addAndBuild('01 Risk.pdf')
+    expect(await last({ type: 'send', course: COURSE, design: 'native' })).toMatchObject({
+      type: 'sent',
+      deck: 'Entrepreneurship WS26 (Lectern)',
+    })
+    await addAndBuild('02 Effectuation.pdf')
+    expect(await last({ type: 'send', course: COURSE, design: 'native' })).toMatchObject({
+      type: 'sent',
+      deck: 'Entrepreneurship WS26 (Lectern)',
+      lectures: [2],
+    })
+    expect(new Set(anki.notes.map((note) => note.deck.split('::')[0]))).toEqual(
+      new Set(['Entrepreneurship WS26 (Lectern)']),
+    )
+  })
+
+  it('keeps the deck it chose when the first send breaks off before any card', async () => {
+    root = join(await tempRoot(), 'library')
+    anki = memoryAnki()
+    await run({ type: 'create', name: 'Entrepreneurship WS26' })
+    await addAndBuild('01 Risk.pdf')
+    const breaking: AnkiPort = {
+      ...anki,
+      addNote: () => Promise.reject(new Error('Anki went away')),
+    }
+    expect((await last({ type: 'send', course: COURSE, design: 'native' }, breaking)).type).toBe(
+      'failed',
+    )
+    // Its own, now empty deck is in Anki. It must not read as somebody else's.
+    expect(await last({ type: 'send', course: COURSE, design: 'native' })).toMatchObject({
+      type: 'sent',
+      deck: 'Entrepreneurship WS26',
+    })
+  })
+})
+
+describe('an Anki that hands back a note and does not keep it', () => {
+  /** Loses a note right after adding it, as the first send into a real Anki did. */
+  const losing = (lose: (call: number) => boolean): AnkiPort => {
+    let call = 0
+    return {
+      ...anki,
+      addNote: async (note) => {
+        const id = await anki.addNote(note)
+        if (lose(++call)) anki.notes.pop()
+        return id
+      },
+    }
+  }
+  const fresh = async () => {
+    root = join(await tempRoot(), 'library')
+    anki = memoryAnki()
+    await run({ type: 'create', name: 'Entrepreneurship WS26' })
+    await addAndBuild('01 Risk.pdf')
+    return (await state()).lectures[0]!.cards
+  }
+
+  it('adds the lost cards again, so every card is in Anki exactly once', async () => {
+    const cards = await fresh()
+    const events = await run(
+      { type: 'send', course: COURSE, design: 'native' },
+      losing((call) => call === 2 || call === 4),
+    )
+    expect(events.filter((e) => e.type === 'sending')).toHaveLength(cards)
+    expect(events.at(-1)).toMatchObject({ type: 'sent', cards })
+    const { notes } = await deliveryFile()
+    expect(anki.notes.map((note) => note.id).sort()).toEqual(Object.values(notes).sort())
+    expect(anki.notes).toHaveLength(cards)
+    expect(new Set(anki.notes.map((note) => note.fields.Front ?? note.fields.Text)).size).toBe(
+      cards,
+    )
+  })
+
+  it('gives up after three tries, says so, and records only what is there', async () => {
+    const cards = await fresh()
+    // The first card never stays: calls 1, then the two retries of it.
+    const events = await run(
+      { type: 'send', course: COURSE, design: 'native' },
+      losing((call) => call === 1 || call > cards),
+    )
+    expect(events.at(-1)).toEqual({
+      type: 'failed',
+      message: '1 card of lecture 1 did not stay in Anki.',
+      fix: 'Do not undo or edit in Anki while Lectern sends. Then send again: only the missing cards are added.',
+    })
+    expect(anki.notes).toHaveLength(cards - 1)
+    expect(Object.keys((await deliveryFile()).notes)).toHaveLength(cards - 1)
+    expect((await state()).lectures[0]).toMatchObject({ cards, sent: cards - 1 })
+
+    expect(await last({ type: 'send', course: COURSE, design: 'native' })).toMatchObject({
+      type: 'sent',
+      cards: 1,
+    })
+    expect(anki.notes).toHaveLength(cards)
   })
 })
 
