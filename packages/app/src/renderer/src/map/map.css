@@ -170,6 +170,15 @@ button.map-stop:hover .map-square {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* Dashed until cards are in Anki, filled with the accent afterwards. */
+.is-sent .map-flag-box {
+  fill: var(--accent);
+  stroke: var(--accent);
+  stroke-dasharray: none;
+}
+.is-sent .map-flag-icon {
+  stroke: #fff;
+}
 
 /* Inside a lecture. */
 .map-guide {

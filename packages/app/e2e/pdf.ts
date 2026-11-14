@@ -11,6 +11,23 @@ export async function makePdf(slides: string[][]): Promise<Buffer> {
   return Buffer.from(await doc.save())
 }
 
+/** A lecture that arrives later in the semester. */
+export const LATER: Record<string, string[][]> = {
+  '03_Lean_startup.pdf': [
+    ['Lean startup'],
+    [
+      'Minimum viable product',
+      'A minimum viable product is the smallest version that tests one assumption',
+      'It is built to learn and not to sell',
+    ],
+    [
+      'Pivot',
+      'A pivot changes one part of the plan and keeps what was learned',
+      'Founders pivot when the measured numbers stay flat',
+    ],
+  ],
+}
+
 /** Two short lectures. Each slide after the title has a heading and the lines that state it. */
 export const LECTURES: Record<string, string[][]> = {
   '01_Introduction.pdf': [

@@ -15,6 +15,7 @@ import type {
   PendingLecture,
   Run,
 } from '@lectern/engine'
+import type { Design } from '@lectern/engine/designs'
 
 export type { Command, CourseSummary, Decision, Event, Run }
 
@@ -41,14 +42,15 @@ export interface CourseView extends Omit<CourseState, 'lectures'> {
   lectures: Lecture[]
 }
 
-export const DESIGNS = ['native', 'structure', 'lamp', 'colours', 'afterglow', 'vitrine'] as const
-export type Design = (typeof DESIGNS)[number]
+export { DESIGNS, type Design } from '@lectern/engine/designs'
 
 export interface Settings {
   provider: 'openai'
   /** Whether a key is stored. The key itself never reaches the interface. */
   hasKey: boolean
   design: Design
+  /** Whether the student has picked the design. Until then it is offered before the first send. */
+  designChosen: boolean
 }
 
 export type KeyResult = { ok: true } | { ok: false; message: string; fix: string }

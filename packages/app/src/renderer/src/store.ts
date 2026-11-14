@@ -56,6 +56,15 @@ export type Panel = null | 'setup' | 'run' | 'cards' | 'details'
 /** Where a course stands. It decides the bar and the default panel. */
 export type Stage = 'empty' | 'setup' | 'running' | 'ready'
 
+/** A send to Anki that is under way. */
+export interface SendState {
+  course: string
+  done: number
+  total: number
+  /** The lecture whose cards are going now. */
+  lecture: number | null
+}
+
 export interface Failure {
   message: string
   fix: string
@@ -71,6 +80,11 @@ interface State {
   goal: Goal
   estimate: Estimate | null
   run: RunState | null
+  sending: SendState | null
+  /** The card designs are on show before the first send. */
+  choosing: boolean
+  /** Why the cards already in Anki could not take a new design. */
+  restyleFailure: Failure | null
   failure: Failure | null
   view: View
   panel: Panel
@@ -85,6 +99,10 @@ interface State {
   addFiles: (files: File[]) => Promise<void>
   setGoal: (goal: Goal) => Promise<void>
   build: () => Promise<void>
+  /** Sends the cards that are not in Anki yet. The first time, the card designs come first. */
+  send: () => Promise<void>
+  chooseAndSend: (design: Design) => Promise<void>
+  cancelChoice: () => void
   showCourse: () => void
   openLecture: (lecture: number) => void
   selectTopic: (topic: string) => void
@@ -164,6 +182,25 @@ export const useStore = create<State>((set, get) => {
     if (failure) set({ failure })
   }
 
+  async function deliver(design: Design): Promise<void> {
+    const { course } = get()
+    if (!course) return
+    set({
+      sending: { course: course.id, done: 0, total: unsentCount(course), lecture: null },
+      failure: null,
+    })
+    const events = await ask({ type: 'send', course: course.id, design }, (event) => {
+      if (event.type !== 'sending') return
+      const { done, total, lecture } = event
+      set({ sending: { course: course.id, done, total, lecture } })
+    })
+    set({ sending: null })
+    if (get().course?.id !== course.id || get().screen === 'courses') return
+    // Also after a failure: the cards that went before it are in Anki.
+    await refresh(course.id)
+    set({ failure: failureOf(events) })
+  }
+
   return {
     screen: 'loading',
     back: 'courses',
@@ -173,6 +210,9 @@ export const useStore = create<State>((set, get) => {
     goal: 'good',
     estimate: null,
     run: null,
+    sending: null,
+    choosing: false,
+    restyleFailure: null,
     failure: null,
     view: { level: 'course' },
     panel: null,
@@ -192,7 +232,9 @@ export const useStore = create<State>((set, get) => {
     },
 
     async setDesign(design) {
-      set({ settings: await window.lectern.setDesign(design) })
+      set({ settings: await window.lectern.setDesign(design), restyleFailure: null })
+      // The cards already in Anki take the design too. New cards take it with their send.
+      set({ restyleFailure: failureOf(await ask({ type: 'restyle', design })) })
     },
 
     async openCourses() {
@@ -303,6 +345,23 @@ export const useStore = create<State>((set, get) => {
       if (failure) await estimate()
     },
 
+    async send() {
+      const { settings, sending } = get()
+      if (!settings || sending) return
+      if (settings.designChosen) await deliver(settings.design)
+      else set({ choosing: true })
+    },
+
+    async chooseAndSend(design) {
+      // Nothing is in Anki before the first send, so there is nothing to restyle yet.
+      set({ settings: await window.lectern.setDesign(design), choosing: false })
+      await deliver(design)
+    },
+
+    cancelChoice() {
+      set({ choosing: false })
+    },
+
     showCourse() {
       const { panel } = get()
       set({ view: { level: 'course' }, panel: panel === 'cards' ? null : panel })
@@ -366,6 +425,11 @@ export function stageOf(course: CourseView, run: RunState | null): Stage {
 
 export function cardCount(course: CourseView): number {
   return course.lectures.reduce((sum, l) => sum + l.cards.length, 0)
+}
+
+/** The cards that are made and not in Anki yet. */
+export function unsentCount(course: CourseView): number {
+  return course.lectures.reduce((sum, l) => sum + l.cards.length - l.sent, 0)
 }
 
 export function conceptCount(course: CourseView): number {

@@ -5,6 +5,9 @@
  * The page's hash picks a scenario: #first-run, #courses, #empty, #setup, #run, #failed,
  * #result, #lecture, #topic, #concept, #large, #details, #stats, #settings.
  *
+ * Sending to Anki: #choice (the card designs before the first send), #sending, #no-anki,
+ * #sent (all of the course in Anki) and #added (the last two lectures not sent yet).
+ *
  * The real course of `dev/real.ts`, with its long titles and dense lectures: #real (the track),
  * #real-details, #dense (lecture 02, 16 concepts, one selected) and #huge (lecture 01, 51
  * concepts). Any scenario ending in -closed closes the side panel at the end, as #dense-closed.
@@ -187,6 +190,7 @@ function effectuation(): Lecture {
     title: 'Effectuation',
     file: '02_Effectuation.pdf',
     slides: 46,
+    sent: 0,
     topics: [
       { name: 'Deciding under uncertainty', concepts: [knight, causation] },
       { name: 'Start with what you have', concepts: [bird, loss, quilt] },
@@ -275,6 +279,7 @@ function sample(number: number, cards: number, topics: number, concepts: number)
     title,
     file: `${two(number)}_${title.replace(/ /g, '_')}.pdf`,
     slides: SLIDES[number - 1]!,
+    sent: 0,
     topics: Array.from({ length: topics }, (_, t) => ({
       name: `${title}, part ${t + 1}`,
       concepts: all.filter((_, i) => i % topics === t),
@@ -373,6 +378,7 @@ function realLecture(
     title,
     file: `${two(number)}_${title.replace(/ /g, '_')}.pdf`,
     slides: REAL_SLIDES[number - 1]!,
+    sent: 0,
     topics: made.map((t) => ({ name: t.name, concepts: t.concepts.map((c) => c.concept) })),
     leftOut: [],
     dropped: [],
@@ -424,6 +430,7 @@ export function installFixture(): void {
     provider: 'openai',
     hasKey: scenario !== 'first-run',
     design: 'native',
+    designChosen: scenario !== 'choice',
   }
   let course =
     scenario === 'empty'
@@ -433,6 +440,14 @@ export function installFixture(): void {
         : ['real', 'real-details', 'dense', 'huge'].includes(scenario)
           ? real()
           : built()
+  // How much of the course is in Anki: all of it, or all but the last two lectures.
+  if (scenario === 'sent' || scenario === 'added') {
+    const upTo = scenario === 'sent' ? course.lectures.length : course.lectures.length - 2
+    course = {
+      ...course,
+      lectures: course.lectures.map((l, i) => ({ ...l, sent: i < upTo ? l.cards.length : 0 })),
+    }
+  }
 
   const answer = (command: Command, emit: (event: Event) => void): Promise<void> => {
     switch (command.type) {
@@ -542,6 +557,21 @@ export function installFixture(): void {
           fix: 'Run the app.',
         })
         break
+      case 'send':
+        if (scenario === 'no-anki') {
+          emit({
+            type: 'failed',
+            message: 'Anki is not open.',
+            fix: 'Open Anki and wait until you see your decks, then try again. If Anki is open, restart it once so the AnkiConnect add-on starts.',
+          })
+          break
+        }
+        emit({ type: 'sending', lecture: 4, done: 139, total: 412 })
+        // Stays midway for the picture.
+        return new Promise(() => {})
+      case 'restyle':
+        emit({ type: 'restyled', noteTypes: [] })
+        break
     }
     return Promise.resolve()
   }
@@ -578,6 +608,7 @@ export function installFixture(): void {
       if (scenario === 'courses' || scenario === 'first-run') return
       await s.openCourse(course.id)
       if (scenario === 'run' || scenario === 'failed') void store.getState().build()
+      if (['choice', 'sending', 'no-anki'].includes(scenario)) void store.getState().send()
       if (scenario === 'lecture') store.getState().openLecture(2)
       if (scenario === 'topic') {
         store.getState().openLecture(2)

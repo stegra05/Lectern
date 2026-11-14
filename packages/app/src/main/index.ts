@@ -3,7 +3,8 @@
  * events between the interface and the engine, which runs here in the main process.
  *
  * Environment, for tests and development:
- *   LECTERN_FAKE=1         run on the offline models: no key, no network, no cost
+ *   LECTERN_FAKE=1         run on the offline models and an Anki in memory: no key, no
+ *                          network, no cost, and nothing reaches the real Anki
  *   LECTERN_FAKE_DELAY=<ms> how long each call of the offline models takes (default 0)
  *   LECTERN_COURSES=<dir>  where courses live (default: "courses" in the app's data folder)
  *   LECTERN_DATA=<dir>     the app's data folder (settings and the stored key)
@@ -22,6 +23,8 @@ if (process.env.LECTERN_DATA) app.setPath('userData', process.env.LECTERN_DATA)
 const fake = process.env.LECTERN_FAKE === '1'
 const fakeDelayMs = Number(process.env.LECTERN_FAKE_DELAY ?? 0)
 const courses = process.env.LECTERN_COURSES ?? join(app.getPath('userData'), 'courses')
+// The card designs are read from the repository, as the interface reads them for its previews.
+const designs = join(app.getAppPath(), '../../design/v3/cards/anki')
 const settings = settingsStore(app.getPath('userData'), fake)
 
 function createWindow(): void {
@@ -50,7 +53,13 @@ function createWindow(): void {
 }
 
 ipcMain.handle('engine:run', async (event, id: number, command: unknown) => {
-  const engine = engineFor({ courses, key: fake ? null : await settings.key(), fake, fakeDelayMs })
+  const engine = engineFor({
+    courses,
+    designs,
+    key: fake ? null : await settings.key(),
+    fake,
+    fakeDelayMs,
+  })
   await engine.run(command, (engineEvent) => {
     if (!event.sender.isDestroyed()) event.sender.send('engine:event', id, engineEvent)
   })

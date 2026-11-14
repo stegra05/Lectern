@@ -202,7 +202,8 @@
 .set-carousel {
   position: relative;
   flex: none;
-  height: 433px;
+  /* A card side, its label above it, and room for the shadow. */
+  height: calc(var(--card-h) + 23px);
   overflow: hidden;
 }
 .set-stage {
@@ -251,12 +252,12 @@
   top: 44px;
   opacity: 0.6;
 }
-/* 308 is half the pair, 22 the gap to it, 300 a card. */
+/* Half the pair is one card and half its gap of 16. 22 is the gap from the pair to a peek. */
 .set-peek-previous {
-  left: calc(50% - 308px - 22px - 300px);
+  left: calc(50% - var(--card-w) - 8px - 22px - var(--card-w));
 }
 .set-peek-next {
-  left: calc(50% + 308px + 22px);
+  left: calc(50% + var(--card-w) + 8px + 22px);
 }
 
 .set-design-foot {

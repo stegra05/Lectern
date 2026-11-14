@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Panel } from '../store.ts'
-import { cardCount, conceptCount, currentPhase, stageOf, useStore } from '../store.ts'
+import { cardCount, conceptCount, currentPhase, stageOf, unsentCount, useStore } from '../store.ts'
 import { plural, two } from '../lecture.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { PHASE_NOW, timeLeft, useTick } from './panels/RunPanel.tsx'
@@ -21,6 +21,8 @@ export function BottomBar() {
   const estimate = useStore((s) => s.estimate)
   const panel = useStore((s) => s.panel)
   const build = useStore((s) => s.build)
+  const sending = useStore((s) => s.sending)
+  const send = useStore((s) => s.send)
   const openPanel = useStore((s) => s.openPanel)
   const openDetails = useStore((s) => s.openDetails)
   const closePanel = useStore((s) => s.closePanel)
@@ -89,19 +91,56 @@ export function BottomBar() {
         second={left ? `${left} left. Nothing to decide here.` : 'Nothing to decide here.'}
       />
     )
-  } else {
+  } else if (sending?.course === course.id) {
+    const on = course.lectures.find((l) => l.number === sending.lecture)
     status = (
       <Lines
-        first={
-          <>
-            <b>{cardCount(course)}</b> cards · <b>{conceptCount(course)}</b> concepts ·{' '}
-            <b>{course.lectures.length}</b> lectures
-          </>
-        }
-        second="Click a lecture to read its cards. They are not in Anki yet."
-        counts
+        first={`Sending to Anki, ${sending.done} of ${plural(sending.total, 'card')}`}
+        second={on ? `${two(on.number)} ${on.title}. Keep Anki open.` : 'Keep Anki open.'}
       />
     )
+  } else {
+    const made = cardCount(course)
+    const unsent = unsentCount(course)
+    const counts = (
+      <>
+        <b>{made}</b> cards · <b>{conceptCount(course)}</b> concepts ·{' '}
+        <b>{course.lectures.length}</b> lectures
+      </>
+    )
+    if (unsent === 0) {
+      status = (
+        <Lines
+          first={
+            <>
+              <b>{made}</b> cards are in Anki, in <b>{course.lectures.length}</b> subdecks
+            </>
+          }
+          second="Open Anki and study. Add the next lecture here when it arrives."
+          counts
+        />
+      )
+    } else {
+      status =
+        unsent === made ? (
+          <Lines
+            first={counts}
+            second="Click a lecture to read its cards. They are not in Anki yet."
+            counts
+          />
+        ) : (
+          <Lines
+            first={counts}
+            second={`Nothing already in Anki changes. Your ${plural(made - unsent, 'card')} there keep their progress.`}
+            counts
+          />
+        )
+      action = (
+        <button type="button" className="btn btn-primary" onClick={() => void send()}>
+          {failure ? 'Try again' : `Send ${plural(unsent, 'card')} to Anki`}
+        </button>
+      )
+    }
   }
 
   // A problem outside a run replaces the status, with its fix underneath.

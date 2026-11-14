@@ -5,6 +5,7 @@ import { Icon } from '../ui/Icon.tsx'
 import { Segmented } from '../ui/Segmented.tsx'
 import { TitleBar } from '../ui/TitleBar.tsx'
 import { BottomBar } from './BottomBar.tsx'
+import { CardChoice } from './CardChoice.tsx'
 import { CopyForChat } from './CopyForChat.tsx'
 import { SidePanel } from './SidePanel.tsx'
 import './course.css'
@@ -81,6 +82,7 @@ export function CourseScreen() {
       <CopyForChat />
       <SidePanel />
       <BottomBar />
+      <CardChoice />
       {dropping && (
         <div className="drop-veil" aria-hidden="true">
           <div className="drop-veil-card material">

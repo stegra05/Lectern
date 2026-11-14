@@ -32,10 +32,11 @@ export function settingsStore(dir: string, fake: boolean): SettingsStore {
   const settingsPath = join(dir, 'settings.json')
   const keyPath = join(dir, 'openai.key')
 
-  async function design(): Promise<Design> {
+  /** The design the student picked, or null while Lectern's default stands. */
+  async function design(): Promise<Design | null> {
     const text = await readOrNull(settingsPath)
     const stored = text ? (JSON.parse(text.toString()) as { design?: string }).design : undefined
-    return DESIGNS.find((d) => d === stored) ?? 'native'
+    return DESIGNS.find((d) => d === stored) ?? null
   }
 
   async function key(): Promise<string | null> {
@@ -51,7 +52,8 @@ export function settingsStore(dir: string, fake: boolean): SettingsStore {
 
   async function get(): Promise<Settings> {
     const hasKey = fake ? fakeKey : (await key()) !== null
-    return { provider: 'openai', hasKey, design: await design() }
+    const chosen = await design()
+    return { provider: 'openai', hasKey, design: chosen ?? 'native', designChosen: chosen !== null }
   }
 
   return {

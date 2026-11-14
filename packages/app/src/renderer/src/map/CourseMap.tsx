@@ -351,6 +351,15 @@ function TrackView({
   now: { lecture: number; phase: Phase } | null
 }) {
   const width = labelWidth(k, track.step)
+  const lectures = stops.flatMap((stop) => (stop.kind === 'lecture' ? [stop.lecture] : []))
+  const made = lectures.reduce((sum, l) => sum + l.cards.length, 0)
+  const sent = lectures.reduce((sum, l) => sum + l.sent, 0)
+  const flag =
+    sent === 0
+      ? 'Not sent yet'
+      : sent === made
+        ? plural(sent, 'card')
+        : `${sent} of ${plural(made, 'card')}`
   return (
     <>
       <svg className="map-svg" aria-hidden="true">
@@ -384,27 +393,30 @@ function TrackView({
           )
         }
         const { number, title, cards, topics } = stop.lecture
+        // Once part of the course is in Anki, a lecture that is not says so.
+        const fresh = sent > 0 && stop.lecture.sent < cards.length
+        const caption = plural(cards.length, fresh ? 'new card' : 'card')
         return (
           <button
             key={`l${number}`}
             type="button"
             className="map-stop map-move"
             style={{ ...at(p), ...colourOf(number) }}
-            aria-label={`Open lecture ${two(number)} ${title}, ${plural(cards.length, 'card')}, ${plural(topics.length, 'topic')}`}
+            aria-label={`Open lecture ${two(number)} ${title}, ${caption}${fresh ? ', ready to send' : ''}, ${plural(topics.length, 'topic')}`}
             title={measure(title, 600) > width ? title : undefined}
             onClick={() => onOpen(number)}
           >
             <Fan cards={topicCards(stop.lecture)} />
             <span className="map-square">{two(number)}</span>
-            <StopLabel title={title} caption={plural(cards.length, 'card')} width={width} />
+            <StopLabel title={title} caption={caption} width={width} />
           </button>
         )
       })}
       <div
-        className="map-stop map-move is-flag"
+        className={sent > 0 ? 'map-stop map-move is-flag is-sent' : 'map-stop map-move is-flag'}
         style={at(toScreen(track.flag))}
         role="img"
-        aria-label="In Anki, not sent yet"
+        aria-label={`In Anki, ${flag.charAt(0).toLowerCase()}${flag.slice(1)}`}
       >
         <svg className="map-square" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
           <rect className="map-flag-box" x="0.75" y="0.75" width="38.5" height="38.5" rx="11.25" />
@@ -413,7 +425,7 @@ function TrackView({
             <path d="M2 2h11l-2.6 3.6L13 9.2H2" />
           </g>
         </svg>
-        <StopLabel title="In Anki" caption="Not sent yet" width={width} />
+        <StopLabel title="In Anki" caption={flag} width={width} />
       </div>
     </>
   )
