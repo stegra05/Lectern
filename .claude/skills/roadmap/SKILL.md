@@ -88,5 +88,8 @@ layer's PR names the issue it finishes.
 | Releases | every open issue by milestone |
 | Triage | issues missing a type, area, milestone or status |
 
+Deciding the values across many issues at once (triage, prioritising a release, checking the
+board against the docs): the `project-manager` skill.
+
 Changing the board itself (fields, views, workflows, labels): read `references/board-admin.md`
 first. Labels, fields and types are Steffen's system; ask before adding or deleting one.
