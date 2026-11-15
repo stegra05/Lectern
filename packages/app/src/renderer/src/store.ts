@@ -16,8 +16,11 @@ import type {
   Goal,
   KeyResult,
   Lecture,
+  Limits,
   Phase,
+  Problem,
   Settings,
+  Slots,
 } from '../../shared/contract.ts'
 import { PHASES } from '../../shared/contract.ts'
 
@@ -65,6 +68,20 @@ export interface SendState {
   lecture: number | null
 }
 
+/** The card form in the side panel. */
+export interface Editor {
+  lecture: number
+  /** The card being changed. Null while the student writes one of their own. */
+  card: string | null
+  /** The id of the concept the card belongs to. */
+  concept: string
+  slots: Slots
+  limits: Limits
+  /** What has to be fixed before the card is taken, by field of the form. */
+  problems: Problem[]
+  busy: boolean
+}
+
 export interface Failure {
   message: string
   fix: string
@@ -85,6 +102,7 @@ interface State {
   choosing: boolean
   /** Why the cards already in Anki could not take a new design. */
   restyleFailure: Failure | null
+  editor: Editor | null
   failure: Failure | null
   view: View
   panel: Panel
@@ -103,6 +121,16 @@ interface State {
   send: () => Promise<void>
   chooseAndSend: (design: Design) => Promise<void>
   cancelChoice: () => void
+  /** Opens the form on a card of the open lecture. */
+  editCard: (card: Card) => Promise<void>
+  /** Opens the form for a card of the student's own on a concept of the open lecture. */
+  writeCard: (concept: string) => Promise<void>
+  setEditor: (changes: Partial<Pick<Editor, 'slots' | 'concept'>>) => void
+  /** A card of the student's own is a question with its answer, or a sentence with gaps. */
+  setEditorKind: (role: 'definition' | 'cloze') => Promise<void>
+  saveCard: () => Promise<void>
+  removeCard: () => Promise<void>
+  closeEditor: () => void
   showCourse: () => void
   openLecture: (lecture: number) => void
   selectTopic: (topic: string) => void
@@ -157,8 +185,8 @@ export const useStore = create<State>((set, get) => {
     const lectures = await Promise.all(
       state.lectures.map(async (lecture) => {
         const reply = await ask({ type: 'cards', course, lecture: lecture.number })
-        const cards = reply.find((e) => e.type === 'cards')?.cards ?? []
-        return { ...lecture, cards }
+        const found = reply.find((e) => e.type === 'cards')
+        return { ...lecture, cards: found?.cards ?? [], inAnki: found?.sent ?? [] }
       }),
     )
     const view: CourseView = { ...state, lectures }
@@ -201,6 +229,38 @@ export const useStore = create<State>((set, get) => {
     set({ failure: failureOf(events) })
   }
 
+  /** Empty slots of a kind, or the slots of a card, with the limits of the form. */
+  async function slotsFor(
+    lecture: number,
+    of: { card: string } | { role: 'definition' | 'cloze' },
+  ): Promise<{ slots: Slots; limits: Limits } | null> {
+    const { course } = get()
+    if (!course) return null
+    const events = await ask({ type: 'slots', course: course.id, lecture, ...of })
+    const found = events.find((e) => e.type === 'slots')
+    if (!found) set({ failure: failureOf(events) })
+    return found ?? null
+  }
+
+  /** Runs a command of the form. What the engine refuses stays in the form as its problems. */
+  async function submit(command: Command): Promise<void> {
+    const { editor, course } = get()
+    if (!editor || !course || editor.busy) return
+    set({ editor: { ...editor, busy: true, problems: [] } })
+    const events = await ask(command)
+    const refused = events.find((e) => e.type === 'refused')?.problems
+    const failure = failureOf(events)
+    const problems: Problem[] =
+      refused ?? (failure ? [{ field: 'card', message: `${failure.message} ${failure.fix}` }] : [])
+    if (problems.length > 0) {
+      const now = get().editor
+      if (now) set({ editor: { ...now, busy: false, problems } })
+      return
+    }
+    await refresh(course.id)
+    set({ editor: null })
+  }
+
   return {
     screen: 'loading',
     back: 'courses',
@@ -213,6 +273,7 @@ export const useStore = create<State>((set, get) => {
     sending: null,
     choosing: false,
     restyleFailure: null,
+    editor: null,
     failure: null,
     view: { level: 'course' },
     panel: null,
@@ -256,7 +317,7 @@ export const useStore = create<State>((set, get) => {
     },
 
     async openCourse(course) {
-      set({ failure: null, estimate: null, view: { level: 'course' } })
+      set({ failure: null, estimate: null, view: { level: 'course' }, editor: null })
       const view = await refresh(course)
       if (!view) return
       const running = get().run?.course === course
@@ -362,29 +423,107 @@ export const useStore = create<State>((set, get) => {
       set({ choosing: false })
     },
 
+    async editCard(card) {
+      const { view } = get()
+      if (view.level !== 'lecture') return
+      const found = await slotsFor(view.lecture, { card: card.id })
+      if (!found) return
+      set({
+        editor: {
+          lecture: view.lecture,
+          card: card.id,
+          concept: card.concept,
+          ...found,
+          problems: [],
+          busy: false,
+        },
+      })
+    },
+
+    async writeCard(concept) {
+      const { view } = get()
+      if (view.level !== 'lecture') return
+      const found = await slotsFor(view.lecture, { role: 'definition' })
+      if (!found) return
+      set({
+        editor: { lecture: view.lecture, card: null, concept, ...found, problems: [], busy: false },
+      })
+    },
+
+    setEditor(changes) {
+      const { editor } = get()
+      // A problem is about the text as it was. It goes once the text changes.
+      if (editor) set({ editor: { ...editor, ...changes, problems: [] } })
+    },
+
+    async setEditorKind(role) {
+      const { editor } = get()
+      if (!editor || editor.card !== null || editor.slots.role === role) return
+      const found = await slotsFor(editor.lecture, { role })
+      const now = get().editor
+      if (!found || !now) return
+      // What is written so far moves over: the question becomes the sentence, and back.
+      const { front, extra } = now.slots
+      set({ editor: { ...now, slots: { ...found.slots, front, extra }, problems: [] } })
+    },
+
+    async saveCard() {
+      const { editor, course } = get()
+      if (!editor || !course) return
+      const place = { course: course.id, lecture: editor.lecture, slots: editor.slots }
+      await submit(
+        editor.card === null
+          ? { type: 'write', ...place, concept: editor.concept }
+          : { type: 'edit', ...place, card: editor.card },
+      )
+    },
+
+    async removeCard() {
+      const { editor, course } = get()
+      if (!editor || !course || editor.card === null) return
+      await submit({
+        type: 'remove',
+        course: course.id,
+        lecture: editor.lecture,
+        card: editor.card,
+      })
+    },
+
+    closeEditor() {
+      set({ editor: null })
+    },
+
     showCourse() {
       const { panel } = get()
-      set({ view: { level: 'course' }, panel: panel === 'cards' ? null : panel })
+      set({ view: { level: 'course' }, panel: panel === 'cards' ? null : panel, editor: null })
     },
 
     openLecture(lecture) {
-      set({ view: { level: 'lecture', lecture }, panel: 'cards' })
+      set({ view: { level: 'lecture', lecture }, panel: 'cards', editor: null })
     },
 
     selectTopic(topic) {
       const { view } = get()
       if (view.level !== 'lecture') return
-      set({ view: { level: 'lecture', lecture: view.lecture, topic }, panel: 'cards' })
+      set({
+        view: { level: 'lecture', lecture: view.lecture, topic },
+        panel: 'cards',
+        editor: null,
+      })
     },
 
     selectConcept(concept) {
       const { view } = get()
       if (view.level !== 'lecture') return
-      set({ view: { level: 'lecture', lecture: view.lecture, concept }, panel: 'cards' })
+      set({
+        view: { level: 'lecture', lecture: view.lecture, concept },
+        panel: 'cards',
+        editor: null,
+      })
     },
 
     openDetails(tab) {
-      set({ panel: 'details', detailsTab: tab ?? get().detailsTab })
+      set({ panel: 'details', detailsTab: tab ?? get().detailsTab, editor: null })
     },
 
     openPanel(panel) {
@@ -396,6 +535,7 @@ export const useStore = create<State>((set, get) => {
       // Closing the cards of a concept or topic keeps the lecture and drops the selection.
       set({
         panel: null,
+        editor: null,
         view: view.level === 'lecture' ? { level: 'lecture', lecture: view.lecture } : view,
       })
     },

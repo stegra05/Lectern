@@ -8,6 +8,9 @@
  * Sending to Anki: #choice (the card designs before the first send), #sending, #no-anki,
  * #sent (all of the course in Anki) and #added (the last two lectures not sent yet).
  *
+ * The card form: #edit (a definition), #edit-contrast, #edit-problem (what the engine refused),
+ * #write (a card of the student's own) and #write-gap.
+ *
  * The real course of `dev/real.ts`, with its long titles and dense lectures: #real (the track),
  * #real-details, #dense (lecture 02, 16 concepts, one selected) and #huge (lecture 01, 51
  * concepts). Any scenario ending in -closed closes the side panel at the end, as #dense-closed.
@@ -23,6 +26,7 @@ import type {
   Event,
   Lecture,
   Settings,
+  Slots,
 } from '../../../shared/contract.ts'
 import { useStore } from '../store.ts'
 import { REAL_CARDS, REAL_SLIDES, REAL_TITLES, REAL_TOPICS } from './real.ts'
@@ -191,6 +195,7 @@ function effectuation(): Lecture {
     file: '02_Effectuation.pdf',
     slides: 46,
     sent: 0,
+    inAnki: [],
     topics: [
       { name: 'Deciding under uncertainty', concepts: [knight, causation] },
       { name: 'Start with what you have', concepts: [bird, loss, quilt] },
@@ -280,6 +285,7 @@ function sample(number: number, cards: number, topics: number, concepts: number)
     file: `${two(number)}_${title.replace(/ /g, '_')}.pdf`,
     slides: SLIDES[number - 1]!,
     sent: 0,
+    inAnki: [],
     topics: Array.from({ length: topics }, (_, t) => ({
       name: `${title}, part ${t + 1}`,
       concepts: all.filter((_, i) => i % topics === t),
@@ -379,6 +385,7 @@ function realLecture(
     file: `${two(number)}_${title.replace(/ /g, '_')}.pdf`,
     slides: REAL_SLIDES[number - 1]!,
     sent: 0,
+    inAnki: [],
     topics: made.map((t) => ({ name: t.name, concepts: t.concepts.map((c) => c.concept) })),
     leftOut: [],
     dropped: [],
@@ -423,6 +430,39 @@ const empty = (): CourseView => ({
   runs: [],
 })
 
+const LIMITS = { front: 20, answer: 25, extra: 40, gapSentence: 45 }
+
+const text = (html: string) => html.replace(/<[^>]+>/g, '')
+
+/** A rough stand-in for the engine's reading of a card into slots. Enough for a picture. */
+function slotsOf(card: Card): Slots {
+  const f = card.fields
+  const items = [...(f.Back ?? '').matchAll(/<li>(.*?)<\/li>/g)].map((m) => m[1]!)
+  const answers = (items.length > 0 ? items : [f.Back ?? '']).map((html) => ({
+    text: text(html),
+    key: /<mark>(.*?)<\/mark>/.exec(html)?.[1] ?? '',
+  }))
+  return {
+    role: (f.Role ?? 'definition') as Slots['role'],
+    front: text(f.Front ?? ''),
+    answers,
+    labels: [...(f.Slots ?? '').matchAll(/<span>(.+?)<\/span>/g)].map((m) => m[1]!),
+    hidden: [],
+    extra: text(f.Extra ?? ''),
+    code: f.Code ?? '',
+  }
+}
+
+const blank = (role: 'definition' | 'cloze' = 'definition'): Slots => ({
+  role,
+  front: '',
+  answers: role === 'definition' ? [{ text: '', key: '' }] : [],
+  labels: [],
+  hidden: [],
+  extra: '',
+  code: '',
+})
+
 export function installFixture(): void {
   const hash = location.hash.replace('#', '') || 'result'
   const scenario = hash.replace(/-closed$/, '')
@@ -445,7 +485,11 @@ export function installFixture(): void {
     const upTo = scenario === 'sent' ? course.lectures.length : course.lectures.length - 2
     course = {
       ...course,
-      lectures: course.lectures.map((l, i) => ({ ...l, sent: i < upTo ? l.cards.length : 0 })),
+      lectures: course.lectures.map((l, i) => ({
+        ...l,
+        sent: i < upTo ? l.cards.length : 0,
+        inAnki: i < upTo ? l.cards.map((card) => card.id) : [],
+      })),
     }
   }
 
@@ -495,7 +539,10 @@ export function installFixture(): void {
           type: 'course',
           course: {
             ...course,
-            lectures: course.lectures.map((l) => ({ ...l, cards: l.cards.length })),
+            lectures: course.lectures.map((l) => {
+              const { inAnki, ...rest } = l
+              return { ...rest, sent: inAnki.length, cards: l.cards.length }
+            }),
           },
         })
         break
@@ -504,7 +551,27 @@ export function installFixture(): void {
           type: 'cards',
           lecture: command.lecture,
           cards: course.lectures.find((l) => l.number === command.lecture)?.cards ?? [],
+          sent: course.lectures.find((l) => l.number === command.lecture)?.inAnki ?? [],
         })
+        break
+      case 'slots': {
+        const card = course.lectures.flatMap((l) => l.cards).find((c) => c.id === command.card)
+        emit({ type: 'slots', slots: card ? slotsOf(card) : blank(command.role), limits: LIMITS })
+        break
+      }
+      case 'edit':
+      case 'write':
+        // The form of the picture stays open with what the engine would say.
+        emit({
+          type: 'refused',
+          problems: [
+            { field: 'front', message: 'It has 23 words. The limit is 20.' },
+            { field: 'key', message: 'The key term must be a part of the answer, word for word.' },
+          ],
+        })
+        break
+      case 'remove':
+        emit({ type: 'removed', card: command.card })
         break
       case 'estimate': {
         const cards = { pass: 150, good: 280, top: 410 }[command.goal ?? 'good']
@@ -617,6 +684,19 @@ export function installFixture(): void {
       if (scenario === 'concept') {
         store.getState().openLecture(2)
         store.getState().selectConcept('knight-risk-vs-uncertainty')
+      }
+      if (scenario.startsWith('edit') || scenario.startsWith('write')) {
+        store.getState().openLecture(2)
+        store.getState().selectConcept('knight-risk-vs-uncertainty')
+        const cards = store.getState().course!.lectures[1]!.cards
+        const role = scenario === 'edit-contrast' ? 'contrast' : 'definition'
+        if (scenario.startsWith('edit')) {
+          await store.getState().editCard(cards.find((card) => card.fields.Role === role)!)
+        } else {
+          await store.getState().writeCard('knight-risk-vs-uncertainty')
+        }
+        if (scenario === 'write-gap') await store.getState().setEditorKind('cloze')
+        if (scenario === 'edit-problem') await store.getState().saveCard()
       }
       if (scenario === 'large') store.getState().openLecture(5)
       if (scenario === 'details') store.getState().openDetails('decisions')

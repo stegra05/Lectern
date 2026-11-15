@@ -168,9 +168,24 @@
 }
 .cards-row {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr) 22px;
   gap: 11px;
-  padding: 10px 12px;
+  padding: 10px 8px 10px 12px;
+}
+/* Always there, so it can be found, and quiet until the row is pointed at. */
+.cards-edit {
+  width: 22px;
+  height: 22px;
+  margin-top: -2px;
+  color: var(--label-2);
+  opacity: 0.55;
+}
+.cards-row:hover .cards-edit,
+.cards-edit:focus-visible {
+  opacity: 1;
+}
+.cards-add {
+  align-self: flex-start;
 }
 .cards-side {
   display: flex;

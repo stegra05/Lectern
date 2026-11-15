@@ -2,7 +2,9 @@ import type { ReactNode } from 'react'
 import type { Card, Lecture } from '../../../../shared/contract.ts'
 import { selectedCards, useStore } from '../../store.ts'
 import { lectureColour, plural, two } from '../../lecture.ts'
+import { Icon } from '../../ui/Icon.tsx'
 import { SlideThumb } from '../SlideThumb.tsx'
+import { CardEditor } from './CardEditor.tsx'
 import './panels.css'
 
 /** Plain names for the card roles of `design/v3/cards/FIELDS.md`. */
@@ -29,7 +31,10 @@ export function roleName(role: string | undefined): string {
 export function CardsPanel({ close }: { close: ReactNode }) {
   const course = useStore((s) => s.course)
   const view = useStore((s) => s.view)
+  const editing = useStore((s) => s.editor !== null)
+  const writeCard = useStore((s) => s.writeCard)
   if (!course || view.level !== 'lecture') return null
+  if (editing) return <CardEditor close={close} />
   const lecture = course.lectures.find((l) => l.number === view.lecture)
   if (!lecture) return null
 
@@ -43,14 +48,13 @@ export function CardsPanel({ close }: { close: ReactNode }) {
   const name = concept?.name ?? view.topic ?? lecture.title
   const crumb = concept || view.topic ? [lecture.title, concept ? topic : null] : ['Whole lecture']
 
-  // The concepts in view, to find the cards that were left out of them.
-  const names = new Set(
-    lecture.topics
-      .filter((t) => !view.topic || t.name === view.topic)
-      .flatMap((t) => t.concepts)
-      .filter((c) => !view.concept || c.id === view.concept)
-      .map((c) => c.name),
-  )
+  // The concepts in view: a card of the student's own goes to the first, and the cards that
+  // were left out are found by their names.
+  const inView = lecture.topics
+    .filter((t) => !view.topic || t.name === view.topic)
+    .flatMap((t) => t.concepts)
+    .filter((c) => !view.concept || c.id === view.concept)
+  const names = new Set(inView.map((c) => c.name))
   const dropped = lecture.dropped.filter((d) => names.has(d.concept))
 
   // A remark of a check may name another card by its id. The student knows it by its question.
@@ -89,6 +93,16 @@ export function CardsPanel({ close }: { close: ReactNode }) {
               />
             ))}
           </ul>
+        )}
+        {inView[0] && (
+          <button
+            type="button"
+            className="btn cards-add"
+            onClick={() => void writeCard(inView[0]!.id)}
+          >
+            <Icon name="plus" size={13} stroke={1.6} />
+            Add your own card
+          </button>
         )}
         {dropped.length > 0 && (
           <section className="cards-dropped" aria-label="Left out">
@@ -148,13 +162,14 @@ function CardRow({
   course: string
   questions: Map<string, string>
 }) {
+  const editCard = useStore((s) => s.editCard)
   const f = card.fields
   const cloze = card.note === 'cloze'
   return (
     <li className="cards-row">
       <span className="cards-side">
         <SlideThumb course={course} lecture={lecture.number} slide={card.slide} />
-        <span className="chip">{roleName(f.Role)}</span>
+        <span className="chip">{card.own ? 'Yours' : roleName(f.Role)}</span>
       </span>
       <span className="cards-text">
         {/* The fields are the engine's own escaped HTML, as FIELDS.md defines them. */}
@@ -174,6 +189,14 @@ function CardRow({
           </span>
         ))}
       </span>
+      <button
+        type="button"
+        className="icon-btn cards-edit"
+        aria-label={`Edit the card: ${questionOf(card)}`}
+        onClick={() => void editCard(card)}
+      >
+        <Icon name="pencil" size={14} stroke={1.4} />
+      </button>
     </li>
   )
 }

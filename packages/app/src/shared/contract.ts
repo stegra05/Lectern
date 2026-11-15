@@ -13,11 +13,13 @@ import type {
   Event,
   LectureState,
   PendingLecture,
+  Problem,
   Run,
+  Slots,
 } from '@lectern/engine'
 import type { Design } from '@lectern/engine/designs'
 
-export type { Command, CourseSummary, Decision, Event, Run }
+export type { Command, CourseSummary, Decision, Event, Problem, Run, Slots }
 
 export type Goal = CourseState['goal']
 export type Phase = Extract<Event, { type: 'phase' }>['phase']
@@ -32,7 +34,12 @@ export type Concept = Topic['concepts'][number]
 /** A lecture as the interface holds it: the engine's state of it, with its cards loaded. */
 export interface Lecture extends Omit<LectureState, 'cards'> {
   cards: Card[]
+  /** The ids of its cards that are in Anki. */
+  inAnki: string[]
 }
+
+/** The word limits a card form shows next to its fields. */
+export type Limits = Extract<Event, { type: 'slots' }>['limits']
 
 /** A lecture PDF that is in the course but has no cards yet. */
 export type Pending = PendingLecture

@@ -5,8 +5,8 @@ import { LATER, LECTURES, makePdf } from './pdf.ts'
 /**
  * The whole way of a student through the base product, on the offline models: first run,
  * a new course, two lecture PDFs, the goal, the run with the engine's phases, the result on
- * the track, a lecture as rings, the cards of a concept in the side panel, the card design
- * before the first send, the cards in Anki, and a lecture that arrives later. Anki is the
+ * the track, a lecture as rings, the cards of a concept in the side panel, changing, writing
+ * and removing a card, the card design before the first send, the cards in Anki, and a lecture that arrives later. Anki is the
  * one in memory, so nothing reaches a real collection.
  */
 let launched: Launched
@@ -79,13 +79,56 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     await page.getByRole('button', { name: /Open lecture 02/ }).click()
     const panel = page.getByRole('complementary')
     await expect(panel).toContainText('Effectuation')
-    await page.getByRole('button', { name: /Affordable loss/ }).click()
+    // The concept on the map. The edit button of a card can name the concept too.
+    await page.getByRole('button', { name: /^Affordable loss, \d+ cards?$/ }).click()
     await expect(panel.getByRole('heading', { name: 'Affordable loss' })).toBeVisible()
     const cards = panel.getByRole('listitem')
     await expect(cards.first()).toBeVisible()
     expect(await cards.count()).toBeGreaterThan(0)
     // The card is made of the slide's own words.
     await expect(panel).toContainText('afford to lose')
+  })
+
+  await test.step('a card: change it, be told what is over the limit, write one, remove one', async () => {
+    const panel = page.getByRole('complementary')
+    const rows = panel.getByRole('listitem')
+    const before = await rows.count()
+
+    await panel
+      .getByRole('button', { name: /^Edit the card:/ })
+      .first()
+      .click()
+    await expect(panel.getByRole('heading', { name: 'Edit this card' })).toBeVisible()
+    const question = panel.getByLabel('Question')
+    await question.fill(`What ${'really '.repeat(20)}counts?`)
+    await expect(panel).toContainText('22 of 20 words')
+    await panel.getByRole('button', { name: 'Save card' }).click()
+    await expect(panel.getByRole('alert')).toHaveText('It has 22 words. The limit is 20.')
+    await question.fill('What decides how much to put into a venture?')
+    await panel.getByRole('button', { name: 'Save card' }).click()
+    await expect(panel.getByRole('heading', { name: 'Affordable loss' })).toBeVisible()
+    await expect(panel).toContainText('What decides how much to put into a venture?')
+    await expect(rows).toHaveCount(before)
+
+    await panel.getByRole('button', { name: 'Add your own card' }).click()
+    await expect(panel.getByRole('heading', { name: 'Add your own card' })).toBeVisible()
+    await expect(panel.getByLabel('Concept')).toHaveValue(/affordable-loss/)
+    await panel.getByLabel('Question').fill('Why does a small loss matter to a founder?')
+    await panel.getByLabel('Answer').fill('It keeps the venture alive for the next try.')
+    await panel.getByRole('button', { name: 'Add card' }).click()
+    await expect(panel.getByRole('alert')).toContainText('Name the key term')
+    await panel.getByLabel('Key term, in bold').fill('alive for the next try')
+    await panel.getByRole('button', { name: 'Add card' }).click()
+    await expect(rows).toHaveCount(before + 1)
+    await expect(rows.last()).toContainText('Yours')
+    await expect(rows.last()).toContainText('Why does a small loss matter to a founder?')
+
+    await panel.getByRole('button', { name: /^Edit the card: What decides/ }).click()
+    await panel.getByRole('button', { name: 'Remove card' }).click()
+    await expect(panel).toContainText('Remove this card?')
+    await panel.getByRole('button', { name: 'Remove', exact: true }).click()
+    await expect(rows).toHaveCount(before)
+    await expect(panel).not.toContainText('What decides how much to put into a venture?')
   })
 
   const status = page.getByRole('region', { name: 'Status' })
@@ -125,6 +168,23 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     await expect(status).toContainText(`${first} cards are in Anki, in 2 subdecks`)
     await expect(page.getByRole('img', { name: `In Anki, ${first} cards` })).toBeVisible()
     await expect(status.getByRole('button', { name: /Send/ })).toHaveCount(0)
+  })
+
+  await test.step('a card that is in Anki says so before it is changed', async () => {
+    await page.getByRole('button', { name: /Open lecture 02/ }).click()
+    const panel = page.getByRole('complementary')
+    await panel
+      .getByRole('button', { name: /^Edit the card:/ })
+      .first()
+      .click()
+    await expect(panel).toContainText('This card is in Anki. Saving changes it there too')
+    await panel
+      .getByLabel('Extra line, optional')
+      .fill('Sarasvathy calls this effectual reasoning.')
+    await panel.getByRole('button', { name: 'Save card' }).click()
+    await expect(panel.getByRole('heading', { name: 'Edit this card' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Whole course' }).click()
+    await expect(status).toContainText(`${first} cards are in Anki, in 2 subdecks`)
   })
 
   await test.step('the chosen design is the one in settings', async () => {
