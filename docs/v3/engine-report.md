@@ -300,8 +300,19 @@ reference notes, same judges and same strict rule as for the old map's facts.
 - **What is left is mostly not on the slides.** 217 notes need the cases, videos, papers and
   past exams. Of the rest, most misses are "partial": the concept is there, the fact is framed
   differently from the reference card.
-- **Not yet run end to end.** The sorting call and the cards from these facts have run only on
-  the offline models in tests. A full run is estimated at 69 cents (cap 2.06 dollars).
+- **The full run (on Steffen's "Run and merge")**: 631 cards, 45 cents against an estimate of
+  69, 34 minutes; the sorting worked on every lecture (1,418 facts read, 1,272 kept after
+  repeats). Judged the same way as the runs before: **204 of 636 notes (32%) have a card on the
+  same fact, against 214 (34%) for the previous run.** 46 gained, 56 lost: a draw within the
+  noise.
+- **Where it is lost: between the facts and the cards.** The facts held 279 notes, the cards 204
+  (73 percent kept). The previous run kept 214 of 253 (85 percent). With twice the facts and a
+  deck held near the reference size, the plan now cuts half of them, and the worth score is
+  too weak a guide for that: notes asked 9 times or more fell from 42 to 33 percent.
+- **Consequence.** Reading is no longer the bottleneck; choosing is. A score that has never seen
+  an exam cannot choose well. The next lever is past exams as input, for weight and framing.
+- Two defects seen: lectures 7 and 8 took the course name as their title (fixed in the prompt,
+  not yet run), and a Greiner chain card answers "Unspecified crisis".
 
 ## Three steps on coverage
 
