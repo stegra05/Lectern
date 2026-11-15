@@ -4,11 +4,11 @@
 
 ## Why
 
-<!-- What problem does it solve? Link issues with "Closes #N". -->
+<!-- What problem does it solve? Link the issue with `Closes #N`, or write `No issue: <why>`. -->
 
 ## Checks
 
-- [ ] `pnpm typecheck` passes
-- [ ] `pnpm test` passes
-- [ ] UI changes were checked in browser mode (`pnpm dev`)
-- [ ] For a bigger feature: there is a spec issue, and this PR holds one feature
+- [ ] One concern, under 1,000 changed lines (deletions and renames aside)
+- [ ] `pnpm check` passes; `pnpm test:e2e` for app changes
+- [ ] Interface changes were looked at in the app, light and dark
+- [ ] `docs/status.md` updated if this changes what is true
