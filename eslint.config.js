@@ -8,7 +8,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'src-tauri', 'website', 'node_modules', 'design', 'packages/*/out'] },
+  { ignores: ['**/dist', '**/out', 'node_modules', 'design', 'eval-results', '.claude', 'packages/app/test-results'] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   reactHooks.configs.flat.recommended,
@@ -41,7 +41,7 @@ export default tseslint.config(
   {
     // Node-context config files and build scripts are linted without type
     // information.
-    files: ['*.config.js', '*.config.ts', 'vite.config.ts', 'scripts/**/*.mjs', 'packages/*/scripts/**/*.mjs'],
+    files: ['**/*.config.js', '**/*.config.ts', 'packages/*/scripts/**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
   },
