@@ -25,6 +25,10 @@ const RETRIES = 6
 export interface OpenAIOptions {
   /** Defaults to the environment (`OPENAI_API_KEY`). */
   apiKey?: string
+  /** Defaults to the environment (`OPENAI_BASE_URL`). */
+  baseURL?: string
+  /** How often a failed call is tried again. */
+  maxRetries?: number
 }
 
 const picture = (image: SlideImage) => ({
@@ -70,7 +74,7 @@ export function openaiModel(model = LUNA, options: OpenAIOptions = {}): ModelPor
     model,
     price,
     async complete(request) {
-      client ??= new OpenAI({ ...options, maxRetries: RETRIES })
+      client ??= new OpenAI({ maxRetries: RETRIES, ...options })
       const response = await client.responses
         .create({
           model,
@@ -144,7 +148,7 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
           `A decision request carries ${request.images.length} pictures, more than the ${MAX_DECISION_IMAGES} the API takes.`,
         )
       }
-      client ??= new OpenAI({ ...options, maxRetries: RETRIES })
+      client ??= new OpenAI({ maxRetries: RETRIES, ...options })
       const content = shared(request.context, request.images, true)
       const answers: Answer[] = []
       for (let start = 0; start < request.questions.length; start += QUESTIONS_PER_REQUEST) {
