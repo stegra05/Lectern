@@ -3,11 +3,13 @@
  * A run measured against a reference deck in Anki. Three steps, none of which calls a model:
  *
  *   node eval/refdeck.ts reference <anki deck> <eval folder>
+ *   node eval/refdeck.ts reference-files <folder of deck files> <eval folder>
  *   node eval/refdeck.ts run <course folder> <eval folder>
  *   node eval/refdeck.ts batches <eval folder> [--size 40]
  *   node eval/refdeck.ts report <eval folder>
  *
- * `reference` reads the deck through AnkiConnect into `reference.json`. `run` reads a built
+ * `reference` reads the deck through AnkiConnect into `reference.json`; `reference-files` reads
+ * a deck kept as YAML files instead (`title`, and `cards` with `front` and `back` or `text`). `run` reads a built
  * course into `cards.json`, `cards.txt`, `facts.json` and `slides.txt`. `batches` writes one file per group
  * of reference notes under `batches/`; a judge (a person or a model) answers each into
  * `labels/<same name>.json`, following `eval/JUDGE.md`. `report` counts the labels.
@@ -22,6 +24,7 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { parse } from 'yaml'
 import { nodeStore } from '../src/adapters/node-store.ts'
 import { pdfjsReader } from '../src/adapters/pdfjs.ts'
 import { CLOZE, htmlToText, two } from '../src/cards/words.ts'
@@ -85,6 +88,31 @@ async function reference(deck: string, out: string): Promise<void> {
     }
   })
   list.sort((a, b) => a.deck.localeCompare(b.deck) || a.id - b.id)
+  await writeFile(join(out, 'reference.json'), `${JSON.stringify(list, null, 1)}\n`)
+  console.log(`${list.length} reference notes`)
+}
+
+async function referenceFiles(folder: string, out: string): Promise<void> {
+  const list: ReferenceNote[] = []
+  for (const name of (await readdir(folder)).filter((n) => n.endsWith('.yaml')).sort()) {
+    const deck = parse(await readFile(join(folder, name), 'utf8')) as {
+      title: string
+      cards: { front?: string; back?: string; text?: string }[]
+    }
+    for (const card of deck.cards) {
+      const text = card.text ?? ''
+      list.push({
+        id: list.length + 1,
+        deck: deck.title,
+        question: htmlToText(text ? text.replace(CLOZE, '[...]') : (card.front ?? '')),
+        answer: text
+          ? [...text.matchAll(CLOZE)].map((m) => htmlToText(m[2]!)).join('; ')
+          : htmlToText(card.back ?? ''),
+        source: '',
+        asked: null,
+      })
+    }
+  }
   await writeFile(join(out, 'reference.json'), `${JSON.stringify(list, null, 1)}\n`)
   console.log(`${list.length} reference notes`)
 }
@@ -210,12 +238,14 @@ async function report(out: string): Promise<void> {
 const out = resolve(rest.at(-1) ?? '.')
 await mkdir(out, { recursive: true })
 if (step === 'reference' && rest.length === 2) await reference(rest[0]!, out)
+else if (step === 'reference-files' && rest.length === 2)
+  await referenceFiles(resolve(rest[0]!), out)
 else if (step === 'run' && rest.length === 2) await run(resolve(rest[0]!), out)
 else if (step === 'batches' && rest.length === 1) await batches(out, Number(values.size ?? 40))
 else if (step === 'report' && rest.length === 1) await report(out)
 else {
   console.error(
-    'Usage: refdeck reference <anki deck> <out> | run <course> <out> | batches <out> | report <out>',
+    'Usage: refdeck reference <anki deck> <out> | reference-files <folder> <out> | run <course> <out> | batches <out> | report <out>',
   )
   process.exit(2)
 }
