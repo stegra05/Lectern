@@ -30,6 +30,7 @@ import {
 import { removeSent, updateSent } from './deliver.ts'
 import { EngineError } from './errors.ts'
 import type { Ports } from './ports.ts'
+import { slideText } from './slides.ts'
 
 interface Place {
   course: string
@@ -99,7 +100,7 @@ async function build(
 ): Promise<CardFile | Problem[]> {
   const problems = checkSlots(filled)
   if (problems.length > 0) return problems
-  const text = await pdf.readSlides(await store.readBytes(`${paths.slides(place.course)}/${file}`))
+  const text = await slideText(pdf, await store.readBytes(`${paths.slides(place.course)}/${file}`))
   const draft = toDraft(filled, {
     concept: concept.name,
     slide: card.slide,
