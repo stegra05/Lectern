@@ -286,6 +286,41 @@ What the real Anki taught, and what changed because of it:
   notes) and "Lectern send test (Lectern)" (35 notes), 53 pictures named
   `lectern-lectern-send-test*`, and the two Lamp fonts. The two note types stay.
 
+## Changing single cards
+
+Added 2026-11-14 and 15 by the session that built sending. Tested on the Anki in memory and in
+the app end to end; never against a real Anki.
+
+**What it does.** Four commands. `slots` gives a card as a form holds it: the slots of its role
+in plain text, with the key term apart from the answer and the hidden parts of a gap sentence
+as a list. `edit` takes such slots for a card and keeps its id, slide and place. `remove` takes
+a card out of its lecture. `write` adds a card of the student's own to a concept: a question
+with a one-sentence answer, or a sentence with gaps. `cards` now also says which cards are in
+Anki.
+
+**How.** `src/cards/slots.ts` reads the slots back out of the stored fields, the reverse of
+`assemble.ts`, so the card file keeps its shape. All 658 cards of the first real run come back
+unchanged from fields to slots to fields. An edit runs through `validateDraft` and `assemble`
+like any card. The form's own checks come first and speak to a student ("It has 22 words. The
+limit is 20."); what only the validator finds is passed on in its words, which are written for
+the model.
+
+**In Anki.** An edited card that is already there changes there too, as the same note with its
+progress. A removed one is deleted there. Both need Anki open; when it is closed nothing
+changes, here or there. When the student has deleted the note in Anki, an edit makes the card
+count as not sent again. An own card is tagged `<course>::own` when it is sent.
+
+**Where it is.** `src/edit.ts`, `src/cards/slots.ts`, two more calls on the `anki` port,
+`updateSent` and `removeSent` in `src/deliver.ts`. Tests: `test/edit.test.ts`, 15.
+
+**Open.**
+
+- Edit and remove against a real Anki.
+- A card that passed when it was built can be refused on a later edit, because the validator
+  has grown since. The student then cannot save a change to another field of that card.
+- An own card takes the first slide of its concept. The student cannot choose the slide.
+- The form has no preview of the card in its design.
+
 ## Placeholder
 
 `presets.ts` holds **one placeholder preset** used for every kind of lecture. Its plan table is
