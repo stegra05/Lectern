@@ -85,10 +85,6 @@
   background: var(--segment-on);
   box-shadow: var(--shadow-control);
 }
-.segmented button:disabled {
-  color: var(--label-2);
-  opacity: 0.7;
-}
 .segmented.large button {
   height: 28px;
   font-size: 13px;

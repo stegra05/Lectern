@@ -1,0 +1,94 @@
+/* The slim bottom bar: 12px from the edges, 56px tall, never taller. */
+
+.bar {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: var(--gutter);
+  z-index: 3;
+  height: var(--bar-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  border-radius: var(--r-panel);
+}
+
+.bar-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.bar-lines {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.bar-first {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bar-clip,
+.bar-second {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-second {
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+.bar-counts {
+  font-weight: 400;
+  color: var(--label-2);
+}
+.bar-counts b {
+  font-weight: 600;
+  color: var(--label);
+}
+
+.bar-problem {
+  color: var(--problem);
+}
+
+.bar-details {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+}
+.bar-details:hover {
+  background: var(--control);
+}
+.bar-details[aria-pressed='true'] {
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent-text) 16%, transparent);
+}
+
+.bar-aside {
+  flex: none;
+  font-size: 12px;
+  color: var(--label-2);
+  white-space: nowrap;
+}
