@@ -272,6 +272,38 @@ in `eval-results/v3-courses/grundlagen-datenbanken`. Estimate at goal top: 1,358
 dollars. Its deck in AnkiTUM is about 140 cards by another student, several facts per card, for
 9 of 21 chapters: a weak reference. The 8 past exams would be a better one.
 
+## Past exams: as weights they do nothing, as questions they are the lever
+
+Same session, 2026-11-15, on Steffen's "Yes, exams next". The 22 regular Entrepreneurship
+papers, split by date: the 18 older ones (2012 to 2023) as input, the 4 newest (2024 to 2026)
+held back to test on. The engine read every paper into its questions (220 and 52) and matched
+each older question to the facts of the full run on the slide-by-slide reading. 3 cents. Then
+judges labelled once which facts answer each reference note and each held-out question, so any
+selection of the 1,272 facts can be scored without judging again (`eval/exam-weight.ts`,
+`eval/JUDGE-ALL.md`, `src/exams.ts`).
+
+| Selection of 641 facts                      | Reference notes answered | Held-out questions answered |
+| ------------------------------------------- | ------------------------ | --------------------------- |
+| In the order of the map                     | 127                      | 9 of 52                     |
+| By worth score (what the build does)        | 299                      | 19 of 52                    |
+| Facts the older exams hit first, then worth | 303                      | 20 of 52                    |
+| All 1,272 facts                             | 355                      | 20 of 52                    |
+
+- **As weights, exams add nothing.** 89 of the 111 facts the older questions hit are already
+  among the 641 the worth score picks. Not built into the plan.
+- **The facts lack the exam's angle.** Read side by side, a note the facts "answer" is often
+  answered only loosely: "penetration grows by selling more to existing customers" for "why is
+  penetration the lowest-risk strategy", a list of Greiner's phases for "which phase resolves
+  the crisis of control". The card judge, stricter, calls these partial, and rightly.
+- **Even all facts answer 20 of the 52 held-out questions.** The rest ask about cases, videos
+  and readings (Celonis, streavent, Kickstarter, Krapp, Porter), or for reasons the slides only
+  imply.
+- **The exams repeat themselves.** 47 of the 52 held-out questions have a near-verbatim twin in
+  the older papers (word overlap 0.5 or more): "Which of the following is not a key idea of
+  effectuation?", "Explain two benefits of a bank loan in contrast to venture capital", "Draw an
+  empty business model canvas". So the strongest use of past exams is a card that answers each
+  recurring question, not a weight on facts.
+
 ## Reading slide by slide
 
 Same session, 2026-11-15, on Steffen's "Build it". The map of a whole lecture in one call, and
