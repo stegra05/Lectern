@@ -1,0 +1,20 @@
+name: Task
+description: A piece of v3 work for the roadmap board
+projects: ["stegra05/3"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: The problem first, with where it was measured or decided. Link the doc or report.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Checkable criteria. Someone else can tell from them alone whether it is done.
+      value: |
+        - [ ]
+    validations:
+      required: true
