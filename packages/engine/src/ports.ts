@@ -28,6 +28,8 @@ export interface ModelRequest {
   schema: Record<string, unknown>
   /** How much the model should reason. Filling a form is recall, so it runs on `low`. */
   effort: 'low' | 'medium'
+  /** Called with the cost of each billed call as soon as the provider reports it, even if the call then fails. */
+  onUsage: (usage: Usage) => void
 }
 
 export interface Usage {
@@ -39,12 +41,12 @@ export interface Usage {
   costUsd: number
 }
 
-/** The one way to a model that writes. `data` is the parsed JSON reply. */
+/** The one way to a model that writes. The reply is the parsed JSON. */
 export interface ModelPort {
   readonly model: string
   /** List price in dollars per million tokens, for the estimate before a run. */
   readonly price: { input: number; cachedInput: number; output: number }
-  complete(request: ModelRequest): Promise<{ data: unknown; usage: Usage }>
+  complete(request: ModelRequest): Promise<unknown>
 }
 
 /** One step of an ordered scale, lowest first. */
@@ -69,11 +71,16 @@ export type Answer =
   | { type: 'score'; score: number }
   | { type: 'refusal' }
 
+/** The most pictures one decision request may carry. */
+export const MAX_DECISION_IMAGES = 128
+
 export interface DecisionRequest {
   /** The input every question is about. Questions are batched per shared input. */
   context: string
   images: SlideImage[]
   questions: Question[]
+  /** Called with the cost of each billed request as soon as the provider reports it. */
+  onUsage: (usage: Usage) => void
 }
 
 /**
@@ -84,7 +91,7 @@ export interface DecisionsPort {
   readonly model: string
   /** List price in dollars per million input tokens. Answers cost nothing. */
   readonly price: { input: number }
-  decide(request: DecisionRequest): Promise<{ answers: Answer[]; usage: Usage }>
+  decide(request: DecisionRequest): Promise<Answer[]>
 }
 
 export interface PdfPort {
@@ -153,6 +160,8 @@ export interface AnkiPort {
   deleteNotes(ids: number[]): Promise<void>
   /** Which of these notes are in Anki. */
   existingNotes(ids: number[]): Promise<number[]>
+  /** The notes that carry this tag. */
+  taggedNotes(tag: string): Promise<number[]>
 }
 
 /** What Lectern's note types are made of: the four templates and the stylesheet. */

@@ -1,0 +1,14 @@
+<div class="lc lc-back lc-clz lec-{{Lecture}} role-{{Role}}">
+  {{#Asked}}<div class="lc-tab is-asked">asked {{Asked}}×{{#Part}}, {{Part}}{{/Part}}</div>{{/Asked}}{{^Asked}}<div class="lc-tab">core</div>{{/Asked}}
+  <div class="lc-sheet">
+    <header class="lc-head"><span class="lc-lec">{{Lecture}}</span> <span class="lc-topic">{{Topic}}</span></header>
+    <div class="lc-text" id="answer">{{cloze:Text}}</div>
+    <div class="lc-cue"></div>
+    {{#Diagram}}<div class="lc-fig">{{Diagram}}</div>{{/Diagram}}
+    {{#Extra}}<div class="lc-extra">{{Extra}}</div>{{/Extra}}
+    {{#Slide}}<details class="lc-plate">
+      <summary><span class="lc-thumb">{{Slide}}</span><span class="lc-cite"><span class="lc-src">{{Source}}</span>{{#Excerpt}}<span class="lc-excerpt">{{Excerpt}}</span>{{/Excerpt}}<span class="lc-toggle"></span></span></summary>
+      <div class="lc-slide">{{Slide}}</div>
+    </details>{{/Slide}}{{^Slide}}<div class="lc-plate"><span class="lc-cite"><span class="lc-src">{{Source}}</span>{{#Excerpt}}<span class="lc-excerpt">{{Excerpt}}</span>{{/Excerpt}}</span></div>{{/Slide}}
+  </div>
+</div>

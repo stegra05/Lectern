@@ -1,0 +1,10 @@
+<div class="lc lc-front lec-{{Lecture}} role-{{Role}}">
+  {{#Asked}}<div class="lc-tab is-asked">asked {{Asked}}×{{#Part}}, {{Part}}{{/Part}}</div>{{/Asked}}{{^Asked}}<div class="lc-tab">core</div>{{/Asked}}
+  <div class="lc-sheet">
+    <header class="lc-head"><span class="lc-lec">{{Lecture}}</span> <span class="lc-topic">{{Topic}}</span></header>
+    <div class="lc-q">{{Front}}</div>
+    {{#Code}}<pre class="lc-code"><code>{{Code}}</code></pre>{{/Code}}
+    <div class="lc-cue"></div>
+    <div class="lc-slot"><div class="lc-shape" aria-hidden="true">{{#Slots}}{{Slots}}{{/Slots}}{{^Slots}}<span></span><span></span>{{/Slots}}</div></div>
+  </div>
+</div>

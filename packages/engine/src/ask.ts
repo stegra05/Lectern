@@ -17,10 +17,10 @@ export interface Meter {
 }
 
 export type AskModel = <S extends z.ZodType>(
-  request: Omit<ModelRequest, 'schema'>,
+  request: Omit<ModelRequest, 'schema' | 'onUsage'>,
   schema: S,
 ) => Promise<z.infer<S>>
-export type Decide = (request: DecisionRequest) => Promise<Answer[]>
+export type Decide = (request: Omit<DecisionRequest, 'onUsage'>) => Promise<Answer[]>
 
 /** The JSON Schema a model port receives: closed objects, every property required. */
 export function replySchema(schema: z.ZodType): Record<string, unknown> {
@@ -50,10 +50,15 @@ export function createAsk(
     async model(request, schema) {
       const jsonSchema = replySchema(schema)
       for (let attempt = 0; attempt < 2; attempt++) {
-        const reply = await ports.model.complete({ ...request, schema: jsonSchema })
-        meter.calls++
-        spend(reply.usage)
-        const parsed = schema.safeParse(reply.data)
+        const reply = await ports.model.complete({
+          ...request,
+          schema: jsonSchema,
+          onUsage: (usage) => {
+            meter.calls++
+            spend(usage)
+          },
+        })
+        const parsed = schema.safeParse(reply)
         if (parsed.success) return parsed.data
       }
       throw new EngineError(
@@ -63,11 +68,10 @@ export function createAsk(
     },
     async decide(request) {
       if (request.questions.length === 0) return []
-      const reply = await ports.decisions.decide(request)
+      const answers = await ports.decisions.decide({ ...request, onUsage: spend })
       meter.decisions += request.questions.length
-      spend(reply.usage)
       // A missing answer counts as no verdict, never as a yes or a no.
-      return request.questions.map((_, i) => reply.answers[i] ?? { type: 'refusal' })
+      return request.questions.map((_, i) => answers[i] ?? { type: 'refusal' })
     },
   }
 }

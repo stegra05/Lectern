@@ -102,6 +102,8 @@ export interface Run {
   startedAt: string
   model: string
   decisionModel: string
+  /** Set when the build stopped before it finished. The run then records what it had spent. */
+  failed?: true
   goal: Goal
   lectures: number[]
   cards: number
