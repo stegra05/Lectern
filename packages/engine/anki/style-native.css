@@ -1,0 +1,896 @@
+/* lectern-notetype v3 skin:native
+   Lectern cards, skin "Native": the card as a well-made system screen. System font, a grey
+   ground with white inset groups, hairline rows instead of boxes, and one blue that means
+   "this is the answer": the trailing checkmark on every answer row, the key term tint and
+   the filled cloze. The head row repeats the app's lecture stop: a 40 px rounded square with
+   the lecture number. Tokens follow design/KIT.md, light and night.
+   Phone first: base rules are for 360 px, one media query adds room.
+   Hooks from the shared templates: .role-<Role>, .lc-front / .lc-back. */
+
+/* ---------- Tokens ---------- */
+
+.card {
+  --ground: #efeff2;
+  --group: #ffffff;
+  --label: #1d1d1f;
+  --label-2: #636366;
+  --sep: rgba(0, 0, 0, 0.1);
+  --fill: rgba(118, 118, 128, 0.12);
+  --field-line: #8a8a8e;
+  --accent: #0064d2;
+  --select: #e3eefb;
+  --mark: #cfe2fb;
+  --focus: #4a8bdf;
+  --good-bg: #dcf2e3;
+  --good-ink: #146c2e;
+  --bad-bg: #fbe2e0;
+  --bad-ink: #9c2019;
+  --miss-bg: rgba(118, 118, 128, 0.16);
+  --miss-ink: #1d1d1f;
+
+  --sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, Roboto,
+    'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, 'Roboto Mono', Consolas, monospace;
+  --gutter: 16px;
+  --r: 12px;
+  --inset: 16px;
+  --num-inset: 44px;
+  --trail: 48px;
+
+  /* Glyphs drawn as masks, so they take the accent or label colour in both modes. */
+  --check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M2.6 8.6l3.6 3.5 7.2-8.2' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  --chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'><path d='M2.5 2.2l5.6 5.8-5.6 5.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.35;
+  text-align: left;
+  margin: 0;
+  padding: 0;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+/* .card.nightMode outranks the reviewer's own body.nightMode background. */
+.card,
+.card.nightMode {
+  background-color: var(--ground);
+  color: var(--label);
+}
+
+.card.nightMode,
+.card.night_mode,
+.nightMode .card,
+.night_mode .card {
+  --ground: #1c1c1e;
+  --group: #2c2c2e;
+  --label: #f2f2f7;
+  --label-2: #aeaeb2;
+  --sep: rgba(255, 255, 255, 0.12);
+  --fill: rgba(118, 118, 128, 0.24);
+  --field-line: #8d8d93;
+  --accent: #6cb0ff;
+  --select: #1f3a5c;
+  --mark: #27456b;
+  --focus: #6cb0ff;
+  --good-bg: #1d3b27;
+  --good-ink: #7fdc96;
+  --bad-bg: #4a2321;
+  --bad-ink: #ffaaa2;
+  --miss-bg: rgba(118, 118, 128, 0.3);
+  --miss-ink: #f2f2f7;
+}
+
+/* ---------- Frame ----------
+   The sheet and the head are wrappers only: their children join one grid, so the lecture
+   tile spans the topic and the weight line, and everything else runs full width below. */
+
+.lc {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 12px;
+  max-width: 35rem;
+  margin: 0 auto;
+  padding: 20px var(--gutter) 32px;
+}
+.lc * {
+  box-sizing: border-box;
+}
+.lc-sheet,
+.lc-head {
+  display: contents;
+}
+.lc-sheet > *:not(.lc-head) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* The lecture stop from the map: a rounded square with the number. */
+.lc-lec {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--group);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--label);
+}
+.lc-topic {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The exam weight, as the subtitle of the head row. Asked: a filled capsule in label ink.
+   Core: plain secondary text. The difference never depends on colour alone. */
+.lc-tab {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  align-self: start;
+  display: inline-block;
+  margin-top: 1px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--label-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.lc-tab::first-letter {
+  text-transform: uppercase;
+}
+.lc-tab.is-asked {
+  margin-top: 2px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--label);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Question ---------- */
+
+.lc-q,
+.lc-text {
+  margin-top: 22px;
+  font-size: 21px;
+  line-height: 1.27;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  text-wrap: pretty;
+}
+.lc-back .lc-q {
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--label-2);
+}
+
+.lc code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+.lc-body code,
+.lc-extra code,
+.lc-q code {
+  padding: 0.05em 0.3em;
+  border-radius: 5px;
+  background: var(--fill);
+}
+.lc sub,
+.lc sup {
+  font-size: 0.72em;
+  line-height: 0;
+}
+
+/* ---------- Groups and rows: the shared look ---------- */
+
+.lc-shape,
+.lc-a,
+.lc-code,
+.lc-plate,
+.role-cloze-list .lc-text ul {
+  background: var(--group);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+/* An inset hairline at the top of a row, like a grouped list. */
+.lc-shape > span + span,
+.lc-body li + li,
+.role-chain .lc-body li:first-child,
+.role-chain .lc-labels + .lc-body:not(:has(> ul)),
+.role-cloze-list .lc-text li + li,
+.lc-a:has(> .lc-fig) .lc-body {
+  background-image: linear-gradient(var(--sep), var(--sep));
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: var(--inset) 0;
+}
+
+/* The answer mark: a trailing checkmark in the accent, as iOS marks the chosen row. */
+.lc-a::after,
+.lc-a:has(> .lc-body > ul) li::after,
+.role-chain .lc-a .lc-body:not(:has(> ul))::after,
+.lc-back.role-cloze-list li:has(.cloze)::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  background: var(--accent);
+  -webkit-mask: var(--check) center / contain no-repeat;
+  mask: var(--check) center / contain no-repeat;
+}
+
+/* ---------- Cue: the section header that names the shape of the answer ---------- */
+
+.lc-cue {
+  margin: 26px 0 7px;
+  padding: 0 var(--inset);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--label-2);
+}
+.lc-cue::after {
+  content: 'Your answer';
+}
+.role-definition .lc-cue::after {
+  content: 'In one sentence';
+}
+.role-reverse .lc-cue::after {
+  content: 'Name the term';
+}
+.role-contrast .lc-cue::after {
+  content: 'One for each side';
+}
+.role-chain .lc-cue::after {
+  content: 'The missing steps';
+}
+.role-name-two .lc-cue::after {
+  content: 'Two items';
+}
+.role-diagram .lc-cue::after {
+  content: 'Sketch it on paper, then flip';
+}
+.role-formula .lc-cue::after {
+  content: 'The statement and its condition';
+}
+.role-why .lc-cue::after {
+  content: 'The reason, in two steps';
+}
+.role-code .lc-cue::after {
+  content: 'Both parts';
+}
+.role-case .lc-cue::after {
+  content: 'Name the conclusion';
+}
+.role-calculation .lc-cue::after {
+  content: 'Work it out';
+}
+.role-cloze .lc-cue::after {
+  content: 'Fill the gap';
+}
+.role-cloze-list .lc-cue::after {
+  content: 'Complete the list';
+}
+/* A plain cloze needs no cue: the gap says it. */
+.lc-clz .lc-cue {
+  display: none;
+}
+
+/* ---------- Front: empty rows in the shape of the answer ---------- */
+
+.lc-shape > span {
+  position: relative;
+  display: block;
+  min-height: 52px;
+  padding: 13px var(--trail) 13px var(--inset);
+}
+.lc-shape > span + span {
+  display: none;
+}
+
+.role-definition .lc-shape > span {
+  min-height: 92px;
+}
+.role-formula .lc-shape > span {
+  min-height: 108px;
+}
+
+/* Labelled rows: contrast and code. The label is the row's caption, the space below it
+   is where the answer goes. */
+.role-contrast .lc-shape > span,
+.role-code .lc-shape > span {
+  display: block;
+  min-height: 78px;
+}
+.lc-shape > span:not(:empty) {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--label-2);
+}
+
+/* Numbered rows: name two, why, chain. Given steps of a chain are written in. */
+.role-name-two .lc-shape,
+.role-why .lc-shape,
+.role-chain .lc-shape,
+.role-name-two .lc-a,
+.role-why .lc-a,
+.role-chain .lc-a {
+  counter-reset: step;
+}
+.role-name-two .lc-shape > span,
+.role-why .lc-shape > span,
+.role-chain .lc-shape > span {
+  display: block;
+  padding-left: var(--num-inset);
+  counter-increment: step;
+}
+.role-name-two .lc-shape > span + span,
+.role-why .lc-shape > span + span,
+.role-chain .lc-shape > span + span {
+  background-position: var(--num-inset) 0;
+}
+.role-name-two .lc-shape > span::before,
+.role-why .lc-shape > span::before,
+.role-chain .lc-shape > span::before,
+.role-name-two .lc-a:has(> .lc-body > ul) li::before,
+.role-why .lc-a:has(> .lc-body > ul) li::before,
+.role-chain .lc-labels > span::before,
+.role-chain .lc-a:has(> .lc-body > ul) li::before {
+  content: counter(step);
+  position: absolute;
+  left: var(--inset);
+  top: 13px;
+  width: 18px;
+  font-size: 15px;
+  line-height: 23px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+.role-chain .lc-shape > span:not(:empty) {
+  min-height: 0;
+  font-size: 17px;
+  line-height: 23px;
+  color: var(--label-2);
+}
+
+.role-diagram .lc-shape {
+  margin: 0 -8px;
+}
+.role-diagram .lc-shape > span {
+  aspect-ratio: 16 / 11;
+}
+
+/* ---------- Back: the same rows, filled, with the checkmark ---------- */
+
+.lc-a {
+  position: relative;
+  min-height: 52px;
+  padding: 13px var(--trail) 13px var(--inset);
+  line-height: 1.35;
+}
+.role-definition .lc-a {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+}
+.role-formula .lc-a {
+  min-height: 108px;
+}
+.role-reverse .lc-body,
+.role-case .lc-body {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.role-reverse .lc-a,
+.role-case .lc-a {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.lc-body > :first-child {
+  margin-top: 0;
+}
+.lc-body > :last-child {
+  margin-bottom: 0;
+}
+.lc-body p {
+  margin: 0.5em 0;
+}
+.lc-body ul {
+  margin: 0;
+  padding-left: 1.15em;
+}
+.lc-body li + li {
+  margin-top: 0.3em;
+}
+
+/* A list answer becomes one row per item (with :has()); without it, one row with bullets. */
+.lc-a:has(> .lc-body > ul) {
+  padding: 0;
+}
+.lc-a:has(> .lc-body > ul)::after {
+  content: none;
+}
+.lc-a:has(> .lc-body > ul) .lc-body > ul {
+  padding: 0;
+  list-style: none;
+}
+.lc-a:has(> .lc-body > ul) li {
+  position: relative;
+  margin: 0;
+  min-height: 52px;
+  padding: 13px var(--trail) 13px var(--inset);
+}
+.role-name-two .lc-a:has(> .lc-body > ul) li,
+.role-why .lc-a:has(> .lc-body > ul) li,
+.role-chain .lc-a:has(> .lc-body > ul) li {
+  padding-left: var(--num-inset);
+  counter-increment: step;
+  background-position: var(--num-inset) 0;
+}
+
+/* The key term: the accent's light tint, the one place colour sits inside a sentence. */
+.lc mark {
+  padding: 0.03em 0.14em;
+  margin: 0 -0.06em;
+  border-radius: 5px;
+  background: var(--mark);
+  color: var(--label);
+  font-weight: 600;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* ---------- Two sides: contrast, code ----------
+   Each label sits as the caption of its own row, on the front over empty space, on the
+   back over the value. Without :has(), or when Back is a sentence, the labels form one
+   caption line over a single row. */
+
+.lc-labels {
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--label-2);
+}
+.lc-labels > span + span::before {
+  content: ' \00b7  ';
+}
+
+.role-contrast .lc-a:has(> .lc-body > ul),
+.role-code .lc-a:has(> .lc-body > ul) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.role-contrast .lc-a:has(> .lc-body > ul) :is(.lc-labels, .lc-body, .lc-body > ul),
+.role-code .lc-a:has(> .lc-body > ul) :is(.lc-labels, .lc-body, .lc-body > ul) {
+  display: contents;
+}
+.role-contrast .lc-a:has(> .lc-body > ul) .lc-labels > span,
+.role-code .lc-a:has(> .lc-body > ul) .lc-labels > span {
+  padding: 13px var(--trail) 0 var(--inset);
+}
+.role-contrast .lc-a:has(> .lc-body > ul) .lc-labels > span::before,
+.role-code .lc-a:has(> .lc-body > ul) .lc-labels > span::before {
+  content: none;
+}
+.role-contrast .lc-a:has(> .lc-body > ul) .lc-labels > span + span,
+.role-code .lc-a:has(> .lc-body > ul) .lc-labels > span + span {
+  background-image: linear-gradient(var(--sep), var(--sep));
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: var(--inset) 0;
+}
+.role-contrast .lc-a:has(> .lc-body > ul) li,
+.role-code .lc-a:has(> .lc-body > ul) li {
+  min-height: 0;
+  padding-top: 3px;
+  padding-bottom: 16px;
+  background: none;
+}
+.role-contrast .lc-a:has(> .lc-body > ul) li::after,
+.role-code .lc-a:has(> .lc-body > ul) li::after {
+  top: 0;
+  margin-top: -2px;
+}
+.lc-a:has(> .lc-body > ul) .lc-labels > span:nth-child(1) {
+  grid-row: 1;
+}
+.lc-a:has(> .lc-body > ul) li:nth-child(1) {
+  grid-row: 2;
+}
+.lc-a:has(> .lc-body > ul) .lc-labels > span:nth-child(2) {
+  grid-row: 3;
+}
+.lc-a:has(> .lc-body > ul) li:nth-child(2) {
+  grid-row: 4;
+}
+.lc-a:has(> .lc-body > ul) .lc-labels > span:nth-child(3) {
+  grid-row: 5;
+}
+.lc-a:has(> .lc-body > ul) li:nth-child(3) {
+  grid-row: 6;
+}
+
+/* ---------- Chain: given steps are numbered rows, the gaps follow ---------- */
+
+.role-chain .lc-a {
+  padding: 0;
+}
+.role-chain .lc-a::after {
+  content: none;
+}
+.role-chain .lc-labels {
+  display: block;
+  margin: 0;
+  font-size: 17px;
+  line-height: 23px;
+}
+.role-chain .lc-labels > span:empty {
+  display: none;
+}
+.role-chain .lc-labels > span {
+  position: relative;
+  display: block;
+  padding: 13px var(--trail) 13px var(--num-inset);
+  counter-increment: step;
+}
+.role-chain .lc-labels > span::before {
+  content: counter(step);
+}
+.role-chain .lc-labels > span + span:not(:empty) {
+  background-image: linear-gradient(var(--sep), var(--sep));
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: var(--num-inset) 0;
+}
+.role-chain .lc-body {
+  position: relative;
+  padding: 13px var(--trail) 13px var(--inset);
+}
+.role-chain .lc-body:has(> ul) {
+  padding: 0;
+}
+.role-chain .lc-body li:first-child {
+  margin-top: 0;
+}
+
+/* ---------- Mathematics ---------- */
+
+.lc mjx-container {
+  color: inherit;
+}
+.lc mjx-container[display='true'] {
+  margin: 0.3em 0 0.55em !important;
+  padding: 2px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: left !important;
+}
+.role-formula .lc-body mjx-container[display='true'] {
+  font-size: 120% !important;
+  margin-top: 0.1em !important;
+}
+.lc-extra mjx-container[display='true'] {
+  font-size: 92% !important;
+}
+
+/* ---------- Diagram: the drawing fills the frame the front left empty ---------- */
+
+.lc-fig {
+  color: var(--label);
+}
+.lc-fig img,
+.lc-fig svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.role-diagram .lc-a {
+  margin: 0 -8px;
+  padding: 0;
+}
+.role-diagram .lc-a::after {
+  content: none;
+}
+.role-diagram .lc-fig {
+  padding: 6px;
+}
+.role-diagram .lc-body {
+  position: relative;
+  padding: 13px var(--trail) 13px var(--inset);
+}
+.role-diagram .lc-body::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  background: var(--accent);
+  -webkit-mask: var(--check) center / contain no-repeat;
+  mask: var(--check) center / contain no-repeat;
+}
+.lc-clz .lc-fig {
+  margin-top: 16px;
+  padding: 6px;
+  border-radius: var(--r);
+  background: var(--group);
+}
+.dg {
+  font-family: var(--sans);
+  font-weight: 600;
+}
+.dg .dg-cell {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+}
+.dg .dg-key {
+  fill: var(--select);
+  stroke: var(--accent);
+  stroke-opacity: 1;
+}
+.dg text {
+  fill: currentColor;
+}
+.dg .dg-axis {
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  fill: var(--label-2);
+}
+.nightMode .lc-fig img,
+.night_mode .lc-fig img {
+  filter: brightness(0.9);
+}
+
+/* ---------- Code ---------- */
+
+.lc-code {
+  margin: 16px 0 0;
+  padding: 13px var(--inset);
+  overflow-x: auto;
+  tab-size: 4;
+}
+.lc-code code {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--label);
+  background: none;
+  padding: 0;
+}
+.lc-back .lc-code {
+  margin-top: 12px;
+}
+
+/* ---------- Cloze: the gap is an empty field, the filled gap is the answer ---------- */
+
+.lc-front .cloze {
+  display: inline-block;
+  min-width: 6em;
+  height: 1.1em;
+  padding: 0 0.4em;
+  border: 1px solid var(--field-line);
+  border-radius: 6px;
+  background: var(--group);
+  color: transparent;
+  line-height: 1;
+  vertical-align: -0.16em;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.lc-back .cloze {
+  padding: 0.02em 0.22em;
+  border-radius: 6px;
+  background: var(--select);
+  color: var(--accent);
+  font-weight: 700;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* A list with one hole: the list is a grouped list, the asked row is the field. */
+.role-cloze-list .lc-text ul {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.role-cloze-list .lc-text li {
+  position: relative;
+  min-height: 48px;
+  padding: 13px var(--trail) 13px var(--inset);
+}
+.lc-front.role-cloze-list .cloze {
+  display: block;
+  width: 72%;
+  min-width: 0;
+  height: 23px;
+  vertical-align: 0;
+}
+.lc-back.role-cloze-list .cloze {
+  background: none;
+  padding: 0;
+  font-weight: 600;
+}
+
+/* ---------- After the answer ---------- */
+
+/* Extra reads as the group's footer. */
+.lc-extra {
+  margin: 8px 0 0;
+  padding: 0 var(--inset);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--label-2);
+}
+
+/* The slide print: a row with thumbnail, source and excerpt, and a disclosure chevron. */
+.lc-plate {
+  margin-top: 28px;
+}
+div.lc-plate {
+  padding: 12px var(--inset);
+}
+.lc-plate summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 40px 12px var(--inset);
+  cursor: pointer;
+  list-style: none;
+}
+.lc-plate summary::-webkit-details-marker {
+  display: none;
+}
+.lc-plate summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+  border-radius: var(--r);
+}
+.lc-thumb {
+  flex: none;
+  width: 72px;
+}
+.lc-thumb img,
+.lc-slide img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px var(--sep);
+  background: #fff;
+}
+.lc-cite {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lc-src {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--label);
+}
+.lc-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--label-2);
+}
+.lc-toggle {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 9px;
+  height: 15px;
+  margin-top: -7.5px;
+  font-size: 0;
+  background: var(--label-2);
+  -webkit-mask: var(--chevron) center / contain no-repeat;
+  mask: var(--chevron) center / contain no-repeat;
+  transition: transform 0.2s ease;
+}
+.lc-toggle::before {
+  content: 'Show slide';
+}
+.lc-plate[open] .lc-toggle {
+  transform: rotate(90deg);
+}
+.lc-plate[open] .lc-toggle::before {
+  content: 'Hide slide';
+}
+.lc-plate[open] .lc-thumb {
+  display: none;
+}
+.lc-plate[open] .lc-excerpt {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+.lc-slide {
+  padding: 0 var(--inset) var(--inset);
+}
+.nightMode .lc-plate img,
+.night_mode .lc-plate img {
+  filter: brightness(0.88);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-toggle {
+    transition: none;
+  }
+}
+
+/* ---------- Wider screens ---------- */
+
+@media (min-width: 520px) {
+  .lc {
+    --gutter: 28px;
+    padding-top: 28px;
+    padding-bottom: 40px;
+  }
+  .lc-q,
+  .lc-text {
+    font-size: 24px;
+    margin-top: 26px;
+  }
+  .lc-back .lc-q {
+    font-size: 18px;
+  }
+  .role-diagram .lc-shape,
+  .role-diagram .lc-a {
+    margin: 0;
+  }
+  .role-diagram .lc-shape > span {
+    aspect-ratio: 2 / 1;
+  }
+  .lc-fig svg {
+    max-width: 460px;
+    margin: 0 auto;
+  }
+  .lc-thumb {
+    width: 104px;
+  }
+}
