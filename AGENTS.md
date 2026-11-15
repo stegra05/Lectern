@@ -31,7 +31,8 @@ pnpm --filter @lectern/engine cli estimate <course folder>
 
 - One concern per pull request, under 1,000 changed lines (whole-file deletions and renames
   aside). Larger work is a stack: `gh stack init --base v3 <branch>`, `gh stack add <branch>`
-  per layer, `gh stack rebase` when the base moves, `gh stack submit` to open the PRs.
+  per layer, `gh stack rebase` when the base moves, `gh stack submit` to open the PRs. The
+  `gh-stack` skill in `.claude/skills/` has the non-interactive flags and recovery steps.
 - Commit messages: `type(scope): what changed`, types `feat fix docs build ci chore test`,
   scopes `engine app design`.
 - Never push, open or merge a pull request, or spend money without Steffen's yes in his words.
