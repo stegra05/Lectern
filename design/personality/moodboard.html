@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personality references</title>
+<style>
+  :root { --bg:#f4f4f6; --card:#ffffff; --ink:#1d1d1f; --ink2:#5a5a60; --line:rgba(0,0,0,.1); --accent:#0064d2; --tag:#eef0f4; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1c1c1e; --card:#2c2c2e; --ink:#f2f2f7; --ink2:#aeaeb2; --line:rgba(255,255,255,.12); --accent:#6cb0ff; --tag:#3a3a3c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:32px 20px 64px; }
+  h1 { font-size:26px; line-height:1.2; letter-spacing:-0.01em; margin:0 0 6px; }
+  .lead { color:var(--ink2); max-width:70ch; margin:0 0 28px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap:20px; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
+  .shot { background:var(--tag); display:flex; align-items:center; justify-content:center; min-height:200px; max-height:360px; overflow:hidden; }
+  .shot img { display:block; width:100%; height:100%; max-height:360px; object-fit:contain; }
+  .shot.two { display:grid; grid-template-columns:1fr 1fr; gap:1px; }
+  .body { padding:14px 16px 16px; display:flex; flex-direction:column; gap:8px; }
+  .head { display:flex; align-items:baseline; gap:10px; }
+  .letter { font:600 12px/1 ui-monospace, 'SF Mono', Menlo, monospace; background:var(--tag); border-radius:6px; padding:5px 7px; }
+  h2 { font-size:17px; margin:0; }
+  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:14px; }
+  dt { color:var(--ink2); white-space:nowrap; }
+  dd { margin:0; }
+  a { color:var(--accent); font-size:13px; }
+  .note { color:var(--ink2); font-size:13px; margin:28px 0 0; max-width:75ch; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Personality in small details</h1>
+  <p class="lead">Ten apps to react to. Each tile says what to look at and what Lectern could take from it. Answer with letters, for example "A and B, not G". The images load from the makers' own sites.</p>
+
+  <div class="grid">
+
+    <article>
+      <div class="shot"><img src="https://culturedcode.com/things/2024-01-20/images/meettheallnewthings2-io75.jpg" alt="Things 3 interface" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">A</span><h2>Things</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>Calm lists, generous space, one blue accent. Finishing a task feels good without any noise.</dd>
+          <dt>For Lectern</dt><dd>The quiet baseline: a native feel where craft shows in spacing and motion.</dd>
+        </dl>
+        <a href="https://culturedcode.com/things/">culturedcode.com/things</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot two">
+        <img src="https://framerusercontent.com/images/y9W9YGgxy5FXNg6RqqZ6gYk.png" alt="Flighty phone screen" loading="lazy">
+        <img src="https://framerusercontent.com/images/C0MWhv5yej3iCgBztmyHMad8Tg.webp" alt="Flighty wide image" loading="lazy">
+      </div>
+      <div class="body">
+        <div class="head"><span class="letter">B</span><h2>Flighty</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>A journey drawn as a path, with the details of a boarding pass and a departure board. The images here show little of that, so follow the link.</dd>
+          <dt>For Lectern</dt><dd>The course track as a journey: stops, progress along the line, arrival "In Anki".</dd>
+        </dl>
+        <a href="https://flighty.app/">flighty.app</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot two">
+        <img src="https://storage.ghost.io/c/7a/33/7a33d0f4-927d-4fe8-a6bf-96131b5e76d4/content/images/2022/05/NEWV2Blog-Tree-Homescreen--2-.png" alt="Duolingo tree and learning path" loading="lazy">
+        <img src="https://storage.ghost.io/c/7a/33/7a33d0f4-927d-4fe8-a6bf-96131b5e76d4/content/images/2024/06/cover_Introducing-the-new-Duolingo-learning-path.png" alt="Duolingo learning path" loading="lazy">
+      </div>
+      <div class="body">
+        <div class="head"><span class="letter">C</span><h2>Duolingo, the learning path</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>A winding path of coloured stops, one per step, with chunky pressable shapes.</dd>
+          <dt>For Lectern</dt><dd>The closest relative of the winding track. Also the loudest: a reference for how far play can go.</dd>
+        </dl>
+        <a href="https://blog.duolingo.com/new-duolingo-home-screen-design/">blog.duolingo.com</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot"><img src="https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/6600ca96-e49b-4fd9-c03a-7979faddad00/f=auto,fit=scale-down,metadata=none,width=2560" alt="Linear interface" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">D</span><h2>Linear</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>Precision and speed. Almost no decoration, personality through exactness. The image here is only a backdrop from their site, so follow the link.</dd>
+          <dt>For Lectern</dt><dd>The opposite pole to Duolingo: an instrument, not a companion.</dd>
+        </dl>
+        <a href="https://linear.app/">linear.app</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot"><img src="https://images.ctfassets.net/spoqsaf9291f/3kVtQWll6jUqQepQ0kaYlz/382b34f23ecb349129239f0b649aba8c/web-homepage-hero-1920x1200_final.jpg" alt="Notion homepage hero" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">E</span><h2>Notion</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>A plain, typographic tool whose personality sits in hand-drawn illustrations and friendly empty states. The image shows the plain side; the illustrations are on their site.</dd>
+          <dt>For Lectern</dt><dd>Personality kept to the edges: empty states, first run, the moment cards are sent.</dd>
+        </dl>
+        <a href="https://www.notion.com/">notion.com</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot"><img src="https://cdn.prod.website-files.com/5f3f4593fbaf55b6554787f3/602ca8d4b5af294478b013bb_widgets-p-500.webp" alt="Not Boring widgets" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">F</span><h2>(Not Boring) apps</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>Bold colour and chunky 3D objects that make a plain utility feel like a game.</dd>
+          <dt>For Lectern</dt><dd>Play as the whole identity. Probably too much, but useful as a limit.</dd>
+        </dl>
+        <a href="https://www.andyworks.co/">andyworks.co</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot"><img src="https://www.amie.so/images/meta.png" alt="Amie" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">G</span><h2>Amie</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>Playful colour and small animations inside a calendar that still feels native. The image here is only their brand card, so follow the link.</dd>
+          <dt>For Lectern</dt><dd>Native controls with colourful content, which is the mix you described.</dd>
+        </dl>
+        <a href="https://amie.so/">amie.so</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot"><img src="https://family.co/preview.png" alt="Family" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">H</span><h2>Family</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>Tiny moments of delight: numbers that roll, buttons that respond, confirmations that feel earned. Brand card only, so follow the link.</dd>
+          <dt>For Lectern</dt><dd>Details on counts and confirmations, such as the 412 ticking up during the run.</dd>
+        </dl>
+        <a href="https://family.co/">family.co</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot"><img src="https://www.craft.do/craft_og.png" alt="Craft" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">I</span><h2>Craft</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>Warmth and polish in a native document app: soft colour, careful type. Brand card only, so follow the link.</dd>
+          <dt>For Lectern</dt><dd>A warmer take on native than Things.</dd>
+        </dl>
+        <a href="https://www.craft.do/">craft.do</a>
+      </div>
+    </article>
+
+    <article>
+      <div class="shot"><img src="https://arc.net/farewell/og.png" alt="Arc" loading="lazy"></div>
+      <div class="body">
+        <div class="head"><span class="letter">J</span><h2>Arc</h2></div>
+        <dl>
+          <dt>Look at</dt><dd>A colour per space that follows you around, and a playful first run. Brand card only. Arc is being retired in December 2026, so it is a dated reference.</dd>
+          <dt>For Lectern</dt><dd>The idea behind lecture colours: a colour that means a place.</dd>
+        </dl>
+        <a href="https://arc.net/">arc.net</a>
+      </div>
+    </article>
+
+  </div>
+
+  <p class="note">Things, Duolingo and (Not Boring) show their interface well. Flighty, Linear and Notion show little of what makes them special, and G to J only have the maker's brand card, because those sites expose no interface image that can be shown here. For those the link is the real reference.</p>
+</main>
+</body>
+</html>
