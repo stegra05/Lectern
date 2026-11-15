@@ -96,7 +96,7 @@ export function groupPrompt(
     ...facts.map((fact, i) => `${factId(i)} (slide ${fact.slide}) ${fact.concept}: ${fact.text}`),
     '',
     'Sort them into a map of the lecture:',
-    `- title: the name of the lecture, at most ${TITLE_CHARS} characters, without its number.`,
+    `- title: what this lecture is about, at most ${TITLE_CHARS} characters, without its number. Not the name of the course, which every lecture shares.`,
     '- topics: the parts of the lecture in order, each with its concepts.',
     '- A concept is one thing a student must know: a term, a model, a principle, a case, a formula.',
     '  Name it as the slides do, in at most 6 words. Facts the reading named differently for the',
