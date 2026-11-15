@@ -71,6 +71,7 @@ ipcMain.handle('engine:run', async (event, id: number, command: unknown) => {
     key: fake ? null : await settings.key(),
     fake,
     fakeDelayMs,
+    notesFile: join(app.getPath('userData'), 'anki-notes.json'),
   })
   let sent = 0
   await engine.run(command, (engineEvent) => {
