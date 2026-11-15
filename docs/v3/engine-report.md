@@ -252,9 +252,8 @@ The 30 percent is the 36 percent of the earlier measurement under a stricter jud
   (`slides.ts`): lines that at least half the slides of a deck repeat, compared without
   digits, are removed before anything else reads the text. 99 slides now go out as pictures,
   and the lecture text every call reads is 23 percent shorter. The estimate for the full run
-  rises from 25 to 51 cents. Not yet run with a model: whether the map turns a figure into its
-  facts is the next thing to measure. On Grundlagen Datenbanken the rule moves 249 to 284 of
-  708 slides.
+  rises from 25 to 51 cents. What it did to coverage is in the next section. On Grundlagen
+  Datenbanken the rule moves 249 to 284 of 708 slides.
 - **What slides alone can reach.** 52 percent of the reference notes are in the slide text, 68
   percent with the pictures. The run has 58 percent of what the text states. The last third
   needs the cases, the videos, the papers and the past exams.
@@ -272,6 +271,77 @@ scripts and labels of the 2026-11-14 measurement are kept beside them in
 in `eval-results/v3-courses/grundlagen-datenbanken`. Estimate at goal top: 1,358 cards, 1.78
 dollars. Its deck in AnkiTUM is about 140 cards by another student, several facts per card, for
 9 of 21 chapters: a weak reference. The 8 past exams would be a better one.
+
+## Three steps on coverage
+
+Same session, 2026-11-15, on Steffen's go ("You may do all of what you suggest. Deck should
+stay near my size"). Three changes, each run in full on the 11 Entrepreneurship decks
+(`gpt-6-luna`, goal top grade, concept preset) and judged the same way: 16 Haiku judges, all
+636 reference notes, strict.
+
+1. **The footer rule** (previous section): 99 slides go to the model as pictures instead of 6.
+2. **A second reading.** After the map, the model reads the lecture once more with its own map
+   and returns the facts the map lacks (`askMore`, `withMore`).
+3. **The worth of a fact and a goal in cards.** The decision model scores each fact alone on
+   four levels (not examinable, detail, examinable, core). The goal is a number of cards per
+   slide (pass 0.5, good 1, top grade 1.8, which is the reference deck: 636 notes on 356
+   slides), and the facts worth most get them. The `core` flag of a concept and the rule "the
+   first N facts of each concept" are gone.
+
+| Run | Facts in the map | Cards | Cost | Reference notes with a card on the same fact |
+|---|---|---|---|---|
+| Concept draft, 2026-11-14 | 633 | 554 | 18.6 cents | 192 (30%) |
+| 1: footer rule | 670 | 588 | 31.0 cents | 206 (32%) |
+| 1 to 3, cards shared out per lecture | 849 | 573 | 36.9 cents | 214 (34%) |
+| The same facts, cards shared out over the course (counted, not run) | 849 | 641 | | 234 (37%) |
+| The same facts, nothing cut (counted, not run) | 849 | 849 | | 253 (40%) |
+
+The two last rows come from one more judge pass: the 422 notes the third run missed, against
+the 265 facts its plan had cut. 39 of them were there.
+
+- **Why the score.** Before building it I tested it on the concept draft run: 633 facts scored
+  alone (1.4 cents), joined to the cards and their judged matches. At 372 cards the facts with
+  the highest score keep 164 of the 192 covered notes, the first 372 in the order of the map
+  keep 133, and 372 at random 129. The order in which the model lists facts carries no
+  information about what the exam asks. The score does: a kept fact matched a reference note
+  2.3 times as often as a cut one (37 against 16 percent).
+- **The figures are read now, and it shows in the cards.** Greiner had one card; it now has the
+  five phases, the crises in order and which crisis ends which phase. "Organizing and teams"
+  went from 14 to 25 percent, "Impact and corporate entrepreneurship" from 21 to 47.
+- **The budget per lecture was a mistake of mine, found by the measurement.** Cards per slide,
+  counted lecture by lecture, gave lecture 4 (96 slides, many of them steps of one animation)
+  173 cards for 140 facts and lecture 9 (24 slides, Greiner) 44 cards for 107 facts. The deck
+  came out at 573 cards, below the size asked for, and the cuts fell where the reference deck
+  is densest. The plan now shares the cards out over all lectures of a build (`plan.ts`). On
+  the judged facts that is 234 notes at 641 cards. It has not been run.
+- **Coverage follows the exam a little more.** Notes asked 9 times or more: 38, 38, 42 percent.
+  Asked once or never: 27, 30, 27.
+- **How much to trust two points.** Between the concept draft and the third run, 80 notes were
+  gained and 58 lost. The map differs from run to run and the judge is not perfectly steady, so
+  one run against another is good to about three points. The three steps point the same way;
+  none of them is proven alone. The comparison at equal facts (the two counted rows) does not
+  have this noise.
+- **Cost and time.** The third run cost 36.9 cents against an estimate of 55, and took 41
+  minutes while another run shared the account: the pictures make every call larger, and 849
+  facts each get a request for their worth. Spent on 2026-11-15 by this session: 69 cents on
+  Entrepreneurship, plus the Grundlagen Datenbanken run below.
+
+**What is still missing, on the third run** (422 notes): 217 are not on the slides, 65 are only
+in a picture, 140 are stated in the slide text. Of those 140, 38 were in a fact the plan cut
+and 102 are in no fact at all. Read through, many of the 102 are the plain definition of a
+concept that has cards from other angles ("What is corporate entrepreneurship?", "Teece: what
+are complementary assets?"), or one more item of a list the map took in part.
+
+**Next, in order of what the numbers say:**
+
+1. Extraction is still the larger gap inside the slides: 40 percent of the notes are in the
+   map's facts, 56 percent are in the slide text, 68 with the pictures. Candidates: a rule in
+   code that every concept carries a fact saying what it is, and a map per section of a lecture
+   instead of one call for all of it.
+2. A third of the reference deck is not on the slides. Only other material reaches it: the
+   cases, the videos, the past exams.
+3. Two or three runs per variant, or judging at the level of facts, before a difference of two
+   points is believed.
 
 ## What was built
 
