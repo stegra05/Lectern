@@ -400,7 +400,9 @@ describe('building a course of two lectures, offline', () => {
   })
 
   it('asks every closed question through the decisions port, batched per shared input', () => {
-    const shape = decider.requests.map((r) => [r.context.split('\n')[0], r.questions.length])
+    const shape = decider.requests
+      .filter((r) => !r.context.startsWith('A flashcard written'))
+      .map((r) => [r.context.split('\n')[0], r.questions.length])
     expect(shape).toEqual([
       [expect.stringContaining('Entrepreneurship') as string, 1],
       ['Lecture file: 01 Risk.pdf', 5],
@@ -470,7 +472,7 @@ describe('building a course of two lectures, offline', () => {
       cards: 7,
       dropped: 2,
       calls: 14,
-      decisions: 26,
+      decisions: 34,
       inputTokens: expect.any(Number) as number,
       cachedInputTokens: 0,
       outputTokens: expect.any(Number) as number,
@@ -687,6 +689,71 @@ describe('calibrated checks act instead of flagging', () => {
       'looks like 02-bird-in-hand-definition-1',
     ])
     expect(events.at(-1)).toMatchObject({ cards: 9, dropped: 3, flagged: 2 })
+  })
+})
+
+describe('the card check and the rules on what a card says', () => {
+  let events: Event[]
+
+  beforeAll(async () => {
+    await courseOf('04 Pivot.pdf')
+    events = await run({ type: 'build', course: 'course' })
+  })
+
+  it('asks about each card with that card as the whole input, never the lecture', () => {
+    const asked = decider.requests.filter((r) => r.context.startsWith('A flashcard written'))
+    expect(asked.every((r) => r.questions.length === 1 && r.images.length === 0)).toBe(true)
+    expect(asked[0]!.context).toBe(
+      'A flashcard written from the slides of a university course.\n' +
+        'Question: When does the exam take place?\nAnswer: On 11 February.',
+    )
+  })
+
+  it('drops a card about the organisation of the course at once, without a repair', async () => {
+    expect(calls('repair').filter(about('The exam takes place on 11 February.'))).toHaveLength(0)
+    expect((await json<Lecture>('lectures/04/lecture.json')).dropped).toContainEqual({
+      concept: 'exam',
+      role: 'definition',
+      front: 'When does the exam take place?',
+      problems: ['is about the organisation of the course, not its subject'],
+    })
+  })
+
+  it('sends a question that leans on the slides back to be reworded', async () => {
+    const repair = calls('repair').find(
+      about('A pivot changes the strategy and keeps the vision.'),
+    )!
+    expect(repair.prompt).toContain(
+      '- the question refers to the slides or the session; ask about the subject itself',
+    )
+    expect((await card('04', '04-pivot-definition-1')).fields.Front).toBe(
+      'Lean startup: what does a pivot change?',
+    )
+  })
+
+  it('drops a card whose answer only turns the question around, after two repairs', async () => {
+    expect(
+      calls('repair').filter(about('A venture perseveres when its numbers improve.')),
+    ).toHaveLength(2)
+    expect((await json<Lecture>('lectures/04/lecture.json')).dropped).toContainEqual({
+      concept: 'persevere',
+      role: 'definition',
+      front: 'When does a venture persevere?',
+      problems: ['the answer only repeats the question; say what the slide adds'],
+    })
+    expect(events.at(-1)).toMatchObject({ cards: 1, dropped: 2, flagged: 0 })
+  })
+
+  it('only flags the card when the check counts as unmeasured', async () => {
+    await courseOf('04 Pivot.pdf')
+    await run(
+      { type: 'build', course: 'course' },
+      { calibrations: { organisation: { calibrated: false, threshold: 0.2 } } },
+    )
+    expect((await cards('04')).map((c) => [c.id, c.flags])).toEqual([
+      ['04-exam-definition-1', ['may be about the organisation of the course']],
+      ['04-pivot-definition-1', undefined],
+    ])
   })
 })
 

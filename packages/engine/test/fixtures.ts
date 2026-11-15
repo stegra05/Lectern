@@ -60,6 +60,15 @@ export const SLIDES: Record<string, string[][]> = {
       'Repeat the loop quickly and cheaply',
     ],
   ],
+  '04 Pivot.pdf': [
+    ['Pivot or persevere', 'Lecture 4'],
+    ['Organisation', 'The exam takes place on 11 February', 'Bring a pen'],
+    [
+      'Pivot',
+      'A pivot changes the strategy and keeps the vision',
+      'Persevere when the numbers improve',
+    ],
+  ],
 }
 
 const F = {
@@ -76,6 +85,9 @@ const F = {
   loop: 'The loop runs build, then measure, then learn.',
   mvp: 'The build step produces a minimum viable product.',
   early: 'Lean startup lowers risk by testing early.',
+  examDate: 'The exam takes place on 11 February.',
+  pivotIs: 'A pivot changes the strategy and keeps the vision.',
+  persevere: 'A venture perseveres when its numbers improve.',
 }
 
 const fact = (text: string, slide: number, items = 0) => ({ text, slide, items })
@@ -122,6 +134,19 @@ const MAPS: Record<string, unknown> = {
         concepts: [
           { name: 'build measure learn', core: true, facts: [fact(F.loop, 2), fact(F.mvp, 2)] },
           { name: 'entrepreneurial risk', core: false, facts: [fact(F.early, 2)] },
+        ],
+      },
+    ],
+  },
+  '04 Pivot.pdf': {
+    title: 'Pivot or persevere',
+    topics: [
+      {
+        name: 'Deciding',
+        concepts: [
+          { name: 'exam', core: true, facts: [fact(F.examDate, 2)] },
+          { name: 'pivot', core: true, facts: [fact(F.pivotIs, 3)] },
+          { name: 'persevere', core: true, facts: [fact(F.persevere, 3)] },
         ],
       },
     ],
@@ -210,6 +235,24 @@ const FILLS: Record<string, unknown> = {
     answer: 'By ==trying ideas out== before spending much.',
     extra: '',
   },
+  // About the organisation of the course. Dropped by the card check, never repaired.
+  [F.examDate]: {
+    question: 'When does the exam take place?',
+    answer: 'On ==11 February==.',
+    extra: '',
+  },
+  // Mistake: the question leans on the slide. Sent back by the rule and reworded.
+  [F.pivotIs]: {
+    question: 'What does the slide say about a pivot?',
+    answer: 'It changes the ==strategy== and keeps the vision.',
+    extra: '',
+  },
+  // Mistake: the answer only turns the question around, in every attempt. Dropped.
+  [F.persevere]: {
+    question: 'When does a venture persevere?',
+    answer: 'A venture ==perseveres==.',
+    extra: '',
+  },
 }
 
 const REPAIRS: Record<string, unknown> = {
@@ -225,6 +268,12 @@ const REPAIRS: Record<string, unknown> = {
     answer: 'By building a ==minimum viable product== and measuring how customers react.',
     extra: '',
   },
+  [F.pivotIs]: {
+    question: 'Lean startup: what does a pivot change?',
+    answer: 'The ==strategy==, while the vision stays.',
+    extra: '',
+  },
+  [F.persevere]: FILLS[F.persevere],
 }
 
 const SPLITS: Record<string, unknown> = {
@@ -266,6 +315,11 @@ export function decisions(question: Question, request: DecisionRequest): Answer 
     }
     const told = /^What kind of knowledge is this fact: "(.+)"$/.exec(question.ask)![1]!
     return { type: 'choice', choice: KINDS[told] ?? 'definition', confidence: 0.8 }
+  }
+  // The card check sees one card as its whole input. One card of lecture 4 trips it.
+  if (question.statement.startsWith('This flashcard is about the organisation of the course')) {
+    const exam = request.context.includes('Question: When does the exam take place?')
+    return { type: 'predicate', probability: exam ? 0.97 : 0.02 }
   }
   const doubts = [
     // Does the concept belong, are two concepts the same, does the slide support the card.

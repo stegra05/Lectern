@@ -4,7 +4,7 @@
  * An empty list means the draft may become a card.
  */
 
-import { CLOZE, contentWords, words } from './words.ts'
+import { CLOZE, contentWords, wordingKey, words } from './words.ts'
 import {
   DIAGRAM_TYPES,
   isRole,
@@ -170,6 +170,104 @@ function answer(spec: RoleSpec, answers: string[], labels: string[]): string[] {
     problems.push(`a label has more than ${LIMITS.slotWords} words`)
   }
   return problems
+}
+
+/**
+ * Words that point at the teaching material instead of the subject, in English and German.
+ * On the real runs this free rule found more such questions than the decision model did, with
+ * a fifth of its false alarms.
+ */
+const MATERIAL =
+  /\b(?:slides?|folien?|wrap-up)\b|\b(?:the|this|last|previous|next|today[’']?s)\s+(?:lecture|session|class)\b|\blecture[’']s\b|\bin class\b|\btoday[’']?s\s+(?:two\s+)?topics\b|\b(?:der|dieser|letzten?|heutigen?)\s+(?:vorlesung|sitzung)\b/i
+
+/**
+ * A question that only makes sense with the slides at hand: "What does slide 16 say", "Last
+ * session: ...", "Today's topics:". A drawing is exempt: its back shows the slide.
+ */
+export function leansOnSlides(draft: Draft): string[] {
+  if (draft.role === 'diagram' || !MATERIAL.test(draft.front)) return []
+  return [
+    'the question refers to the slides or the session; ask about the subject itself, so that the card stands without the slides',
+  ]
+}
+
+/** A side of a contrast that stands for "the slide does not say", in English and German. */
+const NO_VALUE =
+  /\b(?:not|nicht)\s+(?:stated|specified|given|mentioned|named|applicable|angegeben|genannt|erwähnt)\b|^(?:none|n\/a|unknown|keine angabe|unbekannt)\b|\bno specific\b/i
+
+/**
+ * What a text says, for telling whether an answer adds anything: the first five letters of
+ * every content word, so that "buying" meets "buy" forms, and every number.
+ */
+function stems(text: string): string[] {
+  const plain = text.replace(/==/g, '')
+  return [
+    ...contentWords(plain).map((word) => word.slice(0, 5)),
+    ...(plain.match(/\p{N}+/gu) ?? []),
+  ]
+}
+
+/**
+ * A card can keep every limit and still say nothing: the answer stands in the question, a
+ * sentence only turns the question around, a side of a contrast repeats its own label. Such
+ * cards passed the gate on the real runs of 2026-11-14. The build asks this of what the model
+ * wrote, after `validateDraft`. A student's own wording is not held to it.
+ */
+export function saysNothing(draft: Draft): string[] {
+  if (!isRole(draft.role)) return []
+  const spec = ROLE_SPECS[draft.role]
+  const front = draft.front.trim()
+  const answers = draft.answers.map((a) => a.trim())
+  const labels = draft.labels.map((l) => l.trim())
+  const asked = new Set(stems(front))
+  const fresh = (text: string, known: Set<string>) => stems(text).filter((s) => !known.has(s))
+
+  if (spec.back === 'term') {
+    const term = wordingKey(answers[0] ?? '')
+    if (term !== '' && ` ${wordingKey(front)} `.includes(` ${term} `)) {
+      return [`the question already contains its answer "${answers[0]}"; ask without naming it`]
+    }
+    return []
+  }
+  if (draft.role === 'contrast') {
+    const problems: string[] = []
+    if (wordingKey(answers[0] ?? '') === wordingKey(answers[1] ?? '')) {
+      problems.push('both sides have the same value; a contrast needs two different values')
+    }
+    const given = new Set([...asked, ...stems(labels.join(' '))])
+    answers.forEach((value, i) => {
+      const label = labels[i] ?? ''
+      const own = new Set(stems(label))
+      if (NO_VALUE.test(value.replace(/==/g, ''))) {
+        problems.push(`the side "${label}" has no value; a contrast needs what holds for each side`)
+      } else if (stems(value).some((s) => own.has(s)) && fresh(value, given).length === 0) {
+        // A value may answer in the words of the question. Repeating its own label says nothing.
+        problems.push(
+          `the value of "${label}" only repeats its label; say what holds for that side`,
+        )
+      }
+    })
+    return problems
+  }
+  if (draft.role === 'definition' || draft.role === 'why') {
+    // The mark shows what to recall. A marked term the question does not name is an answer.
+    // Short words have no stems, so a mark made of them is compared as a phrase.
+    const marked = /==([^=]+)==/.exec(answers[0] ?? '')?.[1]
+    const named = (text: string) =>
+      stems(text).length > 0
+        ? fresh(text, asked).length === 0
+        : ` ${wordingKey(front)} `.includes(` ${wordingKey(text)} `)
+    if (marked && !named(marked)) return []
+    if (fresh(answers.join(' '), asked).length < 2) {
+      return ['the answer only repeats the question; say what the slide adds']
+    }
+    if (marked) {
+      return [
+        `"${marked}" is marked but the question already names it; mark the words that answer the question`,
+      ]
+    }
+  }
+  return []
 }
 
 function clozeSentence(text: string): string[] {

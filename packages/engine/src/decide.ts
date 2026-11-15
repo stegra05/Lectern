@@ -26,7 +26,8 @@ export const FACT_KINDS = [
 ] as const
 export type FactKind = (typeof FACT_KINDS)[number]
 
-export type CheckName = 'slideKind' | 'conceptBelongs' | 'sameConcept' | 'supported' | 'sameCard'
+export type CheckName =
+  'slideKind' | 'conceptBelongs' | 'sameConcept' | 'supported' | 'sameCard' | 'organisation'
 
 export interface Calibration {
   /** False until the threshold has been set on labelled data. */
@@ -39,13 +40,29 @@ export type Calibrations = Record<CheckName, Calibration>
 
 const unmeasured: Calibration = { calibrated: false, threshold: 0.5 }
 
-/** Nothing has been calibrated yet, so every check only flags. */
+/**
+ * A check that has not been measured on labelled data only flags. One has been: on 2026-11-14
+ * the organisation check ran over the 1,150 cards of two full Entrepreneurship runs, each card
+ * graded by a second model. Its answers fall into two heaps. From 0.2 on it named 37 cards:
+ * 32 of the 56 about course organisation, 3 about the session, 1 other defect and 1 sound
+ * card. None of the 50 cards Steffen had judged worth keeping was among them.
+ */
 export const CALIBRATIONS: Calibrations = {
   slideKind: unmeasured,
   conceptBelongs: unmeasured,
   sameConcept: unmeasured,
   supported: unmeasured,
   sameCard: unmeasured,
+  organisation: { calibrated: true, threshold: 0.2 },
+}
+
+/**
+ * One card as the whole input of a decision request. The decision model judges statements
+ * about its input: asked about a card while a whole lecture was the input, it said yes to
+ * nearly everything. So the card check sees the card and nothing else.
+ */
+export function cardInput(question: string, answer: string): string {
+  return `A flashcard written from the slides of a university course.\nQuestion: ${question}\nAnswer: ${answer}`
 }
 
 export const ask = {
@@ -82,6 +99,12 @@ export const ask = {
   supported: (slide: number, question: string, answer: string): Question => ({
     type: 'predicate',
     statement: `Slide ${slide} supports this flashcard. Question: ${question} Answer: ${answer}`,
+  }),
+  organisation: (): Question => ({
+    type: 'predicate',
+    statement:
+      'This flashcard is about the organisation of the course: the lecturer, dates, grading, ' +
+      'exam rules, assignments, reading lists, guest visits or instructions for a class exercise.',
   }),
   sameCard: (a: string, b: string): Question => ({
     type: 'predicate',

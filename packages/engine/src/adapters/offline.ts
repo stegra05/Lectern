@@ -42,8 +42,13 @@ function fill(request: ModelRequest): Record<string, unknown> {
   const keyFrom = Math.max(0, words.length - 2)
   const fields = Object.keys(request.schema.properties ?? {})
   if (fields.includes('answer')) {
+    // Quoting the start of a fact of a few words would give the whole answer away.
+    const asks =
+      words.length > 4
+        ? `how does the statement beginning "${take(fact, 3)}" go on?`
+        : `which point starts with the letter "${fact.charAt(0).toUpperCase()}"?`
     return {
-      question: `${concept}: how does the statement beginning "${take(fact, 3)}" go on?`,
+      question: `${concept}: ${asks}`,
       answer: `${words.slice(0, keyFrom).join(' ')} ==${words.slice(keyFrom).join(' ')}==`.trim(),
       extra: '',
     }
@@ -81,11 +86,10 @@ export function offlineModel(delayMs = 0): ModelPort {
 
 function decide(question: Question): Answer {
   if (question.type === 'predicate') {
-    // Sure that concepts belong and slides support their cards, sure that no two things are the same.
-    return {
-      type: 'predicate',
-      probability: /are the same concept|test the same thing/.test(question.statement) ? 0.1 : 0.9,
-    }
+    // Sure that concepts belong and slides support their cards, sure that no two things are the
+    // same, and sure that no card is about the organisation of the course.
+    const no = /are the same concept|test the same thing|organisation of the course/
+    return { type: 'predicate', probability: no.test(question.statement) ? 0.1 : 0.9 }
   }
   const slide = /^What kind of slide is slide (\d+)\?/.exec(question.ask)?.[1]
   const choice = slide

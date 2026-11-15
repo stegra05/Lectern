@@ -87,7 +87,7 @@ export const ROLE_SPECS: Record<Role, RoleSpec> = {
     back: 'sentence',
     markRequired: true,
     markWhole: false,
-    use: 'What a term means. answers: one sentence, the key term wrapped as ==key term==.',
+    use: 'What a term means. answers: one sentence that gives the meaning and does not start with the term asked about. Wrap the words to recall as ==words==.',
   },
   reverse: {
     note: 'qa',

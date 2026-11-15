@@ -4,6 +4,8 @@ import {
   copiedRun,
   groundedByRule,
   isYesNo,
+  leansOnSlides,
+  saysNothing,
   tooLong,
   validateDiagram,
   validateDraft,
@@ -578,5 +580,151 @@ describe('the copy check', () => {
         slide,
       ),
     ).toBe(13)
+  })
+})
+
+describe('a card that keeps every limit and says nothing', () => {
+  const nothing = (over: Partial<Draft>) => saysNothing(draft(over))
+
+  it('is not a matter of the limits: the shared validator lets it through', () => {
+    const marked = {
+      front: 'What is venture capital?',
+      answers: ['==Venture capital== is a professionally managed pool of equity capital.'],
+    }
+    expect(problems(marked)).toEqual([])
+    expect(nothing(marked)).toHaveLength(1)
+  })
+
+  it('rejects a term the question already contains', () => {
+    const giveaway = {
+      role: 'case',
+      front: 'Kickstarter: for whom might it be a new financing source?',
+      answers: ['Kickstarter'],
+    }
+    expect(nothing(giveaway)).toEqual([
+      'the question already contains its answer "Kickstarter"; ask without naming it',
+    ])
+    // A word of the term in the question is fine; the whole term is not.
+    const fine = {
+      role: 'reverse',
+      front: 'Which growth strategy sells new products to current customers?',
+      answers: ['product development strategy'],
+    }
+    expect(nothing(fine)).toEqual([])
+  })
+
+  it('rejects a sentence that only turns the question around', () => {
+    const circular = {
+      front: 'What role does education play in an entrepreneur’s upbringing?',
+      answers: ['==Education== is important in the upbringing of an entrepreneur.'],
+    }
+    expect(nothing(circular)).toEqual([
+      'the answer only repeats the question; say what the slide adds',
+    ])
+    // One new word is an answer when it is the marked one. Numbers count as content.
+    expect(
+      nothing({
+        front: 'What can clustering lead to?',
+        answers: ['Clustering can lead to ==inequality==.'],
+      }),
+    ).toEqual([])
+    expect(
+      nothing({
+        role: 'why',
+        front: 'Why do most ventures fail within five years?',
+        answers: ['50 to 80 percent fail.'],
+      }),
+    ).toEqual([])
+  })
+
+  it('rejects a mark on the term the question names', () => {
+    const marked = {
+      front: 'What is venture capital?',
+      answers: ['==Venture capital== is a professionally managed pool of equity capital.'],
+    }
+    expect(nothing(marked)).toEqual([
+      '"Venture capital" is marked but the question already names it; mark the words that answer the question',
+    ])
+    expect(
+      nothing({
+        front: 'What is venture capital?',
+        answers: ['A ==professionally managed pool== of equity capital.'],
+      }),
+    ).toEqual([])
+    // A mark of short words has no stems and is compared as a phrase.
+    expect(
+      nothing({
+        front: 'Bird in hand: what does a founder start from?',
+        answers: ['From ==who you are==, what you know and whom you know.'],
+      }),
+    ).toEqual([])
+  })
+
+  it('rejects a contrast whose side says nothing', () => {
+    const contrast = { role: 'contrast', slide: 25, front: 'How do the furniture choices differ?' }
+    expect(
+      nothing({
+        ...contrast,
+        labels: ['Buying', 'Building'],
+        answers: ['Buying furniture', 'Building it'],
+      }),
+    ).toEqual([
+      'the value of "Buying" only repeats its label; say what holds for that side',
+      'the value of "Building" only repeats its label; say what holds for that side',
+    ])
+    expect(
+      nothing({
+        ...contrast,
+        front: 'Conceptual combination: how do outcomes differ when it is overdone?',
+        labels: ['Overdone', 'Not overdone'],
+        answers: ['some results are not useful', 'Not stated'],
+      }),
+    ).toEqual(['the side "Not overdone" has no value; a contrast needs what holds for each side'])
+    expect(
+      nothing({
+        ...contrast,
+        front: 'Which growth dimensions are not correlated?',
+        labels: ['Revenue growth', 'Profit growth'],
+        answers: ['not necessarily correlated', 'Not necessarily correlated'],
+      }),
+    ).toEqual(['both sides have the same value; a contrast needs two different values'])
+    // A value may answer in the words of the question, as long as it is not its own label.
+    expect(
+      nothing({
+        ...contrast,
+        front: 'Debt versus equity financing: how do collateral requirements differ?',
+        labels: ['Debt financing', 'Equity financing'],
+        answers: ['requires collateral', 'requires no collateral'],
+      }),
+    ).toEqual([])
+  })
+})
+
+describe('a question that leans on the slides', () => {
+  const leans = (front: string, role = 'definition') => leansOnSlides(draft({ front, role }))
+
+  it.each([
+    'What does slide 16 invite students to do?',
+    'What does the lecture prioritize first when generating ideas?',
+    'Last session: what aspect of entrepreneurial intentions was covered?',
+    'Today’s topics:',
+    'What does the wrap-up say about basic growth strategies?',
+    'Welche Begriffe nennt die Folie zur Relationenalgebra?',
+  ])('sends back: %s', (front) => {
+    expect(leans(front)).toEqual([
+      'the question refers to the slides or the session; ask about the subject itself, so that the card stands without the slides',
+    ])
+  })
+
+  it.each([
+    'Knight (1921): what is risk?',
+    'Which brainstorming session rule defers judgement?',
+    'HIGGS case: what was the start-up trying to find?',
+  ])('lets through: %s', (front) => {
+    expect(leans(front)).toEqual([])
+  })
+
+  it('exempts a drawing, whose back shows the slide', () => {
+    expect(leans('Draw the framework shown on the slide.', 'diagram')).toEqual([])
   })
 })

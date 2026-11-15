@@ -50,7 +50,12 @@ const extra = z
   .string()
   .describe(`Context that is not tested. At most ${LIMITS.extraWords} words, or empty.`)
 const sentence = (what: string) =>
-  z.string().describe(`${what} At most ${LIMITS.answerWords} words. Mark the key term as ==term==.`)
+  z
+    .string()
+    .describe(
+      `${what} At most ${LIMITS.answerWords} words. Mark the words that answer the question as ` +
+        '==words==, never a term the question names.',
+    )
 const term = z
   .string()
   .describe(`The term alone, at most ${LIMITS.termWords} words, as it appears mid-sentence.`)

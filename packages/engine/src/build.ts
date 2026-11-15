@@ -16,7 +16,15 @@ import { createAsk, type Meter } from './ask.ts'
 import { assemble, type CardFile } from './cards/assemble.ts'
 import { cardId } from './cards/id.ts'
 import { GOAL_PRESETS, type Draft, type Goal, type Role } from './cards/roles.ts'
-import { COPY_RUN, copiedRun, groundedByRule, tooLong, validateDraft } from './cards/validate.ts'
+import {
+  COPY_RUN,
+  copiedRun,
+  groundedByRule,
+  leansOnSlides,
+  saysNothing,
+  tooLong,
+  validateDraft,
+} from './cards/validate.ts'
 import { htmlToText, slideRange, two } from './cards/words.ts'
 import { findClashes, similarity } from './clash.ts'
 import { estimate, LOW_TEXT_CHARS } from './cost.ts'
@@ -39,6 +47,7 @@ import {
 } from './course.ts'
 import {
   ask,
+  cardInput,
   chosen,
   FACT_KINDS,
   probability,
@@ -66,6 +75,8 @@ const PARALLEL = 4
 const SAME_NAME = 0.5
 /** How much text of the course the profile question reads. */
 const PROFILE_CHARS = 6000
+/** Why a card about the lecturer, dates or grading is dropped. No wording repairs such a fact. */
+const ORGANISATION = 'is about the organisation of the course, not its subject'
 
 type Phase = 'read' | 'map' | 'write' | 'check'
 
@@ -423,7 +434,8 @@ export async function build(
   await phase('check', items.length, async () => {
     let pending = items
     for (let round = 0; pending.length > 0; round++) {
-      // The gate: hard limits, then the copy check, then the slide check.
+      // The gate: hard limits and the two rules on what a card says, then the copy check, the
+      // card check and the slide check.
       const failing: Item[] = []
       const passing: Item[] = []
       for (const item of pending) {
@@ -436,6 +448,11 @@ export async function build(
           slideText: (slide) => text[slide - 1]?.join('\n'),
           seenAsImage: pictured,
         })
+        // A card within every limit can still lean on the slides or say nothing. Both are
+        // asked of what the model wrote, never of a student's own card.
+        if (item.problems.length === 0) {
+          item.problems = [...leansOnSlides(draftOf(item)), ...saysNothing(draftOf(item))]
+        }
         if (item.problems.length > 0) {
           failing.push(item)
           continue
@@ -452,9 +469,28 @@ export async function build(
         }
         passing.push(item)
       }
+      // The card check, each card as the whole input of its own request. A card about the
+      // organisation of the course is dropped at once: no wording repairs such a fact.
+      const organisational = new Set<Item>()
+      await pool(passing, async (item) => {
+        const { question, answer } = questionAndAnswer(item.card!)
+        const [verdict] = await decide({
+          context: cardInput(question, answer),
+          images: [],
+          questions: [ask.organisation()],
+        })
+        const p = probability(verdict)
+        if (p === null || p < calibrations.organisation.threshold) return
+        if (!calibrations.organisation.calibrated) {
+          item.flags.push('may be about the organisation of the course')
+        } else {
+          item.problems = [ORGANISATION]
+          organisational.add(item)
+        }
+      })
       for (const lecture of lectures) {
         const unsure = passing.filter((item) => {
-          if (item.lecture !== lecture) return false
+          if (item.lecture !== lecture || item.problems.length > 0) return false
           const slide = item.fact.slide
           const seen = lecture.images.some((image) => image.slide === slide)
           return seen || !groundedByRule(draftOf(item), lecture.text[slide - 1]!.join('\n'))
@@ -480,7 +516,10 @@ export async function build(
           }
         })
       }
-      for (const item of passing) (item.problems.length > 0 ? failing : accepted).push(item)
+      for (const item of passing) {
+        if (organisational.has(item)) dropped.push(item)
+        else (item.problems.length > 0 ? failing : accepted).push(item)
+      }
       // A split adds cards, so the total is what is in play now, never less than what is done.
       const total = accepted.length + failing.length + dropped.length
       emit({ type: 'progress', phase: 'check', done: accepted.length, total })
