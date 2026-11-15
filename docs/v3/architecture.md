@@ -227,8 +227,8 @@ many cards exist:
 - The goal is a number of cards per slide, at most (`GOAL_PRESETS`, `cards/roles.ts`): `pass`
   0.5, `good` 1, `top` 1.8. Top grade is the size of the reference deck: 636 notes on 356 slides.
 - The cards are shared out over all lectures of one build, not lecture by lecture: slides are a
-  poor measure of what a lecture holds. A budget per lecture left 99 cards of one lecture unused
-  and cut 63 of the 107 facts of another. A lecture added later is a build of its own.
+  poor measure of what a lecture holds. A budget per lecture gave one lecture 173 cards for
+  its 140 facts and cut 63 of the 107 facts of another. A lecture added later is a build of its own.
 - The facts worth most get the cards. Equal worth keeps the order of the map. A fact without a
   verdict counts as examinable (2).
 - A concept left without a card is named in the decisions ("beyond-goal").

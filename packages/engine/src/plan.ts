@@ -33,8 +33,8 @@ const worth = (fact: Fact) => fact.worth ?? WORTH_UNKNOWN
  * One plan per lecture, for all lectures of a build at once. The goal's cards are shared out
  * over the whole build and not lecture by lecture: slides are a poor measure of what one
  * lecture holds. Measured on 2026-11-15 on a full Entrepreneurship run, a budget per lecture
- * left 99 cards of one lecture unused and cut 63 of the 107 facts of another; shared out over
- * the course, the same 584 cards covered 227 notes of the reference deck instead of 211.
+ * gave one lecture 173 cards for its 140 facts and cut 63 of the 107 facts of another; shared
+ * out over the course, the same 584 cards covered 227 notes of the reference deck, not 211.
  */
 export function plan(
   lectures: { topics: Topic[]; slides: number }[],
