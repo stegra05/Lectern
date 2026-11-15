@@ -820,7 +820,7 @@ describe('goal, profile and cost', () => {
         {
           lecture: 1,
           kind: 'beyond-goal',
-          text: 'No cards in 01 Risk and uncertainty for "uncertainty": other facts are worth more, and the goal allows 3 cards here.',
+          text: 'No cards in 01 Risk and uncertainty for "uncertainty": the goal allows 3 cards in this build, and other facts are worth more.',
         },
       ]),
     )

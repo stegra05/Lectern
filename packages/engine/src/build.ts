@@ -359,7 +359,6 @@ export async function build(
           earlier.set(concept.id, { name: concept.name, lecture: lecture.number })
       }
 
-      const { slots, beyondGoal } = plan(topics, lecture.text.length, goal, preset)
       const open: OpenLecture = {
         ...lecture,
         title: settled.title,
@@ -372,9 +371,8 @@ export async function build(
           lecture.text,
           lecture.images,
         ),
-        beyondGoal,
+        beyondGoal: [],
       }
-      planned.push(...slots.map((slot) => ({ lecture: open, ...slot })))
       out.push(open)
       emit({
         type: 'progress',
@@ -384,6 +382,11 @@ export async function build(
         lecture: lecture.number,
       })
     }
+    // One plan for all lectures of the build: the goal's cards go where the facts worth most are.
+    plan(out, goal, preset).forEach(({ slots, beyondGoal }, i) => {
+      out[i]!.beyondGoal = beyondGoal
+      planned.push(...slots.map((slot) => ({ lecture: out[i]!, ...slot })))
+    })
     return out
   })
 
@@ -638,6 +641,10 @@ export async function build(
     })
   }
   const summary = []
+  const allowed = budget(
+    goal,
+    lectures.reduce((sum, lecture) => sum + lecture.slides, 0),
+  )
   for (const lecture of lectures) {
     const cards = accepted.filter((item) => item.lecture === lecture)
     const lost: Dropped[] = dropped
@@ -660,7 +667,7 @@ export async function build(
     const tree: Lecture = { number, title, file, slides, topics, leftOut, dropped: lost }
     await writeJson(store, paths.lecture(course, number), tree)
     decisions.push(
-      ...account(lecture, goal, new Set(cards.map((item) => item.concept)), lost.length),
+      ...account(lecture, allowed, new Set(cards.map((item) => item.concept)), lost.length),
     )
     const concepts = topics.flatMap((t) => t.concepts).length
     summary.push({ number, title, concepts, cards: cards.length })
@@ -718,7 +725,7 @@ function flag(concept: Concept, text: string): void {
 /** The decisions of one lecture, written by code from what happened. */
 function account(
   lecture: OpenLecture,
-  goal: Goal,
+  allowed: number,
   withCards: Set<Concept>,
   dropped: number,
 ): Decision[] {
@@ -738,7 +745,7 @@ function account(
   if (lecture.beyondGoal.length > 0) {
     add(
       'beyond-goal',
-      `No cards in ${name} for ${names(lecture.beyondGoal)}: other facts are worth more, and the goal allows ${budget(goal, lecture.slides)} cards here.`,
+      `No cards in ${name} for ${names(lecture.beyondGoal)}: the goal allows ${allowed} cards in this build, and other facts are worth more.`,
     )
   }
   const concepts = lecture.topics.flatMap((t) => t.concepts)

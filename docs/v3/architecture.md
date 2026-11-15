@@ -129,7 +129,7 @@ flowchart TD
 | 6 | Settle the map | code | The model's map with the second reading put in, the slide kinds, earlier concepts | A tree that is always usable, plus a list of problems; the first map is asked once more when it has problems | `tree.ts` |
 | 7 | Map checks | decision model | The lecture as text; questions: concept belongs, same as earlier concept, kind of fact | Flags (or, once calibrated, removal or merge); a kind for every fact | `build.ts:291`, `decide.ts:96-108` |
 | 7b | Worth of a fact | decision model | One fact with the name of its concept, as the whole input of its own request | A score from 0 to 3 on four labelled levels (not examinable, detail, examinable, core), stored on the fact | `build.ts`, `decide.ts` (`WORTH_LEVELS`) |
-| 8 | Plan | code | Topics, the worth of every fact, slides of the lecture, goal, preset | A list of slots: concept, fact, card type. As many as the goal allows per slide, the facts worth most first | `plan.ts` |
+| 8 | Plan | code | The topics and slide counts of all lectures of the build, the worth of every fact, goal, preset | A list of slots per lecture: concept, fact, card type. As many as the goal allows per slide over the whole build, the facts worth most first | `plan.ts` |
 | 9 | Ids | code | Slot, lecture, concept id, role | `<lecture>-<concept>-<role>-<n>` | `cards/id.ts`, `build.ts:372` |
 | 10 | Fill | generative model | The whole lecture, concept, fact, card type, preset rules, one example of the type | One filled form (the card's slots) | `writer.ts:322` |
 | 11 | Gate: rules | code | The slots | A list of problems, empty means pass | `cards/validate.ts:60`, `:187`, `:216` |
@@ -224,9 +224,11 @@ random 129.
 **8. Plan (code).** `plan` (`plan.ts`) is a pure function and the only place that decides how
 many cards exist:
 
-- The goal is a number of cards per slide of the lecture, at most (`GOAL_PRESETS`,
-  `cards/roles.ts`): `pass` 0.5, `good` 1, `top` 1.8, rounded up per lecture. Top grade is the
-  size of the reference deck: 636 notes on 356 slides.
+- The goal is a number of cards per slide, at most (`GOAL_PRESETS`, `cards/roles.ts`): `pass`
+  0.5, `good` 1, `top` 1.8. Top grade is the size of the reference deck: 636 notes on 356 slides.
+- The cards are shared out over all lectures of one build, not lecture by lecture: slides are a
+  poor measure of what a lecture holds. A budget per lecture left 99 cards of one lecture unused
+  and cut 63 of the 107 facts of another. A lecture added later is a build of its own.
 - The facts worth most get the cards. Equal worth keeps the order of the map. A fact without a
   verdict counts as examinable (2).
 - A concept left without a card is named in the decisions ("beyond-goal").

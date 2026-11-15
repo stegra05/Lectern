@@ -18,7 +18,7 @@ const concept = (name: string, kinds: FactKind[], extra: Partial<Concept> = {}):
   ...extra,
 })
 const topics = (...concepts: Concept[]): Topic[] => [{ name: 'T', concepts }]
-const shape = (result: ReturnType<typeof plan>) =>
+const shape = (result: ReturnType<typeof plan>[number]) =>
   result.slots.map((s) => `${s.fact.text}: ${s.role}`)
 /** Sets the worth of the facts of a concept, in their order. */
 const worth = (c: Concept, ...values: number[]): Concept => {
@@ -39,13 +39,13 @@ describe('the plan: code decides how many cards exist and what shape they take',
   })
 
   it('pass: the facts worth most, and says which concepts it left without a card', () => {
-    const result = plan(all(), 4, 'pass', preset)
+    const result = plan([{ topics: all(), slides: 4 }], 'pass', preset)[0]!
     expect(shape(result)).toEqual(['risk fact 1: definition', 'risk fact 4: contrast'])
     expect(result.beyondGoal.map((c) => c.name)).toEqual(['loop'])
   })
 
   it('good grade: more of them, still in the order of the map', () => {
-    const result = plan(all(), 4, 'good', preset)
+    const result = plan([{ topics: all(), slides: 4 }], 'good', preset)[0]!
     expect(shape(result)).toEqual([
       'risk fact 1: definition',
       'risk fact 3: case',
@@ -56,7 +56,23 @@ describe('the plan: code decides how many cards exist and what shape they take',
   })
 
   it('top grade: every fact when the lecture has fewer than the goal allows', () => {
-    expect(plan(all(), 4, 'top', preset).slots).toHaveLength(6)
+    expect(plan([{ topics: all(), slides: 4 }], 'top', preset)[0]!.slots).toHaveLength(6)
+  })
+
+  it('shares the cards out over all lectures of a build, not lecture by lecture', () => {
+    const thin = topics(worth(concept('a', ['definition', 'definition']), 1, 1))
+    const dense = topics(worth(concept('b', ['definition', 'definition', 'definition']), 3, 3, 3))
+    // Four slides each at "pass" allow four cards in all: three go to the dense lecture.
+    const [first, second] = plan(
+      [
+        { topics: thin, slides: 4 },
+        { topics: dense, slides: 4 },
+      ],
+      'pass',
+      preset,
+    )
+    expect(first!.slots).toHaveLength(1)
+    expect(second!.slots).toHaveLength(3)
   })
 
   it('keeps the order of the map among facts of equal worth, and counts no verdict as examinable', () => {
@@ -65,7 +81,7 @@ describe('the plan: code decides how many cards exist and what shape they take',
       worth(concept('b', ['definition']), 1),
       worth(concept('c', ['definition']), 2.5),
     )
-    expect(shape(plan(even, 4, 'pass', preset))).toEqual([
+    expect(shape(plan([{ topics: even, slides: 4 }], 'pass', preset)[0]!)).toEqual([
       'a fact 1: definition',
       'c fact 1: definition',
     ])
@@ -82,7 +98,11 @@ describe('the plan: code decides how many cards exist and what shape they take',
       'case',
       'diagram',
     ]
-    const result = plan(topics(...kinds.map((kind) => concept(kind, [kind]))), 8, 'good', preset)
+    const result = plan(
+      [{ topics: topics(...kinds.map((kind) => concept(kind, [kind]))), slides: 8 }],
+      'good',
+      preset,
+    )[0]!
     expect(result.slots.map((s) => s.role)).toEqual([
       'definition',
       'contrast',
@@ -99,24 +119,26 @@ describe('the plan: code decides how many cards exist and what shape they take',
     const lists = concept('exit', ['list', 'list', 'list'])
     lists.facts[0]!.items = 2
     lists.facts[1]!.items = 5
-    expect(plan(topics(lists), 4, 'top', preset).slots.map((s) => s.role)).toEqual([
-      'name-two',
-      'cloze-list',
-      'cloze-list',
-    ])
+    expect(
+      plan([{ topics: topics(lists), slides: 4 }], 'top', preset)[0]!.slots.map((s) => s.role),
+    ).toEqual(['name-two', 'cloze-list', 'cloze-list'])
   })
 
   it('turns a cause into a "why" card', () => {
-    expect(shape(plan(topics(concept('copyright', ['cause'])), 4, 'good', preset))).toEqual([
-      'copyright fact 1: why',
-    ])
+    expect(
+      shape(
+        plan([{ topics: topics(concept('copyright', ['cause'])), slides: 4 }], 'good', preset)[0]!,
+      ),
+    ).toEqual(['copyright fact 1: why'])
   })
 
   it('gives a concept that comes up again one more card, for its fact worth most', () => {
     const again = topics(
       worth(concept('risk', ['definition', 'definition', 'case'], { since: 1 }), 1, 3, 2),
     )
-    expect(shape(plan(again, 4, 'top', preset))).toEqual(['risk fact 2: definition'])
+    expect(shape(plan([{ topics: again, slides: 4 }], 'top', preset)[0]!)).toEqual([
+      'risk fact 2: definition',
+    ])
   })
 })
 
