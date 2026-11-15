@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Helvetica, Arial, sans-serif">
+<rect width="1600" height="900" fill="#ffffff"/>
+<rect width="1600" height="14" fill="#1f5fa8"/>
+<text x="64" y="150" font-size="64" font-weight="700" fill="#1d2433">Risk versus uncertainty (Knight, 1921)</text>
+<rect x="64" y="182" width="120" height="6" fill="#1f5fa8"/>
+<circle cx="78" cy="262" r="7" fill="#1f5fa8"/><text x="104" y="274" font-size="36" fill="#333">Risk: probabilities can be calculated or known</text><circle cx="78" cy="336" r="7" fill="#1f5fa8"/><text x="104" y="348" font-size="36" fill="#333">Example: opening a hairdresser shop</text><circle cx="78" cy="410" r="7" fill="#1f5fa8"/><text x="104" y="422" font-size="36" fill="#333">Uncertainty: probabilities cannot be known</text>
+<line x1="64" y1="820" x2="1536" y2="820" stroke="#dddddd" stroke-width="2"/>
+<text x="64" y="862" font-size="28" fill="#777">Entrepreneurship · Lecture 2</text>
+<text x="1536" y="862" font-size="28" fill="#777" text-anchor="end">14</text>
+</svg>
