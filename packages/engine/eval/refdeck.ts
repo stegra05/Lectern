@@ -27,6 +27,7 @@ import { pdfjsReader } from '../src/adapters/pdfjs.ts'
 import { CLOZE, htmlToText, two } from '../src/cards/words.ts'
 import { paths, readCards, readJson, type CourseFile, type Lecture } from '../src/course.ts'
 import { questionAndAnswer } from '../src/outline.ts'
+import { slideText } from '../src/slides.ts'
 
 interface ReferenceNote {
   id: number
@@ -106,7 +107,7 @@ async function run(folder: string, out: string): Promise<void> {
         facts.push({ lecture: number, concept: concept.name, order: i + 1, ...fact }),
       )
     }
-    const text = await pdfjsReader.readSlides(await store.readBytes(`${course}/slides/${pdf}`))
+    const text = await slideText(pdfjsReader, await store.readBytes(`${course}/slides/${pdf}`))
     slides.push(`## Lecture ${two(number)}: ${lecture.title}`)
     text.forEach((lines, i) => slides.push(`[${two(number)}.${i + 1}] ${lines.join(' / ')}`))
   }

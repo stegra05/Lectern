@@ -63,6 +63,7 @@ import { questionAndAnswer } from './outline.ts'
 import { plan } from './plan.ts'
 import type { Ports, SlideImage } from './ports.ts'
 import { presetFor, PRESETS } from './presets.ts'
+import { slideText } from './slides.ts'
 import { settleMap, unusedSlides } from './tree.ts'
 import { createWriter, type CardJob, type Slots } from './writer.ts'
 
@@ -135,7 +136,7 @@ async function survey(ports: Ports, command: BuildCommand | EstimateCommand) {
   const lectures: ReadLecture[] = []
   for (const [i, file] of fresh.entries()) {
     const bytes = await store.readBytes(`${paths.slides(course)}/${file}`)
-    const text = await ports.pdf.readSlides(bytes)
+    const text = await slideText(ports.pdf, bytes)
     // Slides with little text are figures, formulas or scans: the model gets to see them.
     const low = text.flatMap((lines, s) => (lines.join(' ').length < LOW_TEXT_CHARS ? [s + 1] : []))
     const images = low.length > 0 ? await ports.pdf.renderSlides(bytes, low) : []
