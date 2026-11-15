@@ -1,0 +1,149 @@
+/* The few native-looking controls every screen shares. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--group);
+  box-shadow: var(--shadow-control);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+.btn:active:not(:disabled) {
+  filter: brightness(0.93);
+}
+.btn:disabled {
+  opacity: 0.45;
+}
+.btn-primary {
+  height: 32px;
+  padding: 0 16px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.btn-quiet {
+  background: transparent;
+  box-shadow: none;
+  padding: 0 8px;
+}
+.btn-quiet:hover:not(:disabled) {
+  background: var(--control);
+  filter: none;
+}
+.btn-accent {
+  color: var(--accent-text);
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--control);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 1px;
+  border-radius: 7px;
+  background: var(--control);
+}
+.segmented button {
+  flex: 1;
+  min-width: 84px;
+  height: 22px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.segmented button[aria-pressed='true'] {
+  background: var(--segment-on);
+  box-shadow: var(--shadow-control);
+}
+.segmented button:disabled {
+  color: var(--label-2);
+  opacity: 0.7;
+}
+.segmented.large button {
+  height: 28px;
+  font-size: 13px;
+}
+
+.field {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--group);
+  box-shadow:
+    inset 0 0 0 0.5px var(--hairline),
+    inset 0 1px 1px rgba(0, 0, 0, 0.06);
+  user-select: text;
+  cursor: text;
+}
+.field::placeholder {
+  color: var(--label-2);
+}
+
+/* A white group with hairline rows, as in system settings. */
+.group {
+  background: var(--group);
+  border-radius: var(--r-group);
+  box-shadow: 0 0 0 0.5px var(--hairline);
+  overflow: hidden;
+}
+.group > * + * {
+  border-top: 0.5px solid var(--separator);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--chip);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* A lecture number on its colour. */
+.lec-chip {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 5px;
+  color: var(--on-lecture);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
