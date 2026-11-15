@@ -69,6 +69,14 @@ describe('fitTrack', () => {
     expect(fit.centre.x + fit.k * (160 - fit.origin.x)).toBeCloseTo(100, 0)
   })
 
+  it('fits one lecture and thirty lectures at the smallest zoom or more', () => {
+    for (const n of [1, 30]) {
+      const fit = fitTrack(layoutTrack(n), window, 1)
+      expect(fit.k).toBeGreaterThanOrEqual(0.2)
+      expect(Number.isFinite(fit.k)).toBe(true)
+    }
+  })
+
   it('never grows the track past the given cap', () => {
     expect(fitTrack(layoutTrack(3), window, 1).k).toBe(1)
   })
