@@ -1,0 +1,733 @@
+/* lectern-notetype v3 skin:night
+   Lectern cards, skin "Afterglow": built for review in bed, late, with the lights off.
+   Night is the design; light is derived from it. The ground is the blue-violet of a dark
+   bedroom ceiling, the text a warm off-white set one weight lighter than usual, so it does
+   not bloom on a dark screen. One luminous tone, phosphor green, belongs to the answer and
+   nothing else: the front draws the answer space as a row of unlit dots, the back draws
+   the same line lit, with the key term glowing on it, like the glow-in-the-dark stars on
+   the ceiling above. Apparatus (head, cue, weight, source) is a quiet lavender grey.
+   The back is never brighter than the front: the question dims as the answer lights.
+   Nothing on the card is white: slides are inverted, code and figures sit on the ground.
+   Phone first: base rules are for 360 px. Sizes are em of .card, so the font size in
+   Anki's Styling editor scales the whole card.
+   Hooks from the shared templates: .role-<Role>, .is-typed, .lc-front / .lc-back. */
+
+@font-face {
+  font-family: "Lectern Night Sans";
+  src: url("_StructureSans.woff2") format("woff2");
+  font-weight: 200 800;
+}
+@font-face {
+  font-family: "Lectern Night Mono";
+  src: url("_LampMono.woff2") format("woff2");
+  font-weight: 400;
+}
+
+/* ---------- Tokens: night first ----------
+   Night is written first and is the default. The light block below overrides it only on
+   a card that carries neither night class. The two long selectors catch a client that
+   puts the night class on an ancestor instead of on body.card. */
+
+.card,
+.nightMode .card:not(.nightMode):not(.night_mode),
+.night_mode .card:not(.nightMode):not(.night_mode) {
+  --ground: #14161f;
+  --rise: #1b1e2a;
+  --edge: #2a2e3e;
+  --ink: #d9d5c9;
+  --ink-dim: #b9b5ab;
+  --soft: #9a9cb8;
+  --soft-hi: #c3c3da;
+  --dot: rgba(154, 156, 184, 0.5);
+  --lit: #a6f2c9;
+  --lit-line: #5fb98d;
+  --halo: rgba(120, 230, 170, 0.42);
+  --pool: radial-gradient(closest-side at 40% 55%, rgba(120, 230, 170, 0.075), transparent);
+  --slide-opacity: 0.8;
+  --halo-line: rgba(95, 185, 141, 0.55);
+  --mark-bg: transparent;
+  --dg-key: rgba(166, 242, 201, 0.12);
+  --good-bg: rgba(166, 242, 201, 0.12);
+  --good-ink: #a6f2c9;
+  --bad-bg: rgba(240, 176, 196, 0.13);
+  --bad-ink: #f3bccb;
+  --miss-bg: rgba(154, 156, 184, 0.16);
+  --miss-ink: #d0d0e2;
+  --slide-filter: invert(0.9) hue-rotate(180deg) contrast(0.88);
+  --w-text: 370;
+  --w-q: 430;
+  --w-mark: 560;
+  --track: 0.012em;
+
+  --sans: "Lectern Night Sans", "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "Lectern Night Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+.card {
+  font-family: var(--sans);
+  font-size: 16px;
+  font-weight: var(--w-text);
+  letter-spacing: var(--track);
+  margin: 0;
+  padding: 1.25em 1.1em 1.75em;
+  text-align: left;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Light, derived: the same ceiling by day. Lightness flips, the hues stay, the glow
+   becomes a deep phosphor green with a pale band behind the key term, and the text
+   gets back the weight it gave up for the dark. */
+.card:not(.nightMode):not(.night_mode) {
+  --ground: #eceef4;
+  --rise: #e1e4ee;
+  --edge: #cdd1de;
+  --ink: #1b1e2b;
+  --ink-dim: #3a3e4f;
+  --soft: #555a75;
+  --soft-hi: #2f3350;
+  --dot: rgba(85, 90, 117, 0.55);
+  --lit: #0f5c3f;
+  --lit-line: #2f8a62;
+  --halo: transparent;
+  --pool: none;
+  --slide-opacity: 1;
+  --halo-line: transparent;
+  --mark-bg: #c6efd8;
+  --dg-key: rgba(47, 138, 98, 0.16);
+  --good-bg: #cdeedb;
+  --good-ink: #0f4a33;
+  --bad-bg: #f5d7df;
+  --bad-ink: #7c1f3a;
+  --miss-bg: #dde0ea;
+  --miss-ink: #343852;
+  --slide-filter: none;
+  --w-text: 420;
+  --w-q: 500;
+  --w-mark: 620;
+  --track: 0;
+}
+
+/* .card.nightMode outranks the reviewer's own body.nightMode background. */
+.card,
+.card.nightMode {
+  background-color: var(--ground);
+  color: var(--ink);
+}
+
+/* ---------- Frame: no sheet, the screen is the card ----------
+   A lit sheet on a dark screen is a glare edge, so there is none. Topic and weight share
+   the first line; the weight drops below when both do not fit. */
+
+.lc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.75em;
+  max-width: 34em;
+  margin: 0 auto;
+}
+.lc * { box-sizing: border-box; }
+.lc-sheet { display: contents; }
+.lc-sheet > * { flex: 1 1 100%; order: 2; min-width: 0; }
+
+.lc-head {
+  flex: 1 1 auto;
+  order: 0;
+  margin: 0 0 1.5em;
+  color: var(--soft);
+  font-size: 0.875em;
+  line-height: 1.35;
+}
+.lc-lec {
+  margin-right: 0.35em;
+  font-family: var(--mono);
+  font-size: 0.86em;
+  letter-spacing: 0.04em;
+}
+
+/* The exam weight: a lit star when past exams asked it, an unlit one for core. */
+.lc-tab {
+  order: 1;
+  margin: 0 0 1.5em auto;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lc-tab::before { content: "\2727\00A0"; letter-spacing: 0; }
+.lc-tab.is-asked { color: var(--soft-hi); }
+.lc-tab.is-asked::before { content: "\2726\00A0"; }
+
+/* ---------- Question ---------- */
+
+.lc-q,
+.lc-text {
+  font-size: 1.25em;
+  font-weight: var(--w-q);
+  line-height: 1.42;
+}
+.lc-text { font-size: 1.1875em; font-weight: var(--w-text); line-height: 1.6; }
+/* On the back the question steps down, so the light moves to the answer. */
+.lc-back .lc-q {
+  color: var(--ink-dim);
+  font-size: 1em;
+  font-weight: var(--w-text);
+  line-height: 1.5;
+}
+.lc b, .lc strong { font-weight: calc(var(--w-text) + 200); }
+.lc sub, .lc sup { font-size: 0.72em; line-height: 0; }
+.lc code {
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+  background-color: var(--rise);
+  font-family: var(--mono);
+  font-size: 0.86em;
+  letter-spacing: 0;
+}
+
+/* ---------- Cue ---------- */
+
+.lc-cue {
+  margin: 1.75em 0 0.4em;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+/* On the back a small lit point marks where the answer is. */
+.lc-back .lc-cue::before {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-right: 0.7em;
+  border-radius: 50%;
+  background-color: var(--lit);
+  box-shadow: 0 0 6px 1px var(--halo);
+  vertical-align: 0.05em;
+}
+
+.lc-cue::after                    { content: "Your answer"; }
+.role-definition .lc-cue::after   { content: "Define"; }
+.role-reverse .lc-cue::after      { content: "Name the term"; }
+.role-contrast .lc-cue::after     { content: "Contrast"; }
+.role-chain .lc-cue::after        { content: "What comes next"; }
+.role-name-two .lc-cue::after     { content: "Name two"; }
+.role-diagram .lc-cue::after      { content: "Sketch it on paper, then flip"; }
+.role-formula .lc-cue::after      { content: "State it"; }
+.role-why .lc-cue::after          { content: "Explain why"; }
+.role-code .lc-cue::after         { content: "Read the code"; }
+.role-case .lc-cue::after         { content: "Name the conclusion"; }
+.role-calculation .lc-cue::after  { content: "Work it out"; }
+.role-cloze .lc-cue::after        { content: "Fill the gap"; }
+.role-cloze-list .lc-cue::after   { content: "Complete the list"; }
+.is-typed .lc-cue::after          { content: "Type the term"; }
+.lc-clz.is-typed .lc-cue::after   { content: "Type what is missing"; }
+.lc-back.is-typed .lc-cue::after  { content: "Your answer, checked"; }
+.lc-clz:not(.is-typed) .lc-cue { display: none; }
+
+/* ---------- Answer space: unlit dots, then the lit line ----------
+   One pitch on both sides: a line is 2.4em of answer text. The front draws the line as
+   a row of dots, the back writes the answer on the same line and lights it. */
+
+.lc-shape,
+.lc-a {
+  font-size: 1.125em;
+  line-height: 1.6;
+}
+
+/* The unlit line: dots along the baseline. */
+.lc-shape > span,
+.lc-shape > span::after {
+  background-image: radial-gradient(circle, var(--dot) 0.09em, transparent 0.12em);
+  background-size: 0.62em 0.4em;
+  background-position: 0 100%;
+  background-repeat: repeat-x;
+}
+.lc-shape > span {
+  display: block;
+  height: 2.4em;
+}
+.lc-shape > span + span { display: none; }
+.role-definition .lc-shape > span + span { display: block; }
+.role-reverse .lc-shape > span,
+.role-case .lc-shape > span { width: 62%; }
+
+/* The lit line: the same baseline, solid, with a low glow under it. */
+.lc-body,
+.lc-lit {
+  padding-bottom: 0.35em;
+  background-image: linear-gradient(var(--lit-line), var(--lit-line));
+  background-size: 100% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  box-shadow: 0 7px 10px -9px var(--halo-line);
+}
+.lc-body { padding-top: 0.45em; }
+.lc-body > :first-child { margin-top: 0; }
+.lc-body > :last-child { margin-bottom: 0; }
+.lc-body p { margin: 0; }
+.lc-body ul { margin: 0; padding: 0; list-style: none; }
+.lc-body li { margin: 0; }
+/* A list answer: every item gets its own lit line, the block line goes. */
+.lc-body:has(> ul) { padding: 0; background: none; box-shadow: none; }
+.lc-body:has(> ul) li {
+  padding: 0.45em 0 0.35em;
+  background-image: linear-gradient(var(--lit-line), var(--lit-line));
+  background-size: 100% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  box-shadow: 0 7px 10px -9px var(--halo-line);
+}
+.lc-body:has(> ul) li + li { margin-top: 0.5em; }
+
+/* The key term and the revealed cloze: the luminous tone, a soft halo at night,
+   a pale band by day. */
+.lc mark,
+.lc-back .cloze {
+  padding: 0 0.06em;
+  border-radius: 2px;
+  background-color: var(--mark-bg);
+  color: var(--lit);
+  font-weight: var(--w-mark);
+  text-shadow: 0 0 0.7em var(--halo);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* At night the answer casts a faint pool of light on the ground around it. */
+.lc-back .lc-a {
+  margin: 0 -0.9em;
+  padding: 0 0.9em 0.5em;
+  background-image: var(--pool);
+}
+
+/* When the back opens in a dark room the answer fades up instead of switching on. */
+@keyframes lc-charge {
+  from { opacity: 0.35; text-shadow: none; }
+  to { opacity: 1; }
+}
+.lc-back .lc-a,
+.lc-back .lc-text .cloze { animation: lc-charge 420ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .lc-back .lc-a,
+  .lc-back .lc-text .cloze { animation: none; }
+}
+
+/* Reverse and case: one term, set large on one short line. */
+.role-reverse .lc-body,
+.role-case .lc-body {
+  display: inline-block;
+  min-width: 62%;
+  max-width: 100%;
+  font-size: 1.4em;
+  line-height: 1.25;
+  padding-top: 0.35em;
+}
+.lc-front.role-case .lc-q { padding-left: 0.8em; border-left: 2px solid var(--edge); }
+
+/* Labels (contrast, code) and given steps (chain): apparatus, small and quiet. */
+.lc-shape > span:not(:empty),
+.lc-labels > span {
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6em;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+/* Contrast, code: two columns, a label over its line. */
+.role-contrast .lc-shape,
+.role-code .lc-shape,
+.role-contrast .lc-labels,
+.role-code .lc-labels,
+.role-contrast .lc-body > ul,
+.role-code .lc-body > ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1.1em;
+}
+.role-contrast .lc-shape > span,
+.role-code .lc-shape > span {
+  display: block;
+  height: auto;
+  background: none;
+}
+.role-contrast .lc-shape > span::after,
+.role-code .lc-shape > span::after {
+  content: "";
+  display: block;
+  /* one line; the span's font is 0.6em, so one line is 2.4em / 0.6 */
+  height: calc(2.2em / 0.6);
+}
+.role-contrast .lc-shape > span + span,
+.role-code .lc-shape > span + span,
+.role-contrast .lc-labels > span,
+.role-code .lc-labels > span { display: block; }
+.role-contrast .lc-labels,
+.role-code .lc-labels { margin-bottom: -0.2em; }
+.role-contrast .lc-body:has(> ul) li,
+.role-code .lc-body:has(> ul) li { align-self: start; }
+.role-contrast .lc-body:has(> ul) li + li,
+.role-code .lc-body:has(> ul) li + li { margin-top: 0; }
+.role-contrast .lc-body li:nth-child(n + 3),
+.role-code .lc-body li:nth-child(n + 3) { grid-column: 1 / -1; margin-top: 0.5em; }
+
+/* Chain and name two: numbered lines. Given steps are written in, gaps are dots. */
+.role-chain .lc-shape,
+.role-name-two .lc-shape,
+.role-chain .lc-a,
+.role-name-two .lc-a { counter-reset: step; }
+.role-chain .lc-shape > span,
+.role-name-two .lc-shape > span,
+.role-chain .lc-labels > span,
+.role-chain .lc-body:has(> ul) li,
+.role-name-two .lc-body:has(> ul) li {
+  position: relative;
+  display: block;
+  margin-left: 1.6rem;
+  counter-increment: step;
+}
+.role-chain .lc-shape > span + span,
+.role-name-two .lc-shape > span + span { display: block; }
+.role-chain .lc-labels > span:empty { display: none; }
+/* A given step: written, not dotted. */
+.role-chain .lc-shape > span:not(:empty),
+.role-chain .lc-labels > span {
+  height: auto;
+  padding: 0.5em 0 0.35em;
+  background: none;
+  border-bottom: 1px solid var(--edge);
+  font-size: 0.6em;
+}
+.role-chain .lc-shape > span::before,
+.role-name-two .lc-shape > span::before,
+.role-chain .lc-labels > span::before,
+.role-chain .lc-body:has(> ul) li::before,
+.role-name-two .lc-body:has(> ul) li::before {
+  content: counter(step);
+  position: absolute;
+  left: -1.6rem;
+  bottom: 0.55rem;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow: none;
+  text-transform: none;
+}
+.role-chain .lc-labels { margin-bottom: 0.5em; }
+
+/* Why: an argument, introduced as one. */
+.role-why .lc-shape > span + span { display: block; }
+.role-why .lc-shape::before,
+.role-why .lc-body::before {
+  content: "Because";
+  display: block;
+  margin-bottom: -0.2em;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6em;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+.role-why .lc-body::before { margin-bottom: 0.1em; }
+
+/* Formula: a dark recess on the front, the statement standing on the lit line. */
+.role-formula .lc-shape > span {
+  height: 4.6em;
+  border-radius: 6px 6px 0 0;
+  background-color: var(--rise);
+}
+.role-formula .lc-body { padding-top: 0; background: none; box-shadow: none; }
+.role-formula .lc-body mjx-container[display="true"] {
+  margin: 0 0 0.75em !important;
+  padding: 0.8em 0.5em 0.7em;
+  border-radius: 6px 6px 0 0;
+  background-color: var(--rise);
+  background-image: linear-gradient(var(--lit-line), var(--lit-line));
+  background-size: 100% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  box-shadow: 0 7px 10px -9px var(--halo-line);
+  color: var(--lit);
+  text-shadow: 0 0 0.6em var(--halo);
+}
+
+/* Diagram: a dotted frame on the front, the figure on the back. */
+.role-diagram .lc-shape > span {
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border: 1.5px dotted var(--dot);
+  border-radius: 6px;
+  background: none;
+}
+.lc-fig { margin: 0.2em -0.6em 0.6em; color: var(--ink); }
+.lc-fig img,
+.lc-fig svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+.lc-fig img { filter: var(--slide-filter); border-radius: 4px; }
+.dg { font-family: var(--sans); font-weight: var(--w-q); letter-spacing: 0; }
+.dg .dg-cell { fill: none; stroke: var(--soft); stroke-width: 1; }
+.dg .dg-key { fill: var(--dg-key); stroke: var(--lit-line); }
+.dg text { fill: currentColor; }
+.dg .dg-axis { font-family: var(--mono); font-weight: 400; letter-spacing: 0.06em; fill: var(--soft); }
+
+/* ---------- Code: on the ground, never a bright box ---------- */
+
+.lc-code {
+  margin: 1em 0 0.2em;
+  padding: 0.75em 0.85em;
+  overflow-x: auto;
+  border-left: 2px solid var(--edge);
+  border-radius: 0 6px 6px 0;
+  background-color: var(--rise);
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 0.8125em;
+  letter-spacing: 0;
+  line-height: 1.6;
+  tab-size: 4;
+  white-space: pre;
+}
+.lc-code code { padding: 0; background: none; font: inherit; }
+
+/* ---------- Mathematics (Anki's MathJax) ---------- */
+
+.lc mjx-container[display="true"] {
+  display: block;
+  max-width: 100%;
+  margin: 0.4em 0 !important;
+  padding: 0.2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.lc-extra mjx-container[display="true"] { font-size: 92% !important; }
+
+/* ---------- Cloze ---------- */
+
+/* The hidden cloze: an unlit gap. Anki's [...] stays invisible. */
+.lc-front .cloze {
+  display: inline-block;
+  min-width: 5.5em;
+  height: 1.2em;
+  background-image: radial-gradient(circle, var(--dot) 0.09em, transparent 0.12em);
+  background-size: 0.62em 0.4em;
+  background-position: 0 100%;
+  background-repeat: repeat-x;
+  color: transparent;
+  line-height: 1.2;
+  vertical-align: -0.2em;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* The revealed cloze stands on a lit line. */
+.lc-back .cloze {
+  padding-bottom: 0.05em;
+  background-image: linear-gradient(var(--lit-line), var(--lit-line));
+  background-size: 100% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+}
+.role-cloze-list .lc-text ul { margin: 0.6em 0 0; padding: 0; list-style: none; }
+.role-cloze-list .lc-text li { position: relative; margin: 0.2em 0; padding-left: 1.1em; }
+.role-cloze-list .lc-text li::before {
+  content: "";
+  position: absolute;
+  left: 0.15em;
+  top: 0.72em;
+  width: 0.28em;
+  height: 0.28em;
+  border-radius: 50%;
+  background-color: var(--soft);
+}
+.role-cloze-list .lc-text li:has(.cloze)::before {
+  background-color: var(--lit);
+  box-shadow: 0 0 5px 1px var(--halo);
+}
+.lc-front.role-cloze-list .lc-text li:has(.cloze)::before { background-color: var(--soft-hi); box-shadow: none; }
+/* On the back the rest of the cloze text steps down; the revealed part carries the light. */
+.lc-back.lc-clz .lc-text { color: var(--ink-dim); }
+
+/* ---------- Typed answers ----------
+   Front: Anki's <input id=typeans> is the unlit line; focus lights it.
+   Back: Anki's comparison (<code id=typeans>), what was typed above, the answer below. */
+
+.lc-type center { display: block; text-align: left; }
+.lc #typeans {
+  font-family: var(--sans) !important;
+  font-size: 1.125em !important;
+}
+.lc input#typeans {
+  display: block;
+  width: 100%;
+  padding: 0.5em 0.6em 0.35em;
+  border: 0;
+  border-bottom: 1.5px solid var(--soft);
+  border-radius: 6px 6px 0 0;
+  background-color: var(--rise);
+  color: var(--ink);
+  caret-color: var(--lit);
+  font-weight: var(--w-text);
+  line-height: 1.5;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.lc input#typeans:focus {
+  outline: none;
+  border-bottom-color: var(--lit-line);
+  box-shadow: 0 7px 10px -8px var(--halo-line), inset 0 0 0 1px var(--edge);
+}
+.lc input#typeans:focus-visible { outline: 2px solid var(--lit-line); outline-offset: 2px; }
+.lc-type > div {
+  font-family: inherit !important;
+  font-size: inherit !important;
+}
+.lc code#typeans {
+  display: block;
+  padding: 0.55em 0.7em 0.5em;
+  border-radius: 6px 6px 0 0;
+  background-color: var(--rise);
+  background-image: linear-gradient(var(--lit-line), var(--lit-line));
+  background-size: 100% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font-family: var(--mono) !important;
+  font-size: 0.875em !important;
+  letter-spacing: 0;
+  line-height: 1.75;
+}
+.lc code#typeans br { display: none; }
+.lc #typearrow { display: block; margin-top: 0.5em; font-size: 0; }
+.lc #typearrow::before,
+.lc code#typeans::before {
+  display: block;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+.lc #typearrow::before { content: "Correct answer"; }
+.lc code#typeans:has(#typearrow)::before { content: "You typed"; }
+.lc code#typeans:has(.typeGood):not(:has(#typearrow))::before { content: "Correct"; }
+.lc code#typeans:not(:has(span))::before { content: "Answer, nothing typed"; }
+.lc .typeGood {
+  background: var(--good-bg);
+  color: var(--good-ink);
+  border-radius: 2px;
+  text-shadow: 0 0 0.6em var(--halo);
+}
+.lc .typeBad {
+  background: var(--bad-bg);
+  color: var(--bad-ink);
+  border-radius: 2px;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.lc .typeMissed {
+  background: var(--miss-bg);
+  color: var(--miss-ink);
+  border-radius: 2px;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.25em;
+}
+.lc-a:has(code#typeans) > .lc-body { display: none; }
+.lc-clz .lc-a { margin-top: 0.2em; }
+
+/* ---------- After the answer ---------- */
+
+.lc-extra {
+  margin-top: 1.25em;
+  color: var(--soft);
+  font-size: 0.9375em;
+  line-height: 1.55;
+}
+
+/* The slide print. At night the slide is inverted, so a white page never lights the room. */
+.lc-plate {
+  margin-top: 1.6em;
+  padding-top: 1em;
+  border-top: 1px solid var(--edge);
+}
+.lc-plate summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85em;
+  cursor: pointer;
+  list-style: none;
+}
+.lc-plate summary::-webkit-details-marker { display: none; }
+.lc-plate summary:focus-visible { outline: 2px solid var(--lit-line); outline-offset: 3px; border-radius: 4px; }
+/* The frame sits on the wrapper, so the inversion does not turn it into a bright edge. */
+.lc-thumb { flex: none; width: 5.5em; }
+.lc-thumb,
+.lc-slide {
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+}
+.lc-thumb img,
+.lc-slide img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: var(--slide-filter);
+  opacity: var(--slide-opacity);
+}
+.lc-cite { display: flex; flex-direction: column; gap: 0.3em; min-width: 0; }
+.lc-src {
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+.lc-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--soft);
+  font-size: 0.8125em;
+  line-height: 1.45;
+}
+.lc-excerpt::before { content: "\201C"; }
+.lc-excerpt::after { content: "\201D"; }
+.lc-toggle {
+  min-height: 1.75em;
+  color: var(--soft-hi);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1.75;
+  text-transform: uppercase;
+}
+.lc-toggle::before { content: "Show slide +"; }
+.lc-plate[open] .lc-toggle::before { content: "Hide slide \2212"; }
+.lc-plate[open] .lc-thumb { display: none; }
+.lc-plate[open] .lc-excerpt { display: block; -webkit-line-clamp: unset; }
+.lc-slide { margin-top: 0.85em; }
+
+/* ---------- Wider screens ---------- */
+
+@media (min-width: 520px) {
+  .card { font-size: 17px; padding: 2em 1.5em 2.5em; }
+  .lc-q { font-size: 1.3125em; }
+  .lc-fig { margin-left: 0; margin-right: 0; }
+  .lc-fig svg { max-width: 440px; }
+  .lc-thumb { width: 7.5em; }
+  .role-reverse .lc input#typeans,
+  .role-case .lc input#typeans { max-width: 22em; }
+}
