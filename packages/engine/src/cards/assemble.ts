@@ -30,6 +30,8 @@ export interface Placement {
   concept: { id: string; name: string }
   /** The text lines of the card's slide. */
   slideLines: string[]
+  /** Set for a card that answers a past exam question. */
+  exam?: { papers: number; fromSlides: boolean }
 }
 
 const EXCERPT_WORDS = 30
@@ -111,12 +113,19 @@ export function assemble(draft: Draft, place: Placement): CardFile {
   const provenance = {
     Lecture: two(lecture),
     Topic: place.lecture.title,
-    Source: `Lecture ${lecture}, slide ${draft.slide}`,
-    Asked: '',
+    Source: !place.exam
+      ? `Lecture ${lecture}, slide ${draft.slide}`
+      : place.exam.fromSlides
+        ? `Lecture ${lecture}, slide ${draft.slide}; past exams`
+        : 'Past exams; the answer is not on the slides',
+    Asked: place.exam ? `${place.exam.papers}x` : '',
     Part: '',
     Extra: toHtml(draft.extra),
-    Excerpt: escapeHtml(excerpt(place.slideLines, hidden.join(' '))),
-    Slide: slideImage,
+    Excerpt:
+      place.exam?.fromSlides === false
+        ? ''
+        : escapeHtml(excerpt(place.slideLines, hidden.join(' '))),
+    Slide: place.exam?.fromSlides === false ? '' : slideImage,
     // No renderer yet: a diagram card shows its slide, the fallback of the field contract.
     Diagram: role === 'diagram' ? slideImage : '',
     Key: place.concept.name,

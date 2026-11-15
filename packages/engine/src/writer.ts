@@ -295,6 +295,12 @@ export function createWriter(ask: AskModel, preset: Preset): Writer {
     return [
       `Concept: ${job.concept.name}`,
       `Fact to test: ${job.fact.text} (slide ${job.fact.slide})`,
+      ...(job.fact.exam
+        ? [
+            `Past exams asked: ${job.fact.exam.question}`,
+            'Ask what that question asks, within the limits of the card.',
+          ]
+        : []),
       `Card type: ${job.role}. ${ROLE_SPECS[job.role].use}`,
       '',
       'Rules:',

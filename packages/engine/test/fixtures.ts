@@ -171,7 +171,22 @@ const LONG =
   'It means to ==start from who you are==, from what you know and from whom you know, and to let the means come first while the goals follow from the means at hand.'
 
 /** The first filled form per fact. */
+/** A past paper of the course, and what the scripted model makes of it. */
+export const EXAM = ['Exam Winter 2025/26', '1) What is risk according to Knight (1921)?']
+export const EXAM_ANSWER = 'Knight (1921): risk is an outcome whose probability can be calculated.'
+export const EXAM_GAP = 'Kickstarter funds a project only when it reaches its goal.'
+
 const FILLS: Record<string, unknown> = {
+  [EXAM_ANSWER]: {
+    question: 'Knight (1921): how is risk defined?',
+    answer: 'An outcome whose ==probability can be calculated==.',
+    extra: '',
+  },
+  [EXAM_GAP]: {
+    question: 'Kickstarter: when does a project get its money?',
+    answer: 'Only when it ==reaches its funding goal==.',
+    extra: '',
+  },
   [F.riskIs]: {
     question: 'Knight (1921): what is risk?',
     answer: 'An outcome with a ==probability that is known== or can be worked out.',
@@ -301,6 +316,38 @@ const SPLITS: Record<string, unknown> = {
 }
 
 export function script(request: ModelRequest): unknown {
+  // A past paper: its questions. Then the families, then one answer per family.
+  if (request.context.startsWith('Exam paper:')) {
+    return {
+      questions: [
+        { number: '1', text: 'What is risk according to Knight (1921)?' },
+        { number: '2', text: 'When does Kickstarter release the money?' },
+      ],
+    }
+  }
+  if (request.prompt.includes('Sort the questions into families')) {
+    return {
+      families: [
+        {
+          question: 'What is risk according to Knight (1921)?',
+          members: ['Q1'],
+          lecture: 1,
+          concept: 'risk',
+        },
+        {
+          question: 'When does Kickstarter release the money?',
+          members: ['Q2'],
+          lecture: 1,
+          concept: 'Kickstarter',
+        },
+      ],
+    }
+  }
+  if (request.prompt.startsWith('A question past exams')) {
+    return request.prompt.includes('Kickstarter')
+      ? { answer: EXAM_GAP, items: 0, slide: 0, fromSlides: false }
+      : { answer: EXAM_ANSWER, items: 0, slide: 2, fromSlides: true }
+  }
   const map = MAPS[/^Lecture file: (.+)$/m.exec(request.context)?.[1] ?? '']
   const concepts = map?.topics.flatMap((topic) => topic.concepts) ?? []
   // Reading one slide: the facts the map puts on it.

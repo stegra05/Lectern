@@ -40,6 +40,38 @@ function group(request: ModelRequest): unknown {
   return { title: take(first, 4).slice(0, 32), topics, repeats: [] }
 }
 
+/** A past paper: every line that ends in a question mark is a question. */
+function questions(context: string): unknown {
+  const lines = context.split(/\n| \/ /).map((l) => l.trim())
+  const asked = lines.filter((l) => l.endsWith('?'))
+  return { questions: asked.map((text, i) => ({ number: String(i + 1), text })) }
+}
+
+/** Every question a family of its own, in the first lecture, about its first concept. */
+function families(prompt: string): unknown {
+  const asked = [...prompt.matchAll(/^(Q\d+) \([^)]*\) (.+)$/gm)]
+  const lecture = /^Lecture (\d+) [^:]*: ([^;\n]*)/m.exec(prompt)
+  return {
+    families: asked.map(([, id, text]) => ({
+      question: text!,
+      members: [id!],
+      lecture: Number(lecture?.[1] ?? 1),
+      concept: lecture?.[2] ?? 'Exam',
+    })),
+  }
+}
+
+/** The question itself, turned into a statement the slides do not hold. */
+function answer(prompt: string): unknown {
+  const question = prompt.split('\n')[1] ?? ''
+  return {
+    answer: `Past exams asked: ${question.replace(/\?$/, '.')}`,
+    items: 0,
+    slide: 0,
+    fromSlides: false,
+  }
+}
+
 /** Fills the form of a definition or a term card; other forms get the fact in every field. */
 function fill(request: ModelRequest): Record<string, unknown> {
   const concept = /^Concept: (.+)$/m.exec(request.prompt)?.[1] ?? ''
@@ -79,14 +111,19 @@ export function offlineModel(delayMs = 0): ModelPort {
     price: { input: 0, cachedInput: 0, output: 0 },
     async complete(request) {
       await wait(delayMs)
-      const data =
-        request.task === 'read'
-          ? read(request)
-          : request.task === 'map'
-            ? group(request)
-            : request.task === 'split'
-              ? { cards: [fill(request)] }
-              : fill(request)
+      const data = request.context.startsWith('Exam paper:')
+        ? questions(request.context)
+        : request.prompt.includes('Sort the questions into families')
+          ? families(request.prompt)
+          : request.prompt.startsWith('A question past exams')
+            ? answer(request.prompt)
+            : request.task === 'read'
+              ? read(request)
+              : request.task === 'map'
+                ? group(request)
+                : request.task === 'split'
+                  ? { cards: [fill(request)] }
+                  : fill(request)
       return { data, usage: free }
     },
   }

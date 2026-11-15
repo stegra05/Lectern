@@ -26,7 +26,7 @@ import {
   tooLong,
   validateDraft,
 } from './cards/validate.ts'
-import { htmlToText, slideRange, two } from './cards/words.ts'
+import { htmlToText, slideRange, slug, two } from './cards/words.ts'
 import { findClashes, similarity } from './clash.ts'
 import { estimate, LOW_TEXT_CHARS } from './cost.ts'
 import {
@@ -61,6 +61,14 @@ import {
   type SlideKind,
 } from './decide.ts'
 import { EngineError } from './errors.ts'
+import {
+  askAnswer,
+  askFamilies,
+  askQuestions,
+  type Answer,
+  type ExamsFile,
+  type Family,
+} from './exams.ts'
 import { askGroups, askSlide, factId, slidesBlock } from './mapper.ts'
 import { questionAndAnswer } from './outline.ts'
 import { budget, plan } from './plan.ts'
@@ -150,8 +158,21 @@ async function survey(ports: Ports, command: BuildCommand | EstimateCommand) {
     slides: l.text.length,
     images: l.images.length,
   }))
+  // Past papers not read before: only their size, for the estimate.
+  const read = (await readJson<ExamsFile>(store, paths.examsFile(course)))?.papers ?? []
+  const papers = (await store.list(paths.exams(course))).filter(
+    (name) => /\.pdf$/i.test(name) && !read.some((p) => p.file === name),
+  )
+  let examChars = 0
+  for (const name of papers) {
+    const pages = await ports.pdf.readSlides(
+      await store.readBytes(`${paths.exams(course)}/${name}`),
+    )
+    examChars += pages.flat().join(' ').length
+  }
   const prices = { model: ports.model.price, decisions: ports.decisions.price }
-  return { course, existing, goal, lectures, estimate: estimate(sizes, goal, prices) }
+  const exams = { papers: papers.length, chars: examChars }
+  return { course, existing, goal, lectures, estimate: estimate(sizes, goal, prices, exams) }
 }
 
 export async function estimateCourse(
@@ -282,6 +303,62 @@ export async function build(
     return [first, ...rest].flat()
   }
 
+  // Past exams: every paper not read before, read into its questions. Saved with the course.
+  let examsFile: ExamsFile = (await readJson<ExamsFile>(store, paths.examsFile(course))) ?? {
+    papers: [],
+  }
+  const examTally = { questions: 0, papers: 0, families: 0, fromSlides: 0 }
+  const addExamAnswers = async (lectures: OpenLecture[]) => {
+    const known = new Set(examsFile.papers.map((p) => p.file))
+    const fresh = (await store.list(paths.exams(course)))
+      .filter((name) => /\.pdf$/i.test(name) && !known.has(name))
+      .sort()
+    const papers = await pool(fresh, async (name) => {
+      const pages = await ports.pdf.readSlides(
+        await store.readBytes(`${paths.exams(course)}/${name}`),
+      )
+      const paper = name.replace(/\.pdf$/i, '')
+      return { file: name, questions: await askQuestions(askModel, paper, pages) }
+    })
+    examsFile = { papers: [...examsFile.papers, ...papers] }
+    const questions = examsFile.papers.flatMap((paper) => paper.questions)
+    if (questions.length === 0) return
+    // Questions that ask the same thing, each placed in one lecture of this build.
+    const places = lectures.map((l) => ({
+      number: l.number,
+      title: l.title,
+      concepts: l.topics.flatMap((t) => t.concepts).map((c) => c.name),
+    }))
+    const families = await askFamilies(askModel, questions, places)
+    const answered = await pool(families, async (family) => {
+      const lecture = lectures.find((l) => l.number === family.lecture)!
+      const answer = await askAnswer(askModel, lecture, family)
+      return { family, lecture, answer }
+    })
+    const added = new Map<OpenLecture, Fact[]>()
+    for (const { family, lecture, answer } of answered) {
+      if (answer.answer.trim() === '') continue
+      const fact = examFact(lecture, family, answer)
+      added.set(lecture, [...(added.get(lecture) ?? []), fact])
+    }
+    // The kind of each answer, as for every other fact.
+    for (const [lecture, facts] of added) {
+      const answers = await decide({
+        context: lecture.context,
+        images: lecture.images,
+        questions: facts.map((fact) => ask.factKind(fact.text)),
+      })
+      facts.forEach((fact, f) => (fact.kind = chosen(answers[f], FACT_KINDS, 'definition')))
+    }
+    const all = [...added.values()].flat()
+    Object.assign(examTally, {
+      questions: questions.length,
+      papers: examsFile.papers.length,
+      families: all.length,
+      fromSlides: all.filter((fact) => fact.exam!.fromSlides).length,
+    })
+  }
+
   // Steps 3 and 4: map each lecture, check it, label its facts, plan its cards.
   const planned: { lecture: OpenLecture; concept: Concept; fact: Fact; role: Role }[] = []
   const lectures = await phase('map', read.length, async () => {
@@ -391,6 +468,7 @@ export async function build(
         lecture: lecture.number,
       })
     }
+    await addExamAnswers(out)
     // One plan for all lectures of the build: the goal's cards go where the facts worth most are.
     plan(out, goal, preset).forEach(({ slots, beyondGoal }, i) => {
       out[i]!.beyondGoal = beyondGoal
@@ -495,6 +573,7 @@ export async function build(
           lecture: item.lecture,
           concept: item.concept,
           slideLines,
+          ...(item.fact.exam ? { exam: item.fact.exam } : {}),
         })
         if (copiedRun(draftOf(item), slideLines.join(' ')) >= COPY_RUN) {
           item.flags.push('copies a long run of slide text')
@@ -635,6 +714,7 @@ export async function build(
   })
 
   // Save. `course.json` goes last: a lecture counts as built once it is listed there.
+  if (examsFile.papers.length > 0) await writeJson(store, paths.examsFile(course), examsFile)
   const decisions: Decision[] = (await readJson<Decision[]>(store, paths.decisions(course))) ?? []
   if (!existing?.lectures.length) {
     const { label, cardsPerSlide } = GOAL_PRESETS[goal]
@@ -647,6 +727,14 @@ export async function build(
       lecture: null,
       kind: 'profile',
       text: `Read as a ${profile.kind} course. Cards follow the "${preset.id}" preset.`,
+    })
+  }
+  if (examTally.families > 0) {
+    const byModel = examTally.families - examTally.fromSlides
+    decisions.push({
+      lecture: null,
+      kind: 'exams',
+      text: `${examTally.questions} questions from ${examTally.papers} past papers came down to ${examTally.families} questions that get a card first. The slides answer ${examTally.fromSlides} of them; ${byModel} the model answered from what it knows, and those cards say so.`,
     })
   }
   const summary = []
@@ -772,6 +860,37 @@ function account(
     add('dropped', `${what} dropped in ${name}. The reasons are listed with the lecture.`)
   }
   return out
+}
+
+/**
+ * The answer to a family of exam questions as a fact of its lecture: under the concept it
+ * names, or a new concept in the lecture's last topic. An answer the slides do not hold sits on
+ * the first slide of its concept, so the card still has a place.
+ */
+function examFact(lecture: OpenLecture, family: Family, answer: Answer): Fact {
+  const concepts = lecture.topics.flatMap((topic) => topic.concepts)
+  const name = family.concept || family.question
+  let concept = concepts.find((c) => c.name.toLowerCase() === name.toLowerCase())
+  if (!concept) {
+    let id = slug(name) || 'exam-question'
+    while (concepts.some((c) => c.id === id)) id = `${id}-2`
+    concept = { id, name, slides: [], facts: [] }
+    lecture.topics.at(-1)!.concepts.push(concept)
+  }
+  const onSlide = answer.fromSlides && answer.slide >= 1 && answer.slide <= lecture.slides
+  const slide = onSlide ? answer.slide : (concept.slides[0] ?? 1)
+  const fact: Fact = {
+    text: answer.answer.trim(),
+    slide,
+    kind: 'definition',
+    ...(answer.items > 0 ? { items: answer.items } : {}),
+    exam: { question: family.question, papers: family.papers, fromSlides: onSlide },
+  }
+  // First in its concept, so that of two cards asking the same, the exam's is kept.
+  concept.facts.unshift(fact)
+  if (!concept.slides.includes(slide))
+    concept.slides = [...concept.slides, slide].sort((a, b) => a - b)
+  return fact
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {

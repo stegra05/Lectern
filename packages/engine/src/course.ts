@@ -26,6 +26,18 @@ export interface Fact {
   items?: number
   /** How much it is worth learning, from 0 to 3 (`WORTH_LEVELS`). Absent without a verdict. */
   worth?: number
+  /** Set when the fact answers a question of past exams rather than coming from a slide. */
+  exam?: ExamFact
+}
+
+/** Where a fact that answers a past exam question comes from. */
+export interface ExamFact {
+  /** The question in the words the papers use most. */
+  question: string
+  /** How many past papers asked it. */
+  papers: number
+  /** False when the slides do not hold the answer and the model wrote it from what it knows. */
+  fromSlides: boolean
 }
 
 export interface Concept {
@@ -85,7 +97,8 @@ export interface CourseFile {
 export interface Decision {
   /** The lecture the decision is about, or null for the whole course. */
   lecture: number | null
-  kind: 'goal' | 'profile' | 'left-out' | 'beyond-goal' | 'recurring' | 'no-card' | 'dropped'
+  kind:
+    'goal' | 'profile' | 'exams' | 'left-out' | 'beyond-goal' | 'recurring' | 'no-card' | 'dropped'
   text: string
 }
 
@@ -117,6 +130,8 @@ export interface Run {
 export const paths = {
   course: (course: string) => `${course}/course.json`,
   slides: (course: string) => `${course}/slides`,
+  exams: (course: string) => `${course}/exams`,
+  examsFile: (course: string) => `${course}/exams.json`,
   lecture: (course: string, n: number) => `${course}/lectures/${two(n)}/lecture.json`,
   cards: (course: string, n: number) => `${course}/lectures/${two(n)}/cards.yaml`,
   decisions: (course: string) => `${course}/decisions.json`,

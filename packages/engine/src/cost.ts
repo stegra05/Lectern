@@ -31,6 +31,18 @@ const TOKENS = {
   groupReplyPerFact: 25,
   fillPrompt: 600,
   fillReply: 120,
+  /**
+   * Past exams: each paper read whole, then all questions sorted into families in one call,
+   * then one answer per family over its lecture. Measured on 22 Entrepreneurship papers on
+   * 2026-11-15: 272 questions, about 10 per paper; families are roughly half the questions.
+   */
+  questionsPerPaper: 10,
+  questionReply: 45,
+  familyPerQuestion: 70,
+  familyReplyPerQuestion: 30,
+  familiesPerQuestion: 0.5,
+  answerPrompt: 350,
+  answerReply: 120,
   /** One decision request per fact for its worth: 142,375 tokens for 633 facts. */
   factWorth: 225,
   /** Repairs and splits on top of the fill calls. */
@@ -91,9 +103,25 @@ export function estimate(
   lectures: { chars: number; slides: number; images: number }[],
   goal: Goal,
   prices: Prices,
+  exams: { papers: number; chars: number } = { papers: 0, chars: 0 },
 ): Estimate {
   const depth = GOAL_PRESETS[goal]
-  let dollars = 0
+  const questions = exams.papers * TOKENS.questionsPerPaper
+  const families = questions * TOKENS.familiesPerQuestion
+  const lectureSource =
+    lectures.reduce((sum, l) => sum + l.chars * TOKENS.perChar + l.images * TOKENS.perImage, 0) /
+    Math.max(1, lectures.length)
+  let dollars =
+    exams.papers === 0
+      ? 0
+      : exams.chars * TOKENS.perChar * prices.model.input +
+        questions * TOKENS.questionReply * prices.model.output +
+        questions * TOKENS.familyPerQuestion * prices.model.input +
+        questions * TOKENS.familyReplyPerQuestion * prices.model.output +
+        families *
+          (lectureSource * prices.model.cachedInput +
+            TOKENS.answerPrompt * prices.model.input +
+            TOKENS.answerReply * prices.model.output)
   let cards = 0
   for (const lecture of lectures) {
     const source = lecture.chars * TOKENS.perChar + lecture.images * TOKENS.perImage

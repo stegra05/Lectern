@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { readFile, readdir } from 'node:fs/promises'
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -23,8 +23,8 @@ import {
   type Lecture,
   type Run,
 } from '../src/api.ts'
-import { decisions, script, SLIDES } from './fixtures.ts'
-import { addSlides, designs, snapshot, tempRoot } from './helpers.ts'
+import { decisions, EXAM, script, SLIDES } from './fixtures.ts'
+import { addSlides, designs, makePdf, snapshot, tempRoot } from './helpers.ts'
 
 let root: string
 let model: ScriptedModel
@@ -803,6 +803,77 @@ describe('the card check and the rules on what a card says', () => {
       ['04-exam-definition-1', ['may be about the organisation of the course']],
       ['04-pivot-definition-1', undefined],
     ])
+  })
+})
+
+describe('past exams', () => {
+  beforeAll(async () => {
+    await courseOf('01 Risk.pdf')
+    await mkdir(join(root, 'course', 'exams'), { recursive: true })
+    await writeFile(join(root, 'course', 'exams', 'Winter 2025-26.pdf'), await makePdf([EXAM]))
+    await run({ type: 'build', course: 'course', goal: 'pass' })
+  })
+
+  it('reads every paper into its questions once, and keeps them with the course', async () => {
+    expect(await json('exams.json')).toEqual({
+      papers: [
+        {
+          file: 'Winter 2025-26.pdf',
+          questions: [
+            {
+              paper: 'Winter 2025-26',
+              number: '1',
+              text: 'What is risk according to Knight (1921)?',
+            },
+            {
+              paper: 'Winter 2025-26',
+              number: '2',
+              text: 'When does Kickstarter release the money?',
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('gives every answered exam question a card first, even where the goal is short of cards', async () => {
+    // Pass allows 3 cards for the 5 slides of lecture 1: both exam answers get one.
+    const all = await cards('01')
+    const exam = all.filter((c) => c.fields.Asked === '1x')
+    expect(exam.map((c) => [c.fields.Front, c.fields.Source])).toEqual([
+      ['Knight (1921): how is risk defined?', 'Lecture 1, slide 2; past exams'],
+      [
+        'Kickstarter: when does a project get its money?',
+        'Past exams; the answer is not on the slides',
+      ],
+    ])
+    expect(exam[1]!.fields.Slide).toBe('')
+    expect(all).toHaveLength(3)
+  })
+
+  it('tells the writer which exam question the card should answer', () => {
+    expect(
+      calls('fill').some((r) =>
+        r.prompt.includes('Past exams asked: When does Kickstarter release the money?'),
+      ),
+    ).toBe(true)
+  })
+
+  it('puts an answer the lecture has no concept for under a new concept, and says what it did', async () => {
+    const lecture = await json<Lecture>('lectures/01/lecture.json')
+    const kickstarter = lecture.topics
+      .flatMap((t) => t.concepts)
+      .find((c) => c.name === 'Kickstarter')!
+    expect(kickstarter.facts[0]!.exam).toEqual({
+      question: 'When does Kickstarter release the money?',
+      papers: 1,
+      fromSlides: false,
+    })
+    expect(await json<Decision[]>('decisions.json')).toContainEqual({
+      lecture: null,
+      kind: 'exams',
+      text: '2 questions from 1 past papers came down to 2 questions that get a card first. The slides answer 1 of them; 1 the model answered from what it knows, and those cards say so.',
+    })
   })
 })
 

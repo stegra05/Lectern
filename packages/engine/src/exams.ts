@@ -1,29 +1,38 @@
 /**
- * Past exams as a guide to what gets a card. The model reads each paper into its questions,
- * then says for every question which facts of a lecture a student needs to answer it. The
- * number of questions that hit a fact is its weight in the plan.
+ * Past exams as questions the cards answer. The model reads each paper into its questions,
+ * sorts the questions of all papers into families of the same question, places each family in
+ * a lecture of the build, and writes the answer as a fact of that lecture. The answer comes
+ * from the lecture's slides where they hold it, otherwise from what the model knows, and the
+ * fact says which.
  *
- * Why: with the slides read well, the plan has twice the facts it may turn into cards, and a
- * score that has never seen an exam chose badly between them. Measured on 2026-11-15 on the
- * Entrepreneurship course: the facts held 279 of the 636 reference notes, the cards made from
- * them 204, and notes the exam asked nine times or more fell from 42 to 33 percent.
+ * Why: measured on 2026-11-15 on Entrepreneurship, 47 of the 52 questions of the four newest
+ * papers repeat an older question almost word for word, and even every fact read from the
+ * slides answered only 20 of them: the slides imply reasons and relations an exam asks for, or
+ * leave out the cases. As weights on facts read from the slides, past exams changed nothing.
  */
 
 import { z } from 'zod'
 import type { AskModel } from './ask.ts'
 import { SYSTEM } from './mapper.ts'
-import type { ReadFact } from './tree.ts'
+
+/** One question of one past paper. */
+export interface ExamQuestion {
+  /** The paper, as its file is named, without the extension. */
+  paper: string
+  /** The number of the question as the paper gives it, such as "3" or "2b". */
+  number: string
+  /** The question as a student reads it, with the options of a multiple choice question. */
+  text: string
+}
+
+/** The course's past papers, read once each: `exams.json` in the course folder. */
+export interface ExamsFile {
+  papers: { file: string; questions: ExamQuestion[] }[]
+}
 
 const QuestionsSchema = z.object({
   questions: z.array(z.object({ number: z.string(), text: z.string() })),
 })
-
-export interface ExamQuestion {
-  /** Which paper, and the question's number on it, such as "Summer 2024 / 2b". */
-  id: string
-  /** The question as a student reads it, with the options of a multiple choice question. */
-  text: string
-}
 
 export function questionsPrompt(): string {
   return [
@@ -35,11 +44,13 @@ export function questionsPrompt(): string {
   ].join('\n')
 }
 
+/** One paper, from the text of its pages. */
 export async function askQuestions(
   ask: AskModel,
   paper: string,
-  text: string,
+  pages: string[][],
 ): Promise<ExamQuestion[]> {
+  const text = pages.map((lines, i) => `[page ${i + 1}] ${lines.join(' / ')}`).join('\n')
   const reply = await ask(
     {
       task: 'read',
@@ -51,57 +62,132 @@ export async function askQuestions(
     },
     QuestionsSchema,
   )
-  return reply.questions.map((q) => ({ id: `${paper} / ${q.number.trim()}`, text: q.text }))
+  return reply.questions.map((q) => ({ paper, number: q.number.trim(), text: q.text.trim() }))
 }
 
-const MatchSchema = z.object({
-  matches: z.array(z.object({ question: z.string(), facts: z.array(z.string()) })),
+const FamiliesSchema = z.object({
+  families: z.array(
+    z.object({
+      question: z.string(),
+      members: z.array(z.string()),
+      lecture: z.number(),
+      concept: z.string(),
+    }),
+  ),
 })
+
+/** Questions that ask the same thing, placed in a lecture and a concept. */
+export interface Family {
+  /** The question in the words the papers use most. */
+  question: string
+  /** How many papers asked it. */
+  papers: number
+  lecture: number
+  concept: string
+}
 
 /** Short ids for the questions in one prompt. */
 export const questionId = (i: number) => `Q${i + 1}`
 
-export function matchPrompt(
-  facts: { id: string; fact: ReadFact }[],
+export function familiesPrompt(
   questions: ExamQuestion[],
+  lectures: { number: number; title: string; concepts: string[] }[],
 ): string {
   return [
-    'Facts of this lecture:',
-    ...facts.map(({ id, fact }) => `${id} ${fact.concept}: ${fact.text}`),
+    'Questions from past exam papers of the course, one per line:',
+    ...questions.map((q, i) => `${questionId(i)} (${q.paper}) ${q.text}`),
     '',
-    'Questions from past exams of the course:',
-    ...questions.map((q, i) => `${questionId(i)} ${q.text}`),
+    'The lectures, each with its concepts:',
+    ...lectures.map((l) => `Lecture ${l.number} ${l.title}: ${l.concepts.join('; ')}`),
     '',
-    'For each question this lecture helps to answer, give the ids of the facts a student needs',
-    'for the answer, at most three. Leave out a question the facts do not help to answer.',
-    '- question: its id only, such as "Q12". facts: ids only, such as "L03-17".',
+    'Sort the questions into families: questions that ask for the same answer, in the same or in',
+    'other words, form one family. A question that is asked once is a family of its own.',
+    "- question: the family's question in the words its papers use most. A multiple choice",
+    '  question with its options.',
+    '- members: the ids of its questions, such as "Q12".',
+    '- lecture: the number of the lecture that teaches the answer, or the closest one.',
+    '- concept: the concept of that lecture the question is about, named exactly as above, or a',
+    '  new name of at most 6 words when the lecture has no such concept.',
+    'Every id appears in exactly one family. Leave out nothing.',
   ].join('\n')
 }
 
-/** For each question the lecture helps to answer, the ids of the facts it needs. */
-export async function askMatches(
+/** The families of all questions, each placed in one of the given lectures. */
+export async function askFamilies(
   ask: AskModel,
-  context: string,
-  facts: { id: string; fact: ReadFact }[],
   questions: ExamQuestion[],
-): Promise<Map<string, string[]>> {
+  lectures: { number: number; title: string; concepts: string[] }[],
+): Promise<Family[]> {
   const reply = await ask(
     {
       task: 'map',
       system: SYSTEM,
-      context,
+      context: 'Past exam papers of a university course.',
       images: [],
-      prompt: matchPrompt(facts, questions),
+      prompt: familiesPrompt(questions, lectures),
       effort: 'medium',
     },
-    MatchSchema,
+    FamiliesSchema,
   )
-  const known = new Set(facts.map((f) => f.id))
-  const out = new Map<string, string[]>()
-  for (const { question, facts: ids } of reply.matches) {
-    const i = Number(/^Q(\d+)\b/.exec(question.trim())?.[1]) - 1
-    const hit = ids.map((id) => id.trim()).filter((id) => known.has(id))
-    if (questions[i] && hit.length > 0) out.set(questions[i].id, hit.slice(0, 3))
-  }
-  return out
+  const known = new Set(lectures.map((l) => l.number))
+  return reply.families.flatMap((family) => {
+    const members = family.members
+      .map((id) => questions[Number(/^Q(\d+)\b/.exec(id.trim())?.[1]) - 1])
+      .filter((q) => q !== undefined)
+    if (members.length === 0 || !known.has(family.lecture)) return []
+    const papers = new Set(members.map((q) => q.paper)).size
+    return [
+      {
+        question: family.question.trim(),
+        papers,
+        lecture: family.lecture,
+        concept: family.concept.trim(),
+      },
+    ]
+  })
+}
+
+const AnswerSchema = z.object({
+  answer: z.string(),
+  items: z.number(),
+  slide: z.number(),
+  fromSlides: z.boolean(),
+})
+
+export type Answer = z.infer<typeof AnswerSchema>
+
+export function answerPrompt(family: Family): string {
+  return [
+    `A question past exams of this course asked, in ${family.papers === 1 ? 'one paper' : `${family.papers} papers`}:`,
+    family.question,
+    `It is about: ${family.concept}`,
+    '',
+    'Write the answer a student should learn, as one fact.',
+    '- answer: one or two sentences that answer the question on their own and name what it is',
+    '  about. For a multiple choice question, the right option and why, in a few words. For a',
+    '  question that asks for several things, name them all.',
+    '- items: how many things the answer lists, when it is a list to recite, otherwise 0.',
+    '- fromSlides: true when the slides above hold the answer. Then slide is the slide that',
+    '  holds it most.',
+    '- When the slides do not hold the answer, answer from what you know of the subject, set',
+    '  fromSlides to false and slide to 0.',
+  ].join('\n')
+}
+
+/** The answer to one family, with the lecture of its family as context. */
+export function askAnswer(
+  ask: AskModel,
+  lecture: { context: string; images: { slide: number; png: string }[] },
+  family: Family,
+): Promise<Answer> {
+  return ask(
+    {
+      task: 'fill',
+      system: SYSTEM,
+      ...lecture,
+      prompt: answerPrompt(family),
+      effort: 'low',
+    },
+    AnswerSchema,
+  )
 }
