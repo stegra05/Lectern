@@ -1,0 +1,445 @@
+/* The map: dotted ground, the track, the rings and the tools at the top left. */
+
+.map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--ground);
+  background-image: radial-gradient(circle at 12px 12px, var(--grid-dot) 0.9px, transparent 1.2px);
+  background-size: 24px 24px;
+  touch-action: none;
+}
+
+.map-layer {
+  position: absolute;
+  inset: 0;
+}
+/* A level change reads as a zoom: into a lecture from its stop, back out onto the track. */
+.map-enter-in {
+  animation: map-zoom-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.map-enter-out {
+  animation: map-zoom-out 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes map-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes map-zoom-out {
+  from {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+.map-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Everything that follows the viewport slides with it, except while the hand is on it. */
+.map-move {
+  transition-property: transform, d, r, cx, cy;
+  transition-duration: 260ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.map.is-moving .map-move {
+  transition: none;
+}
+
+.map-band {
+  fill: none;
+  stroke: var(--track);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* A stop is its 40px square, centred on the stop's point; fan and label hang outside it. */
+.map-stop,
+.map-neighbour {
+  position: absolute;
+  left: -20px;
+  top: -20px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-group);
+  background: none;
+  color: var(--label);
+}
+.map-stop:focus-visible,
+.map-neighbour:focus-visible {
+  outline: none;
+}
+
+.map-square {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-group);
+  background: var(--lec);
+  box-shadow: inset 0 0 0 0.75px var(--stop-stroke);
+  color: var(--on-lecture);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+  transition: transform 150ms ease-out;
+}
+button.map-stop:hover .map-square {
+  transform: scale(1.06);
+}
+.map-stop:focus-visible .map-square,
+.map-neighbour:focus-visible .map-square {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.map-stop-label {
+  position: absolute;
+  top: 47px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+.map-stop-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: -0.1px;
+}
+.map-stop-caption {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--label-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.map-fan {
+  position: absolute;
+  left: -30px;
+  top: -30px;
+  overflow: visible;
+  color: var(--lec);
+  pointer-events: none;
+}
+.map-fan line {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.map-fan circle {
+  fill: currentColor;
+  stroke: var(--dot-stroke);
+  stroke-width: 0.75;
+}
+
+.is-flag .map-square {
+  background: none;
+  box-shadow: none;
+}
+.map-flag-box {
+  fill: none;
+  stroke: var(--neutral-mark);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3.2;
+}
+.map-flag-icon {
+  fill: none;
+  stroke: var(--label-2);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Dashed until cards are in Anki, filled with the accent afterwards. */
+.is-sent .map-flag-box {
+  fill: var(--accent);
+  stroke: var(--accent);
+  stroke-dasharray: none;
+}
+.is-sent .map-flag-icon {
+  stroke: var(--on-accent);
+}
+
+/* Inside a lecture. */
+.map-guide {
+  fill: none;
+  stroke: var(--track);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.map-spoke {
+  stroke: var(--lec);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.map-spoke.is-on {
+  stroke-width: 2.25;
+}
+
+.map-centre {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--group);
+  box-shadow: 0 0 0 0.75px var(--hairline);
+  color: var(--label);
+}
+.map-centre.is-selected {
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+.map-centre-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+}
+.map-centre-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: -0.15px;
+}
+.map-centre-caption {
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--label-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.map-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 28px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--group);
+  box-shadow: 0 0 0 0.75px var(--hairline);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A shortened pill shows its whole name under the pointer or the keyboard, above the rest. */
+.map-pill:hover,
+.map-pill:focus-visible {
+  z-index: 4;
+  max-width: none !important;
+}
+.map-pill:hover:not(.is-selected) {
+  background: color-mix(in srgb, var(--group) 92%, var(--label));
+}
+.map-pill.is-selected {
+  background: var(--selection);
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+.map-concept {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--label);
+}
+.map-concept:hover,
+.map-concept:focus-visible {
+  z-index: 2;
+}
+.map-concept:hover:not(.is-peek) {
+  background: var(--control);
+}
+/* A name shown only under the pointer floats on a solid plate, above its crowded neighbours. */
+.map-concept.is-peek:not(.is-selected) {
+  z-index: 3;
+  background: var(--group);
+  box-shadow: var(--shadow-control);
+}
+.map-concept.is-selected {
+  background: var(--selection);
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+.map-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--lec);
+  box-shadow: inset 0 0 0 0.75px var(--dot-stroke);
+}
+.map-concept.is-selected .map-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3.55px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+}
+.map-concept-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  white-space: nowrap;
+  text-align: left;
+  pointer-events: none;
+}
+.map-concept.is-left .map-concept-label {
+  text-align: right;
+}
+.map-concept-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  line-height: 15px;
+}
+.map-concept.is-selected .map-concept-name {
+  font-weight: 600;
+}
+.map-concept-caption {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--label-2);
+  font-variant-numeric: tabular-nums;
+}
+.map-concept.is-selected .map-concept-caption {
+  color: var(--label-3);
+}
+
+.map-neighbour {
+  opacity: 0.4;
+  transition: opacity 150ms ease-out;
+}
+button.map-neighbour:hover {
+  opacity: 0.75;
+}
+.map-stub {
+  position: absolute;
+  left: 15px;
+  top: 15px;
+  width: 44px;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--track);
+}
+.map-stub.is-right {
+  left: auto;
+  right: 15px;
+}
+
+/* The tools at the top left. */
+.map-tools {
+  position: absolute;
+  left: var(--gutter);
+  top: calc(var(--titlebar-h) + var(--gutter));
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 3px;
+  border-radius: 9px;
+  background: var(--material);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    var(--shadow-control),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.map-tools-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--separator);
+}
+.map-tools-level {
+  margin-left: 3px;
+  padding: 0 10px 0 9px;
+  border-left: 1px solid var(--separator);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+/* An empty course. */
+.map-empty {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+.map-empty-track {
+  position: relative;
+  display: flex;
+  gap: 52px;
+  margin-bottom: 14px;
+}
+.map-empty-band {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 15px;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--track);
+}
+.map-empty-stop {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-group);
+  background: var(--ground);
+  outline: 1.5px dashed var(--neutral-mark);
+  outline-offset: -1.5px;
+  color: var(--label-2);
+}
+.map-empty-text {
+  max-width: 340px;
+  text-wrap: pretty;
+  margin-bottom: 8px;
+  color: var(--label-2);
+}
+
+/* The lecture the engine is on during a run: a calm halo and its caption in the accent. */
+.map-stop-now::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 18px;
+  background: var(--selection);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-text) 35%, transparent);
+}
+.map-stop-now .map-stop-caption {
+  color: var(--accent-text);
+}
