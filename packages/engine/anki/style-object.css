@@ -1,0 +1,731 @@
+/* lectern-notetype v3 skin:object
+   Lectern cards, skin "Vitrine": the card is a museum wall. A room sign names the lecture,
+   a wall label carries the question and its medium line (the role cue), and the answer is
+   the exhibit. On the front its case stands empty, a niche cut into the wall in the shape
+   of the expected answer. On the back the object sits in the same niche, lit, on a white
+   panel. The extended label below holds the context and the credit line with the slide.
+   One typeface, weights and sizes only, as on a real label. One colour: the wall.
+   Phone first: base rules are for 360 px, one media query adds room. Sizes are em of
+   .card, so the font size in Anki's Styling editor scales the whole card.
+   Hooks from the shared templates: .role-<Role>, .is-typed, .lc-front / .lc-back. */
+
+/* ---------- Tokens ---------- */
+
+.card {
+  --wall: #2f4a46;
+  --wall-ink: #ffffff;
+  --wall-ink-2: #c6d6d1;
+  --niche: #22362f;
+  --niche-rim: rgba(255, 255, 255, 0.2);
+  --niche-shade: rgba(0, 0, 0, 0.38);
+  --plaque: #ffffff;
+  --panel: #ffffff;
+  --ink: #141a19;
+  --ink-2: #4f5b58;
+  --rule: #d8dfdc;
+  --accent: #2b5c51;
+  --mark-line: #4a8f7f;
+  --gap-fill: #e2ece8;
+  --code-bg: #f1f5f3;
+  --edge: rgba(0, 0, 0, 0.28);
+  --lift: rgba(0, 0, 0, 0.55);
+  --marker-ink: #22362f;
+  --good-bg: #d5ecdc;
+  --good-ink: #124a2b;
+  --bad-bg: #f6dad5;
+  --bad-ink: #7a1d13;
+  --miss-bg: #e3e8e6;
+  --miss-ink: #34403d;
+  --dg-key: rgba(74, 143, 127, 0.22);
+
+  --sans: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", Consolas, monospace;
+  --pad: 12px;
+  --in: 16px;
+
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.42;
+  text-align: left;
+  margin: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-size-adjust: 100%;
+}
+/* .card.nightMode outranks the reviewer's own body.nightMode background. */
+.card,
+.card.nightMode {
+  background-color: var(--wall);
+  color: var(--ink);
+}
+
+/* After hours: the wall goes dark, the labels stay readable, the exhibit is still the
+   brightest surface. */
+.card.nightMode,
+.card.night_mode,
+.nightMode .card,
+.night_mode .card {
+  --wall: #101816;
+  --wall-ink: #e6eeeb;
+  --wall-ink-2: #a2b4ae;
+  --niche: #070b0a;
+  --niche-rim: rgba(255, 255, 255, 0.12);
+  --niche-shade: rgba(0, 0, 0, 0.6);
+  --plaque: #1b2523;
+  --panel: #24322f;
+  --ink: #e6eeeb;
+  --ink-2: #a8b6b2;
+  --rule: #33413e;
+  --accent: #93cfbf;
+  --mark-line: #6fb8a5;
+  --gap-fill: #2f4541;
+  --code-bg: #151e1c;
+  --edge: rgba(0, 0, 0, 0.5);
+  --lift: rgba(0, 0, 0, 0.8);
+  --marker-ink: #101816;
+  --good-bg: #1c3f2c;
+  --good-ink: #bdebcb;
+  --bad-bg: #4a2422;
+  --bad-ink: #ffcdc5;
+  --miss-bg: #2c3836;
+  --miss-ink: #cfdad6;
+  --dg-key: rgba(111, 184, 165, 0.2);
+}
+
+/* ---------- The wall ---------- */
+
+.lc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 10px;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 14px var(--pad) 26px;
+}
+.lc * { box-sizing: border-box; }
+/* The sheet is only a wrapper: its children are hung on the wall one by one. */
+.lc-sheet { display: contents; }
+.lc-sheet > * { flex: 1 1 100%; order: 2; min-width: 0; }
+
+/* Room sign: lecture number and lecture name, painted on the wall. */
+.lc-head {
+  flex: 1 1 auto;
+  order: 0;
+  margin: 0 0 10px;
+  padding-left: 2px;
+  color: var(--wall-ink);
+  line-height: 1.3;
+}
+.lc-lec {
+  font-size: 0.82em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-right: 6px;
+  padding-right: 8px;
+  border-right: 1px solid var(--wall-ink-2);
+}
+.lc-topic {
+  font-size: 0.82em;
+  font-weight: 400;
+}
+
+/* Exam weight: the highlight marker next to the label, as museums mark the stops of a
+   tour. Asked by past exams: a filled marker. Core: an outline. */
+.lc-tab {
+  order: 1;
+  margin: 0 0 10px auto;
+  padding: 2px 8px;
+  border: 1px solid var(--wall-ink-2);
+  border-radius: 2px;
+  color: var(--wall-ink-2);
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.lc-tab.is-asked {
+  background: var(--wall-ink);
+  border-color: var(--wall-ink);
+  color: var(--marker-ink);
+}
+
+/* ---------- The wall label: question, listing, medium line ---------- */
+
+.lc-q,
+.lc-text,
+.lc-code,
+.lc-cue {
+  background: var(--plaque);
+  padding-left: var(--in);
+  padding-right: var(--in);
+}
+.lc-q,
+.lc-text {
+  padding-top: 15px;
+  padding-bottom: 4px;
+  border-radius: 2px 2px 0 0;
+  font-size: 1.18em;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.008em;
+  text-wrap: pretty;
+}
+.lc-text { font-weight: 400; }
+
+.lc code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+.lc sub, .lc sup { font-size: 0.72em; line-height: 0; }
+
+.lc-code {
+  margin: 0;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background: var(--code-bg);
+  border-top: 8px solid var(--plaque);
+  border-bottom: 1px solid var(--rule);
+  overflow-x: auto;
+  tab-size: 4;
+}
+.lc-code code {
+  font-size: 0.76em;
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--ink);
+}
+
+/* The medium line: what the role is, then what shape the answer takes. It closes the
+   label, and the label's lower edge throws a hairline shadow on the wall. */
+.lc-cue {
+  margin: 0;
+  padding-top: 6px;
+  padding-bottom: 14px;
+  border-radius: 0 0 2px 2px;
+  box-shadow: 0 2px 0 var(--edge);
+  font-size: 0.8em;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+.lc-cue::before {
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: 0.45em;
+}
+.lc-code + .lc-cue { padding-top: 10px; }
+
+.lc-cue::before                     { content: "Question"; }
+.lc-cue::after                      { content: "Your answer"; }
+.role-definition .lc-cue::before    { content: "Definition"; }
+.role-definition .lc-cue::after     { content: "one sentence"; }
+.role-reverse .lc-cue::before       { content: "Term"; }
+.role-reverse .lc-cue::after        { content: "name it"; }
+.role-contrast .lc-cue::before      { content: "Contrast"; }
+.role-contrast .lc-cue::after       { content: "both sides"; }
+.role-chain .lc-cue::before         { content: "Sequence"; }
+.role-chain .lc-cue::after          { content: "the missing steps"; }
+.role-name-two .lc-cue::before      { content: "Pair"; }
+.role-name-two .lc-cue::after       { content: "two items"; }
+.role-why .lc-cue::before           { content: "Reason"; }
+.role-why .lc-cue::after            { content: "in two steps"; }
+.role-code .lc-cue::before          { content: "Listing"; }
+.role-code .lc-cue::after           { content: "both parts"; }
+.role-case .lc-cue::before          { content: "Case"; }
+.role-case .lc-cue::after           { content: "name the conclusion"; }
+.role-formula .lc-cue::before       { content: "Formula"; }
+.role-formula .lc-cue::after        { content: "the statement and its condition"; }
+.role-diagram .lc-cue::before       { content: "Drawing"; }
+.role-diagram .lc-cue::after        { content: "sketch it on paper, then flip"; }
+.role-calculation .lc-cue::before   { content: "Calculation"; }
+.role-calculation .lc-cue::after    { content: "work it out"; }
+.role-cloze .lc-cue::before         { content: "Gap"; }
+.role-cloze .lc-cue::after          { content: "fill it"; }
+.role-cloze-list .lc-cue::before    { content: "List"; }
+.role-cloze-list .lc-cue::after     { content: "complete it"; }
+.is-typed .lc-cue::after            { content: "type the term"; }
+.lc-clz.is-typed .lc-cue::after     { content: "type what is missing"; }
+.lc-back.is-typed .lc-cue::after    { content: "your answer, checked"; }
+.lc-clz.lc-back:not(.is-typed) .lc-cue::after { content: "filled in"; }
+
+/* ---------- The exhibit: an empty niche on the front ---------- */
+
+.lc-slot,
+.lc-a { margin: 14px 0 0; }
+
+.lc-shape > span,
+.lc-shape > span::after,
+.lc input#typeans {
+  border-radius: 3px;
+  background: var(--niche);
+  box-shadow: inset 0 3px 7px var(--niche-shade), inset 0 -1px 0 var(--niche-rim);
+}
+.lc-shape > span {
+  display: block;
+  min-height: 3.1em;
+}
+.lc-shape > span + span { display: none; }
+
+.role-definition .lc-shape > span { min-height: 5em; }
+.role-formula .lc-shape > span { min-height: 6.2em; }
+.role-reverse .lc-shape > span,
+.role-case .lc-shape > span { width: 62%; }
+.role-diagram .lc-shape > span { aspect-ratio: 16 / 10; }
+
+/* ---------- The exhibit: the object in the same niche on the back ---------- */
+
+.lc-body,
+.lc-back .lc-type {
+  padding: 13px var(--in);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 0 var(--edge), 0 12px 18px -12px var(--lift);
+  font-size: 1.04em;
+  line-height: 1.42;
+}
+.role-definition .lc-body { min-height: 4.8em; }
+.role-formula .lc-body { min-height: 6em; padding-top: 6px; }
+.role-reverse .lc-a,
+.role-case .lc-a { flex: 0 1 auto; width: fit-content; min-width: 62%; max-width: 100%; }
+.role-reverse .lc-body,
+.role-case .lc-body { font-size: 1.32em; line-height: 1.22; font-weight: 700; letter-spacing: -0.01em; }
+
+.lc-body > :first-child { margin-top: 0; }
+.lc-body > :last-child { margin-bottom: 0; }
+.lc-body p { margin: 0.5em 0; }
+.lc-body ul { margin: 0; padding-left: 1.2em; }
+.lc-body li + li { margin-top: 0.3em; }
+
+/* The key term: bold, with the wall's colour drawn under it. */
+.lc mark {
+  background: none;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--mark-line);
+  text-decoration-thickness: 0.14em;
+  text-underline-offset: 0.2em;
+  text-decoration-skip-ink: none;
+}
+
+/* ---------- Mathematics ---------- */
+
+.lc mjx-container { color: inherit; }
+.lc mjx-container[display="true"] {
+  margin: 0.35em 0 0.5em !important;
+  padding: 2px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.role-formula .lc-body mjx-container[display="true"] { font-size: 118% !important; }
+.lc-extra mjx-container[display="true"] { font-size: 92% !important; }
+
+/* ---------- Drawing: a framed picture hung in the niche ---------- */
+
+.lc-fig { margin: 0 0 10px; color: var(--ink); }
+.lc-fig img,
+.lc-fig svg { display: block; width: 100%; height: auto; }
+.dg { font-family: var(--sans); font-weight: 700; }
+.dg .dg-cell { fill: none; stroke: currentColor; stroke-opacity: 0.6; stroke-width: 1; }
+.dg .dg-key { fill: var(--dg-key); }
+.dg text { fill: currentColor; }
+.dg .dg-axis { font-weight: 400; letter-spacing: 0.06em; fill: var(--ink-2); }
+/* The picture bleeds to 6 px from the screen edge, so an 11-unit label in a 300-unit
+   viewBox renders at about 12 px on a 360 px phone. */
+.role-diagram .lc-fig,
+.lc-clz .lc-fig {
+  margin: 0 calc(6px - var(--pad)) 10px;
+  padding: 7px;
+  border-radius: 3px;
+  background: var(--panel);
+  box-shadow: 0 1px 0 var(--edge), 0 12px 18px -12px var(--lift);
+}
+.lc-clz .lc-fig { margin-top: 14px; }
+.nightMode .lc-fig img, .night_mode .lc-fig img { filter: brightness(0.9); }
+
+/* ---------- Labels on the wall: contrast, code ----------
+   The side names are painted on the wall above their niches, on both faces. The
+   baseline back is one panel with the list inside, which is also what a client without
+   :has() shows. With :has() and a list, each item gets its own panel under its name. */
+
+.lc-shape > span:not(:empty),
+.lc-labels > span {
+  font-size: 0.76em;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--wall-ink);
+}
+
+.role-contrast .lc-shape,
+.role-code .lc-shape,
+.role-contrast .lc-labels,
+.role-code .lc-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.role-contrast .lc-shape > span,
+.role-code .lc-shape > span {
+  display: block;
+  min-height: 0;
+  padding-left: 2px;
+  background: none;
+  box-shadow: none;
+}
+.role-contrast .lc-shape > span::after,
+.role-code .lc-shape > span::after {
+  content: "";
+  display: block;
+  height: 4.6em;
+  margin: 5px 0 0 -2px;
+}
+.role-contrast .lc-labels > span,
+.role-code .lc-labels > span { padding-left: 2px; }
+
+.role-contrast .lc-a,
+.role-code .lc-a { display: grid; gap: 5px; }
+.role-contrast .lc-body:has(> ul),
+.role-code .lc-body:has(> ul) {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.role-contrast .lc-body > ul,
+.role-code .lc-body > ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.role-contrast .lc-body:has(> ul) li,
+.role-code .lc-body:has(> ul) li {
+  margin: 0;
+  min-height: 4.6em;
+  padding: 11px 12px;
+  border-radius: 3px;
+  background: var(--panel);
+  box-shadow: 0 1px 0 var(--edge), 0 12px 18px -12px var(--lift);
+}
+.role-contrast .lc-body li:nth-child(n + 3),
+.role-code .lc-body li:nth-child(n + 3) { grid-column: 1 / -1; min-height: 0; }
+
+/* ---------- Numbered niches: name two, why, chain ----------
+   The number is painted on the wall left of each niche, like the stop of a tour. Given
+   chain steps are already on display: their names stand on the wall with no niche. */
+
+.role-name-two .lc-shape,
+.role-why .lc-shape,
+.role-chain .lc-shape,
+.role-chain .lc-a {
+  display: grid;
+  gap: 8px;
+  counter-reset: stop;
+}
+.role-name-two .lc-a,
+.role-why .lc-a { counter-reset: stop; }
+.role-name-two .lc-shape > span + span,
+.role-why .lc-shape > span + span,
+.role-chain .lc-shape > span + span { display: block; }
+
+.role-name-two .lc-shape > span,
+.role-why .lc-shape > span,
+.role-chain .lc-shape > span,
+.role-chain .lc-labels > span,
+.role-name-two .lc-body:has(> ul) li,
+.role-why .lc-body:has(> ul) li,
+.role-chain .lc-body:has(> ul) li {
+  position: relative;
+  margin-left: 28px;
+  counter-increment: stop;
+}
+.role-name-two .lc-shape > span::before,
+.role-why .lc-shape > span::before,
+.role-chain .lc-shape > span::before,
+.role-chain .lc-labels > span::before,
+.role-name-two .lc-body:has(> ul) li::before,
+.role-why .lc-body:has(> ul) li::before,
+.role-chain .lc-body:has(> ul) li::before {
+  content: counter(stop);
+  position: absolute;
+  left: -28px;
+  top: 0.55em;
+  width: 20px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--wall-ink);
+}
+.role-chain .lc-shape > span:not(:empty),
+.role-chain .lc-labels > span {
+  min-height: 0;
+  padding: 3px 0 3px 2px;
+  background: none;
+  box-shadow: none;
+  font-size: 0.88em;
+  font-weight: 400;
+  color: var(--wall-ink);
+}
+.role-chain .lc-shape > span:not(:empty)::before,
+.role-chain .lc-labels > span::before {
+  top: 3px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--wall-ink-2);
+}
+.role-chain .lc-shape > span:empty { min-height: 2.8em; }
+.role-chain .lc-labels { display: grid; gap: 8px; }
+.role-chain .lc-labels > span:empty { display: none; }
+
+.role-name-two .lc-body:has(> ul),
+.role-why .lc-body:has(> ul),
+.role-chain .lc-body:has(> ul) {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.role-name-two .lc-body > ul,
+.role-why .lc-body > ul,
+.role-chain .lc-body > ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.role-name-two .lc-body:has(> ul) li,
+.role-why .lc-body:has(> ul) li,
+.role-chain .lc-body:has(> ul) li {
+  margin-top: 0;
+  min-height: 3.1em;
+  padding: 11px var(--in);
+  border-radius: 3px;
+  background: var(--panel);
+  box-shadow: 0 1px 0 var(--edge), 0 12px 18px -12px var(--lift);
+}
+.role-name-two .lc-body:has(> ul) li::before,
+.role-why .lc-body:has(> ul) li::before,
+.role-chain .lc-body:has(> ul) li::before { top: 12px; }
+/* A sentence where a list was expected: one panel, set in from the numbers. */
+.role-chain .lc-body:not(:has(> ul)) { margin-left: 28px; }
+
+/* ---------- Cloze: the gap is a niche cut through the label ---------- */
+
+.lc-front .cloze {
+  display: inline-block;
+  min-width: 5.5em;
+  height: 1.2em;
+  padding: 0 0.4em;
+  border-radius: 2px;
+  background: var(--niche);
+  box-shadow: inset 0 2px 4px var(--niche-shade);
+  color: transparent;
+  line-height: 1.2;
+  vertical-align: -0.16em;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.lc-back .cloze {
+  padding: 0 0.25em;
+  border-radius: 2px;
+  background: var(--gap-fill);
+  font-weight: 700;
+  color: var(--ink);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* A list with one gap: the lead-in is the title, each item a line of the label, and the
+   asked line is the niche. */
+.role-cloze-list .lc-text { font-weight: 700; }
+.role-cloze-list .lc-text ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.86em;
+  font-weight: 400;
+}
+.role-cloze-list .lc-text li {
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+}
+.role-cloze-list .cloze {
+  display: block;
+  width: 100%;
+  margin: -3px 0;
+  padding: 3px 8px;
+}
+.role-cloze-list .lc-front .cloze { height: auto; min-height: 1.9em; }
+
+/* ---------- Typed answers ----------
+   Front: Anki's <input id=typeans> is the niche itself, and the typed text goes into the
+   empty case. Back: Anki's comparison (<code id=typeans>) is the object on its panel, the
+   typed line above, the answer below. */
+
+.lc-type center { display: block; text-align: left; }
+.lc #typeans {
+  font-family: var(--sans) !important;
+  font-size: 1.12em !important;
+}
+.lc input#typeans {
+  display: block;
+  width: 100%;
+  min-height: 3.1em;
+  padding: 10px var(--in);
+  border: 1px solid var(--wall-ink-2);
+  color: var(--wall-ink);
+  caret-color: var(--wall-ink);
+  line-height: 1.4;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.lc input#typeans:focus {
+  outline: 2px solid var(--wall-ink);
+  outline-offset: 2px;
+}
+.lc-type > div {
+  font-family: inherit !important;
+  font-size: inherit !important;
+}
+.lc code#typeans {
+  display: block;
+  font-family: var(--mono) !important;
+  font-size: 1em !important;
+  line-height: 1.7;
+  color: var(--ink);
+}
+.lc code#typeans br { display: none; }
+.lc #typearrow {
+  display: block;
+  margin-top: 8px;
+  font-size: 0;
+}
+.lc #typearrow::before,
+.lc code#typeans::before {
+  display: block;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.lc #typearrow::before { content: "Correct answer"; }
+.lc code#typeans:has(#typearrow)::before { content: "You typed"; }
+.lc code#typeans:has(.typeGood):not(:has(#typearrow))::before { content: "Correct"; }
+.lc code#typeans:not(:has(span))::before { content: "Answer, nothing typed"; }
+.lc .typeGood { background: var(--good-bg); color: var(--good-ink); border-radius: 2px; }
+.lc .typeBad {
+  background: var(--bad-bg);
+  color: var(--bad-ink);
+  border-radius: 2px;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.lc .typeMissed {
+  background: var(--miss-bg);
+  color: var(--miss-ink);
+  border-radius: 2px;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.25em;
+}
+.lc-back.is-typed .lc-a { flex: 1 1 100%; width: auto; min-width: 0; }
+.lc-back .lc-type { font-size: 1em; }
+/* When the comparison is there, it is the answer; Back stays as the fallback for
+   clients that show no typing box (AnkiWeb, the preview). */
+.lc-a:has(code#typeans) > .lc-body { display: none; }
+
+/* ---------- The extended label: context and credit line ---------- */
+
+.lc-extra,
+.lc-plate {
+  background: var(--plaque);
+  color: var(--ink);
+  padding-left: var(--in);
+  padding-right: var(--in);
+}
+.lc-extra {
+  margin: 22px 0 0;
+  padding-top: 14px;
+  padding-bottom: 12px;
+  border-radius: 2px 2px 0 0;
+  font-size: 0.88em;
+  line-height: 1.48;
+}
+.lc-plate {
+  margin-top: 22px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-radius: 2px;
+  box-shadow: 0 2px 0 var(--edge);
+}
+.lc-extra + .lc-plate {
+  margin-top: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0 0 2px 2px;
+}
+.lc-plate summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.lc-plate summary::-webkit-details-marker { display: none; }
+.lc-plate summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.lc-thumb { flex: none; width: 86px; }
+.lc-thumb img,
+.lc-slide img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  background: #fff;
+}
+.lc-cite { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lc-src {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.lc-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.42;
+  color: var(--ink-2);
+}
+.lc-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.lc-toggle::before { content: "Show slide"; }
+.lc-plate[open] .lc-toggle::before { content: "Hide slide"; }
+.lc-plate[open] .lc-thumb { display: none; }
+.lc-plate[open] .lc-excerpt { display: block; -webkit-line-clamp: unset; }
+.lc-slide { margin-top: 10px; }
+.nightMode .lc-plate img, .night_mode .lc-plate img { filter: brightness(0.88); }
+
+/* ---------- Wider screens ---------- */
+
+@media (min-width: 520px) {
+  .lc { --pad: 28px; --in: 22px; padding-top: 24px; padding-bottom: 32px; }
+  .lc-q, .lc-text { font-size: 1.3em; padding-top: 20px; }
+  .lc-cue { padding-bottom: 18px; }
+  .role-diagram .lc-shape > span { aspect-ratio: 2 / 1; }
+  .role-diagram .lc-fig,
+  .lc-clz .lc-fig { margin-left: 0; margin-right: 0; }
+  .lc-fig svg { max-width: 480px; margin: 0 auto; }
+  .lc-thumb { width: 120px; }
+  .role-name-two .lc-shape,
+  .role-name-two .lc-a:has(.lc-body > ul) .lc-body > ul { grid-template-columns: 1fr 1fr; }
+  .role-reverse .lc input#typeans,
+  .role-case .lc input#typeans { max-width: 24em; }
+}

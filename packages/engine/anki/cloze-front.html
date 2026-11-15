@@ -1,0 +1,9 @@
+<div class="lc lc-front lc-clz lec-{{Lecture}} role-{{Role}}{{#Typed}} is-typed{{/Typed}}">
+  {{#Asked}}<div class="lc-tab is-asked">asked {{Asked}}×{{#Part}}, {{Part}}{{/Part}}</div>{{/Asked}}{{^Asked}}<div class="lc-tab">core</div>{{/Asked}}
+  <div class="lc-sheet">
+    <header class="lc-head"><span class="lc-lec">{{Lecture}}</span> <span class="lc-topic">{{Topic}}</span></header>
+    <div class="lc-text">{{cloze:Text}}</div>
+    <div class="lc-cue"></div>
+    {{#Typed}}<div class="lc-slot"><div class="lc-type">{{type:cloze:Text}}</div></div>{{/Typed}}
+  </div>
+</div>
