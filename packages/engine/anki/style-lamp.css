@@ -1,0 +1,645 @@
+/* lectern-notetype v3 skin:lamp
+   Lectern cards, skin "Lamp": an index card under warm reading light.
+   Serif carries the study text, mono carries the apparatus, amber marks what matters
+   (the key term, the cloze, the lit tab of a card past exams asked). The answer space is
+   the card's own ruling: blank lines on the front, the answer written on the same lines
+   on the back. Phone first: base rules are for 360 px. All sizes are em of .card, so
+   the font size in Anki's Styling editor scales the whole card.
+   Hooks from the shared templates: .role-<Role>, .is-typed, .lc-front / .lc-back. */
+
+@font-face {
+  font-family: "Lectern Lamp Serif";
+  src: url("_LampSerif.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200 900;
+}
+@font-face {
+  font-family: "Lectern Lamp Mono";
+  src: url("_LampMono.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+}
+
+/* ---------- Tokens ---------- */
+
+.card {
+  --ground: #ece8df;
+  --sheet: #fbfaf6;
+  --ink: #211e1a;
+  --soft: #57534e;
+  --edge: #e3ddd1;
+  --rule: #cfc6b6;
+  --edge-strong: #b9ae9c;
+  --inset: #f3f0e8;
+  --lamp: #e8a33d;
+  --lamp-deep: #b97a1e;
+  --lamp-ink: #8a5a12;
+  --tab-ink: #211e1a;
+  --swipe: rgba(232, 163, 61, 0.42);
+  --mark-ink: #211e1a;
+  --glow: rgba(232, 163, 61, 0.11);
+  --ruled: rgba(87, 83, 78, 0.09);
+  --shadow: 0 1px 2px rgba(56, 46, 32, 0.08), 0 8px 24px rgba(56, 46, 32, 0.1);
+  --good-bg: #dcebd2;
+  --good-ink: #284019;
+  --bad-bg: #f4d5ca;
+  --bad-ink: #74220f;
+  --miss-bg: #e8e1d3;
+  --miss-ink: #4a4540;
+  --dg-key: rgba(232, 163, 61, 0.24);
+  --serif: "Lectern Lamp Serif", "Source Serif 4", Charter, "Iowan Old Style", Georgia, serif;
+  --mono: "Lectern Lamp Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  font-family: var(--serif);
+  font-size: 16px;
+  margin: 0;
+  padding: 0.75em 0.625em 1em;
+  text-align: left;
+}
+/* .card.nightMode outranks the reviewer's own body.nightMode background. */
+.card,
+.card.nightMode {
+  background-color: var(--ground);
+  color: var(--ink);
+}
+
+.nightMode .card,
+.night_mode .card,
+.card.nightMode,
+.card.night_mode {
+  --ground: #171513;
+  --sheet: #26221f;
+  --ink: #e6e1d8;
+  --soft: #a59f95;
+  --edge: #3a352f;
+  --rule: #4e473f;
+  --edge-strong: #6a6157;
+  --inset: #1e1b18;
+  --lamp: #e8a33d;
+  --lamp-deep: #e8a33d;
+  --lamp-ink: #eeb560;
+  --tab-ink: #1c1917;
+  --swipe: rgba(232, 163, 61, 0.3);
+  --mark-ink: #f7e8cb;
+  --glow: rgba(232, 163, 61, 0.1);
+  --ruled: rgba(230, 225, 216, 0.06);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45);
+  --good-bg: #2b3d22;
+  --good-ink: #cfe8bf;
+  --bad-bg: #4d2519;
+  --bad-ink: #ffcfbf;
+  --miss-bg: #37312b;
+  --miss-ink: #ddd5c8;
+  --dg-key: rgba(232, 163, 61, 0.18);
+}
+
+/* ---------- The card and its tab ---------- */
+
+.lc {
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  max-width: 34em;
+}
+.lc * { box-sizing: border-box; }
+
+/* The tab on top of the index card carries the exam weight. */
+.lc-tab {
+  align-self: flex-end;
+  position: relative;
+  z-index: 1;
+  margin-right: 1.6em;
+  padding: 0.65em 0.9em 0.55em;
+  border-radius: 6px 6px 0 0;
+  background-color: var(--sheet);
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lc-tab::before {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.6em;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  vertical-align: 0.02em;
+}
+/* Asked in past exams: the tab lights up and the light runs into the card's edge. */
+.lc-tab.is-asked { background-color: var(--lamp); color: var(--tab-ink); }
+.lc-tab.is-asked::before { background-color: currentColor; }
+.lc-tab.is-asked + .lc-sheet { border-top: 2px solid var(--lamp); }
+
+.lc-sheet {
+  position: relative;
+  padding: 1.05em 1.15em 1.15em;
+  border-radius: 10px;
+  background-color: var(--sheet);
+  background-image: radial-gradient(130% 70% at 50% -12%, var(--glow), transparent 62%);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+.lc-head {
+  margin-bottom: 1.25em;
+  padding-bottom: 0.85em;
+  border-bottom: 1px solid var(--edge);
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+.lc-lec::after { content: " \00B7"; }
+
+/* ---------- Question ---------- */
+
+.lc-q,
+.lc-text {
+  font-size: 1.25em;
+  font-weight: 560;
+  letter-spacing: -0.005em;
+  line-height: 1.38;
+}
+.lc-back .lc-q {
+  color: var(--soft);
+  font-size: 1em;
+  font-weight: 480;
+  line-height: 1.45;
+}
+.lc-text { font-weight: 480; font-size: 1.1875em; line-height: 1.5; }
+
+.lc b, .lc strong { font-weight: 640; }
+.lc sub, .lc sup { font-size: 0.72em; line-height: 0; }
+.lc code {
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+  background-color: var(--inset);
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+
+/* ---------- Cue: one line above the answer space ---------- */
+
+.lc-cue {
+  margin: 1.5em 0 0.35em;
+  color: var(--lamp-ink);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+/* On the back the cue becomes the lamp rule, then steps back. */
+.lc-back .lc-cue { color: var(--soft); margin-top: 1.4em; }
+.lc-back .lc-cue::before {
+  content: "";
+  display: block;
+  width: 3.6em;
+  height: 2px;
+  margin-bottom: 1.1em;
+  border-radius: 1px;
+  background-color: var(--lamp-deep);
+}
+
+.lc-cue::after                    { content: "Your answer"; }
+.role-definition .lc-cue::after   { content: "Define"; }
+.role-reverse .lc-cue::after      { content: "Name the term"; }
+.role-contrast .lc-cue::after     { content: "Contrast"; }
+.role-chain .lc-cue::after        { content: "What comes next"; }
+.role-name-two .lc-cue::after     { content: "Name two"; }
+.role-diagram .lc-cue::after      { content: "Sketch it on paper, then flip"; }
+.role-formula .lc-cue::after      { content: "State it"; }
+.role-why .lc-cue::after          { content: "Explain why"; }
+.role-code .lc-cue::after         { content: "Read the code"; }
+.role-case .lc-cue::after         { content: "Name the conclusion"; }
+.role-calculation .lc-cue::after  { content: "Work it out"; }
+.role-cloze .lc-cue::after        { content: "Fill the gap"; }
+.role-cloze-list .lc-cue::after   { content: "Complete the list"; }
+.is-typed .lc-cue::after          { content: "Type the term"; }
+.lc-clz.is-typed .lc-cue::after   { content: "Type what is missing"; }
+.lc-back.is-typed .lc-cue::after  { content: "Your answer, checked"; }
+.lc-clz:not(.is-typed) .lc-cue { display: none; }
+
+/* ---------- Answer space: the card's ruling ----------
+   One pitch for both sides: 1.75 lines of answer text. The front draws blank lines,
+   the back writes on them. */
+
+.lc-shape,
+.lc-a {
+  font-size: 1.125em;
+  line-height: 1.75;
+}
+.lc-shape > span {
+  display: block;
+  height: 1.75em;
+  border-bottom: 1.5px solid var(--rule);
+}
+.lc-shape > span + span { display: none; }
+.role-definition .lc-shape > span { height: 3.5em; background: linear-gradient(to bottom, transparent calc(1.75em - 1.5px), var(--rule) calc(1.75em - 1.5px), var(--rule) 1.75em, transparent 1.75em); }
+.role-reverse .lc-shape > span,
+.role-case .lc-shape > span { width: 62%; }
+
+.lc-body {
+  background-image: linear-gradient(to top, var(--rule) 1.5px, transparent 1.5px);
+  background-size: 100% 1.75em;
+}
+.lc-body > :first-child { margin-top: 0; }
+.lc-body > :last-child { margin-bottom: 0; }
+.lc-body p { margin: 0; }
+.lc-body ul { margin: 0; padding-left: 1.2em; }
+.lc-body li { margin: 0; }
+.lc li::marker { color: var(--lamp-ink); font-family: var(--mono); font-size: 0.85em; }
+
+/* The key term and the revealed cloze: a highlighter stroke under the lamp. */
+.lc mark,
+.lc-back .cloze {
+  background: linear-gradient(to bottom, transparent 54%, var(--swipe) 54%, var(--swipe) 94%, transparent 94%);
+  color: var(--mark-ink);
+  font-weight: 620;
+  padding: 0 0.08em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Reverse and case: the answer is one term, set as a headword on one line. */
+.role-reverse .lc-body,
+.role-case .lc-body {
+  display: inline-block;
+  min-width: 62%;
+  max-width: 100%;
+  padding-bottom: 0.05em;
+  border-bottom: 1.5px solid var(--rule);
+  background: none;
+  font-size: 1.45em;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+}
+.lc-front.role-case .lc-q { padding-left: 0.75em; border-left: 2px solid var(--edge-strong); }
+
+/* Labels (contrast, code) and given steps (chain) sit on the ruling at a smaller size. */
+.lc-shape > span:not(:empty),
+.lc-labels > span {
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6em;
+  letter-spacing: 0.08em;
+  line-height: calc(1.75em / 0.6);
+  text-transform: uppercase;
+}
+
+/* Contrast, code: two columns, each a label and its line. */
+.role-contrast .lc-shape,
+.role-code .lc-shape,
+.role-contrast .lc-labels,
+.role-code .lc-labels,
+.role-contrast .lc-body > ul,
+.role-code .lc-body > ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1.2em;
+}
+.role-contrast .lc-shape > span,
+.role-code .lc-shape > span {
+  display: block;
+  height: auto;
+  border: 0;
+}
+.role-contrast .lc-shape > span::after,
+.role-code .lc-shape > span::after {
+  content: "";
+  display: block;
+  /* two blank lines; the span's font is 0.6em, so one pitch is 1.75em / 0.6 */
+  height: calc(3.5em / 0.6);
+  border-bottom: 1.5px solid var(--rule);
+  background: linear-gradient(to bottom, transparent calc(1.75em / 0.6 - 1.5px), var(--rule) calc(1.75em / 0.6 - 1.5px), var(--rule) calc(1.75em / 0.6), transparent calc(1.75em / 0.6));
+}
+.role-contrast .lc-labels > span,
+.role-code .lc-labels > span { display: block; }
+.role-contrast .lc-body > ul,
+.role-code .lc-body > ul { padding: 0; list-style: none; }
+.role-contrast .lc-body:has(> ul),
+.role-code .lc-body:has(> ul) { background: none; }
+.role-contrast .lc-body:has(> ul) li,
+.role-code .lc-body:has(> ul) li {
+  min-height: 3.5em;
+  background-image: linear-gradient(to top, var(--rule) 1.5px, transparent 1.5px);
+  background-size: 100% 1.75em;
+}
+.role-contrast .lc-body li:nth-child(n + 3),
+.role-code .lc-body li:nth-child(n + 3) { grid-column: 1 / -1; min-height: 0; }
+.role-contrast .lc-shape > span + span,
+.role-code .lc-shape > span + span { display: block; }
+
+/* Chain, name two: numbered lines. Given steps are written in, gaps are blank. */
+.role-chain .lc-shape,
+.role-name-two .lc-shape,
+.role-chain .lc-a,
+.role-name-two .lc-a { counter-reset: step; }
+.role-chain .lc-shape > span,
+.role-name-two .lc-shape > span,
+.role-chain .lc-labels > span,
+.role-chain .lc-body:has(> ul) li,
+.role-name-two .lc-body:has(> ul) li {
+  position: relative;
+  display: block;
+  margin-left: 1.7rem;
+  counter-increment: step;
+}
+.role-chain .lc-labels > span:empty { display: none; }
+.role-chain .lc-shape > span + span,
+.role-name-two .lc-shape > span + span { display: block; }
+.role-chain .lc-shape > span:not(:empty) { height: auto; }
+.role-chain .lc-shape > span::before,
+.role-name-two .lc-shape > span::before,
+.role-chain .lc-labels > span::before,
+.role-chain .lc-body:has(> ul) li::before,
+.role-name-two .lc-body:has(> ul) li::before {
+  content: counter(step);
+  position: absolute;
+  left: -1.7rem;
+  top: 1.15rem;
+  color: var(--lamp-ink);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: none;
+}
+.role-chain .lc-body > ul,
+.role-name-two .lc-body > ul { padding: 0; list-style: none; }
+.role-chain .lc-labels > span { border-bottom: 1.5px solid var(--rule); }
+.role-chain .lc-shape > span:not(:empty) { border-bottom: 1.5px solid var(--rule); }
+
+/* Why: an argument, introduced as one. */
+.role-why .lc-shape > span + span { display: block; }
+.role-why .lc-shape::before,
+.role-why .lc-body::before {
+  content: "Because";
+  display: block;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6em;
+  letter-spacing: 0.08em;
+  line-height: calc(1.75em / 0.6);
+  text-transform: uppercase;
+}
+.role-why .lc-body > ul { padding: 0; list-style: none; }
+
+/* Formula: a blank plate on the front, the statement on the plate on the back. */
+.role-formula .lc-shape > span {
+  height: 4.5em;
+  border: 0;
+  border-left: 2px dashed var(--lamp-deep);
+  border-radius: 0 6px 6px 0;
+  background: var(--inset);
+}
+.role-formula .lc-body { background: none; line-height: 1.5; }
+.role-formula .lc-body mjx-container[display="true"] {
+  margin: 0 0 0.6em !important;
+  padding: 0.85em 0.6em;
+  border-left: 2px solid var(--lamp-deep);
+  border-radius: 0 6px 6px 0;
+  background-color: var(--inset);
+}
+
+/* Diagram: an empty sketch frame on the front, the figure on the back. */
+.role-diagram .lc-shape > span {
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border: 1.5px dashed var(--edge-strong);
+  border-radius: 6px;
+}
+.role-diagram .lc-body { background: none; line-height: 1.5; }
+.lc-fig { margin: 0.2em -0.9em 0.9em; color: var(--ink); }
+.lc-fig img,
+.lc-fig svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+.dg { font-family: var(--serif); font-weight: 560; }
+.dg .dg-cell { fill: none; stroke: currentColor; stroke-opacity: 0.55; stroke-width: 1; }
+.dg .dg-key { fill: var(--dg-key); }
+.dg text { fill: currentColor; }
+.dg .dg-axis { font-family: var(--mono); font-weight: 400; letter-spacing: 0.06em; fill: var(--soft); }
+.nightMode .lc-fig img, .night_mode .lc-fig img { filter: brightness(0.88); }
+
+/* ---------- Code ---------- */
+
+.lc-code {
+  margin: 0.9em 0 0.2em;
+  padding: 0.7em 0.9em;
+  overflow-x: auto;
+  border-left: 2px solid var(--edge-strong);
+  border-radius: 0 6px 6px 0;
+  background-color: var(--inset);
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(1.6em - 1px), var(--ruled) calc(1.6em - 1px), var(--ruled) 1.6em);
+  background-origin: content-box;
+  background-attachment: local;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.8125em;
+  line-height: 1.6;
+  tab-size: 4;
+  white-space: pre;
+}
+.lc-code code { padding: 0; background: none; font: inherit; }
+
+/* ---------- Mathematics (Anki's MathJax) ---------- */
+
+.lc mjx-container[display="true"] {
+  display: block;
+  max-width: 100%;
+  margin: 0.4em 0 !important;
+  padding: 0.2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.lc-extra mjx-container[display="true"] { font-size: 92% !important; }
+
+/* ---------- Cloze ---------- */
+
+/* The hidden cloze: an empty slot. Anki's [...] stays invisible. */
+.lc-front .cloze {
+  display: inline-block;
+  min-width: 5.5em;
+  padding: 0 0.45em;
+  border-bottom: 2px solid var(--lamp-deep);
+  border-radius: 3px 3px 0 0;
+  background-color: var(--inset);
+  color: transparent;
+  line-height: 1.3;
+  vertical-align: -0.1em;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.role-cloze-list .lc-text ul { margin-top: 0.5em; padding-left: 1.2em; list-style: square; }
+.role-cloze-list .lc-text li { margin: 0.25em 0; }
+.role-cloze-list .lc-text li::marker { color: var(--lamp-deep); }
+.lc-back.lc-clz .lc-text { color: var(--ink); }
+
+/* ---------- Typed answers ----------
+   Front: Anki's <input id=typeans> is a blank line on an inset strip.
+   Back: Anki's comparison (<code id=typeans>), the typed line above, the answer below. */
+
+.lc-type center { display: block; text-align: left; }
+.lc #typeans {
+  font-family: var(--serif) !important;
+  font-size: 1.125em !important;
+}
+.lc input#typeans {
+  display: block;
+  width: 100%;
+  padding: 0.45em 0.55em 0.3em;
+  border: 0;
+  border-bottom: 2px solid var(--lamp-deep);
+  border-radius: 4px 4px 0 0;
+  background-color: var(--inset);
+  color: var(--ink);
+  line-height: 1.5;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.lc input#typeans:focus {
+  outline: 2px solid var(--lamp-deep);
+  outline-offset: 2px;
+}
+.lc-type > div {
+  font-family: inherit !important;
+  font-size: inherit !important;
+}
+.lc code#typeans {
+  display: block;
+  padding: 0.6em 0.75em;
+  border-left: 2px solid var(--lamp-deep);
+  border-radius: 0 6px 6px 0;
+  background: var(--inset);
+  color: var(--ink);
+  font-family: var(--mono) !important;
+  font-size: 0.875em !important;
+  line-height: 1.75;
+}
+.lc code#typeans br { display: none; }
+.lc #typearrow { display: block; margin-top: 0.5em; font-size: 0; }
+.lc #typearrow::before,
+.lc code#typeans::before {
+  display: block;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+.lc #typearrow::before { content: "Correct answer"; }
+.lc code#typeans:has(#typearrow)::before { content: "You typed"; }
+.lc code#typeans:has(.typeGood):not(:has(#typearrow))::before { content: "Correct"; }
+.lc code#typeans:not(:has(span))::before { content: "Answer, nothing typed"; }
+.lc .typeGood { background: var(--good-bg); color: var(--good-ink); border-radius: 2px; }
+.lc .typeBad {
+  background: var(--bad-bg);
+  color: var(--bad-ink);
+  border-radius: 2px;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.lc .typeMissed {
+  background: var(--miss-bg);
+  color: var(--miss-ink);
+  border-radius: 2px;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.25em;
+}
+.lc-a:has(code#typeans) > .lc-body { display: none; }
+.lc-clz .lc-a { margin-top: 0.2em; }
+
+/* ---------- After the answer ---------- */
+
+.lc-extra {
+  margin-top: 1em;
+  color: var(--soft);
+  font-size: 0.9375em;
+  line-height: 1.5;
+}
+
+/* The slide print: the slide the card was lifted from, at the foot of the back. */
+.lc-plate {
+  margin-top: 1.4em;
+  padding-top: 0.95em;
+  border-top: 1px solid var(--edge);
+}
+.lc-plate summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85em;
+  cursor: pointer;
+  list-style: none;
+}
+.lc-plate summary::-webkit-details-marker { display: none; }
+.lc-plate summary:focus-visible { outline: 2px solid var(--lamp-deep); outline-offset: 3px; border-radius: 4px; }
+.lc-thumb { flex: none; width: 5.5em; }
+.lc-thumb img,
+.lc-slide img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background-color: #fff;
+}
+.lc-cite { display: flex; flex-direction: column; gap: 0.3em; min-width: 0; }
+.lc-src {
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+.lc-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--soft);
+  font-size: 0.8125em;
+  line-height: 1.45;
+}
+.lc-excerpt::before { content: "\201C"; }
+.lc-excerpt::after { content: "\201D"; }
+.lc-toggle {
+  min-height: 1.75em;
+  color: var(--lamp-ink);
+  font-family: var(--mono);
+  font-size: 0.6875em;
+  letter-spacing: 0.08em;
+  line-height: 1.75;
+  text-transform: uppercase;
+}
+.lc-toggle::before { content: "Show slide +"; }
+.lc-plate[open] .lc-toggle::before { content: "Hide slide \2212"; }
+.lc-plate[open] .lc-thumb { display: none; }
+.lc-plate[open] .lc-excerpt { display: block; -webkit-line-clamp: unset; }
+.lc-slide { margin-top: 0.85em; }
+.lc-slide img { border-radius: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.nightMode .lc-plate img,
+.night_mode .lc-plate img { filter: brightness(0.86); }
+
+/* ---------- Wider screens ---------- */
+
+@media (min-width: 520px) {
+  .card { font-size: 17px; padding: 1.5em 1em 2em; }
+  .lc-sheet { padding: 1.5em 1.85em 1.6em; }
+  .lc-q { font-size: 1.3125em; }
+  .lc-fig { margin-left: 0; margin-right: 0; }
+  .lc-fig svg { max-width: 440px; }
+  .lc-thumb { width: 7.5em; }
+  .role-reverse .lc input#typeans,
+  .role-case .lc input#typeans { max-width: 22em; }
+}
