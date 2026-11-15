@@ -33,6 +33,8 @@ const TOKENS = {
   uncachedCalls: 10,
   /** How often the whole lecture goes to the decision model: slide kinds, map checks, slide check. */
   decisionPasses: 3,
+  /** Every card that passes the limits is its own small decision request: is it about the course's organisation. Not yet measured with one question; two questions took about 400. */
+  cardCheck: 250,
 }
 
 export interface Prices {
@@ -74,7 +76,7 @@ export function estimate(
       // Every card sees the whole lecture again, mostly from the provider's cache.
       source * (uncached * prices.model.input + (calls - uncached) * prices.model.cachedInput) +
       calls * (TOKENS.fillPrompt * prices.model.input + TOKENS.fillReply * prices.model.output) +
-      source * TOKENS.decisionPasses * prices.decisions.input
+      (source * TOKENS.decisionPasses + calls * TOKENS.cardCheck) * prices.decisions.input
   }
   const costUsd = dollars / 1_000_000
   return {

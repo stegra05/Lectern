@@ -31,7 +31,7 @@ PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 | Run | Result |
 |---|---|
-| Engine tests | 168 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 7 files, 4 s |
+| Engine tests | 222 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 9 files |
 | Live OpenAI tests, run once with a key | 2 passed |
 | Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
@@ -53,8 +53,9 @@ All on `gpt-6-luna` for writing and for decisions, goal top grade, 2026-11-14.
 | 11 decks with the concept draft | `704922e`, preset `concept-draft` | 554 | 8 | 24 | 18.6 cents | 25.0 cents | 17.5 min |
 
 The two full runs happened at once by a coordination miss between the two sessions: each had
-Steffen's yes, and the messages crossed. Total spent today on OpenAI, the run with the
-concept draft included: about 90 cents of the 50 dollars. Both results are kept. The reference deck has 636 notes for the same decks.
+Steffen's yes, and the messages crossed. Total spent on OpenAI on 2026-11-14, all sessions together:
+about 1.10 dollars of the 50 (this session about 90 cents, the quality session about 18 cents
+for grading 1,150 cards and for measuring its checks). Both results are kept. The reference deck has 636 notes for the same decks.
 
 My full run in numbers (course folder under the shared notes folder, `courses/entrepreneurship`):
 
@@ -110,6 +111,29 @@ Read as a student would, a sample of the output is mixed.
   as a "sequence", twice, differing only in the marked cell.
 - Recurring concepts work mechanically, and so the administration concepts recur too and get
   one more card in each lecture.
+
+## Checks added after the first runs
+
+Built by the session "Card quality and relevancy patterns" on Steffen's instruction (commit
+`ba081d2`), measured on the cards of the two full runs and on 62 cards he judged himself. This
+is its account, not re-measured by me:
+
+- **Organisation.** A decision check on each card that passes the limits: is it about the
+  organisation of the course. It is calibrated (threshold 0.2) and drops such a card, since no
+  rewording repairs it. On the placeholder run it names 30 of 596 cards, 27 of them
+  administration; on the concept draft run 2 of 554, because the draft's map rules had already
+  removed them.
+- **Says nothing.** A rule in code: the answer stands in the question, a sentence only turns
+  the question around, or a side of a contrast repeats its label. Such a card goes back for
+  repair.
+- **Leans on the slides.** A word rule for questions that only make sense with the slides at
+  hand. A decision check for the same thing was measured against it and lost.
+- **A finding about the decision model.** Asked about one card while a whole lecture was the
+  input, it said yes to nearly everything. So the card checks give it the card alone. My slide
+  check ("slide N supports this card") and the concept check still pass the whole lecture as
+  input and have not been re-measured: treat their flags as weak until they are.
+
+The cost estimate now counts one small decision request per card for the organisation check.
 
 ## What was built
 
@@ -298,14 +322,13 @@ diagram card. The interface session should know these exist.
 ## Proposed next steps
 
 1. Steffen's verdict on the concept draft: use it as the working preset for concept courses,
-   or change it first.
-2. Three checks in code that the comparison run asks for: an answer must not repeat its
-   question, near-identical facts are merged before cards are planned, and lists and contrasts
-   are capped per concept.
+   or change it first. It and the organisation check remove the same defect from two ends.
+2. Re-measure the slide check and the concept check with the slide or the concept as the only
+   input, as the card checks now do.
 3. Checkpoints: a run saves nothing until the end, and one died on a dropped connection. The
    adapter now retries harder; saving per lecture would end the risk.
-4. Calibration data from the three full runs: the flagged concepts and card pairs are ready-made
-   examples to label. Start with "same card" and "concept belongs".
+4. Still open in code from the comparison run: merging near-identical facts before cards are
+   planned, and a cap on lists and contrasts per concept.
 5. The blind comparison against the reference deck.
 6. A small run on Datenbanken and Operations Research once code and formula cards have a preset.
 
