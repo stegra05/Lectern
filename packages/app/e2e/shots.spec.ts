@@ -126,9 +126,12 @@ test('pictures of every base screen', async () => {
     await page.locator('.course-card').last().click()
 
     await page.getByRole('button', { name: 'a top grade' }).click()
-    await expect(page.getByRole('region', { name: 'Status' })).toContainText('About $', {
-      timeout: 60_000,
-    })
+    await expect(page.getByRole('region', { name: 'Status' })).toContainText(
+      /About \d+ cents|Under 5 cents|No cost/,
+      {
+        timeout: 60_000,
+      },
+    )
     await shoot(page, '04-files-and-goal')
 
     await page.getByRole('button', { name: 'Make my cards' }).click()

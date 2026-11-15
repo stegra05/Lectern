@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { findClashes, similarity } from '../src/clash.ts'
-import { CAP_FLOOR_USD, CAP_MULTIPLE, estimate } from '../src/cost.ts'
+import { CAP_FLOOR_USD, CAP_MULTIPLE, estimate, shownEuros } from '../src/cost.ts'
 import type { Concept, Topic } from '../src/course.ts'
 import type { FactKind } from '../src/decide.ts'
 import { plan } from '../src/plan.ts'
@@ -167,6 +167,32 @@ describe('the estimate', () => {
     })
     expect(big.capUsd).toBeCloseTo(CAP_MULTIPLE * big.costUsd)
     expect(estimate(decks.slice(0, 1), 'pass', prices).capUsd).toBe(CAP_FLOOR_USD)
+  })
+})
+
+describe('the estimate as the student sees it', () => {
+  it('is in euros and rounded up to a step that grows with the amount', () => {
+    // 0.9 euros per dollar. One lecture, a course, a long course, an expensive model.
+    expect(shownEuros(0)).toBe(0)
+    expect(shownEuros(0.02)).toBe(0.05)
+    expect(shownEuros(0.19)).toBe(0.2)
+    expect(shownEuros(0.25)).toBe(0.25)
+    expect(shownEuros(0.6)).toBe(0.6)
+    expect(shownEuros(0.7)).toBe(0.7)
+    expect(shownEuros(0.75)).toBe(0.7)
+    expect(shownEuros(1.3)).toBe(1.5)
+    expect(shownEuros(4)).toBe(4)
+  })
+
+  it('travels with every estimate', () => {
+    const decks = [{ chars: 12_800, slides: 32, images: 2 }]
+    const prices = {
+      model: { input: 0.1, cachedInput: 0.01, output: 0.5 },
+      decisions: { input: 0.1 },
+    }
+    const one = estimate(decks, 'top', prices)
+    expect(one.costEur).toBe(shownEuros(one.costUsd))
+    expect(one.costEur).toBe(0.05)
   })
 })
 

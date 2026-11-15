@@ -581,6 +581,8 @@ export function installFixture(): void {
           slides: 472,
           cards,
           costUsd: cards / 1000,
+          // As the engine rounds it: up to the next 5 cents, in euros.
+          costEur: Math.ceil((cards / 1000) * 0.9 * 20 - 1e-9) / 20,
           capUsd: (cards / 1000) * 3,
         })
         break
@@ -592,6 +594,7 @@ export function installFixture(): void {
           slides: 472,
           cards: 410,
           costUsd: 0.41,
+          costEur: 0.4,
           capUsd: 1.23,
         })
         emit({ type: 'phase', phase: 'read', status: 'started', total: 11 })

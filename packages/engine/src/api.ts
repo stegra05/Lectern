@@ -117,6 +117,8 @@ export type Event =
       slides: number
       cards: number
       costUsd: number
+      /** What to show the student: euros, rounded up to a coarse step. */
+      costEur: number
       capUsd: number
     }
   /** The kind of course, for the student's one line to confirm. Confidence is null when they set it. */

@@ -55,7 +55,30 @@ export interface Estimate {
   /** Cards the run is expected to write. */
   cards: number
   costUsd: number
+  /** The estimate as the student is shown it: euros, rounded up. See `shownEuros`. */
+  costEur: number
   capUsd: number
+}
+
+/**
+ * Euros per dollar, for what the student is shown. Fixed on purpose: the estimate is rougher
+ * than the rate moves, and a live rate would need the network. Providers bill in dollars, so
+ * the engine counts and caps in dollars.
+ */
+export const EUR_PER_USD = 0.9
+
+/**
+ * The estimate in euros, rounded up to a step that grows with the amount: 5 cents up to 50
+ * cents, 10 cents up to one euro, 50 cents above. Real runs landed between half and 2.6 times
+ * their estimate, so a figure to the cent would claim a precision the engine does not have.
+ * Up, never to the nearest step: what a run costs should rarely exceed what was shown.
+ */
+export function shownEuros(costUsd: number): number {
+  const cents = costUsd * EUR_PER_USD * 100
+  if (cents <= 0) return 0
+  const step = cents <= 50 ? 5 : cents <= 100 ? 10 : 50
+  // The small margin keeps an amount that sits on a step from being pushed to the next one.
+  return (Math.ceil(cents / step - 1e-9) * step) / 100
 }
 
 export function estimate(
@@ -89,6 +112,7 @@ export function estimate(
     slides: lectures.reduce((sum, l) => sum + l.slides, 0),
     cards,
     costUsd,
+    costEur: shownEuros(costUsd),
     capUsd: Math.max(CAP_MULTIPLE * costUsd, CAP_FLOOR_USD),
   }
 }

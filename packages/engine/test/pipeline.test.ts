@@ -89,7 +89,15 @@ describe('building a course of two lectures, offline', () => {
     ])
     expect(events.slice(0, 3)).toEqual([
       { type: 'phase', phase: 'read', status: 'started', total: 0 },
-      { type: 'estimate', lectures: 2, slides: 9, cards: 14, costUsd: 0, capUsd: 0.25 },
+      {
+        type: 'estimate',
+        lectures: 2,
+        slides: 9,
+        cards: 14,
+        costUsd: 0,
+        costEur: 0,
+        capUsd: 0.25,
+      },
       { type: 'profile', kind: 'concept', confidence: 0.9 },
     ])
     expect(events.at(-1)).toEqual({
@@ -841,7 +849,15 @@ describe('goal, profile and cost', () => {
   it('estimates a build without calling a model', async () => {
     await courseOf('01 Risk.pdf', '02 Effectuation.pdf')
     expect(await run({ type: 'estimate', course: 'course', goal: 'top' })).toEqual([
-      { type: 'estimate', lectures: 2, slides: 9, cards: 18, costUsd: 0, capUsd: 0.25 },
+      {
+        type: 'estimate',
+        lectures: 2,
+        slides: 9,
+        cards: 18,
+        costUsd: 0,
+        costEur: 0,
+        capUsd: 0.25,
+      },
     ])
     expect(model.requests).toEqual([])
     expect(decider.requests).toEqual([])

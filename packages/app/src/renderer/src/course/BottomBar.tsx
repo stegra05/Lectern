@@ -6,8 +6,15 @@ import { Icon } from '../ui/Icon.tsx'
 import { PHASE_NOW, timeLeft, useTick } from './panels/RunPanel.tsx'
 import './bar.css'
 
-export function dollars(usd: number): string {
-  return `$${usd.toFixed(2)}`
+/**
+ * The estimate in words. The engine has already rounded it up to a coarse step in euros, so
+ * small amounts read as cents and nothing pretends to be exact.
+ */
+export function estimateText(eur: number): string {
+  if (eur <= 0) return 'No cost'
+  if (eur <= 0.05) return 'Under 5 cents'
+  if (eur < 1) return `About ${Math.round(eur * 100)} cents`
+  return `About ${eur.toFixed(2).replace('.', ',')} €`
 }
 
 /**
@@ -61,7 +68,7 @@ export function BottomBar() {
           second="Choose your goal, then make your cards."
         />
       )
-    if (estimate) aside = `About ${dollars(estimate.costUsd)}`
+    if (estimate) aside = estimateText(estimate.costEur)
     const label = failure
       ? 'Try again'
       : made > 0
