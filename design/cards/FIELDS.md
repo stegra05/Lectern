@@ -1,7 +1,7 @@
 # Card field contract
 
 Both skins read exactly these fields through the same four templates in `anki/`. A skin is a
-stylesheet and nothing else. Read `docs/v3/brief.md` ("Card system") and `design/v3/samples.md`
+stylesheet and nothing else. Read `docs/brief.md` ("Card system") and `design/samples.md`
 first; the limits below repeat the brief's hard limits and add the ones the templates need.
 
 Two note types, installed by Lectern and owned by Lectern:

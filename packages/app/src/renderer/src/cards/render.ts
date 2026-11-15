@@ -2,15 +2,15 @@
  * Renders one card through Lectern's real Anki templates, so the preview shows the markup Anki
  * itself produces. Only the part of Anki's template language those four files use is here:
  * `{{Field}}`, `{{#Field}}`, `{{^Field}}`, `{{cloze:Text}}` and `{{type:...}}`. The markup of
- * cloze deletions and of the typing box follows what design/v3/cards/build.py got from Anki's
+ * cloze deletions and of the typing box follows what design/cards/build.py got from Anki's
  * own engine and reviewer, so the stylesheets meet the same elements as in Anki.
  */
 
 import type { Card } from '../../../shared/contract.ts'
-import back from '../../../../../../design/v3/cards/anki/back.html?raw'
-import clozeBack from '../../../../../../design/v3/cards/anki/cloze-back.html?raw'
-import clozeFront from '../../../../../../design/v3/cards/anki/cloze-front.html?raw'
-import front from '../../../../../../design/v3/cards/anki/front.html?raw'
+import back from '../../../../../../design/cards/anki/back.html?raw'
+import clozeBack from '../../../../../../design/cards/anki/cloze-back.html?raw'
+import clozeFront from '../../../../../../design/cards/anki/cloze-front.html?raw'
+import front from '../../../../../../design/cards/anki/front.html?raw'
 
 export type Side = 'front' | 'back'
 

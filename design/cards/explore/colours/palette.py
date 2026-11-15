@@ -1,6 +1,6 @@
 """Write the lecture palette into ../../anki/style-colours.css and print its contrast table.
 
-The twelve colours are the app's lecture colours (design/v3/KIT.md, "Lecture colours"), in
+The twelve colours are the app's lecture colours (design/KIT.md, "Lecture colours"), in
 that order, repeating from lecture 13. Every lecture number Lectern can write (01 to 99)
 gets a rule, so no card falls back to grey because the course is long.
 

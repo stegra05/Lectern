@@ -1,6 +1,6 @@
 # Lectern v3 engine: plan for milestone 1
 
-Written 2026-11-14, before any code. Goal: `docs/v3/engine-goal.md`. Product: `docs/v3/brief.md`.
+Written 2026-11-14, before any code. Goal: `docs/engine-goal.md`. Product: `docs/brief.md`.
 
 ## Package layout
 

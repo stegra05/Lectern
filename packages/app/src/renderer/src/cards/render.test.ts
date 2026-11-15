@@ -94,9 +94,9 @@ describe('typeAnswer', () => {
   })
 })
 
-// The gallery holds the markup Anki's own engine produced for these cards (design/v3/cards/build.py).
+// The gallery holds the markup Anki's own engine produced for these cards (design/cards/build.py).
 const gallery = readFileSync(
-  new URL('../../../../../../design/v3/cards/gallery.html', import.meta.url),
+  new URL('../../../../../../design/cards/gallery.html', import.meta.url),
   'utf8',
 )
 const rendered = JSON.parse(gallery.match(/const CARDS = (\[[\s\S]*?\]);\n/)![1]!) as {

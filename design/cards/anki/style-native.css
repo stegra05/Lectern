@@ -3,7 +3,7 @@
    ground with white inset groups, hairline rows instead of boxes, and one blue that means
    "this is the answer": the trailing checkmark on every answer row, the key term tint and
    the filled cloze. The head row repeats the app's lecture stop: a 40 px rounded square with
-   the lecture number. Tokens follow design/v3/KIT.md, light and night.
+   the lecture number. Tokens follow design/KIT.md, light and night.
    Phone first: base rules are for 360 px, one media query adds room.
    Hooks from the shared templates: .role-<Role>, .is-typed, .lc-front / .lc-back. */
 

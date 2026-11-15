@@ -493,7 +493,7 @@ back. The record is saved even when a send breaks off, so the next send continue
 **Where it is.** `src/deliver.ts`, the ports `anki` and `designs` in `src/ports.ts`,
 `adapters/ankiconnect.ts` (the add-on on `127.0.0.1:8765`), `adapters/memory-anki.ts` (an Anki
 in memory that behaves like the real one where it matters, for tests and for the app offline),
-`adapters/node-designs.ts` (reads `design/v3/cards/anki`). Tests: `test/deliver.test.ts`, 19.
+`adapters/node-designs.ts` (reads `design/cards/anki`). Tests: `test/deliver.test.ts`, 19.
 
 **The real run.** Two lectures of the first real Entrepreneurship run (03 and 09, 94 cards),
 copied into a course named "Lectern send test", from the command line.
@@ -596,7 +596,7 @@ The course ended with 36 cards, 36 of them in Anki.
 ## Placeholder
 
 `presets.ts` holds **one placeholder preset** used for every kind of lecture. Its plan table is
-my guess, its examples are seven of the sample cards from `design/v3/samples.md`, its rules are
+my guess, its examples are seven of the sample cards from `design/samples.md`, its rules are
 five lines. It exists so the pipeline runs. It is not one of the four presets Steffen will
 approve, and no result from it should be read as the quality of the method.
 
@@ -663,4 +663,4 @@ diagram card. The interface session should know these exist.
 - `pnpm-lock.yaml` is shared. My commit `f5d004a` includes the entries of `packages/app`, which
   another session added but has not committed. `pnpm-workspace.yaml` (the `electron` line) is
   theirs and I left it uncommitted.
-- Root `pnpm lint` fails locally on `design/v3/cards-lamp/build-gallery.mjs`.
+- Root `pnpm lint` fails locally on `design/cards-lamp/build-gallery.mjs`.

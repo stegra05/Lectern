@@ -5,7 +5,7 @@
  *
  * `concept` is the working preset for concept courses, written from Steffen's Entrepreneurship
  * study kit and accepted by him on 2026-11-15 after a comparison run
- * (`docs/v3/engine-profile-concept.md`). The other three kinds of lecture have no preset of
+ * (`docs/engine-profile-concept.md`). The other three kinds of lecture have no preset of
  * their own yet and get `placeholder`, one minimal preset that only makes the pipeline run.
  */
 

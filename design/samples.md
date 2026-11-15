@@ -1,7 +1,7 @@
 # Shared sample content for v3 design explorations
 
-Every exploration in `design/v3/` uses this content, so the results can be compared side by
-side. Read `docs/v3/brief.md` first.
+Every exploration in `design/` uses this content, so the results can be compared side by
+side. Read `docs/brief.md` first.
 
 ## Sample courses (for app flow prototypes)
 
@@ -76,7 +76,7 @@ def find(xs, target):
 
 ## Rules for all explorations
 
-- Write only inside your own folder under `design/v3/`. Do not change any other file and do
+- Write only inside your own folder under `design/`. Do not change any other file and do
   not run git commands that change state.
 - No em-dashes anywhere, in copy, comments or notes. A hook rejects files that contain one.
 - Plain language for a student who is not technical. Errors name the fix.

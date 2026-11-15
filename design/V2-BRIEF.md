@@ -11,9 +11,9 @@ You only WRITE FILES. The main session publishes them. Do not use the Artifact t
 
 In the repository `/Users/stef/Projects/study-tools/lectern` (branch `v3`):
 
-1. `design/v3/KIT.md`: tokens, lecture colours, the frame, the map. Binding.
-2. `docs/v3/brief.md` and `design/v3/DIRECTION.md`: the product and what the owner decided.
-3. `design/v3/samples.md`: the sample course (Course A, Entrepreneurship).
+1. `design/KIT.md`: tokens, lecture colours, the frame, the map. Binding.
+2. `docs/brief.md` and `design/DIRECTION.md`: the product and what the owner decided.
+3. `design/samples.md`: the sample course (Course A, Entrepreneurship).
 
 In the canvas project folder
 `/private/tmp/claude-501/-Users-stef-Projects-study-tools-lectern/3481f3e4-d8c3-43f4-ac74-fe23851bdf58/scratchpad/lectern-v3-canvas/project/`:

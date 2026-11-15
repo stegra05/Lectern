@@ -15,7 +15,7 @@ import type { Design } from './designs.ts'
 import { EngineError } from './errors.ts'
 import type { DesignFiles, NoteType, Ports, Store } from './ports.ts'
 
-/** The fields of `design/v3/cards/FIELDS.md`, in its order. The first is the one Anki requires. */
+/** The fields of `design/cards/FIELDS.md`, in its order. The first is the one Anki requires. */
 const PROVENANCE = [
   ...['Lecture', 'Topic', 'Source', 'Asked', 'Part'],
   ...['Extra', 'Excerpt', 'Slide', 'Diagram', 'Key'],

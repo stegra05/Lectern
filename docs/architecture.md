@@ -14,8 +14,8 @@ one PDF per lecture, states a goal, and the app writes cards and sends them to A
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `packages/engine` (`@lectern/engine`) | The headless engine. Plain TypeScript, run by Node with type stripping, no build step, no interface code. Everything that makes cards lives here.                                                                        |
 | `packages/app` (`@lectern/app`)       | The Electron desktop app. A shell and a React interface around the engine.                                                                                                                                               |
-| `design/v3/`                          | Design kit, card field contract (`cards/FIELDS.md`), and the Anki templates and six stylesheets the engine installs (`cards/anki/`).                                                                                     |
-| `docs/v3/`                            | Brief, decisions, plans, reports, this file.                                                                                                                                                                             |
+| `design/`                          | Design kit, card field contract (`cards/FIELDS.md`), and the Anki templates and six stylesheets the engine installs (`cards/anki/`).                                                                                     |
+| `docs/`                            | Brief, decisions, plans, reports, this file.                                                                                                                                                                             |
 | `eval-results/`                       | Git-ignored. Real course folders and run logs (`v3-courses/`).                                                                                                                                                           |
 | `src/`, `src-tauri/`                  | **The old v2 app (Tauri), still shipping on `main`. Not part of v3.** `src/engine` is reference material for v3 (provider quirks), nothing imports it. The root `package.json` (`lectern-desktop` 2.17.0) belongs to v2. |
 
@@ -466,7 +466,7 @@ the prompt:
 `diagram` carries a structured description (`matrix`, `sequence` or `cycle`) with its own
 validator; there is no renderer, so the card shows the slide image (`assemble.ts:121`). Note
 types in Anki are `Lectern Q&A` (16 fields) and `Lectern Cloze v3` (13 fields), the fields of
-`design/v3/cards/FIELDS.md` (`deliver.ts:19-30`).
+`design/cards/FIELDS.md` (`deliver.ts:19-30`).
 
 ## 9. Validation rules and hard limits
 
@@ -569,7 +569,7 @@ The app side (`packages/app`):
 - `engine.ts` wires the ports: `nodeStore(courses)`, `ankiConnect()`, `nodeDesigns`, `pdfjsReader`,
   `openaiModel` and `openaiDecisions` with the stored key. With `LECTERN_FAKE=1` it uses the
   offline models and a module-level `memoryAnki` instead. The card designs are read from
-  `design/v3/cards/anki` in the repository.
+  `design/cards/anki` in the repository.
 - `src/main/settings.ts` holds what is not engine business: the chosen card design
   (`settings.json`) and the OpenAI key, sealed with Electron's `safeStorage` (`openai.key`).
   `OPENAI_API_KEY` in the environment wins. The key never reaches the renderer.
@@ -580,7 +580,7 @@ The app side (`packages/app`):
   `preset` or `capUsd`.
 - Screens: first run (provider and key), courses, the course (a full-width map of lectures, a
   lecture as rings, a bottom bar, one side panel for setup, run, cards, details), settings with
-  the six card designs. Design is binding in `design/v3/KIT.md`; the app's rules are in
+  the six card designs. Design is binding in `design/KIT.md`; the app's rules are in
   `packages/app/README.md`.
 - Commands to run it: `pnpm --filter @lectern/app start`, with `LECTERN_FAKE=1` for the offline
   models and an Anki in memory. Environment: `LECTERN_FAKE_DELAY`, `LECTERN_COURSES`,

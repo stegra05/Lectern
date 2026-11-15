@@ -7,7 +7,7 @@ import { SlideThumb } from '../SlideThumb.tsx'
 import { CardEditor } from './CardEditor.tsx'
 import './panels.css'
 
-/** Plain names for the card roles of `design/v3/cards/FIELDS.md`. */
+/** Plain names for the card roles of `design/cards/FIELDS.md`. */
 export const ROLE_NAMES: Record<string, string> = {
   definition: 'Definition',
   reverse: 'Reverse',

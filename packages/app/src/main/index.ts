@@ -24,9 +24,9 @@ const fake = process.env.LECTERN_FAKE === '1'
 const fakeDelayMs = Number(process.env.LECTERN_FAKE_DELAY ?? 0)
 const courses = process.env.LECTERN_COURSES ?? join(app.getPath('userData'), 'courses')
 // The card designs are read from the repository, as the interface reads them for its previews.
-const designs = join(app.getAppPath(), '../../design/v3/cards/anki')
+const designs = join(app.getAppPath(), '../../design/cards/anki')
 const settings = settingsStore(app.getPath('userData'), fake)
-// Rendered from design/v3/icon/master.py by design/v3/icon/export.sh.
+// Rendered from design/icon/master.py by design/icon/export.sh.
 const icon = join(app.getAppPath(), 'resources/icon.png')
 
 function createWindow(): void {

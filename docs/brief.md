@@ -91,7 +91,7 @@ Rules are enforced by code, so a cheap model is forced into good cards.
 
 Several card designs are wanted as options, and the cards should be smart: one system that
 adapts its layout to the role and to the kind of lecture. This is a later, lower priority
-requirement, explored in `design/v3/`.
+requirement, explored in `design/`.
 
 ## Schedule
 
@@ -148,7 +148,7 @@ blind comparison against the reference deck, and adding lecture 12 creates only 
 4. The multiple-choice quiz.
 5. A second card design, typed answers, and smart cards for every type of lecture.
 
-The chosen design direction is recorded in `design/v3/DIRECTION.md`.
+The chosen design direction is recorded in `design/DIRECTION.md`.
 
 **Vision, not planned**: reading progress back from Anki, hosted keys and payment, a website.
 

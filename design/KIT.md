@@ -148,8 +148,8 @@ hues, toned down for daily review. The app's track keeps the full colours.
 
 The hand of stops: four lecture stops (02 to 05, in course order left to right) fanned like a
 hand of cards behind the 01 stop, whose face is a card with a cloze gap. White ground in light,
-`#1C1C1E` in dark, greyscale for tinted. Master and generator: `design/v3/icon/master.py`,
-output in `design/v3/icon/master/` (masked SVGs plus unmasked layers for Icon Composer).
+`#1C1C1E` in dark, greyscale for tinted. Master and generator: `design/icon/master.py`,
+output in `design/icon/master/` (masked SVGs plus unmasked layers for Icon Composer).
 Picked by Steffen on 2026-11-14 over five rounds; rejected: dots on stalks (reads as a virus),
 the flat lamp (reads as a figure in a hat when small), the track, rings and a plain deck.
 

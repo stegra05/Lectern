@@ -1,6 +1,6 @@
 # Vitrine
 
-Stylesheet: `design/v3/cards/anki/style-object.css`. Gallery: `gallery.html` (all 17 cards, light
+Stylesheet: `design/cards/anki/style-object.css`. Gallery: `gallery.html` (all 17 cards, light
 and night, 360 or 600, slide open or closed). Overview: `overview.png`. Rebuild both with
 `uv run --with anki python build.py` from this folder; `build.py` is a copy of the shared one that
 reads the unchanged templates in `../../anki/` and writes only into this folder.

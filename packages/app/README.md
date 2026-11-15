@@ -1,7 +1,7 @@
 # @lectern/app
 
-The Lectern v3 desktop app: an Electron shell around `@lectern/engine`. Design: `design/v3/KIT.md`
-(binding) and the canvas frames in `design/v3/canvas/project/V2*.dc.html`.
+The Lectern v3 desktop app: an Electron shell around `@lectern/engine`. Design: `design/KIT.md`
+(binding) and the canvas frames in `design/canvas/project/V2*.dc.html`.
 
 ## Commands
 
@@ -12,7 +12,7 @@ The Lectern v3 desktop app: an Electron shell around `@lectern/engine`. Design: 
 | Develop with reload | `pnpm --filter @lectern/app dev` |
 | Unit tests | `pnpm --filter @lectern/app test` |
 | End-to-end test (builds first, offline models) | `pnpm --filter @lectern/app test:e2e` |
-| Pictures of every base screen into `docs/v3/shots/` | `pnpm --filter @lectern/app shots` |
+| Pictures of every base screen into `docs/shots/` | `pnpm --filter @lectern/app shots` |
 | Typecheck | `pnpm --filter @lectern/app typecheck` |
 
 Environment: `LECTERN_FAKE=1` (offline models), `LECTERN_FAKE_DELAY=<ms>` (each offline call

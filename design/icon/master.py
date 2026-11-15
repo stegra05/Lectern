@@ -13,7 +13,7 @@ from pathlib import Path
 OUT = Path(__file__).parent / "master"
 (OUT / "layers").mkdir(parents=True, exist_ok=True)
 
-# Lecture colours 02 to 05 of design/v3/KIT.md; 01 is the card stop in front.
+# Lecture colours 02 to 05 of design/KIT.md; 01 is the card stop in front.
 STOPS = ["#FF7A33", "#FFA3D1", "#A487FF", "#7FD0FF"]
 
 APPEARANCES = {

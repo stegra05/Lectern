@@ -6,7 +6,7 @@ import { Icon } from '../../ui/Icon.tsx'
 import { roleName } from './CardsPanel.tsx'
 import './editor.css'
 
-/** The kinds whose one-sentence answer carries a key term, as `design/v3/cards/FIELDS.md` has it. */
+/** The kinds whose one-sentence answer carries a key term, as `design/cards/FIELDS.md` has it. */
 const KEYED = new Set(['definition', 'why', 'diagram'])
 /** How many parts a gap card may hide, and how many items a list may have. */
 const MOST_PARTS = 5

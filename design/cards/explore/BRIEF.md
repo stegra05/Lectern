@@ -8,7 +8,7 @@ Four other designers each make a different design in parallel, so commit fully t
 ## How the card system works (binding)
 
 Repository `/Users/stef/Projects/study-tools/lectern` (branch `v3`). The card system is in
-`design/v3/cards/`:
+`design/cards/`:
 
 - `FIELDS.md`: the field contract. `NOTES.md`: how role adaptation, answer-shaped slots, the
   slide print and typed answers work.
@@ -18,7 +18,7 @@ Repository `/Users/stef/Projects/study-tools/lectern` (branch `v3`). The card sy
   likes both. Study them to see every hook a stylesheet must style.
 - `gallery.html`, `gallery.src.html`, `build.py`: how the gallery renders the sample cards
   through Anki's real template engine. `shots/`: what the existing designs look like.
-- `design/v3/samples.md`: the twelve sample cards.
+- `design/samples.md`: the twelve sample cards.
 
 Then load the `frontend-design` skill with the Skill tool.
 
@@ -34,15 +34,15 @@ Do not go near it.
 
 ## Rules
 
-- Write ONLY new files: your stylesheet `design/v3/cards/anki/style-<name>.css` and everything
-  else in your own folder `design/v3/cards/explore/<name>/`. That folder may hold leftovers of
+- Write ONLY new files: your stylesheet `design/cards/anki/style-<name>.css` and everything
+  else in your own folder `design/cards/explore/<name>/`. That folder may hold leftovers of
   an interrupted earlier run: reuse or overwrite them.
 - Do not modify the shared templates, the two existing stylesheets, `gallery.html`,
   `gallery.src.html` or `build.py`. If your design truly needs a template change, do not make
   it in place: put a patched copy in your folder, render with it, and explain the exact change
   in your notes.
 - No JavaScript in cards. Fonts: system stacks, or the font files already bundled in
-  `design/v3/cards/anki/`. Do not download any font or other file.
+  `design/cards/anki/`. Do not download any font or other file.
 - WCAG AA contrast in light and night mode. No em-dashes anywhere (a hook rejects them).
 
 ## Deliverables in your folder

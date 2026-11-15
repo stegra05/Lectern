@@ -1,7 +1,7 @@
 # v3 design direction
 
 Decided by Steffen on 2026-11-13 after reviewing the six explorations in this folder.
-Read `docs/v3/brief.md` first. This file says which exploration wins where, and what is new.
+Read `docs/brief.md` first. This file says which exploration wins where, and what is new.
 
 ## Chosen
 
@@ -137,7 +137,7 @@ He then asked for an extensive interview to catch the nuances before anything is
 
 **Settings and cards**
 - "More mock designs" means more card designs. The agents may be creative. Five new designs
-  were commissioned in `design/v3/cards/explore/`: native, colours, night, object, poster.
+  were commissioned in `design/cards/explore/`: native, colours, night, object, poster.
 - The carousel shows one card design at a time on a card from the student's own course.
 
 **Export**

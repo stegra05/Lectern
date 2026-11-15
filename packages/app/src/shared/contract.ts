@@ -26,7 +26,7 @@ export type Phase = Extract<Event, { type: 'phase' }>['phase']
 export const PHASES: readonly Phase[] = ['read', 'map', 'write', 'check']
 export type Estimate = Extract<Event, { type: 'estimate' }>
 
-/** One card, with every field of `design/v3/cards/FIELDS.md`. */
+/** One card, with every field of `design/cards/FIELDS.md`. */
 export type Card = CardFile
 export type Topic = LectureState['topics'][number]
 export type Concept = Topic['concepts'][number]

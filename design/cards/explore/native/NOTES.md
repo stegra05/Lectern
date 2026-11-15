@@ -39,7 +39,7 @@ filled cloze, and nothing else on the card is blue.
   group footer at 15 px.
 - **Cloze list is a real grouped list**, the asked item an empty bordered field in its row,
   filled in blue with the check on the back. Plain cloze gaps are small white fields inline.
-- **Tokens from `design/v3/KIT.md`**, light and night. Contrast (WCAG 2.x, computed): label on
+- **Tokens from `design/KIT.md`**, light and night. Contrast (WCAG 2.x, computed): label on
   ground 14.7 / 15.2, secondary on ground 5.2 / 7.7 (on group 6.0 / 6.3), accent on group
   5.6 / 6.2, filled cloze on its tint 4.8 / 5.1, key term on its tint 12.8 / 8.8, asked capsule
   12.8 / 11.5, typeGood / typeBad 5.6 / 6.5 light and 7.4 / 7.4 night, input and gap boundary

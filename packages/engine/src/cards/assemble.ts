@@ -1,5 +1,5 @@
 /**
- * From a checked draft to the fields of `design/v3/cards/FIELDS.md`. The model filled the
+ * From a checked draft to the fields of `design/cards/FIELDS.md`. The model filled the
  * slots; everything written here (markup, slot labels, deletions of a list, typing, source,
  * excerpt) is code. Pure.
  */

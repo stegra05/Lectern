@@ -4,32 +4,32 @@ Written 2026-11-14 for the next session. Branch `v3`, local only, nothing pushed
 
 ## Read first, in this order
 
-1. `docs/v3/brief.md`: the product, architecture and scope.
-2. `design/v3/DIRECTION.md`: every design decision Steffen made, with dates and reasons.
-3. `design/v3/KIT.md`: the binding design kit (tokens, lecture colours, frame, map, cards).
-4. `docs/v3/engine-decisions.md`: his engine decisions, including how cards are created.
-5. `docs/v3/engine-report.md` and `docs/v3/engine-plan.md`: what the engine can do today.
-6. `docs/v3/prototype-report.md` and `packages/app/README.md`: what the app can do today.
+1. `docs/brief.md`: the product, architecture and scope.
+2. `design/DIRECTION.md`: every design decision Steffen made, with dates and reasons.
+3. `design/KIT.md`: the binding design kit (tokens, lecture colours, frame, map, cards).
+4. `docs/engine-decisions.md`: his engine decisions, including how cards are created.
+5. `docs/engine-report.md` and `docs/engine-plan.md`: what the engine can do today.
+6. `docs/prototype-report.md` and `packages/app/README.md`: what the app can do today.
 
 ## Where things are
 
 | Thing | Place |
 |---|---|
 | Design canvas (the source of truth for screens) | https://claude.ai/artifact/E4ZxyLc4DdB7HK3CgoQ1XE |
-| A copy of every canvas file | `design/v3/canvas/project/` |
+| A copy of every canvas file | `design/canvas/project/` |
 | Screens to build | canvas page "Direction v2", files `V2*.dc.html` |
-| Card system: templates, six stylesheets, field contract | `design/v3/cards/` (`FIELDS.md`, `anki/`) |
-| Brief for designers of canvas screens | `design/v3/V2-BRIEF.md` |
-| Personality references | `design/v3/personality/moodboard.html` |
+| Card system: templates, six stylesheets, field contract | `design/cards/` (`FIELDS.md`, `anki/`) |
+| Brief for designers of canvas screens | `design/V2-BRIEF.md` |
+| Personality references | `design/personality/moodboard.html` |
 | Engine | `packages/engine` |
 | App (Electron) | `packages/app`, start with `pnpm --filter @lectern/app start` |
-| Pictures of every base screen, light and dark | `docs/v3/shots/` |
+| Pictures of every base screen, light and dark | `docs/shots/` |
 | The real run's course and log (not in git) | `eval-results/v3-courses/` |
-| Superseded explorations, local only, not in git | `design/v3/archive/` |
+| Superseded explorations, local only, not in git | `design/archive/` |
 | v2 app, still the shipping product on `main` | `src/`, `src-tauri/` |
 
 Steffen edited the canvas by hand after the last publish. Before changing any canvas file, read
-it back from the canvas. The copy in `design/v3/canvas/project/` may be older than the canvas.
+it back from the canvas. The copy in `design/canvas/project/` may be older than the canvas.
 
 ## State
 
@@ -46,7 +46,7 @@ one placeholder preset, has commands for the interface (`courses`, `course`, `ca
 first real runs happened on 2026-11-14: the 11 Entrepreneurship decks became 596 cards for
 16.7 cents on `gpt-6-luna`, with no card over a hard limit. The content is not good enough yet:
 course administration gets cards, and some cards are thin. Figures and findings are in
-`docs/v3/engine-report.md`, section "First real runs". About 70 cents of the 50 dollars are used.
+`docs/engine-report.md`, section "First real runs". About 70 cents of the 50 dollars are used.
 
 **App.** The base prototype is done and committed (app code up to `99ff4ab`): an Electron app
 on the engine's one boundary, with first run, courses, files and goal, the run with the real
@@ -56,11 +56,11 @@ test from a new course to its cards pass on the offline models. It was checked o
 Entrepreneurship course. Sending to Anki is built (the card design offered once before the
 first send, then only new cards with each later send). The engine's send ran against his real
 Anki with 94 cards; the app's send has only run on an Anki in memory:
-`docs/v3/engine-report.md`, section "Sending to Anki". Changing, removing and writing a
+`docs/engine-report.md`, section "Sending to Anki". Changing, removing and writing a
 card is built in the side panel and tested end to end on the offline models (section
 "Changing single cards"). Not built yet: themes. A real build has only been started from the engine's command line,
 never from inside the app.
-Details and what is unverified: `docs/v3/prototype-report.md`.
+Details and what is unverified: `docs/prototype-report.md`.
 
 ## Next steps
 

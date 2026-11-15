@@ -28,7 +28,7 @@ one boundary. All eight criteria are met, with three things to know first:
 | 4 | `packages/app` exists, one command starts it | Met | `pnpm --filter @lectern/app start` |
 | 5 | Base screens work with real engine output, light and dark | Met | 26 pictures from the real course, section "Screens" |
 | 6 | Playwright test from creating a course to cards in the side panel | Met | `pnpm --filter @lectern/app test:e2e`: 1 passed |
-| 7 | Pictures of every base screen in light and dark, each looked at | Met | `docs/v3/shots/`, 13 screens times 2 |
+| 7 | Pictures of every base screen in light and dark, each looked at | Met | `docs/shots/`, 13 screens times 2 |
 | 8 | This report | Met | |
 
 ## Test results
@@ -66,7 +66,7 @@ The Playwright test passed three times in a row on the offline models at 80 ms p
 On my request it also added what an interface needs, in the same boundary: `courses`, `course`,
 `cards`, `slide`, `create`, `add` (PDFs as base64, so the boundary stays plain JSON), and
 offline models that turn any PDF text into a small course without a script. Its own account:
-`docs/v3/engine-report.md`.
+`docs/engine-report.md`.
 
 ### The app (`packages/app`, commits `623209a` to `99ff4ab`, about 8,800 lines with tests and CSS)
 
@@ -123,7 +123,7 @@ runs.
 
 ## Screens
 
-`docs/v3/shots/`, each in light and dark, 1100 by 720, taken by `pnpm --filter @lectern/app
+`docs/shots/`, each in light and dark, 1100 by 720, taken by `pnpm --filter @lectern/app
 shots` from the running app. Screens 06 to 13 show the course of the real run. Screens 03 to 05
 show the real 11 PDFs added through the app (about 120 MB, one of 70 MB) and a run on the
 offline models, because a second real run only for a picture would have cost money.

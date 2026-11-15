@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "electron-vite build && playwright test",
-    "shots": "electron-vite build && LECTERN_SHOTS=../../docs/v3/shots playwright test shots"
+    "shots": "electron-vite build && LECTERN_SHOTS=../../docs/shots playwright test shots"
   },
   "dependencies": {
     "@lectern/engine": "workspace:*",
