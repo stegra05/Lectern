@@ -61,11 +61,10 @@ function families(prompt: string): unknown {
   }
 }
 
-/** The question itself, turned into a statement the slides do not hold. */
-function answer(prompt: string): unknown {
-  const question = prompt.split('\n')[1] ?? ''
+/** An answer the slides do not hold, in words that do not repeat the question. */
+function answer(): unknown {
   return {
-    answer: `Past exams asked: ${question.replace(/\?$/, '.')}`,
+    answer: 'An answer to this past exam question, written without the slides.',
     items: 0,
     slide: 0,
     fromSlides: false,
@@ -116,7 +115,7 @@ export function offlineModel(delayMs = 0): ModelPort {
         : request.prompt.includes('Sort the questions into families')
           ? families(request.prompt)
           : request.prompt.startsWith('A question past exams')
-            ? answer(request.prompt)
+            ? answer()
             : request.task === 'read'
               ? read(request)
               : request.task === 'map'

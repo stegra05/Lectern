@@ -115,6 +115,8 @@ interface State {
   createCourse: (name: string) => Promise<void>
   openCourse: (course: string) => Promise<void>
   addFiles: (files: File[]) => Promise<void>
+  /** Adds past exam papers. The next build turns their recurring questions into cards first. */
+  addExams: (files: File[]) => Promise<void>
   setGoal: (goal: Goal) => Promise<void>
   build: () => Promise<void>
   /** Sends the cards that are not in Anki yet. The first time, the card designs come first. */
@@ -340,6 +342,19 @@ export const useStore = create<State>((set, get) => {
       set({ failure: failureOf(events) })
       const view = await refresh(course.id)
       if (view && view.pending.length > 0) set({ panel: 'setup', view: { level: 'course' } })
+      await estimate()
+    },
+
+    async addExams(files) {
+      const { course } = get()
+      const pdfs = files.filter((f) => f.name.toLowerCase().endsWith('.pdf'))
+      if (!course || pdfs.length === 0) return
+      const data = await Promise.all(
+        pdfs.map(async (f) => ({ name: f.name, data: await toBase64(f) })),
+      )
+      const events = await ask({ type: 'add', course: course.id, files: data, to: 'exams' })
+      set({ failure: failureOf(events) })
+      await refresh(course.id)
       await estimate()
     },
 

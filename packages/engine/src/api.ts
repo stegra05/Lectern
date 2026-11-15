@@ -11,7 +11,7 @@ import { edit, remove, slots, write } from './edit.ts'
 import { CALIBRATIONS, type Calibrations } from './decide.ts'
 import { EngineError } from './errors.ts'
 import {
-  addSlides,
+  addFiles,
   createCourse,
   listCourses,
   readCourse,
@@ -79,7 +79,7 @@ export function createEngine(ports: Ports, options: Options = {}): Engine {
             return emit({
               type: 'added',
               course: known.course,
-              files: await addSlides(store, known.course, known.files),
+              files: await addFiles(store, known.course, known.files, known.to),
             })
           case 'send':
             return await send(ports, known, emit)
@@ -111,4 +111,10 @@ export type { CardFile } from './cards/assemble.ts'
 export type { Problem, Slots } from './cards/slots.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
 export type { Calibrations } from './decide.ts'
-export type { CourseState, CourseSummary, LectureState, PendingLecture } from './library.ts'
+export type {
+  CourseState,
+  CourseSummary,
+  LectureState,
+  PaperState,
+  PendingLecture,
+} from './library.ts'

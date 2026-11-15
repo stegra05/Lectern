@@ -131,6 +131,29 @@ describe('a course from creation to its cards, through the boundary only, with t
     expect(await readdir(join(root, 'entrepreneurship-ws26/slides'))).toHaveLength(2)
   })
 
+  it('adds past exam papers to their own folder and lists them as not read yet', async () => {
+    const paper = Buffer.from(
+      await makePdf([['Exam Winter 2025/26', '1) What is risk according to Knight (1921)?']]),
+    ).toString('base64')
+    const files = [{ name: 'Winter 2025-26.pdf', data: paper }]
+    expect(
+      await only({ type: 'add', course: 'entrepreneurship-ws26', files, to: 'exams' }, 'added'),
+    ).toEqual({ type: 'added', course: 'entrepreneurship-ws26', files: ['Winter 2025-26.pdf'] })
+    expect(await readdir(join(root, 'entrepreneurship-ws26/exams'))).toEqual(['Winter 2025-26.pdf'])
+    const course = (await only({ type: 'course', course: 'entrepreneurship-ws26' }, 'course'))
+      .course
+    expect(course.exams).toEqual([{ file: 'Winter 2025-26.pdf', questions: null }])
+    expect(course.pending).toHaveLength(2)
+    // A paper may not take the name of a lecture file, nor a lecture the name of a paper.
+    const clash = [{ name: '01 Risk.pdf', data: paper }]
+    expect(
+      await only(
+        { type: 'add', course: 'entrepreneurship-ws26', files: clash, to: 'exams' },
+        'failed',
+      ),
+    ).toMatchObject({ message: 'The course already has a file named 01 Risk.pdf.' })
+  })
+
   it('renders one slide as a picture, before and after the build', async () => {
     const event = await only(
       { type: 'slide', course: 'entrepreneurship-ws26', lecture: 2, slide: 3 },
@@ -170,6 +193,7 @@ describe('a course from creation to its cards, through the boundary only, with t
     expect(state.lectures.reduce((sum, lecture) => sum + lecture.cards, 0)).toBeGreaterThanOrEqual(
       14,
     )
+    expect(state.exams).toEqual([{ file: 'Winter 2025-26.pdf', questions: 1 }])
   })
 
   it('reads one course as the interface shows it', () => {
@@ -199,7 +223,8 @@ describe('a course from creation to its cards, through the boundary only, with t
       id: 'risk-knight-1921',
       name: 'Risk (Knight 1921)',
       slides: [2],
-      cards: 2,
+      // Its two cards from the slides, and the answer to the past paper's question.
+      cards: 3,
     })
     expect(lecture.cards).toBe(
       lecture.topics.flatMap((t) => t.concepts).reduce((sum, c) => sum + c.cards, 0),
@@ -212,14 +237,21 @@ describe('a course from creation to its cards, through the boundary only, with t
       'cards',
     )
     expect(cards.length).toBe(state.lectures[0]!.cards)
-    const first: CardFile = cards[0]!
-    expect(first).toMatchObject({ id: '01-risk-knight-1921-definition-1', note: 'qa', slide: 2 })
+    // The answer to the past paper's question comes first in its concept.
+    expect(cards[0]!.fields).toMatchObject({
+      Asked: '1x',
+      Source: 'Past exams; the answer is not on the slides',
+      Slide: '',
+    })
+    const first: CardFile = cards[1]!
+    expect(first).toMatchObject({ id: '01-risk-knight-1921-definition-2', note: 'qa', slide: 2 })
     expect(first.fields).toMatchObject({
       Front: 'Risk (Knight 1921): how does the statement beginning "An outcome whose" go on?',
       Back: 'An outcome whose probability can be calculated <mark>or known</mark>',
       Source: 'Lecture 1, slide 2',
+      Asked: '',
     })
-    expect(cards[1]!.fields).toMatchObject({
+    expect(cards[2]!.fields).toMatchObject({
       Role: 'reverse',
       Back: '<mark>Risk (Knight 1921)</mark>',
       Typed: 'Risk (Knight 1921)',

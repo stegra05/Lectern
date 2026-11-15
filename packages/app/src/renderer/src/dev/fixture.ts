@@ -315,6 +315,7 @@ function built(): CourseView {
     goal: 'top',
     lectures,
     pending: [],
+    exams: [],
     decisions: [
       {
         lecture: null,
@@ -414,6 +415,10 @@ function waiting(): CourseView {
       title,
       slides: SLIDES[i]!,
     })),
+    exams: [
+      { file: 'Exam Winter 2024-25.pdf', questions: null },
+      { file: 'Exam Summer 2025.pdf', questions: null },
+    ],
     decisions: [],
     runs: [],
   }
@@ -425,6 +430,7 @@ const empty = (): CourseView => ({
   goal: 'good',
   lectures: [],
   pending: [],
+  exams: [],
   decisions: [],
   runs: [],
 })
