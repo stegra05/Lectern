@@ -16,10 +16,21 @@ hook checks staged package files with Prettier and ESLint.
 `cli build` spends money on the OpenAI account of `OPENAI_API_KEY`. Every test runs on the
 offline models; live tests run only with `LECTERN_LIVE=1`.
 
+## Issues and the board
+
+Work is planned as issues on the [roadmap board](https://github.com/users/stegra05/projects/3),
+one per piece of work, filed with the Task form ("What and why", "Done when"). Each issue has a
+type (Feature, Quality, Verify, Decision, Chore, Bug), an Area, a Size, and a milestone for the
+release it ships in; issues in the current release also get a Priority. `costs money` marks work
+that spends money, and "blocked by" links show what has to come first. New issues join the board
+in Backlog by themselves. `.claude/skills/roadmap/board.sh` reads and edits the board from the
+command line, and `.claude/skills/roadmap/SKILL.md` describes the whole system.
+
 ## Pull requests
 
 Every change reaches `v3` through a pull request, and CI must pass: lint, format, typecheck and
-unit tests, plus the app's end-to-end test.
+unit tests, plus the app's end-to-end test. Its description names the issue it finishes with
+"Closes #N". The issue then closes, and moves to Done, when the pull request merges into `v3`.
 
 A pull request does one thing and stays under 1,000 changed lines, so it can be read in one
 sitting. Whole-file deletions and renames do not count against that. Work larger than that is
