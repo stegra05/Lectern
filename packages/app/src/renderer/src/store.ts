@@ -50,7 +50,7 @@ export interface RunState {
 
 /** Where the map is: the whole course, or inside one lecture with an optional selection. */
 export type View =
-  { level: 'course' } | { level: 'lecture'; lecture: number; topic?: string; concept?: string }
+  { level: 'course' } | { level: 'lecture'; lecture: number; topic?: number; concept?: string }
 
 /** What the side panel shows. Null is the full-width map. */
 export type Panel = null | 'setup' | 'run' | 'cards' | 'details'
@@ -127,7 +127,7 @@ interface State {
   closeEditor: () => void
   showCourse: () => void
   openLecture: (lecture: number) => void
-  selectTopic: (topic: string) => void
+  selectTopic: (topic: number) => void
   selectConcept: (concept: string) => void
   openDetails: (tab?: 'decisions' | 'statistics') => void
   openPanel: (panel: Panel) => void
@@ -585,10 +585,8 @@ export function cardsOfConcept(lecture: Lecture, concept: string): Card[] {
 export function selectedCards(lecture: Lecture, view: View): Card[] {
   if (view.level !== 'lecture') return []
   if (view.concept) return cardsOfConcept(lecture, view.concept)
-  if (view.topic) {
-    const ids = new Set(
-      lecture.topics.find((t) => t.name === view.topic)?.concepts.map((c) => c.id),
-    )
+  if (view.topic !== undefined) {
+    const ids = new Set(lecture.topics[view.topic]?.concepts.map((c) => c.id))
     return lecture.cards.filter((c) => ids.has(c.concept))
   }
   return lecture.cards
