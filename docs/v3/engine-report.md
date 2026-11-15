@@ -153,6 +153,73 @@ folder, `courses/check-measurement-2026-11-15.json`.
 
 The cost estimate now counts one small decision request per card for the organisation check.
 
+**One real lecture with the new gate** (lecture 8 of Entrepreneurship, concept preset, goal top
+grade, 2.1 cents, 114 seconds): 69 cards, none dropped, 5 repair calls on 69 fills, 202
+decisions. Definitions now mark what answers the question ("Using any possible method to
+==conserve cash==") where the earlier run marked the term asked about ("==Bootstrap financing==
+means ..."). Two gaps showed in its cards. "Which two main subjects does Session 6 cover?"
+passes the word rule, which looks for "the session" and "last session" and not for a session
+number. And a contrast side such as "Opportunity: Opportunity: they invest because ..." passes
+the "says nothing" rule, because it adds words after repeating its label. One lecture is a
+small sample: no full run has been made with the gate.
+
+## Measured against the reference deck
+
+By the session "Card quality and relevancy patterns", 2026-11-14. Both full runs (placeholder,
+596 cards, and concept draft, 554 cards) were compared with the 636 notes of the reference
+deck. A small model (Claude Haiku) judged, in two passes: for every reference note, whether
+the generated deck has a card on the same fact, only the same concept, or nothing; and for
+every generated card, one label. I checked about forty of its calls by hand. It is not a blind
+comparison by a person, and its "sound" label is lenient.
+
+| | Placeholder run | Concept draft run |
+|---|---|---|
+| Cards labelled sound | 63% | 77% |
+| About course organisation or the session itself | 17% | 4% |
+| Broken: the answer does not answer the question | 9% | 10% |
+| Thin or trivia | 11% | 9% |
+| Reference notes with a card on the same fact | 39% | 36% |
+| Reference notes with the concept, without the fact | 54% | 58% |
+| Reference notes with no counterpart | 7% | 5% |
+| Generated cards with no counterpart in the reference deck | 46% | 39% |
+
+- **The concept preset fixed administration and did not move coverage.** The three points
+  between 39 and 36 percent are within what the judge varies by.
+- **The misses are facts, not concepts.** The map finds the concept almost every time. The card
+  then tests another fact of it than the one the exam asks. `plan.ts` takes the first facts of
+  a concept in the order the model listed them; nothing ranks them.
+- **No sense of what matters.** Coverage is the same for notes asked once (36%) and notes asked
+  nine times or more (43%).
+- **The reference deck is selected by the exam, not by the lectures.** Every note carries how
+  often 22 past papers asked it. 132 of the 636 notes cite no slides at all (videos, the Krapp
+  and HIGGS cases, Greiner, Teece, past papers) and are covered at 2 percent. Greiner's crises,
+  Porter and the names of the effectual principles are not in the slide text. On the 504 notes
+  that cite slides, coverage is 48 and 45 percent. A deck from slides alone cannot reach this
+  reference, so coverage should be reported on that part.
+- **Card types.** Weakest by label: diagram (33 to 40 percent sound), case (30 to 58), contrast
+  (65 to 75). Reverse, why and list cards reach 79 to 88 percent on the draft run.
+- **The flags of the first runs did not find the defects.** In the draft run 21 of the 24
+  flagged cards were sound, and 2 of the 23 cards about organisation or the session sat on a
+  flagged concept.
+
+**The decision model as a grader** (all 1,150 cards, five questions per card, 32 seconds, 10.8
+cents). Against the labels above: organisation 0.88, slide-meta 0.92 and a four-level rubric
+"worth studying" 0.87 (area under the curve; 0.5 is chance). "The answer answers the question"
+is weak (0.67, and 86 percent of all cards score above 0.9). "An exam could ask this" is
+useless: every card scores above 0.9. The rubric follows the reference deck only loosely: cards
+with a counterpart there against cards without, 0.70; notes asked nine times or more against
+notes asked twice or less, 0.58. So it can order cards, and it cannot tell what is examined.
+It is not in the engine: nothing uses a score yet.
+
+**Steffen's own verdicts.** He judged 62 cards in two rounds (41 keep, 9 right fact but bad
+card, 5 not worth a card, 7 junk) and then said he does not know the course contents yet. So
+they count for form (cards about the session, answers that do not answer, malformed contrasts)
+and not for what is worth studying. A student who has not learned the course is in the same
+place: a feedback loop should not ask them whether a card is relevant.
+
+**Not in the repository.** The scripts, the judge's labels and the decision model's raw answers
+were in that session's scratch folder. The figures here are what is kept.
+
 ## What was built
 
 `packages/engine`: 3,800 lines of source, 2,717 lines of tests, no interface code, no build step.
@@ -356,8 +423,9 @@ diagram card. The interface session should know these exist.
 
 ## Unverified
 
-- **Quality against the reference deck.** Counts are comparable (596 and 658 against 636). No
-  blind comparison and no coverage check has been made. My reading of a sample is above.
+- **Quality against the reference deck.** Measured once, by a small model as the judge: see
+  "Measured against the reference deck". Still open: a blind comparison by a person who knows
+  the course, and any measurement of a full run built with the new gate.
 - **Prices.** The cost figures use constants from the v2 config and the decisions file. They
   have not been checked against the OpenAI bill.
 - **Decision input.** Cached decision input is priced at the full rate here, as an upper
@@ -379,7 +447,10 @@ diagram card. The interface session should know these exist.
    adapter now retries harder; saving per lecture would end the risk.
 4. Still open in code from the comparison run: merging near-identical facts before cards are
    planned, and a cap on lists and contrasts per concept.
-5. The blind comparison against the reference deck.
+5. Coverage, the largest gap the measurement found: the map has the concept and the card
+   tests another fact than the exam asks. Candidates are ranking the facts of a concept before
+   the plan picks them, and other course material beside the slides. The comparison itself
+   should become an engine command, so that each such change is measured the same way.
 6. A small run on Datenbanken and Operations Research once code and formula cards have a preset.
 
 ## Follow-ups outside my paths

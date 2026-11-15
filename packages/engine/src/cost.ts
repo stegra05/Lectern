@@ -35,7 +35,9 @@ const TOKENS = {
   decisionPasses: 2,
   /**
    * Decision input per card: the organisation check on every card, and the slide check on the
-   * cards the free rule cannot settle, each with one slide as input. Rough, not yet measured.
+   * cards the free rule cannot settle, each with one slide as input. Rough. The one measured
+   * figure is 401 tokens per card for a request with two questions about one card (1,150 cards,
+   * 2026-11-14); a request with one question has not been measured.
    */
   cardCheck: 350,
 }
