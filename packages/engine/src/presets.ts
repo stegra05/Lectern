@@ -3,10 +3,10 @@
  * becomes, shows the model example cards per card type, and states the rules for the map and
  * for the cards.
  *
- * Nothing here is approved yet. `placeholder` is one minimal preset that serves every kind of
- * lecture so the pipeline runs end to end. `concept-draft` is a draft of the preset for concept
- * courses, written from Steffen's Entrepreneurship study kit, waiting for his review; a build
- * uses it only when the command names it. See `docs/v3/engine-profile-concept.md`.
+ * `concept` is the working preset for concept courses, written from Steffen's Entrepreneurship
+ * study kit and accepted by him on 2026-11-15 after a comparison run
+ * (`docs/v3/engine-profile-concept.md`). The other three kinds of lecture have no preset of
+ * their own yet and get `placeholder`, one minimal preset that only makes the pipeline run.
  */
 
 import type { Role } from './cards/roles.ts'
@@ -90,9 +90,9 @@ const PLACEHOLDER: Preset = {
   ],
 }
 
-/** Draft for concept courses. Examples are cards of the reference deck, put into the forms. */
-const CONCEPT_DRAFT: Preset = {
-  id: 'concept-draft',
+/** Concept courses. Examples are cards of the reference deck, put into the forms. */
+const CONCEPT: Preset = {
+  id: 'concept',
   plan: PLACEHOLDER.plan,
   examples: {
     definition: {
@@ -166,12 +166,12 @@ const CONCEPT_DRAFT: Preset = {
   ],
 }
 
-export const PRESETS = { placeholder: PLACEHOLDER, 'concept-draft': CONCEPT_DRAFT }
-export const PRESET_IDS = ['placeholder', 'concept-draft'] as const
+export const PRESETS = { placeholder: PLACEHOLDER, concept: CONCEPT }
+export const PRESET_IDS = ['placeholder', 'concept'] as const
 
-/** Every kind of lecture gets the placeholder until its own preset is approved. */
+/** A kind of lecture without a preset of its own gets the placeholder. */
 const BY_KIND: Record<ProfileKind, Preset> = {
-  concept: PLACEHOLDER,
+  concept: CONCEPT,
   formula: PLACEHOLDER,
   programming: PLACEHOLDER,
   'fact-heavy': PLACEHOLDER,

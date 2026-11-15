@@ -3,7 +3,7 @@
  * The engine from a command line.
  *
  *   node src/cli.ts estimate <course folder> [--goal pass|good|top] [--model gpt-6-luna]
- *   node src/cli.ts build <course folder> [--goal pass|good|top] [--profile concept|formula|programming|fact-heavy] [--model gpt-6-luna] [--cap dollars] [--preset concept-draft]
+ *   node src/cli.ts build <course folder> [--goal pass|good|top] [--profile concept|formula|programming|fact-heavy] [--model gpt-6-luna] [--cap dollars] [--preset placeholder|concept]
  *   node src/cli.ts outline <course folder>
  *   node src/cli.ts send <course folder> [--design native|structure|lamp|colours|afterglow|vitrine]
  *

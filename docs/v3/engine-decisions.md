@@ -124,6 +124,17 @@ through the question tool in the engine session:
 - **Paid runs.** Only the engine session starts them. He approved one run of all eleven
   Entrepreneurship decks with the draft profile, about 17 cents.
 
+## Decided on 2026-11-15
+
+Steffen's answers in the engine session, after the comparison run of the concept profile:
+
+- **The concept profile is the working preset for concept courses.** It is not the last word:
+  definitions that restate their question, near-identical cards and too many lists were still
+  open in the comparison run, and code checks for them followed.
+- **The slide check and the concept check may be re-measured** with a few cents of paid
+  decision calls, to find out whether they work better with the slide or the concept as the
+  only input.
+
 ## Pending
 
 - Themes across lectures stay out of the base.

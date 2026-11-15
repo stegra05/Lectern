@@ -1,8 +1,10 @@
-# Profile for concept courses: draft for review
+# Profile for concept courses
 
-Written 2026-11-14 for Steffen. Status: **draft, not approved**. It is in the engine as the
-preset `concept-draft` (`packages/engine/src/presets.ts`) and is used only when a build names it
-(`--preset concept-draft`). Every course still gets the placeholder by default.
+Written 2026-11-14 for Steffen as a draft. **Accepted by him on 2026-11-15 as the working preset
+for concept courses**, after the comparison run below. It is the preset `concept` in
+`packages/engine/src/presets.ts`, and every course read as a concept course is built with it.
+The three other kinds of lecture still get the placeholder. In the text below, "draft" is what
+this preset was called while it waited for his verdict.
 
 Source: the Entrepreneurship study kit, its `STYLE.md` and its 636 vetted cards.
 
