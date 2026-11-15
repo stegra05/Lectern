@@ -31,7 +31,7 @@ Sort field in both: `Key`. Field order is the order of the tables.
 | Extra | Context after the answer | Model | At most 40 words. Inline maths at most 30 TeX characters; anything longer is written as display maths `\[ \]` |
 | Excerpt | A short quote from the source slide | Code, from the slide text | At most 30 words, plain text. The skins show two lines until the slide is opened |
 | Slide | The rendered source slide | Code | `<img src="l02-s14.png">` in the card file. Anki receives the file as `lectern-<course>-l02-s14.png`, lowercase, in `collection.media` |
-| Diagram | The answer as a drawing | Code | Inline `<svg class="dg">`, see "Diagrams". Only in the diagram role |
+| Diagram | The slide image | Code | The same `<img>` as Slide. Only in the diagram role |
 | Key | The concept as plain text | Code | Never rendered. Sort field, search handle and the stable identity of the concept |
 
 ## Lectern Cloze v3
@@ -58,7 +58,7 @@ Same as Q&A, with `Text` in place of Front, Back, Slots and Code.
 | code | `<ul>` with one item per question part | one label per part |
 | case | One term | none |
 | formula | `\[ \]` display maths, then one sentence with the condition | none |
-| diagram | One sentence; the drawing goes into Diagram | none |
+| diagram | One sentence; the slide image goes into Diagram | none |
 | cloze, cloze-list | (Cloze note type) | none |
 
 A role that expects a list still renders when Back is a sentence: the answer becomes one slot
@@ -83,8 +83,6 @@ An unknown role renders as a single slot with the cue "Your answer".
   means "this matters", and `<b>` stays free for ordinary emphasis.
 - **Lists are always `<ul>`.** Numbering (name two, chain) is the skin's job, done with CSS
   counters, so the field never carries presentation.
-- **Diagram is inline SVG** (from Lamp), drawn in `currentColor`, so it follows night mode and the
-  skin colours its emphasis.
 
 ## Typed answers
 
@@ -115,16 +113,3 @@ field on the same note, so the card keeps its id and its review history. Rejecte
 a second card template would create a second card with its own schedule (and a cloze note type
 cannot have a second template), and a separate note type would double the styling that Lectern
 has to keep upgraded and would lose the card's history on a note type change.
-
-## Diagrams
-
-- `<svg class="dg" viewBox="0 0 W H">` with W at most 300 units.
-- Labels are `<text>` of at least 11 units, no `font-family` (the skin sets it), no fill other
-  than `currentColor`.
-- Cells are `<rect class="dg-cell">`; the part that answers the question gets `dg-key`.
-  Axis or legend text gets `dg-axis`.
-- A label wider than its cell is broken with a hyphen (`propo-` / `sitions`), never shrunk.
-
-Both skins let the figure bleed to about 330 px on a 360 px phone, so 11 units render at about
-12 px. A slide image (`<img>`) is allowed as a Diagram only when no SVG can be drawn; it does not
-follow night mode.
