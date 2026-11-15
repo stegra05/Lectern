@@ -1,0 +1,332 @@
+/* The screens outside a course: first run and the course list. */
+
+.entry {
+  position: relative;
+  height: 100%;
+}
+.entry-scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding-top: var(--titlebar-h);
+}
+.entry-wintitle {
+  display: block;
+  line-height: 24px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.entry-label {
+  display: block;
+  margin: 0 0 6px 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+.entry-note {
+  margin: 6px 2px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--label-2);
+}
+.entry-note b {
+  font-weight: 500;
+  color: var(--label);
+}
+
+/* A problem and its fix, next to what caused it. */
+.entry-failure {
+  display: flex;
+  gap: 7px;
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--label-2);
+}
+.entry-failure svg {
+  margin-top: 1px;
+  color: var(--problem);
+}
+.entry-failure b {
+  font-weight: 600;
+  color: var(--problem);
+}
+.entry-failure-boxed {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--r-group);
+  background: var(--group);
+  box-shadow: 0 0 0 0.5px var(--hairline);
+}
+
+.entry-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--separator);
+  border-top-color: var(--label-2);
+  animation: entry-spin 0.9s linear infinite;
+}
+@keyframes entry-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* First run */
+
+.first-wrap {
+  display: flex;
+  min-height: 100%;
+  padding: 32px 0 48px;
+}
+.first {
+  width: 440px;
+  margin: auto;
+}
+/* The emblem's first stop lines up with the text below it. */
+.first-emblem {
+  margin: 0 0 20px -16px;
+}
+.first-emblem .mini {
+  width: 330px;
+  height: auto;
+}
+.first-lede {
+  margin-top: 8px;
+  color: var(--label-2);
+  line-height: 1.5;
+}
+.first-section {
+  margin-top: 24px;
+}
+.first-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 4px 0 12px;
+  color: var(--label-2);
+}
+.first-key:focus-within {
+  box-shadow: inset 0 0 0 2px var(--focus);
+  border-radius: var(--r-group);
+}
+.first-key-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--label);
+  font-size: 12.5px;
+  user-select: text;
+  cursor: text;
+}
+.first-key-input::placeholder {
+  color: var(--label-2);
+  opacity: 0.7;
+}
+.first-key-input:focus-visible {
+  outline: none;
+}
+.first-key-input:read-only {
+  color: var(--label-2);
+}
+.first-show {
+  height: 24px;
+  font-size: 12px;
+}
+.first-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+.first-busy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+/* The course list */
+
+.courses {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+.courses-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.courses-head p {
+  margin-top: 4px;
+}
+.courses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.course-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-group);
+  background: var(--group);
+  box-shadow:
+    0 0 0 0.5px var(--hairline),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+  text-align: left;
+  overflow: hidden;
+  transition: box-shadow 200ms ease-out;
+}
+.course-card:hover {
+  box-shadow:
+    0 0 0 0.5px var(--hairline),
+    0 2px 6px rgba(0, 0, 0, 0.06),
+    0 8px 20px rgba(0, 0, 0, 0.06);
+}
+.course-card:active {
+  filter: brightness(0.98);
+}
+/* The track sits on the map's own ground, a window onto the course. */
+.course-track {
+  display: grid;
+  place-items: center;
+  height: 150px;
+  padding: 0 12px;
+  background-color: var(--ground);
+  /* The faint dot grid of the map's ground. */
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1.4px);
+  background-size: 16px 16px;
+  background-position: 8px 8px;
+  border-bottom: 0.5px solid var(--separator);
+}
+.course-track .mini {
+  max-width: 100%;
+  height: auto;
+}
+.course-text {
+  padding: 12px 16px 14px;
+}
+.course-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.course-status {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.new-course {
+  display: grid;
+  gap: 5px;
+}
+.new-course-input {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* No course yet: an invitation to the first. */
+.courses-first {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 400px;
+  margin: 0 auto;
+  padding-top: 150px;
+  text-align: center;
+}
+.courses-first .mini {
+  margin-bottom: 8px;
+}
+.courses-first p {
+  line-height: 1.5;
+}
+.courses-first .btn-primary,
+.courses-first .new-course {
+  margin-top: 10px;
+}
+.courses-first .new-course {
+  width: 260px;
+}
+.courses-first .entry-failure-boxed {
+  margin-top: 12px;
+  text-align: left;
+}
+
+/* The small track */
+
+.mini {
+  display: block;
+  overflow: visible;
+}
+.mini-band {
+  fill: none;
+  stroke: var(--track);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.mini-done {
+  stroke: var(--stop-stroke);
+  stroke-width: 0.5;
+}
+.mini-open {
+  fill: var(--ground);
+  stroke: var(--neutral-mark);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 2.4;
+}
+.mini-num {
+  fill: var(--on-lecture);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.mini-num-open {
+  fill: var(--label-2);
+  font-weight: 600;
+}
+.mini-stop {
+  transition: transform 220ms ease-out;
+  transition-delay: calc(var(--i) * 22ms);
+}
+/* A small hello on hover: the stops lift one after the other, along the track. */
+.course-card:hover .mini-stop {
+  transform: translateY(-2px);
+}
+.mini-animate .mini-band {
+  stroke-dasharray: 1;
+  animation: mini-draw 700ms ease-out 80ms backwards;
+}
+.mini-animate .mini-stop {
+  animation: mini-in 300ms ease-out backwards;
+  animation-delay: calc(var(--i) * 110ms + 80ms);
+}
+@keyframes mini-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes mini-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}

@@ -424,6 +424,7 @@ describe('building a course of two lectures, offline', () => {
       outputTokens: expect.any(Number) as number,
       estimateUsd: 0,
       costUsd: 0,
+      costEur: 0,
       durationMs: expect.any(Number) as number,
       phaseMs: { read: 1000, map: 1000, write: 1000, check: 1000 },
     })

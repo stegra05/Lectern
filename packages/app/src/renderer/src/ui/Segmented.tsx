@@ -3,9 +3,6 @@ import './controls.css'
 export interface Segment<T extends string> {
   value: T
   label: string
-  disabled?: boolean
-  /** Why the segment cannot be chosen, shown as a tooltip. */
-  title?: string
 }
 
 /** A two or three way switch, the system's segmented control. */
@@ -29,8 +26,6 @@ export function Segmented<T extends string>({
           key={s.value}
           type="button"
           aria-pressed={s.value === value}
-          disabled={s.disabled}
-          title={s.title}
           onClick={() => onChange(s.value)}
         >
           {s.label}

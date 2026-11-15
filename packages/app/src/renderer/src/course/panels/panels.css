@@ -1,0 +1,321 @@
+/* The four kinds of side panel content. Shared pieces live in ../panel.css. */
+
+/* Setup */
+.setup-found {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+}
+.setup-found b {
+  font-weight: 600;
+}
+.setup-count {
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+.setup-goal {
+  gap: 8px;
+}
+.setup-goal .segmented {
+  padding: 2px;
+  border-radius: var(--r-control);
+}
+.setup-goal .segmented button {
+  min-width: 0;
+}
+.setup-goal .segmented button[aria-pressed='true'] {
+  font-weight: 600;
+}
+
+/* Run */
+.run-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.run-step[data-status='started'] {
+  background: var(--selection);
+}
+.run-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--dot-stroke);
+}
+.run-step[data-status='done'] .run-mark {
+  background: var(--positive);
+  box-shadow: none;
+  color: var(--group);
+}
+.run-step[data-status='started'] .run-mark {
+  box-shadow: inset 0 0 0 2px var(--accent-text);
+}
+.run-mark i {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-text);
+}
+.run-step-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.run-step-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.run-step-title b {
+  font-weight: 600;
+}
+.run-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+  white-space: nowrap;
+}
+.run-progress {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent-text) 15%, transparent);
+  overflow: hidden;
+}
+.run-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent-text);
+  transition: width 300ms ease-out;
+}
+.run-left {
+  gap: 4px;
+}
+.run-left-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.run-problem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--r-group);
+  background: var(--group);
+  box-shadow: 0 0 0 0.5px var(--hairline);
+}
+.run-problem-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--problem);
+  font-weight: 600;
+}
+.run-problem-head svg {
+  margin-top: 2px;
+}
+
+/* Cards */
+.cards-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 14px 10px 16px;
+}
+.cards-crumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.cards-crumb-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cards-title {
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.cards-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cards-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 22px;
+  gap: 11px;
+  padding: 10px 8px 10px 12px;
+}
+/* Always there, so it can be found, and quiet until the row is pointed at. */
+.cards-edit {
+  width: 22px;
+  height: 22px;
+  margin-top: -2px;
+  color: var(--label-2);
+  opacity: 0.55;
+}
+.cards-row:hover .cards-edit,
+.cards-edit:focus-visible {
+  opacity: 1;
+}
+.cards-add {
+  align-self: flex-start;
+}
+.cards-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.cards-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  user-select: text;
+  cursor: text;
+}
+.cards-front {
+  font-weight: 600;
+  line-height: 1.33;
+}
+.cards-back {
+  line-height: 1.38;
+}
+.cards-text mark {
+  background: var(--key-term);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 500;
+}
+.cards-back ul {
+  margin: 0;
+  padding: 0 0 0 16px;
+}
+.cards-slot {
+  font-weight: 500;
+}
+.cards-dropped {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cards-dropped h2 {
+  margin: 0 4px;
+}
+.cards-dropped-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 11px;
+  padding: 10px 12px;
+}
+.cards-dropped-row .chip {
+  justify-self: start;
+}
+.cards-dropped-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cards-dropped-text b {
+  font-weight: 600;
+  color: var(--label-2);
+}
+
+/* Details */
+.details-head {
+  padding-top: 14px;
+}
+.details-tabs {
+  flex: 1;
+}
+.details-tabs .segmented button {
+  min-width: 0;
+}
+.details-decision {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px 10px;
+  line-height: 1.38;
+}
+.details-index {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--chip);
+  font-size: 11px;
+  font-weight: 600;
+}
+.details-decision .lec-chip {
+  margin-top: 1px;
+}
+
+.stats-left {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stats-left li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.stats-left li + li {
+  border-top: 1px solid var(--separator);
+}
+.stats-left b {
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+.stats-left li > span {
+  font-weight: 600;
+}
+.stats-left .t-secondary {
+  font-weight: 400;
+}
+.stats-figure {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.cards-body > * {
+  flex: none;
+}
