@@ -71,6 +71,9 @@ export type Answer =
   | { type: 'score'; score: number }
   | { type: 'refusal' }
 
+/** The most pictures one decision request may carry. */
+export const MAX_DECISION_IMAGES = 128
+
 export interface DecisionRequest {
   /** The input every question is about. Questions are batched per shared input. */
   context: string

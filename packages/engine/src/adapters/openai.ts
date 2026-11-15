@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { EngineError } from '../errors.ts'
+import { MAX_DECISION_IMAGES } from '../ports.ts'
 import type { Answer, DecisionsPort, ModelPort, Question, SlideImage } from '../ports.ts'
 
 /** Dollars per million tokens. Above `longFrom` prompt tokens the long card prices the whole request. */
@@ -15,7 +16,6 @@ const LONG_FROM = 272_000
 
 /** The Decisions API takes this many questions and pictures per request. */
 const QUESTIONS_PER_REQUEST = 200
-const IMAGES_PER_REQUEST = 128
 /**
  * A run makes hundreds of calls and saves nothing until the end, so one dropped connection must
  * not end it. The SDK waits longer between each of these tries.
@@ -139,9 +139,9 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
     model: LUNA,
     price: { input: PRICES[LUNA]!.input },
     async decide(request) {
-      if (request.images.length > IMAGES_PER_REQUEST) {
+      if (request.images.length > MAX_DECISION_IMAGES) {
         throw new Error(
-          `A decision request carries ${request.images.length} pictures, more than the ${IMAGES_PER_REQUEST} the API takes.`,
+          `A decision request carries ${request.images.length} pictures, more than the ${MAX_DECISION_IMAGES} the API takes.`,
         )
       }
       client ??= new OpenAI({ ...options, maxRetries: RETRIES })
