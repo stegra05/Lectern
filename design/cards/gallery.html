@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lectern cards: one system, two skins</title>
+<title>Lectern cards: one system, six designs</title>
 <style>
   :root { --g-bg: #e9eeeb; --g-ink: #172238; --g-soft: #465267; --g-line: #c9d3cd; --g-on: #172238; --g-on-ink: #ffffff; }
   html, body { margin: 0; }
@@ -33,8 +33,8 @@
 </head>
 <body>
 <div class="bar">
-  <h1>Lectern cards <span>one system, two skins</span></h1>
-  <div><span class="lbl">Skin</span><span class="seg" data-key="skin"><button data-v="structure">Structure</button><button data-v="lamp">Lamp</button><button data-v="both">Both</button></span></div>
+  <h1>Lectern cards <span>one system, six designs</span></h1>
+  <div><span class="lbl">Skin</span><span class="seg" data-key="skin"><button data-v="native">Native</button><button data-v="colours">Lecture colours</button><button data-v="night">Afterglow</button><button data-v="object">Vitrine</button><button data-v="structure">Structure</button><button data-v="lamp">Lamp</button><button data-v="both">All</button></span></div>
   <div><span class="lbl">Mode</span><span class="seg" data-key="mode"><button data-v="light">Light</button><button data-v="night">Night</button><button data-v="both">Both</button></span></div>
   <div><span class="lbl">Width</span><span class="seg" data-key="w"><button data-v="360">360</button><button data-v="600">600</button><button data-v="both">Both</button></span></div>
   <div><span class="lbl">Slide</span><span class="seg" data-key="slide"><button data-v="closed">Closed</button><button data-v="open">Open</button></span></div>
@@ -65,7 +65,7 @@ const MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],dis
 
 const params = new URLSearchParams(location.search);
 const state = {
-  skin: params.get('skin') || 'structure',
+  skin: params.get('skin') || 'native',
   mode: params.get('mode') || 'light',
   w: params.get('w') || '360',
   slide: params.get('slide') || 'closed',
@@ -86,7 +86,7 @@ function list(v, all) { return v === 'both' ? all : [v]; }
 function render() {
   const out = document.getElementById('out');
   out.innerHTML = '';
-  const skins = list(state.skin, ['structure', 'lamp']);
+  const skins = list(state.skin, ['native', 'colours', 'night', 'object', 'structure', 'lamp']);
   const modes = list(state.mode, ['light', 'night']);
   const widths = list(state.w, ['360', '600']).map(Number);
   CARDS.forEach((c) => {

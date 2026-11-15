@@ -96,7 +96,7 @@
   --band-edge: var(--lc-nedge);
 }
 
-/* palette:start (written by explore/colours/palette.py) */
+/* palette:start (written by design/cards/palette.py) */
 .lc.lec-01 { --lc: #FFC629; --lc-tint: #FFF4D4; --lc-mid: #FFE089; --lc-edge: #8E7224; --lc-deep: #5F512D; --lc-nedge: #AF8B2B; --lc-nmark: #D9AA2A; }
 .lc.lec-02 { --lc: #FF7A33; --lc-tint: #FFE4D6; --lc-mid: #FFB68F; --lc-edge: #8E4C29; --lc-deep: #5F3F2F; --lc-nedge: #AF5C31; --lc-nmark: #D96C32; }
 .lc.lec-03 { --lc: #FFA3D1; --lc-tint: #FFEDF6; --lc-mid: #FFCCE6; --lc-edge: #8E6078; --lc-deep: #5F4955; --lc-nedge: #AF7693; --lc-nmark: #D98EB4; }
