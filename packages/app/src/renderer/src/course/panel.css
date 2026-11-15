@@ -1,0 +1,177 @@
+/* The side panel: 344px, 12px below the title bar and from the right, 8px above the bar. */
+
+.panel {
+  position: absolute;
+  top: calc(var(--titlebar-h) + var(--gutter));
+  right: var(--gutter);
+  bottom: calc(var(--gutter) + var(--bar-h) + 8px);
+  z-index: 3;
+  width: var(--panel-w);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-panel);
+  overflow: hidden;
+  animation: panel-in 240ms ease-out;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.panel-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--control);
+  color: var(--label-2);
+}
+.panel-close:hover {
+  background: var(--control-hover);
+}
+
+/* The header row: eyebrow and title, or tabs, with the close button. */
+.panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 0 18px;
+}
+.panel-head-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.panel-eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.panel-section-rule {
+  padding-top: 14px;
+  border-top: 1px solid var(--separator);
+}
+.panel-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.panel-h2 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.panel-h2-large {
+  font-size: 15px;
+}
+.panel-note {
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+/* A white group of rows, as in system settings. */
+.panel-group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--group);
+  border-radius: var(--r-group);
+  box-shadow: 0 0 0 0.5px var(--hairline);
+  overflow: hidden;
+}
+.panel-group > li + li {
+  border-top: 1px solid var(--separator);
+}
+
+/* A slide in miniature: the real picture, or a drawn stand-in. */
+.panel-thumb {
+  position: relative;
+  width: 64px;
+  height: 36px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--group);
+  box-shadow:
+    0 0 0 0.5px var(--hairline),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.panel-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.panel-thumb-drawn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 6px 0 7px;
+}
+.panel-thumb-drawn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--thumb-colour);
+}
+.panel-thumb-drawn i {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--separator);
+}
+.panel-thumb-drawn i:first-child {
+  height: 3px;
+  background: var(--label-3);
+  opacity: 0.7;
+}
+.panel-thumb-drawn i:nth-child(2) {
+  background: var(--key-term);
+}
+.panel-thumb-number {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 6px;
+  line-height: 1.2;
+  color: var(--label-2);
+}
+
+/* Sections keep their height; the body scrolls instead of squeezing them. */
+.panel-body > * {
+  flex: none;
+}

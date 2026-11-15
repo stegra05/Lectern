@@ -1,0 +1,86 @@
+/* The card designs before the first send: a sheet over the dimmed course. */
+
+.choice-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 56px;
+  background: rgba(28, 28, 30, 0.34);
+  animation: choice-veil-in 160ms ease-out;
+}
+.choice {
+  width: 760px;
+  max-width: calc(100% - 32px);
+  /* In a low window the sheet scrolls and keeps 16px to the edge. */
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  padding-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-radius: var(--r-panel);
+  background: var(--ground);
+  box-shadow: var(--shadow-panel);
+  animation: choice-in 200ms ease-out;
+}
+.choice > * {
+  flex: none;
+}
+.choice-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 24px;
+}
+.choice .set-design-head,
+.choice .set-design-foot {
+  padding: 0 24px;
+}
+/* The dialog names the card in its own heading, and has no button beside the design's name. */
+.choice .set-design-head > :last-child {
+  margin-left: 0;
+}
+.choice .set-which {
+  display: none;
+}
+.choice-foot {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--group) 60%, var(--ground));
+  /* The way on stays in reach while the sheet scrolls. */
+  position: sticky;
+  bottom: 0;
+}
+.choice-foot p {
+  margin-right: auto;
+  font-size: 12px;
+}
+.choice-foot .btn {
+  height: 32px;
+  padding: 0 14px;
+}
+
+@keyframes choice-veil-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes choice-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .choice-veil,
+  .choice {
+    animation: none;
+  }
+}
