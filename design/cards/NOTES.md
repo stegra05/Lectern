@@ -10,10 +10,10 @@ blank ruling of an index card and writes the answer on the same lines.
 
 ## Files
 
-- `anki/front.html`, `back.html`, `cloze-front.html`, `cloze-back.html`: the shared templates.
-- `anki/style-structure.css` with `_StructureSans.woff2` (Atkinson Hyperlegible Next) and
+- `packages/engine/anki/front.html`, `back.html`, `cloze-front.html`, `cloze-back.html`: the shared templates.
+- `packages/engine/anki/style-structure.css` with `_StructureSans.woff2` (Atkinson Hyperlegible Next) and
   `_StructureSerif.woff2` (Young Serif, Latin). Both OFL.
-- `anki/style-lamp.css` with `_LampSerif.woff2` (Source Serif 4) and `_LampMono.woff2`
+- `packages/engine/anki/style-lamp.css` with `_LampSerif.woff2` (Source Serif 4) and `_LampMono.woff2`
   (IBM Plex Mono). Both OFL. The four file names do not collide in `collection.media`.
 - `FIELDS.md`: the field contract, the typing rule, the diagram rule.
 - `gallery.html`: 17 cards (the twelve samples, typed variants 2t, 10t, 12t, and fallbacks 3x and

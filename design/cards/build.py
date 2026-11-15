@@ -1,4 +1,4 @@
-"""Build gallery.html and the mock slides in media/ from the templates in anki/.
+"""Build gallery.html and the mock slides in media/ from the templates in packages/engine/anki/.
 
 The cards are rendered by Anki's own engine (the `anki` package from PyPI), not by an
 imitation: a throwaway collection gets the two Lectern note types with the four templates,
@@ -21,7 +21,7 @@ from anki.collection import Collection
 from anki.models import MODEL_CLOZE
 
 ROOT = Path(__file__).parent
-ANKI = ROOT / "anki"
+ANKI = ROOT.parent.parent / "packages" / "engine" / "anki"
 MEDIA = ROOT / "media"
 
 QA_FIELDS = ["Front", "Back", "Role", "Slots", "Code", "Typed", "Lecture", "Topic", "Source",

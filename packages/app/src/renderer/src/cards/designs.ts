@@ -1,19 +1,19 @@
 /**
  * The six card designs that ship. Each one is a stylesheet over the same four templates, read
- * from design/cards/anki/ as Anki receives it.
+ * from packages/engine/anki/ as Anki receives it.
  */
 
 import type { Design } from '../../../shared/contract.ts'
-import colours from '../../../../../../design/cards/anki/style-colours.css?raw'
-import lamp from '../../../../../../design/cards/anki/style-lamp.css?raw'
-import native from '../../../../../../design/cards/anki/style-native.css?raw'
-import afterglow from '../../../../../../design/cards/anki/style-night.css?raw'
-import vitrine from '../../../../../../design/cards/anki/style-object.css?raw'
-import structure from '../../../../../../design/cards/anki/style-structure.css?raw'
-import lampMono from '../../../../../../design/cards/anki/_LampMono.woff2?url'
-import lampSerif from '../../../../../../design/cards/anki/_LampSerif.woff2?url'
-import structureSans from '../../../../../../design/cards/anki/_StructureSans.woff2?url'
-import structureSerif from '../../../../../../design/cards/anki/_StructureSerif.woff2?url'
+import colours from '../../../../../engine/anki/style-colours.css?raw'
+import lamp from '../../../../../engine/anki/style-lamp.css?raw'
+import native from '../../../../../engine/anki/style-native.css?raw'
+import afterglow from '../../../../../engine/anki/style-night.css?raw'
+import vitrine from '../../../../../engine/anki/style-object.css?raw'
+import structure from '../../../../../engine/anki/style-structure.css?raw'
+import lampMono from '../../../../../engine/anki/_LampMono.woff2?url'
+import lampSerif from '../../../../../engine/anki/_LampSerif.woff2?url'
+import structureSans from '../../../../../engine/anki/_StructureSans.woff2?url'
+import structureSerif from '../../../../../engine/anki/_StructureSerif.woff2?url'
 
 export interface CardDesign {
   id: Design

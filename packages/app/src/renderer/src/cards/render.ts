@@ -7,10 +7,10 @@
  */
 
 import type { Card } from '../../../shared/contract.ts'
-import back from '../../../../../../design/cards/anki/back.html?raw'
-import clozeBack from '../../../../../../design/cards/anki/cloze-back.html?raw'
-import clozeFront from '../../../../../../design/cards/anki/cloze-front.html?raw'
-import front from '../../../../../../design/cards/anki/front.html?raw'
+import back from '../../../../../engine/anki/back.html?raw'
+import clozeBack from '../../../../../engine/anki/cloze-back.html?raw'
+import clozeFront from '../../../../../engine/anki/cloze-front.html?raw'
+import front from '../../../../../engine/anki/front.html?raw'
 
 export type Side = 'front' | 'back'
 

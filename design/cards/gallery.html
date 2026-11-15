@@ -77,7 +77,7 @@ function doc(card, side, skin, width, night) {
   const math = /\\[(\[]/.test(html) ? MATHJAX : '';
   return '<!doctype html><html' + (width === 360 ? ' class="mobile"' : '') + '><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1"><style>' + REVIEWER_CSS + '</style>' +
-    '<link rel="stylesheet" href="anki/style-' + skin + '.css">' + math + '</head>' +
+    '<link rel="stylesheet" href="../../packages/engine/anki/style-' + skin + '.css">' + math + '</head>' +
     '<body class="card card' + card.ord + (night ? ' nightMode night_mode' : '') + '"><div id="qa">' + html + '</div></body></html>';
 }
 

@@ -1,3 +1,5 @@
 packages/*/out
 packages/*/test-results
 pnpm-lock.yaml
+# Anki receives these byte for byte
+packages/engine/anki

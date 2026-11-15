@@ -14,7 +14,7 @@ one PDF per lecture, states a goal, and the app writes cards and sends them to A
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `packages/engine` (`@lectern/engine`) | The headless engine. Plain TypeScript, run by Node with type stripping, no build step, no interface code. Everything that makes cards lives here.                                                                        |
 | `packages/app` (`@lectern/app`)       | The Electron desktop app. A shell and a React interface around the engine.                                                                                                                                               |
-| `design/`                          | Design kit, card field contract (`cards/FIELDS.md`), and the Anki templates and six stylesheets the engine installs (`cards/anki/`).                                                                                     |
+| `design/`                          | Design kit and card field contract (`cards/FIELDS.md`). The Anki templates and six stylesheets the engine installs live in `packages/engine/anki/`.                                                                                     |
 | `docs/`                            | Brief, decisions, plans, reports, this file.                                                                                                                                                                             |
 | `eval-results/`                       | Git-ignored. Real course folders and run logs (`v3-courses/`).                                                                                                                                                           |
 | `src/`, `src-tauri/`                  | **The old v2 app (Tauri), still shipping on `main`. Not part of v3.** `src/engine` is reference material for v3 (provider quirks), nothing imports it. The root `package.json` (`lectern-desktop` 2.17.0) belongs to v2. |
@@ -569,7 +569,7 @@ The app side (`packages/app`):
 - `engine.ts` wires the ports: `nodeStore(courses)`, `ankiConnect()`, `nodeDesigns`, `pdfjsReader`,
   `openaiModel` and `openaiDecisions` with the stored key. With `LECTERN_FAKE=1` it uses the
   offline models and a module-level `memoryAnki` instead. The card designs are read from
-  `design/cards/anki` in the repository.
+  `packages/engine/anki` in the repository.
 - `src/main/settings.ts` holds what is not engine business: the chosen card design
   (`settings.json`) and the OpenAI key, sealed with Electron's `safeStorage` (`openai.key`).
   `OPENAI_API_KEY` in the environment wins. The key never reaches the renderer.

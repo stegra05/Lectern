@@ -493,7 +493,7 @@ back. The record is saved even when a send breaks off, so the next send continue
 **Where it is.** `src/deliver.ts`, the ports `anki` and `designs` in `src/ports.ts`,
 `adapters/ankiconnect.ts` (the add-on on `127.0.0.1:8765`), `adapters/memory-anki.ts` (an Anki
 in memory that behaves like the real one where it matters, for tests and for the app offline),
-`adapters/node-designs.ts` (reads `design/cards/anki`). Tests: `test/deliver.test.ts`, 19.
+`adapters/node-designs.ts` (reads `packages/engine/anki`). Tests: `test/deliver.test.ts`, 19.
 
 **The real run.** Two lectures of the first real Entrepreneurship run (03 and 09, 94 cards),
 copied into a course named "Lectern send test", from the command line.

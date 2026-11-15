@@ -61,7 +61,7 @@ try {
     model: openaiModel(values.model),
     decisions: openaiDecisions(),
     anki: ankiConnect(),
-    designs: nodeDesigns(join(import.meta.dirname, '../../../design/cards/anki')),
+    designs: nodeDesigns(join(import.meta.dirname, '../anki')),
     now: Date.now,
   })
   await engine.run(command, (event) => {

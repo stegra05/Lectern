@@ -16,7 +16,7 @@ const STYLESHEETS: Record<Design, string> = {
 /** A font the stylesheet loads from Anki's media folder: `url("_LampSerif.woff2")`. */
 const FONT = /url\("(_[\w-]+\.woff2)"\)/g
 
-/** Card designs from a folder laid out like `design/cards/anki`. */
+/** Card designs from a folder laid out like `packages/engine/anki`. */
 export function nodeDesigns(dir: string): DesignsPort {
   const text = (name: string) => readFile(join(dir, name), 'utf8')
   return {

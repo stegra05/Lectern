@@ -1,6 +1,6 @@
 # Card field contract
 
-Both skins read exactly these fields through the same four templates in `anki/`. A skin is a
+Both skins read exactly these fields through the same four templates in `packages/engine/anki/`. A skin is a
 stylesheet and nothing else. Read `docs/brief.md` ("Card system") and `design/samples.md`
 first; the limits below repeat the brief's hard limits and add the ones the templates need.
 

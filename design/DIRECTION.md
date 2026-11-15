@@ -181,7 +181,7 @@ as a mind map with its cards, the themes view, dark mode with course details, fi
 track with the goal, the run with the engine's real phases, statistics, sent, a lecture added
 mid-semester, settings with the card carousel, the card choice before the first send, and
 "Copy for chat". Canvas page "Card designs" holds five new card designs as pictures: Placard,
-Afterglow, Vitrine, Native, Lecture colours. Their stylesheets are in `cards/anki/` and their
+Afterglow, Vitrine, Native, Lecture colours. Their stylesheets are in `packages/engine/anki/` and their
 galleries in `cards/explore/`.
 
 Open points found while reviewing the renders:
