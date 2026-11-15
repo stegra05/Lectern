@@ -4,9 +4,13 @@
   "type": "module",
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
     "lint": "eslint .",
     "format": "prettier --write packages",
-    "format:check": "prettier --check packages"
+    "format:check": "prettier --check packages",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @lectern/app test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
