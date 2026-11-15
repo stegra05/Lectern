@@ -1,0 +1,15 @@
+<div class="lc lc-back lec-{{Lecture}} role-{{Role}}{{#Typed}} is-typed{{/Typed}}">
+  {{#Asked}}<div class="lc-tab is-asked">asked {{Asked}}×{{#Part}}, {{Part}}{{/Part}}</div>{{/Asked}}{{^Asked}}<div class="lc-tab">core</div>{{/Asked}}
+  <div class="lc-sheet">
+    <header class="lc-head"><span class="lc-lec">{{Lecture}}</span> <span class="lc-topic">{{Topic}}</span></header>
+    <div class="lc-q">{{Front}}</div>
+    {{#Code}}<pre class="lc-code"><code>{{Code}}</code></pre>{{/Code}}
+    <div class="lc-cue"></div>
+    <div class="lc-a" id="answer">{{#Typed}}<div class="lc-type">{{type:Typed}}</div>{{/Typed}}{{#Slots}}<div class="lc-labels">{{Slots}}</div>{{/Slots}}{{#Diagram}}<div class="lc-fig">{{Diagram}}</div>{{/Diagram}}<div class="lc-body">{{Back}}</div></div>
+    {{#Extra}}<div class="lc-extra">{{Extra}}</div>{{/Extra}}
+    {{#Slide}}<details class="lc-plate">
+      <summary><span class="lc-thumb">{{Slide}}</span><span class="lc-cite"><span class="lc-src">{{Source}}</span>{{#Excerpt}}<span class="lc-excerpt">{{Excerpt}}</span>{{/Excerpt}}<span class="lc-toggle"></span></span></summary>
+      <div class="lc-slide">{{Slide}}</div>
+    </details>{{/Slide}}{{^Slide}}<div class="lc-plate"><span class="lc-cite"><span class="lc-src">{{Source}}</span>{{#Excerpt}}<span class="lc-excerpt">{{Excerpt}}</span>{{/Excerpt}}</span></div>{{/Slide}}
+  </div>
+</div>
