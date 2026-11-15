@@ -70,8 +70,9 @@ Details and what is unverified: `docs/v3/prototype-report.md`.
    a blind comparison of a run against his reference deck, the measure of success in the brief.
 2. **Keeping course administration out of the cards.** The largest visible defect of the first
    real runs. Open with Steffen: a calibrated slide label, a rule in the preset, or both.
-3. **The app after the prototype:** a send into a real Anki from inside the app, an edit and
-   a removal of a card that is in a real Anki, and a real build started from inside the app.
+3. **The app after the prototype:** a send, an edit and a removal from inside the app against a
+   real Anki (the engine's own have run against it), and a real build started from inside
+   the app.
 4. **Then:** evals on the two extra courses.
 
 Paid runs: only the engine session starts them (agreed between the engine and the prototype

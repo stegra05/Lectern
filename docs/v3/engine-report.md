@@ -355,8 +355,9 @@ What the real Anki taught, and what changed because of it:
 
 ## Changing single cards
 
-Added 2026-11-14 and 15 by the session that built sending. Tested on the Anki in memory and in
-the app end to end; never against a real Anki.
+Added 2026-11-14 and 15 by the session that built sending. Tested on the Anki in memory, in
+the app end to end, and from a script against Steffen's real Anki (one lecture of 36 cards as
+the course "Lectern edit test").
 
 **What it does.** Four commands. `slots` gives a card as a form holds it: the slots of its role
 in plain text, with the key term apart from the answer and the hidden parts of a gap sentence
@@ -380,9 +381,16 @@ count as not sent again. An own card is tagged `<course>::own` when it is sent.
 **Where it is.** `src/edit.ts`, `src/cards/slots.ts`, two more calls on the `anki` port,
 `updateSent` and `removeSent` in `src/deliver.ts`. Tests: `test/edit.test.ts`, 15.
 
+**Against the real Anki, 2026-11-15.** All four worked on the first try. An edited card
+changed in Anki as the same note, with its cards and tags untouched. A removed card left Anki
+and the record. A card whose note was deleted in Anki counted as not sent after an edit and
+went again with the next send. An own card arrived with the tag `lectern-edit-test::own`.
+The course ended with 36 cards, 36 of them in Anki.
+
 **Open.**
 
-- Edit and remove against a real Anki.
+- Edit and remove from inside the app against a real Anki. The script shares the engine code
+  and not the app's wiring.
 - A card that passed when it was built can be refused on a later edit, because the validator
   has grown since. The student then cannot save a change to another field of that card.
 - An own card takes the first slide of its concept. The student cannot choose the slide.
