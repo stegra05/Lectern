@@ -220,6 +220,59 @@ place: a feedback loop should not ask them whether a card is relevant.
 **Not in the repository.** The scripts, the judge's labels and the decision model's raw answers
 were in that session's scratch folder. The figures here are what is kept.
 
+## Where the missed facts are
+
+By the session "What's next", 2026-11-15, with the harness that is now in the repository
+(`packages/engine/eval/refdeck.ts`, judge rules in `eval/JUDGE.md`). The concept draft run (554
+cards) was judged again against all 636 reference notes by Claude Haiku, 16 batches of 40. The
+judge was told to be strict, and for every miss it also said where the fact is. I checked a
+sample of its labels against the slide text: the "same" and "text" labels hold, the line
+between "picture" and "absent" is soft.
+
+| Reference notes | Count | Share |
+|---|---|---|
+| A card tests the same fact | 192 | 30% |
+| Missed, and the slide text states the fact | 137 | 22% |
+| Missed, a slide shows it in a picture and its text does not say it | 101 | 16% |
+| Missed, not on the slides at all | 206 | 32% |
+
+The 30 percent is the 36 percent of the earlier measurement under a stricter judge (192 against
+230 notes), not a change in the cards.
+
+- **The plan is not the cause.** At goal top the plan keeps 561 of the 633 facts the map found.
+  Ranking facts before the plan picks them cannot lift coverage at this goal: the examined fact
+  was never in the map. 81 of 232 concepts have one fact. A ranking matters for the goals pass
+  and good, which keep 180 and 372 cards.
+- **The model never saw the figures.** A slide with under 100 characters of text goes to the
+  model as a picture. Every slide of these decks carries a footer of about 100 characters
+  (lecturer, course, session, page, date), so only 6 of 356 slides were shown. The Greiner
+  slide is a title and a figure: 35 reference notes hang on it and the deck has one card. The
+  table of entrepreneurial against traditional management (12 notes), Kickstarter (10), the
+  business model canvas (11) and the IOOI framework (3) are the same case. Fixed in code
+  (`slides.ts`): lines that at least half the slides of a deck repeat, compared without
+  digits, are removed before anything else reads the text. 99 slides now go out as pictures,
+  and the lecture text every call reads is 23 percent shorter. The estimate for the full run
+  rises from 25 to 51 cents. Not yet run with a model: whether the map turns a figure into its
+  facts is the next thing to measure. On Grundlagen Datenbanken the rule moves 249 to 284 of
+  708 slides.
+- **What slides alone can reach.** 52 percent of the reference notes are in the slide text, 68
+  percent with the pictures. The run has 58 percent of what the text states. The last third
+  needs the cases, the videos, the papers and the past exams.
+- **Coverage still does not follow the exam.** Asked 0 to 1 times: 27 percent. 2 to 4: 27.
+  5 to 8: 25. 9 or more: 38.
+- **By subdeck**, weakest first: Organizing and teams 14 percent (Greiner), Business model and
+  plan 19, Impact and corporate entrepreneurship 21, Ideas and opportunities 22, Digital
+  entrepreneurship and Teece 23.
+
+The exports, batches and labels are in `eval-results/v3-eval/concept-draft/` (not in git). The
+scripts and labels of the 2026-11-14 measurement are kept beside them in
+`2026-11-14-quality-session/`.
+
+**The second course.** Grundlagen Datenbanken is set up as a course of 9 chapters (708 slides)
+in `eval-results/v3-courses/grundlagen-datenbanken`. Estimate at goal top: 1,358 cards, 1.78
+dollars. Its deck in AnkiTUM is about 140 cards by another student, several facts per card, for
+9 of 21 chapters: a weak reference. The 8 past exams would be a better one.
+
 ## What was built
 
 `packages/engine`: 3,800 lines of source, 2,717 lines of tests, no interface code, no build step.
