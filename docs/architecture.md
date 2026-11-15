@@ -3,7 +3,7 @@
 How the code of `v3` works, written from the code. The code is the truth; where this file and the
 code disagree, the code wins and this file is wrong. Places in code are cited by symbol (for
 example `settleMap` in `tree.ts`), never by line number. What is not built yet is an issue, listed
-in section 15.
+in section 15. Why it is built this way is in the RFDs (`docs/rfd/`, index in `docs/README.md`).
 
 Lectern turns a course's lecture PDFs into Anki cards. A student creates a course, drops in one PDF
 per lecture, states a goal, and the app writes cards and sends them to Anki.
@@ -15,7 +15,7 @@ per lecture, states a goal, and the app writes cards and sends them to Anki.
 | `packages/engine` (`@lectern/engine`) | The headless engine. Plain TypeScript, run by Node with type stripping, no build step, no interface code. Everything that makes cards lives here. |
 | `packages/app` (`@lectern/app`) | The Electron desktop app. A shell and a React interface around the engine. |
 | `design/` | Design kit (`KIT.md`) and the card field contract (`cards/FIELDS.md`). The Anki templates and the stylesheet the engine installs live in `packages/engine/anki/`. |
-| `docs/` | This file and the other documents of the project. |
+| `docs/` | Decisions as RFDs (`rfd/`, index in `README.md`), the status, this file. |
 | `eval-results/` | Git-ignored. Real course folders and run logs. |
 
 The v2 app lives on the `main` branch. Nothing in v3 imports it.
@@ -54,7 +54,7 @@ anki/                 four card templates and style-native.css
 
 ## 2. The three kinds of actor
 
-Every step of the pipeline is done by exactly one of these. The design rule: the model never
+Every step of the pipeline is done by exactly one of these. The design rule ([RFD 2](rfd/0002-code-decides.md)): the model never
 decides how many cards exist or what shape they take. Code owns numbers and structure, the
 generative model only writes words into small forms, the decision model only answers closed
 questions.
@@ -194,8 +194,8 @@ which the map lists facts says nothing about what an exam asks; the measurement 
 on `WORTH_LEVELS`.
 
 **8. Past exams (generative model).** Only when the course folder has an `exams/` folder with
-papers not read before, and only in a build that has new lectures. There is no command to add a
-paper: the student puts the PDF there. Each new paper goes to the model whole and comes back as its
+papers not read before, and only in a build that has new lectures. The student adds papers with the `add` command
+(`to: 'exams'`; "Past exams" in the course setup of the app), which stores them in `exams/`. Each new paper goes to the model whole and comes back as its
 questions, kept in `exams.json`. One call then sorts all new questions into families that ask for
 the same answer and places each family in a lecture of this build and a concept of it. One call per
 family, with that lecture's slides as context, writes the answer as one fact and says whether the
@@ -296,7 +296,7 @@ A failure ends in `failed` with a message and a fix, never a throw (`createEngin
 | About course organisation | predicate | the card alone | at or above 0.2 (`ORGANISATION_THRESHOLD`): the card is dropped |
 
 Everything else that rejects a card is code: the hard limits, `leansOnSlides`, `saysNothing`, and
-the exact-twin rule. A check that has not been measured on labelled data does not drop; that is why
+the exact-twin rule. A check that has not been measured on labelled data does not run ([RFD 5](rfd/0005-decision-models.md)); that is why
 only the organisation check exists as a decision that acts. Further checks are issue #105.
 
 ## 5. Where money is spent, the estimate and the cap
@@ -364,7 +364,7 @@ A **preset** (`Preset` in `presets.ts`) is the hand-written method for writing c
 - `rules`: how a card is worded.
 
 There is one preset, `CONCEPT`, and every course uses it. It was written from the Entrepreneurship
-study kit and accepted as the working preset. Its map rules forbid course organisation as a concept
+study kit and accepted as the working preset ([RFD 7](rfd/0007-presets.md)). Its map rules forbid course organisation as a concept
 and ask for several angles per idea; its card rules say to lead with the key term, one fact per
 answer, about 12 words, a context prefix when a rival answer exists. Its `plan` table:
 
@@ -439,7 +439,7 @@ folder; a command carries the course as a folder name.
 ```
 <course>/
   slides/*.pdf                    input, one PDF per lecture
-  exams/*.pdf                     optional: past papers, put there by the student
+  exams/*.pdf                     optional: past papers, added with the add command
   course.json                     format, name, goal, lectures: number, title, file, sha256, slides
   exams.json                      the questions of the papers read so far
   lectures/02/lecture.json        tree (topics > concepts > facts), left-out slides with reasons, dropped cards
@@ -642,7 +642,8 @@ asked, and by subdeck, and fails on a label for a note that is not in `reference
 - **Live adapter test**: `LECTERN_LIVE=1 OPENAI_API_KEY=... pnpm --filter @lectern/engine test`.
 
 The measurements behind the constants (worth, plan, exams, the organisation threshold, the
-estimate) sit in the comments of the code that uses them.
+estimate) sit in the comments of the code that uses them and in the RFDs
+([RFD 4](rfd/0004-lecture-to-cards.md), [RFD 6](rfd/0006-money.md), [RFD 8](rfd/0008-past-exams.md), [RFD 14](rfd/0014-the-quality-bar.md)).
 
 ## 15. Not built yet
 

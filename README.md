@@ -29,13 +29,14 @@ Without `LECTERN_FAKE` the app asks for an OpenAI key on first run.
 | ----------------- | ---------------------------------------------------------------------------------- |
 | `packages/engine` | headless engine: reads a course folder, makes and checks cards, sends them to Anki |
 | `packages/app`    | Electron app around the engine, through its one boundary                           |
-| `docs/`           | how it is built, what works today                                                  |
+| `docs/`           | decisions as RFDs, how it is built, what works today                               |
 | `design/`         | design kit, card field contract and gallery, app icon, mood board                  |
 
 ## Docs
 
 | Document                                           | Read it for                               |
 | -------------------------------------------------- | ----------------------------------------- |
+| [`docs/README.md`](docs/README.md)                 | the RFDs: every decision and why          |
 | [`docs/status.md`](docs/status.md)                 | what works today and what is unverified   |
 | [`docs/architecture.md`](docs/architecture.md)     | how the code works, written from the code |
 | [`design/KIT.md`](design/KIT.md)                   | the binding design kit                    |

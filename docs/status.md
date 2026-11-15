@@ -9,7 +9,8 @@ The binding kit is `design/KIT.md`. The look is native per system, with light an
 colours and a winding track, a full-width map that never reshuffles, a slim bottom bar, one side
 panel for all details and mind maps as rings. Cards come in one design, Native. The card gallery
 is `design/cards/gallery.html`, built by `design/cards/build.py`; the app icon is made by
-`design/icon/export.sh`.
+`design/icon/export.sh`. The decisions behind all of it are the RFDs in `docs/rfd/`, indexed in
+`docs/README.md`.
 
 ## Engine
 
@@ -20,7 +21,7 @@ that drops course administration, exact twins dropped, past exam questions turne
 sending to a real Anki. One preset, `CONCEPT`, serves every course. How the code works:
 `docs/architecture.md`.
 
-Engine tests: 217 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+Engine tests: 218 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 
