@@ -260,6 +260,9 @@ describe('a card that is already in Anki', () => {
     expect(inAnki.fields.Slide).toBe(`<img src="lectern-${COURSE}-l01-s0${card.slide}.png">`)
     expect((await record())[card.id]).toBe(note)
     expect(await lectureOf()).toMatchObject({ sent: anki.notes.length })
+    // The cards of a lecture come with the ids of those that are in Anki.
+    const reply = await only({ type: 'cards', ...at }, 'cards')
+    expect(reply.sent).toEqual(reply.cards.map((c) => c.id))
   })
 
   it('stays as it is, here and there, while Anki is closed', async () => {

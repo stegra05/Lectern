@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { build, estimateCourse } from './build.ts'
 import { GOALS, ROLES } from './cards/roles.ts'
 import { OWN_ROLES, type Problem, type Slots } from './cards/slots.ts'
-import { restyle, send } from './deliver.ts'
+import { restyle, send, sentCards } from './deliver.ts'
 import { edit, remove, slots, write } from './edit.ts'
 import { DESIGNS } from './designs.ts'
 import { CALIBRATIONS, PROFILE_KINDS, type Calibrations, type ProfileKind } from './decide.ts'
@@ -135,7 +135,8 @@ export type Event =
   | { type: 'outline'; markdown: string }
   | { type: 'courses'; courses: CourseSummary[] }
   | { type: 'course'; course: CourseState }
-  | { type: 'cards'; lecture: number; cards: CardFile[] }
+  /** `sent` are the ids of the cards that are in Anki. */
+  | { type: 'cards'; lecture: number; cards: CardFile[]; sent: string[] }
   /** A PNG in base64. */
   | { type: 'slide'; lecture: number; slide: number; png: string }
   | { type: 'created'; course: string }
@@ -198,12 +199,16 @@ export function createEngine(ports: Ports, options: Options = {}): Engine {
             return emit({ type: 'courses', courses: await listCourses(store) })
           case 'course':
             return emit({ type: 'course', course: await readCourse(ports, known.course) })
-          case 'cards':
+          case 'cards': {
+            const cards = await readLectureCards(store, known.course, known.lecture)
+            const inAnki = await sentCards(store, known.course)
             return emit({
               type: 'cards',
               lecture: known.lecture,
-              cards: await readLectureCards(store, known.course, known.lecture),
+              cards,
+              sent: cards.map((card) => card.id).filter((id) => inAnki.has(id)),
             })
+          }
           case 'slide': {
             const { png } = await renderSlide(ports, known.course, known.lecture, known.slide)
             return emit({ type: 'slide', lecture: known.lecture, slide: known.slide, png })
