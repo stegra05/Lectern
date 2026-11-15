@@ -63,9 +63,14 @@ ipcMain.handle('engine:run', async (event, id: number, command: unknown) => {
     fake,
     fakeDelayMs,
   })
+  let sent = 0
   await engine.run(command, (engineEvent) => {
-    if (!event.sender.isDestroyed()) event.sender.send('engine:event', id, engineEvent)
+    if (event.sender.isDestroyed()) return
+    event.sender.send('engine:event', id, engineEvent)
+    sent++
   })
+  // How many events went out: the interface waits for all of them, see the preload script.
+  return sent
 })
 ipcMain.handle('settings:get', () => settings.get())
 ipcMain.handle('settings:design', (_, design: Design) => settings.setDesign(design))
