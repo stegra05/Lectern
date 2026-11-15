@@ -18,9 +18,12 @@ code works and `design/KIT.md` for interface work. A change that alters a decisi
 RFD, and a change that alters what `docs/status.md` says updates it, in the same PR. Anything
 still to do is an issue, never a note in a doc.
 
-What comes next is on the roadmap board (`gh project item-list 3 --owner stegra05`): one issue
-per piece of work, each with "Done when" criteria, areas as labels, releases as milestones. A PR
-names its issue with "Closes #N".
+What comes next is on the roadmap board: one issue per piece of work, each with "Done when"
+criteria, a type, Area, Size and, in the current release, a Priority; releases are milestones.
+The `roadmap` skill in `.claude/skills/` says how to read and change it, and its `board.sh` does
+the work. Start only issues from the Agent queue view (`board.sh view "Agent queue"`) and set
+them to In progress; a Decision, a Verify or anything labelled `costs money` waits for Steffen's
+yes. A PR names its issue with "Closes #N", which moves it to In review, and to Done on merge.
 
 ## Commands
 
