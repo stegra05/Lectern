@@ -3,7 +3,8 @@
  * seven steps of how cards are created:
  *
  *   read   text and pictures of the slides, the course profile (1), the kind of each slide (2)
- *   map    topics, concepts and facts (3), their checks, the kind of each fact and the plan (4)
+ *   map    every slide read on its own, its facts sorted into topics and concepts (3), their
+ *          checks, the kind and worth of each fact and the plan (4)
  *   write  one form per planned card (5)
  *   check  the gate with repair and split (6), then clashes across the course (7)
  *
@@ -60,13 +61,13 @@ import {
   type SlideKind,
 } from './decide.ts'
 import { EngineError } from './errors.ts'
-import { askMap, askMore, slidesBlock } from './mapper.ts'
+import { askGroups, askSlide, factId, slidesBlock } from './mapper.ts'
 import { questionAndAnswer } from './outline.ts'
 import { budget, plan } from './plan.ts'
 import type { Ports, SlideImage } from './ports.ts'
 import { presetFor, PRESETS } from './presets.ts'
 import { slideText } from './slides.ts'
-import { settleMap, unusedSlides, withMore } from './tree.ts'
+import { fromGroups, settleMap, unusedSlides } from './tree.ts'
 import { createWriter, type CardJob, type Slots } from './writer.ts'
 
 /** How often a rejected card is filled again before it is dropped. */
@@ -266,6 +267,21 @@ export async function build(
       existingCards.push({ id: card.id, card })
   }
 
+  // Step 3, first move: every slide of a lecture read on its own, with its picture. The first
+  // slide goes ahead and fills the provider's cache with the lecture; the rest read it there.
+  const readSlides = async (lecture: ReadLecture) => {
+    const bytes = await store.readBytes(`${paths.slides(course)}/${lecture.file}`)
+    const all = lecture.text.map((_, s) => s + 1)
+    const images = await ports.pdf.renderSlides(bytes, all)
+    const context = slidesBlock(`Lecture file: ${lecture.file}`, lecture.text, [])
+    const slide = (s: number) => ({ number: s + 1, lines: lecture.text[s]!, image: images[s]! })
+    const first = await askSlide(askModel, context, slide(0), preset.mapRules)
+    const rest = await pool(all.slice(1), (n) =>
+      askSlide(askModel, context, slide(n - 1), preset.mapRules),
+    )
+    return [first, ...rest].flat()
+  }
+
   // Steps 3 and 4: map each lecture, check it, label its facts, plan its cards.
   const planned: { lecture: OpenLecture; concept: Concept; fact: Fact; role: Role }[] = []
   const lectures = await phase('map', read.length, async () => {
@@ -283,16 +299,9 @@ export async function build(
         fallbackTitle: titleFromFile(lecture.file, lecture.number),
       }
       const vocabulary = [...earlier.values()].map((concept) => concept.name)
-      let map = await askMap(askModel, source, preset.mapRules, vocabulary)
-      const { problems } = settleMap(map, ctx)
-      if (problems.length > 0) {
-        map = await askMap(askModel, source, preset.mapRules, vocabulary, problems)
-      }
-      // The second reading: what the one call that mapped the whole lecture passed over.
-      const settled = settleMap(
-        withMore(map, await askMore(askModel, source, preset.mapRules, map)),
-        ctx,
-      )
+      const found = await readSlides(lecture)
+      const grouping = await askGroups(askModel, source, found, preset.mapRules, vocabulary)
+      const settled = settleMap(fromGroups(found, grouping, factId), ctx)
 
       // Closed questions about the map, all in one request over the lecture.
       let concepts = settled.topics.flatMap((t) => t.concepts)

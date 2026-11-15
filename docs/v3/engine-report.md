@@ -15,26 +15,26 @@ work of the real presets and of calibration, not of the pipeline.
 
 ## Commands
 
-| What | Command |
-|---|---|
-| Tests | `pnpm --filter @lectern/engine test` |
-| Typecheck | `pnpm --filter @lectern/engine typecheck` |
-| Lint | `pnpm exec eslint packages/engine` |
-| Estimate, free | `node packages/engine/src/cli.ts estimate <course folder> [--goal pass\|good\|top] [--model gpt-6-luna]` |
-| Build, paid | `node packages/engine/src/cli.ts build <course folder> [--goal ...] [--profile ...] [--model ...] [--cap dollars]` |
-| Outline | `node packages/engine/src/cli.ts outline <course folder>` |
-| Send to Anki | `node packages/engine/src/cli.ts send <course folder> [--design native]` |
+| What           | Command                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Tests          | `pnpm --filter @lectern/engine test`                                                                               |
+| Typecheck      | `pnpm --filter @lectern/engine typecheck`                                                                          |
+| Lint           | `pnpm exec eslint packages/engine`                                                                                 |
+| Estimate, free | `node packages/engine/src/cli.ts estimate <course folder> [--goal pass\|good\|top] [--model gpt-6-luna]`           |
+| Build, paid    | `node packages/engine/src/cli.ts build <course folder> [--goal ...] [--profile ...] [--model ...] [--cap dollars]` |
+| Outline        | `node packages/engine/src/cli.ts outline <course folder>`                                                          |
+| Send to Anki   | `node packages/engine/src/cli.ts send <course folder> [--design native]`                                           |
 
 PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 ## Test results
 
-| Run | Result |
-|---|---|
-| Engine tests | 223 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 9 files |
-| Live OpenAI tests, run once with a key | 2 passed |
-| Typecheck, lint, format | clean |
-| Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
+| Run                                    | Result                                                                              |
+| -------------------------------------- | ----------------------------------------------------------------------------------- |
+| Engine tests                           | 223 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 9 files |
+| Live OpenAI tests, run once with a key | 2 passed                                                                            |
+| Typecheck, lint, format                | clean                                                                               |
+| Root `pnpm test` (the v2 suite)        | 406 passed, 12 skipped, unchanged                                                   |
 
 By file: validators 57, cards 20, tree and lecture numbering 14, plan, clashes and estimate 11,
 whole pipeline 42, library commands and the offline models 14. The pipeline test uses real PDFs, the real pdf.js reader and renderer and
@@ -44,13 +44,13 @@ real files; only the two models are scripted.
 
 All on `gpt-6-luna` for writing and for decisions, goal top grade, 2026-11-14.
 
-| Run | Engine | Cards | Dropped | Flagged | Cost | Estimate | Time |
-|---|---|---|---|---|---|---|---|
-| One deck, 16 slides | before the cache fix | 47 | 0 | 6 | 1.8 cents | 0.7 cents | 71 s |
-| The same deck | with the cache fix | 40 | 0 | 7 | 0.7 cents | 1.3 cents | 49 s |
-| 11 decks, run by the app session | before the cache fix (`7332526`) | 658 | 7 | 38 | 48.4 cents | 18.6 cents | 19.4 min |
-| 11 decks, run by this session | with the cache fix (`a460b25`) | 596 | 5 | 31 | 16.7 cents | 33.6 cents | 16.6 min |
-| 11 decks with the concept draft | `704922e`, preset `concept-draft` | 554 | 8 | 24 | 18.6 cents | 25.0 cents | 17.5 min |
+| Run                              | Engine                            | Cards | Dropped | Flagged | Cost       | Estimate   | Time     |
+| -------------------------------- | --------------------------------- | ----- | ------- | ------- | ---------- | ---------- | -------- |
+| One deck, 16 slides              | before the cache fix              | 47    | 0       | 6       | 1.8 cents  | 0.7 cents  | 71 s     |
+| The same deck                    | with the cache fix                | 40    | 0       | 7       | 0.7 cents  | 1.3 cents  | 49 s     |
+| 11 decks, run by the app session | before the cache fix (`7332526`)  | 658   | 7       | 38      | 48.4 cents | 18.6 cents | 19.4 min |
+| 11 decks, run by this session    | with the cache fix (`a460b25`)    | 596   | 5       | 31      | 16.7 cents | 33.6 cents | 16.6 min |
+| 11 decks with the concept draft  | `704922e`, preset `concept-draft` | 554   | 8       | 24      | 18.6 cents | 25.0 cents | 17.5 min |
 
 The two full runs happened at once by a coordination miss between the two sessions: each had
 Steffen's yes, and the messages crossed. Total spent on OpenAI on 2026-11-14, all sessions together:
@@ -137,12 +137,12 @@ written from against the same card with a far-away slide of the same lecture, an
 a lecture against a concept only another lecture has. These are easy negatives, so the numbers
 show whether a check can tell at all, not how it does on subtle cases.
 
-| Check | Input | Yes to the right case | Yes to the wrong case | Right at 0.5 |
-|---|---|---|---|---|
-| Slide supports the card | the whole lecture | 65 of 66 | 50 of 66 | 61% |
-| Slide supports the card | the slide alone | 65 of 66 | 12 of 66 | 90% |
-| Concept belongs to the lecture | the whole lecture | 54 of 55 | 5 of 55 | 95% |
-| Concept belongs to the lecture | the concept's slides alone | 54 of 55 | 0 of 55 | 99% |
+| Check                          | Input                      | Yes to the right case | Yes to the wrong case | Right at 0.5 |
+| ------------------------------ | -------------------------- | --------------------- | --------------------- | ------------ |
+| Slide supports the card        | the whole lecture          | 65 of 66              | 50 of 66              | 61%          |
+| Slide supports the card        | the slide alone            | 65 of 66              | 12 of 66              | 90%          |
+| Concept belongs to the lecture | the whole lecture          | 54 of 55              | 5 of 55               | 95%          |
+| Concept belongs to the lecture | the concept's slides alone | 54 of 55              | 0 of 55               | 99%          |
 
 The slide check was close to useless as built: with the whole lecture as input it accepted
 three of four wrong slides. It now gets the slide alone, one request per slide, and goes from
@@ -172,16 +172,16 @@ the generated deck has a card on the same fact, only the same concept, or nothin
 every generated card, one label. I checked about forty of its calls by hand. It is not a blind
 comparison by a person, and its "sound" label is lenient.
 
-| | Placeholder run | Concept draft run |
-|---|---|---|
-| Cards labelled sound | 63% | 77% |
-| About course organisation or the session itself | 17% | 4% |
-| Broken: the answer does not answer the question | 9% | 10% |
-| Thin or trivia | 11% | 9% |
-| Reference notes with a card on the same fact | 39% | 36% |
-| Reference notes with the concept, without the fact | 54% | 58% |
-| Reference notes with no counterpart | 7% | 5% |
-| Generated cards with no counterpart in the reference deck | 46% | 39% |
+|                                                           | Placeholder run | Concept draft run |
+| --------------------------------------------------------- | --------------- | ----------------- |
+| Cards labelled sound                                      | 63%             | 77%               |
+| About course organisation or the session itself           | 17%             | 4%                |
+| Broken: the answer does not answer the question           | 9%              | 10%               |
+| Thin or trivia                                            | 11%             | 9%                |
+| Reference notes with a card on the same fact              | 39%             | 36%               |
+| Reference notes with the concept, without the fact        | 54%             | 58%               |
+| Reference notes with no counterpart                       | 7%              | 5%                |
+| Generated cards with no counterpart in the reference deck | 46%             | 39%               |
 
 - **The concept preset fixed administration and did not move coverage.** The three points
   between 39 and 36 percent are within what the judge varies by.
@@ -229,12 +229,12 @@ judge was told to be strict, and for every miss it also said where the fact is. 
 sample of its labels against the slide text: the "same" and "text" labels hold, the line
 between "picture" and "absent" is soft.
 
-| Reference notes | Count | Share |
-|---|---|---|
-| A card tests the same fact | 192 | 30% |
-| Missed, and the slide text states the fact | 137 | 22% |
-| Missed, a slide shows it in a picture and its text does not say it | 101 | 16% |
-| Missed, not on the slides at all | 206 | 32% |
+| Reference notes                                                    | Count | Share |
+| ------------------------------------------------------------------ | ----- | ----- |
+| A card tests the same fact                                         | 192   | 30%   |
+| Missed, and the slide text states the fact                         | 137   | 22%   |
+| Missed, a slide shows it in a picture and its text does not say it | 101   | 16%   |
+| Missed, not on the slides at all                                   | 206   | 32%   |
 
 The 30 percent is the 36 percent of the earlier measurement under a stricter judge (192 against
 230 notes), not a change in the cards.
@@ -272,6 +272,37 @@ in `eval-results/v3-courses/grundlagen-datenbanken`. Estimate at goal top: 1,358
 dollars. Its deck in AnkiTUM is about 140 cards by another student, several facts per card, for
 9 of 21 chapters: a weak reference. The 8 past exams would be a better one.
 
+## Reading slide by slide
+
+Same session, 2026-11-15, on Steffen's "Build it". The map of a whole lecture in one call, and
+the second reading after it, are replaced by one call per slide with its picture and a narrow
+question, then one call per lecture that sorts the facts into topics and concepts.
+
+Measured on the reading alone, before any card: the facts of all 11 decks against the 636
+reference notes, same judges and same strict rule as for the old map's facts.
+
+| Facts from                                    | Facts | Cost               | Notes with a fact on the same thing |
+| --------------------------------------------- | ----- | ------------------ | ----------------------------------- |
+| Old map plus second reading (third run above) | 849   | part of 36.9 cents | 253 (40%)                           |
+| One call per slide, first prompt              | 1,824 | 10.9 cents         | 244 (38%)                           |
+| One call per slide, sets named as one fact    | 1,418 | 10.8 cents         | 279 (44%)                           |
+
+- **The first prompt split every list into one fact per item.** "Large exit transactions" came
+  back as three facts, IPO, M&A and LBO, each alone, and no fact named all three, so no card
+  could answer "name the three exit routes". The second prompt asks for the set first.
+- **The gain is real and smaller than I expected.** I had set 50 percent as the bar to build on
+  and 45 as the point to drop the idea. It landed at 44. Of the 140 notes the old map missed
+  although the slide text states them, the new reading has 88. It lost 43 the old map had, and
+  a look at them shows the judge is part of it: both Sarasvathy definitions are in a fact
+  ("Causation starts with given goals, whereas effectuation starts with means") and were judged
+  partial. A few are truly gone, such as Lemonade and what an exit is.
+- **Pictures still give little.** Of 65 notes only in a figure, 10 are now in a fact.
+- **What is left is mostly not on the slides.** 217 notes need the cases, videos, papers and
+  past exams. Of the rest, most misses are "partial": the concept is there, the fact is framed
+  differently from the reference card.
+- **Not yet run end to end.** The sorting call and the cards from these facts have run only on
+  the offline models in tests. A full run is estimated at 69 cents (cap 2.06 dollars).
+
 ## Three steps on coverage
 
 Same session, 2026-11-15, on Steffen's go ("You may do all of what you suggest. Deck should
@@ -288,13 +319,13 @@ stay near my size"). Three changes, each run in full on the 11 Entrepreneurship 
    slides), and the facts worth most get them. The `core` flag of a concept and the rule "the
    first N facts of each concept" are gone.
 
-| Run | Facts in the map | Cards | Cost | Reference notes with a card on the same fact |
-|---|---|---|---|---|
-| Concept draft, 2026-11-14 | 633 | 554 | 18.6 cents | 192 (30%) |
-| 1: footer rule | 670 | 588 | 31.0 cents | 206 (32%) |
-| 1 to 3, cards shared out per lecture | 849 | 573 | 36.9 cents | 214 (34%) |
-| The same facts, cards shared out over the course (counted, not run) | 849 | 641 | | 234 (37%) |
-| The same facts, nothing cut (counted, not run) | 849 | 849 | | 253 (40%) |
+| Run                                                                 | Facts in the map | Cards | Cost       | Reference notes with a card on the same fact |
+| ------------------------------------------------------------------- | ---------------- | ----- | ---------- | -------------------------------------------- |
+| Concept draft, 2026-11-14                                           | 633              | 554   | 18.6 cents | 192 (30%)                                    |
+| 1: footer rule                                                      | 670              | 588   | 31.0 cents | 206 (32%)                                    |
+| 1 to 3, cards shared out per lecture                                | 849              | 573   | 36.9 cents | 214 (34%)                                    |
+| The same facts, cards shared out over the course (counted, not run) | 849              | 641   |            | 234 (37%)                                    |
+| The same facts, nothing cut (counted, not run)                      | 849              | 849   |            | 253 (40%)                                    |
 
 The two last rows come from one more judge pass: the 422 notes the third run missed, against
 the 265 facts its plan had cut. 39 of them were there.
@@ -353,18 +384,18 @@ the scripted model, incremental builds, the outline export.
 
 **Milestone 2**, by criterion:
 
-| # | Criterion | Where |
-|---|---|---|
-| 1 | Cards in `lectures/NN/cards.yaml`, dropped cards listed, earlier files byte-identical | `course.ts`, tested in `pipeline.test.ts` |
-| 2 | One decisions port, batched per shared input, OpenAI adapter, scripted fake | `ports.ts`, `decide.ts`, `adapters/openai.ts`, `adapters/fake.ts` |
-| 3 | Calibration per check: unmeasured flags, measured acts, both tested | `decide.ts`, `build.ts`, "calibrated checks act instead of flagging" |
-| 4 | The seven steps end to end with a placeholder preset | `build.ts`, `mapper.ts`, `writer.ts`, `presets.ts` |
-| 5 | The plan as a pure function | `plan.ts`, `plan.test.ts` |
-| 6 | OpenAI model adapter with a gated live test | `adapters/openai.ts`, `openai.live.test.ts` |
-| 7 | `estimate` command, estimate before the first paid call, cap that stops | `cost.ts`, `ask.ts`, tested with a model that charges |
-| 8 | All twelve roles validate, `code` and `diagram` with their own checks | `cards/roles.ts`, `cards/validate.ts` |
-| 9 | Tests, typecheck, lint with one command each | see above |
-| 10 | First real run only after a yes | done after Steffen's yes, see "First real runs" |
+| #   | Criterion                                                                             | Where                                                                |
+| --- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 1   | Cards in `lectures/NN/cards.yaml`, dropped cards listed, earlier files byte-identical | `course.ts`, tested in `pipeline.test.ts`                            |
+| 2   | One decisions port, batched per shared input, OpenAI adapter, scripted fake           | `ports.ts`, `decide.ts`, `adapters/openai.ts`, `adapters/fake.ts`    |
+| 3   | Calibration per check: unmeasured flags, measured acts, both tested                   | `decide.ts`, `build.ts`, "calibrated checks act instead of flagging" |
+| 4   | The seven steps end to end with a placeholder preset                                  | `build.ts`, `mapper.ts`, `writer.ts`, `presets.ts`                   |
+| 5   | The plan as a pure function                                                           | `plan.ts`, `plan.test.ts`                                            |
+| 6   | OpenAI model adapter with a gated live test                                           | `adapters/openai.ts`, `openai.live.test.ts`                          |
+| 7   | `estimate` command, estimate before the first paid call, cap that stops               | `cost.ts`, `ask.ts`, tested with a model that charges                |
+| 8   | All twelve roles validate, `code` and `diagram` with their own checks                 | `cards/roles.ts`, `cards/validate.ts`                                |
+| 9   | Tests, typecheck, lint with one command each                                          | see above                                                            |
+| 10  | First real run only after a yes                                                       | done after Steffen's yes, see "First real runs"                      |
 
 How the seven steps run:
 
@@ -424,15 +455,15 @@ in memory that behaves like the real one where it matters, for tests and for the
 **The real run.** Two lectures of the first real Entrepreneurship run (03 and 09, 94 cards),
 copied into a course named "Lectern send test", from the command line.
 
-| Figure | Value |
-|---|---|
-| Cards sent | 94, into 2 subdecks, with the fields, tags and note types as planned |
-| Time | 10.9 s, slide pictures included. About 75 s for a course of 650 cards at that rate |
-| Slide pictures | 38 PNG, 4.9 MB, 130 KB on average, 540 KB the largest. About 45 MB for 350 slides at that rate |
-| Notes that Anki did not keep | 2 of 94 |
-| A second send | "Every card of this course is already in Anki." |
-| Design change to Lamp and back | Both note types changed, the Lectern 2 note types did not |
-| His reference deck | 636 notes before and after |
+| Figure                         | Value                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Cards sent                     | 94, into 2 subdecks, with the fields, tags and note types as planned                           |
+| Time                           | 10.9 s, slide pictures included. About 75 s for a course of 650 cards at that rate             |
+| Slide pictures                 | 38 PNG, 4.9 MB, 130 KB on average, 540 KB the largest. About 45 MB for 350 slides at that rate |
+| Notes that Anki did not keep   | 2 of 94                                                                                        |
+| A second send                  | "Every card of this course is already in Anki."                                                |
+| Design change to Lamp and back | Both note types changed, the Lectern 2 note types did not                                      |
+| His reference deck             | 636 notes before and after                                                                     |
 
 What the real Anki taught, and what changed because of it:
 
@@ -453,14 +484,14 @@ What the real Anki taught, and what changed because of it:
 
 **Defaults I chose, none of them in the design documents:**
 
-| Topic | Default | Why |
-|---|---|---|
-| Cloze note type name | `Lectern Cloze v3` | Lectern 2 installed `Lectern Cloze` with other fields. `FIELDS.md` is updated |
-| Tags | `<course>::lecture::02` and `<course>::role::definition` | Hierarchical, as in his study kits. Exam part and weight wait for past exams |
-| Slide pictures | `lectern-<course>-l02-s14.png`, PNG, 1024 px wide | Anki keeps all media in one folder, so the bare `l02-s14.png` of two courses would collide |
-| Deck preset | Not touched | The study plan brings the preset. Until then the new decks use Anki's default |
-| Who owns a note type | Lectern, while its stylesheet opens with the `lectern-notetype` line | The rule of Lectern 2. A student who edits the styling removes the line |
-| Same question twice | Allowed | Anki refuses a note whose first field it has. Two courses may ask the same question |
+| Topic                | Default                                                              | Why                                                                                        |
+| -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Cloze note type name | `Lectern Cloze v3`                                                   | Lectern 2 installed `Lectern Cloze` with other fields. `FIELDS.md` is updated              |
+| Tags                 | `<course>::lecture::02` and `<course>::role::definition`             | Hierarchical, as in his study kits. Exam part and weight wait for past exams               |
+| Slide pictures       | `lectern-<course>-l02-s14.png`, PNG, 1024 px wide                    | Anki keeps all media in one folder, so the bare `l02-s14.png` of two courses would collide |
+| Deck preset          | Not touched                                                          | The study plan brings the preset. Until then the new decks use Anki's default              |
+| Who owns a note type | Lectern, while its stylesheet opens with the `lectern-notetype` line | The rule of Lectern 2. A student who edits the styling removes the line                    |
+| Same question twice  | Allowed                                                              | Anki refuses a note whose first field it has. Two courses may ask the same question        |
 
 **Open.**
 
@@ -535,19 +566,19 @@ against the reference deck: `engine-profile-concept.md`.
 
 ## Where a decision met something already built
 
-| Decision | What I did | Open |
-|---|---|---|
-| Step 2: slides that are not content are left out | Uncalibrated, the label does not remove a slide from the map. It becomes the reason when the map leaves the slide unused. Calibrated, facts on such slides are refused | Two rules pulled against each other: "left out" and "unmeasured checks only flag". I followed the second |
-| Step 1: blends of kinds, weighted | One kind is chosen. No blend | Needs the real presets first |
-| Step 5: key terms exactly as on the slides | A rule in the prompt, plus the copy check that flags sentences taking over 8 or more slide words in a row | Not enforced by code |
-| Decision 6: a small model where the provider has no decision model | Not built. Only OpenAI's Decisions API sits behind the port | Needed for a provider without one |
-| Decisions API: "up to 400 questions per request" | The installed SDK (7.38.0) documents 1 to 200, so the adapter sends chunks of 200 | Harmless either way |
-| Decision 10: readable YAML as in the study kits | The file holds the card fields as they go to Anki (HTML, all 16 fields, empty ones too), not the kits' Markdown | Is field HTML readable enough, or should the file hold the slots and the fields be built at delivery? |
-| Decision 9: drawings from a small set of types | Three types: matrix, sequence, cycle. Data shape and validator only; the card shows the slide | A canvas such as the BMC does not fit these three |
-| Decision 7: stop cleanly at the cap | The run fails with a message and saves nothing. Calls already under way (up to four) still finish. A command can set its own limit | A stopped run loses its paid work |
-| Thinking off for recall tasks | Fill, repair and split run on effort `low` | Whether the model accepts less than `low` is unverified |
-| Milestone 1: Anthropic adapter | Removed, no backward compatibility | |
-| Milestone 1: a rejected card kept its role and went back twice | Still twice, now with the split step first for cards that are too long | |
+| Decision                                                           | What I did                                                                                                                                                             | Open                                                                                                     |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Step 2: slides that are not content are left out                   | Uncalibrated, the label does not remove a slide from the map. It becomes the reason when the map leaves the slide unused. Calibrated, facts on such slides are refused | Two rules pulled against each other: "left out" and "unmeasured checks only flag". I followed the second |
+| Step 1: blends of kinds, weighted                                  | One kind is chosen. No blend                                                                                                                                           | Needs the real presets first                                                                             |
+| Step 5: key terms exactly as on the slides                         | A rule in the prompt, plus the copy check that flags sentences taking over 8 or more slide words in a row                                                              | Not enforced by code                                                                                     |
+| Decision 6: a small model where the provider has no decision model | Not built. Only OpenAI's Decisions API sits behind the port                                                                                                            | Needed for a provider without one                                                                        |
+| Decisions API: "up to 400 questions per request"                   | The installed SDK (7.38.0) documents 1 to 200, so the adapter sends chunks of 200                                                                                      | Harmless either way                                                                                      |
+| Decision 10: readable YAML as in the study kits                    | The file holds the card fields as they go to Anki (HTML, all 16 fields, empty ones too), not the kits' Markdown                                                        | Is field HTML readable enough, or should the file hold the slots and the fields be built at delivery?    |
+| Decision 9: drawings from a small set of types                     | Three types: matrix, sequence, cycle. Data shape and validator only; the card shows the slide                                                                          | A canvas such as the BMC does not fit these three                                                        |
+| Decision 7: stop cleanly at the cap                                | The run fails with a message and saves nothing. Calls already under way (up to four) still finish. A command can set its own limit                                     | A stopped run loses its paid work                                                                        |
+| Thinking off for recall tasks                                      | Fill, repair and split run on effort `low`                                                                                                                             | Whether the model accepts less than `low` is unverified                                                  |
+| Milestone 1: Anthropic adapter                                     | Removed, no backward compatibility                                                                                                                                     |                                                                                                          |
+| Milestone 1: a rejected card kept its role and went back twice     | Still twice, now with the split step first for cards that are too long                                                                                                 |                                                                                                          |
 
 New in the files, not in `FIELDS.md`: `flags` on a card and on a concept, and `diagram` on a
 diagram card. The interface session should know these exist.

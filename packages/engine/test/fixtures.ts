@@ -92,7 +92,16 @@ const F = {
 
 const fact = (text: string, slide: number, items = 0) => ({ text, slide, items })
 
-const MAPS: Record<string, unknown> = {
+interface FixtureMap {
+  title: string
+  topics: {
+    name: string
+    concepts: { name: string; facts: { text: string; slide: number; items: number }[] }[]
+  }[]
+}
+
+/** The map each lecture should end up with. The scripted model reads it out slide by slide. */
+const MAPS: Record<string, FixtureMap> = {
   '01 Risk.pdf': {
     title: 'Risk and uncertainty',
     topics: [
@@ -292,9 +301,38 @@ const SPLITS: Record<string, unknown> = {
 }
 
 export function script(request: ModelRequest): unknown {
-  if (request.task === 'map') return MAPS[/^Lecture file: (.+)$/m.exec(request.context)![1]!]
-  // The second reading finds nothing the maps do not have.
-  if (request.task === 'deepen') return { facts: [] }
+  const map = MAPS[/^Lecture file: (.+)$/m.exec(request.context)?.[1] ?? '']
+  const concepts = map?.topics.flatMap((topic) => topic.concepts) ?? []
+  // Reading one slide: the facts the map puts on it.
+  if (request.task === 'read') {
+    const slide = Number(/^Read slide (\d+) /.exec(request.prompt)![1])
+    const facts = concepts.flatMap((concept) =>
+      concept.facts
+        .filter((fact) => fact.slide === slide)
+        .map(({ text, items }) => ({ concept: concept.name, text, items })),
+    )
+    return { facts }
+  }
+  // Sorting the facts: the map itself, with the ids the prompt gave each fact.
+  if (request.task === 'map') {
+    const ids = new Map(
+      [...request.prompt.matchAll(/^(F\d+) \(slide \d+\) [^:]+: (.+)$/gm)].map((m) => [
+        m[2]!,
+        m[1]!,
+      ]),
+    )
+    return {
+      title: map!.title,
+      topics: map!.topics.map((topic) => ({
+        name: topic.name,
+        concepts: topic.concepts.map((concept) => ({
+          name: concept.name,
+          facts: concept.facts.map((fact) => ids.get(fact.text)!),
+        })),
+      })),
+      repeats: [],
+    }
+  }
   const told = /^Fact to test: (.+) \(slide \d+\)$/m.exec(request.prompt)![1]!
   return { fill: FILLS, repair: REPAIRS, split: SPLITS }[request.task][told]
 }

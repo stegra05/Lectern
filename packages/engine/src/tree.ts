@@ -24,34 +24,59 @@ export interface MapOutput {
   }[]
 }
 
-/** What a second reading of the lecture adds to the map: facts, each with its place. */
-export interface MoreOutput {
-  facts: { topic: string; concept: string; text: string; slide: number; items: number }[]
+/** One fact as the reading of one slide gives it, with the name of what it is about. */
+export interface ReadFact {
+  concept: string
+  text: string
+  slide: number
+  items: number
+}
+
+/** How the model sorted the facts of a lecture: topics, concepts, and the ids of their facts. */
+export interface Grouping {
+  title: string
+  topics: { name: string; concepts: { name: string; facts: string[] }[] }[]
+  /** Ids of facts that repeat another fact, in the same or in other words. They are left out. */
+  repeats: string[]
 }
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 /**
- * The map with the facts of the second reading put in: under the concept they name, or under
- * a new concept in the topic they name, or in the last topic when the map has no such topic.
+ * The map from the facts of a lecture and how the model sorted them. `idOf` gives the id the
+ * model saw for each fact. An id the model names twice counts once and an id it does not know
+ * is passed over. A fact it calls a repeat is left out. A fact it forgot is kept, under the
+ * concept the reading named for it: an existing one of that name, or a new one in the last
+ * topic.
  */
-export function withMore(map: MapOutput, more: MoreOutput): MapOutput {
-  const topics = map.topics.map((topic) => ({
-    ...topic,
-    concepts: topic.concepts.map((concept) => ({ ...concept, facts: [...concept.facts] })),
-  }))
-  for (const { topic, concept, text, slide, items } of more.facts) {
-    const fact = { text, slide, items }
-    const known = topics.flatMap((t) => t.concepts).find((c) => same(c.name, concept))
-    if (known) {
-      if (!known.facts.some((f) => same(f.text, text))) known.facts.push(fact)
-      continue
-    }
-    const home = topics.find((t) => same(t.name, topic)) ?? topics.at(-1)
-    if (home) home.concepts.push({ name: concept, facts: [fact] })
-    else topics.push({ name: topic, concepts: [{ name: concept, facts: [fact] }] })
+export function fromGroups(
+  facts: ReadFact[],
+  grouping: Grouping,
+  idOf: (i: number) => string,
+): MapOutput {
+  const byId = new Map(facts.map((fact, i) => [idOf(i), fact]))
+  const placed = new Set<ReadFact>(grouping.repeats.flatMap((id) => byId.get(id.trim()) ?? []))
+  const take = (id: string) => {
+    const fact = byId.get(id.trim())
+    if (!fact || placed.has(fact)) return []
+    placed.add(fact)
+    return [{ text: fact.text, slide: fact.slide, items: fact.items }]
   }
-  return { title: map.title, topics }
+  const topics = grouping.topics.map((topic) => ({
+    name: topic.name,
+    concepts: topic.concepts.map((concept) => ({
+      name: concept.name,
+      facts: concept.facts.flatMap(take),
+    })),
+  }))
+  for (const fact of facts.filter((f) => !placed.has(f))) {
+    const item = { text: fact.text, slide: fact.slide, items: fact.items }
+    const known = topics.flatMap((t) => t.concepts).find((c) => same(c.name, fact.concept))
+    if (known) known.facts.push(item)
+    else if (topics.length > 0) topics.at(-1)!.concepts.push({ name: fact.concept, facts: [item] })
+    else topics.push({ name: fact.concept, concepts: [{ name: fact.concept, facts: [item] }] })
+  }
+  return { title: grouping.title, topics }
 }
 
 export interface MapContext {

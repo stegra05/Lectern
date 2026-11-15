@@ -10,14 +10,14 @@ one PDF per lecture, states a goal, and the app writes cards and sends them to A
 
 ## 1. Layout of the repository
 
-| Path | What it is |
-|---|---|
-| `packages/engine` (`@lectern/engine`) | The headless engine. Plain TypeScript, run by Node with type stripping, no build step, no interface code. Everything that makes cards lives here. |
-| `packages/app` (`@lectern/app`) | The Electron desktop app. A shell and a React interface around the engine. |
-| `design/v3/` | Design kit, card field contract (`cards/FIELDS.md`), and the Anki templates and six stylesheets the engine installs (`cards/anki/`). |
-| `docs/v3/` | Brief, decisions, plans, reports, this file. |
-| `eval-results/` | Git-ignored. Real course folders and run logs (`v3-courses/`). |
-| `src/`, `src-tauri/` | **The old v2 app (Tauri), still shipping on `main`. Not part of v3.** `src/engine` is reference material for v3 (provider quirks), nothing imports it. The root `package.json` (`lectern-desktop` 2.17.0) belongs to v2. |
+| Path                                  | What it is                                                                                                                                                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/engine` (`@lectern/engine`) | The headless engine. Plain TypeScript, run by Node with type stripping, no build step, no interface code. Everything that makes cards lives here.                                                                        |
+| `packages/app` (`@lectern/app`)       | The Electron desktop app. A shell and a React interface around the engine.                                                                                                                                               |
+| `design/v3/`                          | Design kit, card field contract (`cards/FIELDS.md`), and the Anki templates and six stylesheets the engine installs (`cards/anki/`).                                                                                     |
+| `docs/v3/`                            | Brief, decisions, plans, reports, this file.                                                                                                                                                                             |
+| `eval-results/`                       | Git-ignored. Real course folders and run logs (`v3-courses/`).                                                                                                                                                           |
+| `src/`, `src-tauri/`                  | **The old v2 app (Tauri), still shipping on `main`. Not part of v3.** `src/engine` is reference material for v3 (provider quirks), nothing imports it. The root `package.json` (`lectern-desktop` 2.17.0) belongs to v2. |
 
 Engine runtime dependencies (`packages/engine/package.json`): `openai`, `pdfjs-dist`,
 `@napi-rs/canvas` (renders slides to PNG), `yaml`, `zod`. Tests use `vitest` and `pdf-lib`.
@@ -66,12 +66,12 @@ output, `store: false`. Default model id `gpt-6-luna` (the only other priced id 
 `gpt-6.1-terra`, `openai.ts:6-13`); the CLI takes `--model`, the app uses the default. Four
 tasks (`Task` in `ports.ts:9`), each with a closed reply schema:
 
-| Task | Effort | Asked in | Returns |
-|---|---|---|---|
-| `map` | `medium` (`mapper.ts:80`) | step 5 below | title, topics, concepts, facts |
-| `fill` | `low` (`writer.ts:313`) | step 10 | one filled form for one card type |
-| `repair` | `low` | step 12 | the same form again, after rejection |
-| `split` | `low` | step 12 | two or three forms of the same type |
+| Task     | Effort                    | Asked in     | Returns                              |
+| -------- | ------------------------- | ------------ | ------------------------------------ |
+| `map`    | `medium` (`mapper.ts:80`) | step 5 below | title, topics, concepts, facts       |
+| `fill`   | `low` (`writer.ts:313`)   | step 10      | one filled form for one card type    |
+| `repair` | `low`                     | step 12      | the same form again, after rejection |
+| `split`  | `low`                     | step 12      | two or three forms of the same type  |
 
 Every request carries the whole lecture as `context` (slides as `[n] line / line`, slides under
 100 characters of text also as PNG images), a `system` text (`mapper.ts:11`: "You only fill
@@ -118,29 +118,29 @@ flowchart TD
 
 ### The whole pipeline in one table
 
-| # | Step | Actor | Input | Output | File |
-|---|---|---|---|---|---|
-| 1 | Survey | code | PDF bytes | Text lines per slide without the lines every slide repeats (footer, page number); PNG (1024 px wide) for each slide with under 100 characters of text left | `build.ts:118`, `slides.ts`, `adapters/pdfjs.ts`, `cost.ts` (`LOW_TEXT_CHARS`) |
-| 2 | Estimate and cap | code | characters, slide and image counts, goal, model prices | `estimate` event: cards, `costUsd`, `capUsd` | `cost.ts`, `build.ts:211` |
-| 3 | Profile | decision model | First 6,000 characters of the new lectures' text | One of `concept`, `formula`, `programming`, `fact-heavy`; stored in `course.json`; picks the preset | `build.ts:215`, `decide.ts:79` |
-| 4 | Kind of slide | decision model | The lecture as text plus its low-text images; one question per slide | One of `title`, `agenda`, `recap`, `reading list`, `content` per slide | `build.ts:233`, `decide.ts:87` |
-| 5 | Map | generative model | The lecture, the preset's map rules, the names of all concepts of earlier lectures | `title`, topics, concepts, facts (text, slide, item count) | `mapper.ts` |
-| 5b | Second reading | generative model | The lecture again, its map so far as text, which slides are pictures | The facts the map lacks, each with its topic and concept | `mapper.ts` (`askMore`), `tree.ts` (`withMore`) |
-| 6 | Settle the map | code | The model's map with the second reading put in, the slide kinds, earlier concepts | A tree that is always usable, plus a list of problems; the first map is asked once more when it has problems | `tree.ts` |
-| 7 | Map checks | decision model | The lecture as text; questions: concept belongs, same as earlier concept, kind of fact | Flags (or, once calibrated, removal or merge); a kind for every fact | `build.ts:291`, `decide.ts:96-108` |
-| 7b | Worth of a fact | decision model | One fact with the name of its concept, as the whole input of its own request | A score from 0 to 3 on four labelled levels (not examinable, detail, examinable, core), stored on the fact | `build.ts`, `decide.ts` (`WORTH_LEVELS`) |
-| 8 | Plan | code | The topics and slide counts of all lectures of the build, the worth of every fact, goal, preset | A list of slots per lecture: concept, fact, card type. As many as the goal allows per slide over the whole build, the facts worth most first | `plan.ts` |
-| 9 | Ids | code | Slot, lecture, concept id, role | `<lecture>-<concept>-<role>-<n>` | `cards/id.ts`, `build.ts:372` |
-| 10 | Fill | generative model | The whole lecture, concept, fact, card type, preset rules, one example of the type | One filled form (the card's slots) | `writer.ts:322` |
-| 11 | Gate: rules | code | The slots | A list of problems, empty means pass | `cards/validate.ts:60`, `:187`, `:216` |
-| 12 | Split or repair | generative model | The rejected slots, every problem, the same brief | A fixed form, or two or three forms | `writer.ts:327`, `:337` |
-| 13 | Assemble | code | Passing slots, place in the course, slide text | Card fields: HTML, Slots, Typed, Source, Excerpt, Slide, Key | `cards/assemble.ts:99` |
-| 14 | Copy check | code | Answer sentence, slide text | A flag when 8 or more slide words repeat in a row | `validate.ts:425`, `build.ts:468` |
-| 15 | Organisation check | decision model | The card alone: question and answer | Probability that the card is about course organisation; at 0.2 or more the card is dropped | `build.ts:476`, `decide.ts:113` |
-| 16 | Slide check | code, then decision model | Rule: answer terms against slide text. If unsure: the one slide (and its picture) as the whole input, all cards of a slide in one request | A flag, or once calibrated a rejection | `validate.ts:387`, `build.ts:494` |
-| 17 | Clashes | code, then decision model | Questions of new cards against earlier and new cards | Identical question: dropped by code. Look-alike pair: probability that the two test the same thing | `clash.ts`, `build.ts:564` |
-| 18 | Save | code | Everything accepted | `cards.yaml`, `lecture.json`, `decisions.json`, `runs/NNN.json`, `course.json` | `build.ts:606` |
-| 19 | Send | code through AnkiConnect | Cards not yet in Anki, a card design | Decks, note types, media, notes | `deliver.ts:204` |
+| #   | Step               | Actor                                                   | Input                                                                                                                                     | Output                                                                                                                                                     | File                                                                           |
+| --- | ------------------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1   | Survey             | code                                                    | PDF bytes                                                                                                                                 | Text lines per slide without the lines every slide repeats (footer, page number); PNG (1024 px wide) for each slide with under 100 characters of text left | `build.ts:118`, `slides.ts`, `adapters/pdfjs.ts`, `cost.ts` (`LOW_TEXT_CHARS`) |
+| 2   | Estimate and cap   | code                                                    | characters, slide and image counts, goal, model prices                                                                                    | `estimate` event: cards, `costUsd`, `capUsd`                                                                                                               | `cost.ts`, `build.ts:211`                                                      |
+| 3   | Profile            | decision model                                          | First 6,000 characters of the new lectures' text                                                                                          | One of `concept`, `formula`, `programming`, `fact-heavy`; stored in `course.json`; picks the preset                                                        | `build.ts:215`, `decide.ts:79`                                                 |
+| 4   | Kind of slide      | decision model                                          | The lecture as text plus its low-text images; one question per slide                                                                      | One of `title`, `agenda`, `recap`, `reading list`, `content` per slide                                                                                     | `build.ts:233`, `decide.ts:87`                                                 |
+| 5   | Read each slide    | generative model, effort `low`, one call per slide      | The lecture as text (cached), the slide's picture, a narrow question                                                                      | The facts this slide states or shows, each with the name of its concept; a set named as one fact                                                           | `mapper.ts` (`askSlide`)                                                       |
+| 5b  | Sort the facts     | generative model, effort `medium`, one call per lecture | The lecture, every fact with an id, the course vocabulary                                                                                 | Title, topics, concepts with their fact ids, and the ids of repeats                                                                                        | `mapper.ts` (`askGroups`), `tree.ts` (`fromGroups`)                            |
+| 6   | Settle the map     | code                                                    | The sorted facts, the slide kinds, earlier concepts                                                                                       | A tree that is always usable. A fact the sorting forgot is kept under the concept the reading named                                                        | `tree.ts`                                                                      |
+| 7   | Map checks         | decision model                                          | The lecture as text; questions: concept belongs, same as earlier concept, kind of fact                                                    | Flags (or, once calibrated, removal or merge); a kind for every fact                                                                                       | `build.ts:291`, `decide.ts:96-108`                                             |
+| 7b  | Worth of a fact    | decision model                                          | One fact with the name of its concept, as the whole input of its own request                                                              | A score from 0 to 3 on four labelled levels (not examinable, detail, examinable, core), stored on the fact                                                 | `build.ts`, `decide.ts` (`WORTH_LEVELS`)                                       |
+| 8   | Plan               | code                                                    | The topics and slide counts of all lectures of the build, the worth of every fact, goal, preset                                           | A list of slots per lecture: concept, fact, card type. As many as the goal allows per slide over the whole build, the facts worth most first               | `plan.ts`                                                                      |
+| 9   | Ids                | code                                                    | Slot, lecture, concept id, role                                                                                                           | `<lecture>-<concept>-<role>-<n>`                                                                                                                           | `cards/id.ts`, `build.ts:372`                                                  |
+| 10  | Fill               | generative model                                        | The whole lecture, concept, fact, card type, preset rules, one example of the type                                                        | One filled form (the card's slots)                                                                                                                         | `writer.ts:322`                                                                |
+| 11  | Gate: rules        | code                                                    | The slots                                                                                                                                 | A list of problems, empty means pass                                                                                                                       | `cards/validate.ts:60`, `:187`, `:216`                                         |
+| 12  | Split or repair    | generative model                                        | The rejected slots, every problem, the same brief                                                                                         | A fixed form, or two or three forms                                                                                                                        | `writer.ts:327`, `:337`                                                        |
+| 13  | Assemble           | code                                                    | Passing slots, place in the course, slide text                                                                                            | Card fields: HTML, Slots, Typed, Source, Excerpt, Slide, Key                                                                                               | `cards/assemble.ts:99`                                                         |
+| 14  | Copy check         | code                                                    | Answer sentence, slide text                                                                                                               | A flag when 8 or more slide words repeat in a row                                                                                                          | `validate.ts:425`, `build.ts:468`                                              |
+| 15  | Organisation check | decision model                                          | The card alone: question and answer                                                                                                       | Probability that the card is about course organisation; at 0.2 or more the card is dropped                                                                 | `build.ts:476`, `decide.ts:113`                                                |
+| 16  | Slide check        | code, then decision model                               | Rule: answer terms against slide text. If unsure: the one slide (and its picture) as the whole input, all cards of a slide in one request | A flag, or once calibrated a rejection                                                                                                                     | `validate.ts:387`, `build.ts:494`                                              |
+| 17  | Clashes            | code, then decision model                               | Questions of new cards against earlier and new cards                                                                                      | Identical question: dropped by code. Look-alike pair: probability that the two test the same thing                                                         | `clash.ts`, `build.ts:564`                                                     |
+| 18  | Save               | code                                                    | Everything accepted                                                                                                                       | `cards.yaml`, `lecture.json`, `decisions.json`, `runs/NNN.json`, `course.json`                                                                             | `build.ts:606`                                                                 |
+| 19  | Send               | code through AnkiConnect                                | Cards not yet in Anki, a card design                                                                                                      | Decks, note types, media, notes                                                                                                                            | `deliver.ts:204`                                                               |
 
 ### Step by step
 
@@ -172,39 +172,34 @@ slide unused ("Title slide", "Agenda slide", ... or "No testable fact found on t
 `tree.ts:47`). Once calibrated, `contentOnly` would refuse facts on non-content slides
 (`build.ts:278`, `tree.ts:59`).
 
-**5. Map (generative model).** One call per lecture (`mapper.ts:72`), effort `medium`. The
-model gets the whole lecture, the preset's `mapRules`, and the names of every concept earlier
-lectures introduced (told to reuse exactly that name when a concept comes back). It returns the
-lecture title (at most 32 characters), topics, concepts (name of at most 6 words) and facts (one
-sentence, the one slide that states it, `items` for a list to recite). It sees no card limits
-here and decides nothing about cards.
+**5. Read each slide (generative model).** One call per slide (`askSlide`, `mapper.ts`),
+effort `low`. The model gets the lecture as text, which the provider caches, then the picture of
+this one slide and a narrow question: every fact this slide states or shows. Several things
+under one heading come first as one fact naming all of them, then one fact per part only when
+the slide says more about it. The first slide goes ahead to fill the cache. Why: one call for a
+whole lecture skimmed it. Measured on 2026-11-15 against the reference deck, the old map with a
+second reading held 253 of 636 notes in its facts, the slide-by-slide reading 279.
 
-**5b. Second reading (generative model).** One more call per lecture (`askMore`, `mapper.ts`),
-effort `medium`. One call that maps a whole lecture passes over much of it: against the
-reference deck, 137 of 636 notes tested a fact the slide text states and the map lacked, and 81
-of 232 concepts had one fact. The model gets the lecture again, its own map as text, and the
-numbers of the slides shown as pictures, and returns only what the map lacks: facts, each with
-the topic and the concept it belongs to (an existing name, or a new one). `withMore`
-(`tree.ts`) puts them into the map before code settles it. A fact the map already has, word for
-word, is passed over.
+**5b. Sort the facts (generative model).** One call per lecture (`askGroups`), effort `medium`.
+It gets every fact with an id and returns the title, topics, concepts with their fact ids, and
+the ids of facts that repeat another. `fromGroups` (`tree.ts`) builds the map; a fact the model
+forgot is kept under the concept the reading named for it.
 
 **6. Settle the map (code).** `settleMap` (`tree.ts:55`) checks the map and repairs it itself:
 empty or too long title, unnamed or over-long concept names, facts on slides that do not exist,
 facts without text, more than 12 facts per concept (cut), duplicate concept ids (slug of the name;
 the duplicate is dropped), content slides no fact uses. It
-returns the repaired tree and the list of what the model got wrong. When the list is not empty,
-`build` asks the model once more with the problems and takes the second map whatever it
-contains. The second reading is added to that map, and code settles the result. A concept whose id
+returns the repaired tree and the list of what it repaired. Nothing is asked again. A concept whose id
 exists in an earlier lecture keeps the stored name and gets `since: <lecture>` (one vocabulary).
 
 **7. Map checks (decision model).** One request per lecture over the whole lecture, holding
 three kinds of question (`build.ts:301`):
 
-- *Concept belongs*: predicate "This lecture teaches the concept X", one per concept.
-- *Same concept*: predicate "X in this lecture and Y from an earlier lecture are the same
+- _Concept belongs_: predicate "This lecture teaches the concept X", one per concept.
+- _Same concept_: predicate "X in this lecture and Y from an earlier lecture are the same
   concept". Code first picks the pairs: a new concept against each earlier concept whose name
   shares at least half of its words (`SAME_NAME = 0.5`, `build.ts:76`).
-- *Kind of fact*: a `choice` among `definition`, `contrast`, `list`, `sequence`, `formula`,
+- _Kind of fact_: a `choice` among `definition`, `contrast`, `list`, `sequence`, `formula`,
   `code`, `case`, `diagram`, `cause`. Invalid answer falls back to `definition`.
 
 Outcomes (`build.ts:309-330`): concept below its threshold is flagged "may not belong to this
@@ -261,9 +256,9 @@ so that a model can act on them.
 
 **12. Split or repair (generative model).** Cards that fail go back, at most twice (`REPAIRS`,
 `build.ts:70`). A card that breaks a length limit (`tooLong`, `validate.ts:401`) and is not yet a
-part is *split*: the model returns two or three atomic forms (`SPLIT_INTO = 3`), the first part
+part is _split_: the model returns two or three atomic forms (`SPLIT_INTO = 3`), the first part
 keeps the id, the others get new ids, and each part goes through the gate again but is never split
-again. Every other failure is *repaired*: the same form again with the previous attempt and the
+again. Every other failure is _repaired_: the same form again with the previous attempt and the
 full list of problems. A card that still fails after two rounds is dropped and listed in
 `lecture.json` with concept, role, question and reasons.
 
@@ -323,16 +318,16 @@ a fix, never a throw (`api.ts:240`).
 
 ## 4. Where each decision is made
 
-| Judgement | Question to the decision model | Input | Threshold, outcome |
-|---|---|---|---|
-| Kind of course | choice of 4 | first 6,000 chars | fallback `concept` |
-| Kind of slide | choice of 5, one per slide | lecture + low-text images | label only becomes a reason (uncalibrated) |
-| Concept belongs | predicate | lecture | below 0.5: flag (calibrated: remove) |
-| Same concept | predicate, for look-alike names | lecture | at or above 0.5: flag (calibrated: merge) |
-| Kind of fact | choice of 9 | lecture | always applied |
-| About course organisation | predicate | the card alone | at or above 0.2: drop, calibrated |
-| Slide supports the card | predicate | the slide alone | below 0.5: flag (calibrated: repair) |
-| Same card | predicate, for look-alike pairs | pair of cards | 0.25 to 0.5: "looks like"; 0.5 and up: flag (calibrated: drop) |
+| Judgement                 | Question to the decision model  | Input                     | Threshold, outcome                                             |
+| ------------------------- | ------------------------------- | ------------------------- | -------------------------------------------------------------- |
+| Kind of course            | choice of 4                     | first 6,000 chars         | fallback `concept`                                             |
+| Kind of slide             | choice of 5, one per slide      | lecture + low-text images | label only becomes a reason (uncalibrated)                     |
+| Concept belongs           | predicate                       | lecture                   | below 0.5: flag (calibrated: remove)                           |
+| Same concept              | predicate, for look-alike names | lecture                   | at or above 0.5: flag (calibrated: merge)                      |
+| Kind of fact              | choice of 9                     | lecture                   | always applied                                                 |
+| About course organisation | predicate                       | the card alone            | at or above 0.2: drop, calibrated                              |
+| Slide supports the card   | predicate                       | the slide alone           | below 0.5: flag (calibrated: repair)                           |
+| Same card                 | predicate, for look-alike pairs | pair of cards             | 0.25 to 0.5: "looks like"; 0.5 and up: flag (calibrated: drop) |
 
 Thresholds are in `CALIBRATIONS` (`decide.ts:50`). Uncalibrated checks use `{ calibrated: false,
 threshold: 0.5 }`. The rule from `engine-decisions.md`: a check that has not been measured on
@@ -419,14 +414,14 @@ one fact per answer, about 12 words, a context prefix when a rival answer exists
 `placeholder` only exists so the pipeline runs on any course and says nothing about quality.
 Both share one `plan` table:
 
-| Fact kind | Card types, in turn |
-|---|---|
-| definition | definition, reverse |
-| contrast | contrast |
-| list | cloze-list (name-two when exactly 2 items) |
-| sequence | chain |
-| formula, code, case, diagram | formula, code, case, diagram |
-| cause | why |
+| Fact kind                    | Card types, in turn                        |
+| ---------------------------- | ------------------------------------------ |
+| definition                   | definition, reverse                        |
+| contrast                     | contrast                                   |
+| list                         | cloze-list (name-two when exactly 2 items) |
+| sequence                     | chain                                      |
+| formula, code, case, diagram | formula, code, case, diagram               |
+| cause                        | why                                        |
 
 A build command can override the kind (`profile`) or the preset (`preset`, for trying a draft).
 The three other presets (formula, programming, fact-heavy) are not written; Steffen has to
@@ -438,20 +433,20 @@ The closed set of 12 card types, called roles (`ROLES`, `cards/roles.ts:6`). Eac
 with the note type, how many answers and labels, how `Back` is built, and a one-line `use` for
 the prompt:
 
-| Role | Note | Answers | Labels | Back |
-|---|---|---|---|---|
-| definition | qa | 1 | 0 | sentence, key term marked |
-| reverse | qa | 1 | 0 | one term |
-| contrast | qa | 2 | 2 | two bullets |
-| chain | qa | 1 to 2 | 1 to 4 | list |
-| name-two | qa | 2 | 0 | two bullets |
-| why | qa | 1 to 2 | 0 | sentence, or two bullets |
-| case | qa | 1 | 0 | one term |
-| formula | qa | 2 (TeX, condition) | 0 | formula plus sentence |
-| code | qa | 1 to 2 | 1 to 2 | list, with a listing |
-| diagram | qa | 1 | 0 | sentence; diagram data, slide image shown |
-| cloze | cloze | 0 | 0 | sentence with 1 to 5 deletions |
-| cloze-list | cloze | 2 to 5 | 0 | lead-in with one deletion per item |
+| Role       | Note  | Answers            | Labels | Back                                      |
+| ---------- | ----- | ------------------ | ------ | ----------------------------------------- |
+| definition | qa    | 1                  | 0      | sentence, key term marked                 |
+| reverse    | qa    | 1                  | 0      | one term                                  |
+| contrast   | qa    | 2                  | 2      | two bullets                               |
+| chain      | qa    | 1 to 2             | 1 to 4 | list                                      |
+| name-two   | qa    | 2                  | 0      | two bullets                               |
+| why        | qa    | 1 to 2             | 0      | sentence, or two bullets                  |
+| case       | qa    | 1                  | 0      | one term                                  |
+| formula    | qa    | 2 (TeX, condition) | 0      | formula plus sentence                     |
+| code       | qa    | 1 to 2             | 1 to 2 | list, with a listing                      |
+| diagram    | qa    | 1                  | 0      | sentence; diagram data, slide image shown |
+| cloze      | cloze | 0                  | 0      | sentence with 1 to 5 deletions            |
+| cloze-list | cloze | 2 to 5             | 0      | lead-in with one deletion per item        |
 
 `diagram` carries a structured description (`matrix`, `sequence` or `cycle`) with its own
 validator; there is no renderer, so the card shows the slide image (`assemble.ts:121`). Note
@@ -462,19 +457,19 @@ types in Anki are `Lectern Q&A` (16 fields) and `Lectern Cloze v3` (13 fields), 
 
 `LIMITS` (`cards/validate.ts:18`), quoted:
 
-| Limit | Value |
-|---|---|
-| Front (question) | 20 words, never a yes/no opener (English and German list, `YES_NO`) |
-| Answer, all answers together | 25 words |
-| Bullets in a list or steps answer | 2 |
-| Term answer (reverse, case) | 5 words |
-| Extra | 40 words |
-| Cloze sentence | 45 words, 1 to 5 deletions, each at most 8 words, numbered c1.. once each, no hints, balanced braces, at least 3 words of cue |
-| Cloze list | lead-in 20 words, each item 8 words, 2 to 5 items |
-| Slot label | 4 words |
-| Code listing | 16 lines, 60 characters per line, every line must be found on the slide (skipped when the slide was seen as a picture) |
-| Diagram | matrix axes 1 to 4 labels, cell count equals columns times rows; sequence or cycle 2 to 8 steps; labels 4 words; `key` indexes valid |
-| Key term marks | at most one `==term==` per answer; definition requires one |
+| Limit                             | Value                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Front (question)                  | 20 words, never a yes/no opener (English and German list, `YES_NO`)                                                                  |
+| Answer, all answers together      | 25 words                                                                                                                             |
+| Bullets in a list or steps answer | 2                                                                                                                                    |
+| Term answer (reverse, case)       | 5 words                                                                                                                              |
+| Extra                             | 40 words                                                                                                                             |
+| Cloze sentence                    | 45 words, 1 to 5 deletions, each at most 8 words, numbered c1.. once each, no hints, balanced braces, at least 3 words of cue        |
+| Cloze list                        | lead-in 20 words, each item 8 words, 2 to 5 items                                                                                    |
+| Slot label                        | 4 words                                                                                                                              |
+| Code listing                      | 16 lines, 60 characters per line, every line must be found on the slide (skipped when the slide was seen as a picture)               |
+| Diagram                           | matrix axes 1 to 4 labels, cell count equals columns times rows; sequence or cycle 2 to 8 steps; labels 4 words; `key` indexes valid |
+| Key term marks                    | at most one `==term==` per answer; definition requires one                                                                           |
 
 Further rules in `validateDraft` (`validate.ts:60`): the role exists, answer and label counts
 match the role, no empty slot, plain text only (no line breaks, no HTML except `<sub>` and
@@ -523,12 +518,12 @@ out, both plain JSON, so the in-app channel can later be swapped for HTTP. A com
 with a zod discriminated union (`CommandSchema`, `api.ts:47`); a bad command, or any thrown
 `EngineError`, becomes a `failed` event with `message` and `fix`. Nothing throws out of `run`.
 
-| Commands | Model or network? | Answered by events |
-|---|---|---|
-| `build`, `estimate` | `build` calls both models, `estimate` neither | `phase`, `progress`, `estimate`, `profile`, `built` |
-| `courses`, `course`, `cards`, `outline`, `create`, `add`, `slide` | no model | `courses`, `course`, `cards`, `outline`, `created`, `added`, `slide` |
-| `send`, `restyle` | AnkiConnect only | `sending`, `sent`, `restyled` |
-| `slots`, `edit`, `remove`, `write` | none (Anki when the card is there) | `slots`, `edited`, `removed`, `written`, `refused` |
+| Commands                                                          | Model or network?                             | Answered by events                                                   |
+| ----------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+| `build`, `estimate`                                               | `build` calls both models, `estimate` neither | `phase`, `progress`, `estimate`, `profile`, `built`                  |
+| `courses`, `course`, `cards`, `outline`, `create`, `add`, `slide` | no model                                      | `courses`, `course`, `cards`, `outline`, `created`, `added`, `slide` |
+| `send`, `restyle`                                                 | AnkiConnect only                              | `sending`, `sent`, `restyled`                                        |
+| `slots`, `edit`, `remove`, `write`                                | none (Anki when the card is there)            | `slots`, `edited`, `removed`, `written`, `refused`                   |
 
 The engine touches no file system, network or PDF library itself. `Ports` (`ports.ts:158`) are
 passed in: `store`, `pdf`, `model`, `decisions`, `anki`, `designs`, `now`.
@@ -653,12 +648,12 @@ for this document.
 
 **The harness is `packages/engine/eval/refdeck.ts`.** It calls no model itself. Four steps:
 
-| Step | Command | Writes |
-|---|---|---|
+| Step                       | Command                                                    | Writes                                                              |
+| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
 | Reference deck out of Anki | `node eval/refdeck.ts reference <anki deck> <eval folder>` | `reference.json`: question, answer, source and asked count per note |
-| A built course | `node eval/refdeck.ts run <course folder> <eval folder>` | `cards.json`, `cards.txt`, `facts.json` (the map), `slides.txt` |
-| Work for the judge | `node eval/refdeck.ts batches <eval folder> [--size 40]` | `batches/NN.json` |
-| Count | `node eval/refdeck.ts report <eval folder>` | prints the table |
+| A built course             | `node eval/refdeck.ts run <course folder> <eval folder>`   | `cards.json`, `cards.txt`, `facts.json` (the map), `slides.txt`     |
+| Work for the judge         | `node eval/refdeck.ts batches <eval folder> [--size 40]`   | `batches/NN.json`                                                   |
+| Count                      | `node eval/refdeck.ts report <eval folder>`                | prints the table                                                    |
 
 A judge answers each batch into `labels/NN.json` following `eval/JUDGE.md`. Per reference note
 it says `match` (same fact, concept only, nothing) and, for a miss, `stated`: whether the slide

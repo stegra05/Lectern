@@ -4,7 +4,7 @@ import type { SlideKind } from '../src/decide.ts'
 import {
   FACTS_PER_CONCEPT,
   settleMap,
-  withMore,
+  fromGroups,
   type MapContext,
   type MapOutput,
 } from '../src/tree.ts'
@@ -202,52 +202,77 @@ describe('lecture files', () => {
   })
 })
 
-describe('the second reading', () => {
-  const map = {
-    title: 'Growth',
-    topics: [
-      {
-        name: 'Phases',
-        concepts: [{ name: 'Greiner', facts: [{ text: 'Five phases.', slide: 2, items: 0 }] }],
-      },
-      {
-        name: 'Exit',
-        concepts: [{ name: 'IPO', facts: [{ text: 'A sale of shares.', slide: 4, items: 0 }] }],
-      },
-    ],
-  }
-  const more = (topic: string, concept: string, text: string) => ({
-    topic,
-    concept,
-    text,
-    slide: 2,
-    items: 0,
-  })
+describe('the map from the facts read slide by slide', () => {
+  const facts = [
+    { concept: 'Growth phases', text: 'Greiner names five phases.', slide: 9, items: 5 },
+    {
+      concept: 'Creativity',
+      text: 'Creativity ends in a crisis of leadership.',
+      slide: 9,
+      items: 0,
+    },
+    { concept: 'Growth phases', text: 'Greiner has five phases.', slide: 12, items: 5 },
+    { concept: 'IPO', text: 'An IPO sells shares on a stock market.', slide: 14, items: 0 },
+  ]
+  const id = (i: number) => `F${i + 1}`
 
-  it('puts a fact under the concept it names, however the name is cased', () => {
-    const out = withMore(map, {
-      facts: [more('Phases', 'greiner', 'Creativity ends in a crisis of leadership.')],
-    })
-    expect(out.topics[0]!.concepts[0]!.facts.map((f) => f.text)).toEqual([
-      'Five phases.',
-      'Creativity ends in a crisis of leadership.',
-    ])
-  })
-
-  it('opens a new concept in the topic it names, or in the last topic', () => {
-    const out = withMore(map, {
-      facts: [
-        more('Phases', 'Crisis of autonomy', 'It ends the phase of direction.'),
-        more('Nowhere', 'Trade sale', 'A sale to a firm.'),
+  it('puts each fact under the concept the model sorted it into', () => {
+    const map = fromGroups(
+      facts,
+      {
+        title: 'Growth',
+        topics: [
+          { name: 'Phases', concepts: [{ name: 'Greiner growth phases', facts: ['F1', 'F2'] }] },
+          { name: 'Exit', concepts: [{ name: 'IPO', facts: ['F4'] }] },
+        ],
+        repeats: ['F3'],
+      },
+      id,
+    )
+    expect(map).toEqual({
+      title: 'Growth',
+      topics: [
+        {
+          name: 'Phases',
+          concepts: [
+            {
+              name: 'Greiner growth phases',
+              facts: [
+                { text: 'Greiner names five phases.', slide: 9, items: 5 },
+                { text: 'Creativity ends in a crisis of leadership.', slide: 9, items: 0 },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'Exit',
+          concepts: [
+            {
+              name: 'IPO',
+              facts: [{ text: 'An IPO sells shares on a stock market.', slide: 14, items: 0 }],
+            },
+          ],
+        },
       ],
     })
-    expect(out.topics[0]!.concepts.map((c) => c.name)).toEqual(['Greiner', 'Crisis of autonomy'])
-    expect(out.topics[1]!.concepts.map((c) => c.name)).toEqual(['IPO', 'Trade sale'])
   })
 
-  it('passes over a fact the map already has, and leaves the map itself alone', () => {
-    const out = withMore(map, { facts: [more('Phases', 'Greiner', 'five phases.')] })
-    expect(out).toEqual(map)
-    expect(out).not.toBe(map)
+  it('keeps a fact the model forgot, under the concept the reading named, and counts an id once', () => {
+    const map = fromGroups(
+      facts,
+      {
+        title: 'Growth',
+        topics: [
+          { name: 'Phases', concepts: [{ name: 'growth phases', facts: ['F1', 'F1', 'F9'] }] },
+        ],
+        repeats: [],
+      },
+      id,
+    )
+    expect(map.topics[0]!.concepts.map((c) => [c.name, c.facts.map((f) => f.slide)])).toEqual([
+      ['growth phases', [9, 12]],
+      ['Creativity', [9]],
+      ['IPO', [14]],
+    ])
   })
 })

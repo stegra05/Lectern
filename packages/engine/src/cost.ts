@@ -16,16 +16,21 @@ export const LOW_TEXT_CHARS = 100
 const TOKENS = {
   perChar: 0.25,
   perImage: 1000,
-  mapPrompt: 500,
-  /** The map reasons before it answers, and reasoning is billed as output. */
-  mapReplyPerSlide: 250,
+  /**
+   * Reading one slide: its picture and the question at full price, the lecture from the cache.
+   * Measured on the 356 Entrepreneurship slides on 2026-11-15: 1,281 tokens at full price and
+   * 285 tokens of reply per slide.
+   */
+  readPerSlide: 1300,
+  readReply: 290,
+  /** Facts the reading finds per slide: 1,418 on those 356 slides. */
+  factsPerSlide: 4,
+  /** Sorting the facts: each one listed with its id, and its id back with some reasoning. */
+  groupPrompt: 600,
+  groupPerFact: 45,
+  groupReplyPerFact: 25,
   fillPrompt: 600,
   fillReply: 120,
-  /** The second reading gets the map back and answers with what it adds. */
-  morePromptPerSlide: 120,
-  moreReplyPerSlide: 150,
-  /** Facts the map finds per slide: 633 on 356 slides before the second reading. Rough. */
-  factsPerSlide: 2.2,
   /** One decision request per fact for its worth: 142,375 tokens for 633 facts. */
   factWorth: 225,
   /** Repairs and splits on top of the fill calls. */
@@ -98,13 +103,13 @@ export function estimate(
     const uncached = Math.min(calls, TOKENS.uncachedCalls)
     cards += fills
     dollars +=
-      // The map reads the lecture once at full price.
-      (source + TOKENS.mapPrompt) * prices.model.input +
-      lecture.slides * TOKENS.mapReplyPerSlide * prices.model.output +
-      // The second reading: the lecture again, the map so far, and what it adds.
-      (source + TOKENS.mapPrompt + lecture.slides * TOKENS.morePromptPerSlide) *
-        prices.model.input +
-      lecture.slides * TOKENS.moreReplyPerSlide * prices.model.output +
+      // Every slide read on its own: the first call puts the lecture in the cache.
+      source * (prices.model.input + (lecture.slides - 1) * prices.model.cachedInput) +
+      lecture.slides *
+        (TOKENS.readPerSlide * prices.model.input + TOKENS.readReply * prices.model.output) +
+      // The facts sorted into topics and concepts, in one call over the lecture.
+      (source + TOKENS.groupPrompt + facts * TOKENS.groupPerFact) * prices.model.input +
+      facts * TOKENS.groupReplyPerFact * prices.model.output +
       // Every card sees the whole lecture again, mostly from the provider's cache.
       source * (uncached * prices.model.input + (calls - uncached) * prices.model.cachedInput) +
       calls * (TOKENS.fillPrompt * prices.model.input + TOKENS.fillReply * prices.model.output) +

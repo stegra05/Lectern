@@ -79,7 +79,14 @@ export function openaiModel(model = 'gpt-6-luna', options: OpenAIOptions = {}): 
           input: [
             {
               role: 'user',
-              content: [...shared(request.context, request.images, true), text(request.prompt)],
+              content: [
+                ...shared(request.context, request.images, true),
+                ...(request.shown ?? []).flatMap((image) => [
+                  text(`Picture of slide ${image.slide}:`),
+                  picture(image),
+                ]),
+                text(request.prompt),
+              ],
             },
           ],
           reasoning: { effort: request.effort },

@@ -13,25 +13,31 @@ const SLIDES_PER_TOPIC = 3
 
 const take = (text: string, n: number) => text.split(/\s+/).slice(0, n).join(' ')
 
-function map(context: string): unknown {
-  const slides = [...context.matchAll(/^\[(\d+)\] (.*)$/gm)].map((m) => ({
-    slide: Number(m[1]),
-    lines: m[2]!.replace(' (see the picture of this slide)', '').split(' / ').filter(Boolean),
-  }))
-  const names = new Set<string>()
-  const concepts = slides.slice(1).flatMap(({ slide, lines }) => {
-    const name = take(lines[0] ?? '', CONCEPT_WORDS)
-    if (lines.length < 2 || names.has(name.toLowerCase())) return []
-    names.add(name.toLowerCase())
-    const facts = lines.slice(1, 1 + FACTS).map((text) => ({ text, slide, items: 0 }))
-    return [{ name, facts }]
-  })
+/** One slide: its heading is the concept, each line under it a fact. A title slide gives none. */
+function read(request: ModelRequest): unknown {
+  const slide = Number(/^Read slide (\d+) /.exec(request.prompt)![1])
+  const lines = (/^Its text: (.*)$/m.exec(request.prompt)?.[1] ?? '').split(' / ').filter(Boolean)
+  if (slide === 1 || lines.length < 2) return { facts: [] }
+  const concept = take(lines[0]!, CONCEPT_WORDS)
+  return { facts: lines.slice(1, 1 + FACTS).map((text) => ({ concept, text, items: 0 })) }
+}
+
+/** The facts under the concept the reading named, three concepts to a topic. */
+function group(request: ModelRequest): unknown {
+  const facts = [...request.prompt.matchAll(/^(F\d+) \(slide \d+\) ([^:]+): /gm)]
+  const concepts: { name: string; facts: string[] }[] = []
+  for (const [, id, name] of facts) {
+    const known = concepts.find((c) => c.name === name)
+    if (known) known.facts.push(id!)
+    else concepts.push({ name: name!, facts: [id!] })
+  }
   const topics = []
   for (let i = 0; i < concepts.length; i += SLIDES_PER_TOPIC) {
-    const group = concepts.slice(i, i + SLIDES_PER_TOPIC)
-    topics.push({ name: group[0]!.name, concepts: group })
+    const part = concepts.slice(i, i + SLIDES_PER_TOPIC)
+    topics.push({ name: part[0]!.name, concepts: part })
   }
-  return { title: take(slides[0]?.lines[0] ?? 'Lecture', 4).slice(0, 32), topics }
+  const first = /^\[1\] (.*)$/m.exec(request.context)?.[1]?.split(' / ')[0] ?? 'Lecture'
+  return { title: take(first, 4).slice(0, 32), topics, repeats: [] }
 }
 
 /** Fills the form of a definition or a term card; other forms get the fact in every field. */
@@ -74,10 +80,10 @@ export function offlineModel(delayMs = 0): ModelPort {
     async complete(request) {
       await wait(delayMs)
       const data =
-        request.task === 'map'
-          ? map(request.context)
-          : request.task === 'deepen'
-            ? { facts: [] }
+        request.task === 'read'
+          ? read(request)
+          : request.task === 'map'
+            ? group(request)
             : request.task === 'split'
               ? { cards: [fill(request)] }
               : fill(request)

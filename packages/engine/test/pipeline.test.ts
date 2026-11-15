@@ -242,10 +242,16 @@ describe('building a course of two lectures, offline', () => {
     expect(calls('fill')).toHaveLength(9)
   })
 
-  it('reads every lecture a second time, with its map so far, for the facts the map passed over', () => {
-    expect(calls('deepen')).toHaveLength(2)
-    expect(calls('deepen')[0]!.prompt).toContain(
-      '    - Risk is an outcome whose probability can be calculated or known. (slide 2)',
+  it('reads every slide on its own with its picture, then sorts what it found in one call per lecture', () => {
+    // Five slides in lecture 1, four in lecture 2.
+    expect(calls('read')).toHaveLength(9)
+    const second = calls('read')[1]!
+    expect(second.shown!.map((image) => image.slide)).toEqual([2])
+    expect(second.images).toEqual([])
+    expect(second.prompt).toMatch(/^Read slide 2 of this lecture\./)
+    expect(calls('map')).toHaveLength(2)
+    expect(calls('map')[0]!.prompt).toContain(
+      'F1 (slide 2) risk: Risk is an outcome whose probability can be calculated or known.',
     )
   })
 
@@ -507,7 +513,7 @@ describe('building a course of two lectures, offline', () => {
       lectures: [1, 2],
       cards: 8,
       dropped: 2,
-      calls: 17,
+      calls: 24,
       decisions: 44,
       inputTokens: expect.any(Number) as number,
       cachedInputTokens: 0,
@@ -624,7 +630,7 @@ describe('building a course of two lectures, offline', () => {
         run: 2,
         lectures: [3],
         cards: 3,
-        calls: 5,
+        calls: 6,
       })
     })
 
@@ -923,8 +929,8 @@ describe('goal, profile and cost', () => {
       message: 'The run was stopped at 0.40 dollars, above its cap of 0.25 dollars.',
       fix: 'Nothing was saved. Build again, or build fewer lectures at once.',
     })
-    // The map and its second reading pass the cap. No card call starts.
-    expect(model.requests.map((r) => r.task)).toEqual(['map', 'deepen'])
+    // The first slide, then the four reads already under way, pass the cap. Nothing more starts.
+    expect(model.requests.map((r) => r.task)).toEqual(['read', 'read', 'read', 'read', 'read'])
     expect(await readdir(join(root, 'course'))).toEqual(['slides'])
   })
 })

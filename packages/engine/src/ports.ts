@@ -6,7 +6,7 @@
 
 import type { Design } from './designs.ts'
 
-export type Task = 'map' | 'deepen' | 'fill' | 'repair' | 'split'
+export type Task = 'read' | 'map' | 'fill' | 'repair' | 'split'
 
 /** A slide as a picture: a PNG in base64. */
 export interface SlideImage {
@@ -22,6 +22,8 @@ export interface ModelRequest {
   context: string
   /** Slides with little text, shown as pictures. They belong to the context. */
   images: SlideImage[]
+  /** Pictures only this call looks at. They come after the lecture, so the lecture stays cached. */
+  shown?: SlideImage[]
   /** What this one call asks for. */
   prompt: string
   /** JSON Schema of the reply. Every object is closed and every property required. */
