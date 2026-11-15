@@ -4,8 +4,8 @@ import { LATER, LECTURES, makePdf } from './pdf.ts'
 
 /**
  * The whole way of a student through the base product, on the offline models: first run,
- * a new course, two lecture PDFs, the goal, the run with the engine's phases, the result on
- * the track, a lecture as rings, the cards of a concept in the side panel, changing, writing
+ * a new course, two lecture PDFs, the goal, a past exam paper, the run with the engine's phases,
+ * the result on the track, the paper's question as a card, a lecture as rings, the cards of a concept in the side panel, changing, writing
  * and removing a card, the cards in Anki, changing and removing a card that was sent, and a
  * lecture that arrives later. Anki is the one in memory, which writes its notes to the data
  * folder on every change, so the test reads what reached it and nothing reaches a real
@@ -49,7 +49,7 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
         buffer: await makePdf(slides),
       })),
     )
-    await page.locator('input[type=file]').setInputFiles(files)
+    await page.locator('.map-empty input[type=file]').setInputFiles(files)
     await expect(page.getByRole('img', { name: /Lecture 01 Introduction, 4 slides/ })).toBeVisible()
     await expect(page.getByRole('img', { name: /Lecture 02 Effectuation, 4 slides/ })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'I am aiming for' })).toBeVisible()
@@ -72,6 +72,19 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     )
   })
 
+  await test.step('past exams: a paper is added in the setup and waits for the cards', async () => {
+    const paper = await makePdf([['Exam Winter 2025/26', '1) What is a minimum viable product?']])
+    await page
+      .getByLabel('Past exam papers')
+      .setInputFiles([
+        { name: 'Exam Winter 2025-26.pdf', mimeType: 'application/pdf', buffer: paper },
+      ])
+    const panel = page.getByRole('complementary')
+    await expect(panel).toContainText('Exam Winter 2025-26')
+    await expect(panel).toContainText('read with these cards')
+    await expect(panel.getByRole('button', { name: 'Add more past exams' })).toBeVisible()
+  })
+
   await test.step('the run: the engine’s four phases', async () => {
     await page.getByRole('button', { name: 'Make my cards' }).click()
     const phases = page.getByRole('list', { name: 'What Lectern is doing' })
@@ -88,8 +101,16 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     await expect(page.getByRole('button', { name: /Open lecture 01/ })).toBeVisible()
   })
 
+  await test.step('past exams: the paper’s question has a card in the first lecture', async () => {
+    await page.getByRole('button', { name: /Open lecture 01/ }).click()
+    await page.getByRole('button', { name: /^Entrepreneurship, \d+ cards?$/ }).click()
+    await expect(page.getByRole('complementary')).toContainText(
+      'An answer to this past exam question',
+    )
+  })
+
   await test.step('a lecture as rings, its cards in the side panel', async () => {
-    await page.getByRole('button', { name: /Open lecture 02/ }).click()
+    await page.getByRole('button', { name: /^(Open|Go to) lecture 02/ }).click()
     const panel = page.getByRole('complementary')
     await expect(panel).toContainText('Effectuation')
     // The concept on the map. The edit button of a card can name the concept too.

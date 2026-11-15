@@ -51,11 +51,16 @@ export const CommandSchema = z.discriminatedUnion('type', [
     lecture: z.number().int().positive(),
     slide: z.number().int().positive(),
   }),
-  /** Adds PDFs to the course, each as its file name and its bytes. The next `build` builds them. */
+  /**
+   * Adds PDFs to the course, each as its file name and its bytes: lecture slides,
+   * which the next `build` builds, or past exam papers (`to: 'exams'`), whose questions the
+   * next `build` turns into cards first.
+   */
   z.object({
     type: z.literal('add'),
     course,
     files: z.array(z.object({ name: z.string().min(1), data: z.instanceof(Uint8Array) })).min(1),
+    to: z.enum(['slides', 'exams']).optional(),
   }),
   /** Sends the cards that are not in Anki yet. */
   z.object({ type: z.literal('send'), course }),

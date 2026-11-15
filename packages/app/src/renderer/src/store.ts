@@ -111,6 +111,8 @@ interface State {
   createCourse: (name: string) => Promise<void>
   openCourse: (course: string) => Promise<void>
   addFiles: (files: File[]) => Promise<void>
+  /** Adds past exam papers. The next build turns their recurring questions into cards first. */
+  addExams: (files: File[]) => Promise<void>
   setGoal: (goal: Goal) => Promise<void>
   build: () => Promise<void>
   /** Sends the cards that are not in Anki yet. */
@@ -207,6 +209,30 @@ export const useStore = create<State>((set, get) => {
     // A failure that is already shown stays: a working estimate says nothing about it.
     const failure = failureOf(events)
     if (failure) set({ failure })
+  }
+
+  /** Adds PDFs as lecture slides or as past exam papers. */
+  async function addPdfs(files: File[], to: 'slides' | 'exams'): Promise<void> {
+    const { course, sending } = get()
+    if (!course || sending) return
+    const pdfs = files.filter((f) => f.name.toLowerCase().endsWith('.pdf'))
+    if (pdfs.length === 0) {
+      set({
+        addProblem: {
+          message: 'Only PDF files can be added.',
+          fix: `Drop the ${to === 'exams' ? 'exam paper' : 'lecture'} as a PDF.`,
+        },
+      })
+      return
+    }
+    const data = await Promise.all(
+      pdfs.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })),
+    )
+    const events = await ask({ type: 'add', course: course.id, files: data, to })
+    set({ addProblem: failureOf(events) })
+    const view = await refresh(course.id)
+    if (view && view.pending.length > 0) set({ panel: 'setup', view: { level: 'course' } })
+    await estimate()
   }
 
   async function deliver(): Promise<void> {
@@ -329,28 +355,8 @@ export const useStore = create<State>((set, get) => {
       if (!running) await estimate()
     },
 
-    async addFiles(files) {
-      const { course, sending } = get()
-      if (!course || sending) return
-      const pdfs = files.filter((f) => f.name.toLowerCase().endsWith('.pdf'))
-      if (pdfs.length === 0) {
-        set({
-          addProblem: {
-            message: 'Only PDF files can be added.',
-            fix: 'Drop the lecture as a PDF.',
-          },
-        })
-        return
-      }
-      const data = await Promise.all(
-        pdfs.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })),
-      )
-      const events = await ask({ type: 'add', course: course.id, files: data })
-      set({ addProblem: failureOf(events) })
-      const view = await refresh(course.id)
-      if (view && view.pending.length > 0) set({ panel: 'setup', view: { level: 'course' } })
-      await estimate()
-    },
+    addFiles: (files) => addPdfs(files, 'slides'),
+    addExams: (files) => addPdfs(files, 'exams'),
 
     async setGoal(goal) {
       set({ goal })
