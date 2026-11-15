@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in */src/*.ts|*/src/*.tsx|*/src/*.css) pnpm exec prettier --write \"$f\" >/dev/null;; esac; } 2>/dev/null || true",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in */packages/*.ts|*/packages/*.tsx|*/packages/*.css|*/packages/*.mjs|*/packages/*.md) pnpm exec prettier --write \"$f\" >/dev/null;; esac; } 2>/dev/null || true",
             "timeout": 30,
             "statusMessage": "prettier"
           }
