@@ -1,0 +1,25 @@
+.course-screen {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ground);
+}
+
+.drop-veil {
+  position: absolute;
+  inset: var(--titlebar-h) 0 0 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ground) 70%, transparent);
+  pointer-events: none;
+}
+.drop-veil-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 20px 28px;
+  border-radius: var(--r-panel);
+  outline: 1.5px dashed var(--accent-text);
+  outline-offset: -6px;
+}
