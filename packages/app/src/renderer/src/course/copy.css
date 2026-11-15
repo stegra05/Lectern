@@ -1,0 +1,49 @@
+/* "Copy for chat": top right of the map, left of the side panel when it is open. */
+
+.panel-copy {
+  position: absolute;
+  top: calc(var(--titlebar-h) + var(--gutter));
+  right: var(--gutter);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow:
+    0 0 0 0.5px var(--hairline),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+  transition: right 240ms ease-out;
+}
+.panel-copy[data-panel='true'] {
+  right: calc(var(--gutter) * 2 + var(--panel-w));
+}
+.panel-copy:hover:not(:disabled) {
+  background: var(--group);
+}
+.panel-copy:disabled {
+  color: var(--label-2);
+}
+
+.panel-copy-note {
+  position: absolute;
+  top: calc(var(--titlebar-h) + var(--gutter) + 38px);
+  right: var(--gutter);
+  z-index: 3;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: var(--r-control);
+  font-size: 12px;
+}
+.panel-copy-note[data-panel='true'] {
+  right: calc(var(--gutter) * 2 + var(--panel-w));
+}
+.panel-copy-note b {
+  color: var(--problem);
+  font-weight: 600;
+}
