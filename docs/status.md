@@ -1,62 +1,54 @@
 # Lectern v3: status
 
-What is true today. Update it in the pull request that changes it. What comes next lives on the
-[roadmap board](https://github.com/users/stegra05/projects/3), not here. Last updated 2026-11-15.
-
-## Design
-
-Direction v2 is accepted as "right direction, needs polish", the look is fine. Decided: native
-look per system with light and dark, lecture colours and a winding track, a full-width map that
-never reshuffles, a slim bottom bar, one side panel for all details, mind maps as rings, six
-card designs with Native as default, "Copy for chat" with cards as content. The themes view
-comes after the base product. Every decision with its date: `design/DIRECTION.md`. The binding
-kit: `design/KIT.md`. The canvas (https://claude.ai/artifact/E4ZxyLc4DdB7HK3CgoQ1XE) is the
-source of truth for screens and was edited by hand after its copy in `design/canvas/`.
+What is true today. Update it in the pull request that changes it. Why things are this way: the
+[RFDs](README.md). What comes next: the
+[roadmap board](https://github.com/users/stegra05/projects/3). Last updated 2026-11-15.
 
 ## Engine
 
-`packages/engine` runs the whole pipeline of `engine-decisions.md` on real slides: reading
-slide by slide with pictures, a map of topics, concepts and facts, a worth score that decides
-which facts get cards under the goal, cards written per fact and checked, an organisation check
-that drops course administration, past exam questions turned into cards, and sending to a real
-Anki. The `concept` preset is the working preset for concept courses; the three other kinds of
-lecture still use the placeholder. 240 tests pass (2 skipped, live only).
+`packages/engine` runs the whole pipeline on real slides ([RFD 4](rfd/0004-lecture-to-cards.md)):
+reading slide by slide with pictures, a map of topics, concepts and facts, a worth score that
+picks facts under the goal, cards written per fact and gated, an organisation check that drops
+course administration, past exam questions turned into cards, and sending to a real Anki. The
+`concept` preset is the working preset; the three other kinds of course use the placeholder.
+240 tests pass (2 skipped, live only).
 
-On the 11 Entrepreneurship decks with 18 past papers a run makes about 630 cards (Steffen's deck
-size) for about 55 cents on `gpt-6-luna` in about 35 minutes. Of the 52 questions of four newer
-papers the engine never saw, a card answers 34; of the 636 notes of Steffen's reference deck,
-246 (39%). Without the papers: 19 and 204. The rest is mostly not on the slides (cases, videos,
-readings), or the card tests another angle than the exam asks. Figures: `docs/history/engine-report.md`. How the code
-works and where older documents lag it: `docs/architecture.md`.
+On the 11 Entrepreneurship decks with 18 past papers a run makes about 630 cards for about 55
+cents on `gpt-6-luna` in about 35 minutes, with no hard-limit violation. A card answers 34 of the
+52 questions of four newer papers the engine never saw, and covers 246 of the 636 notes of
+Steffen's reference deck (39%). Form is fine; coverage is the gap
+([RFD 14](rfd/0014-the-quality-bar.md), [RFD 8](rfd/0008-past-exams.md)). How the code works: [`architecture.md`](architecture.md).
 
 ## App
 
 `packages/app` is the base prototype on the engine's one boundary: first run, courses, files and
-goal, the run with the real phases, the result track, a lecture as rings, cards in the side
+goal, the run with the real phases, the course track, a lecture as rings, cards in the side
 panel with changing, removing and writing a card, course details, settings with the card design
-carousel, sending to Anki, past exam papers added in the course setup, in light and dark. 53
-unit tests and one Playwright test from a new course to its cards pass on the offline models. Screens: `docs/shots/`.
+carousel, Copy for chat, past exam papers added in the course setup, sending to Anki, in light
+and dark. 53 unit tests and one Playwright
+test from a new course to its cards pass on the offline models. Screens: [`shots/`](shots/).
+
+## Design
+
+Direction v2 is accepted as "right direction, needs polish" ([RFD 11](rfd/0011-app-shape.md)).
+Six card designs, Native by default ([RFD 10](rfd/0010-card-designs.md)). The binding kit is
+[`design/KIT.md`](../design/KIT.md); the canvas is the source of truth for screens.
 
 ## Unverified
 
-- The app's own send, edit and remove against a real Anki (the engine's ran against one; the
-  app's only against the in-memory Anki).
-- A real build started from inside the app (only from the engine's command line so far).
-- Five of the six card checks are uncalibrated and only flag; only the organisation check acts.
-- Packaging: the app reads the Anki templates from `packages/engine/anki` in the repository.
-- Past papers added after a course's lectures are built change no card already made; they count
-  only for lectures built later. Answers the model wrote are not checked against the readings.
-- The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
-
-## Open with Steffen
-
-- His personality references (calm craft, colour play in a native app, small delights) are not
-  yet applied to any screen.
-- Polish of the Direction v2 screens beyond the rings, which are done.
-- The statistics content is a proposal he has not judged.
+- The app's own build, send, edit and remove against a real Anki and a real key
+  ([#112](https://github.com/stegra05/lectern/issues/112)).
+- Five of the six card checks are uncalibrated and only flag
+  ([#105](https://github.com/stegra05/lectern/issues/105)).
+- The cards in a real Anki client, on desktop or phone
+  ([#134](https://github.com/stegra05/lectern/issues/134)).
+- Packaging: the app reads the Anki templates from `packages/engine/anki` in the repository
+  ([#113](https://github.com/stegra05/lectern/issues/113)).
+- The OpenAI prices against a bill ([RFD 6](rfd/0006-money.md)).
+- Past exams have run on one course; model-written answers are not checked against the
+  readings ([RFD 8](rfd/0008-past-exams.md)).
 
 ## Money
 
-Paid runs only through the engine on OpenAI, within the 50 dollars he set for evals, each
-preceded by its estimate. 70 cents were used by 2026-11-14; each later run states its cost in
-`docs/history/engine-report.md`.
+Paid runs only through the engine on OpenAI, within the 50 dollars for evals, each preceded by
+its estimate ([RFD 6](rfd/0006-money.md)). Each run records its cost in its course folder.

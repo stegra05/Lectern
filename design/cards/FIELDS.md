@@ -1,8 +1,8 @@
 # Card field contract
 
 Both skins read exactly these fields through the same four templates in `packages/engine/anki/`. A skin is a
-stylesheet and nothing else. Read `docs/brief.md` ("Card system") and `design/samples.md`
-first; the limits below repeat the brief's hard limits and add the ones the templates need.
+stylesheet and nothing else. Why it is this way: [RFD 9](../../docs/rfd/0009-cards-in-anki.md). The limits below repeat the
+hard limits and add the ones the templates need.
 
 Two note types, installed by Lectern and owned by Lectern:
 
@@ -11,7 +11,8 @@ Two note types, installed by Lectern and owned by Lectern:
   "Lectern Cloze": Lectern 2 installed a note type of that name with other fields, and a
   student who used it still has it.
 
-Sort field in both: `Key`. Field order is the order of the tables.
+Field order is the order of the tables. `Key` is meant as the sort field, but AnkiConnect cannot
+set it, so Anki sorts by the first field.
 
 ## Lectern Q&A
 
@@ -32,7 +33,7 @@ Sort field in both: `Key`. Field order is the order of the tables.
 | Excerpt | A short quote from the source slide | Code, from the slide text | At most 30 words, plain text. The skins show two lines until the slide is opened |
 | Slide | The rendered source slide | Code | `<img src="l02-s14.png">`, the file in `collection.media` |
 | Diagram | The answer as a drawing | Code | Inline `<svg class="dg">`, see "Diagrams". Only in the diagram role |
-| Key | The concept as plain text | Code | Never rendered. Sort field, search handle and the stable identity of the concept |
+| Key | The concept as plain text | Code | Never rendered. Search handle and the stable identity of the concept |
 
 ## Lectern Cloze v3
 
@@ -54,7 +55,7 @@ Same as Q&A, with `Text` in place of Front, Back, Slots and Code.
 | contrast | `<ul>` with one item per side | one label per side |
 | chain | `<ul>` with one item per gap | the given steps, then one empty span per gap |
 | name-two | `<ul>` with two items | none |
-| why | `<ul>` with two reasoning steps | none |
+| why | `<ul>` with one reasoning step, a second allowed | none |
 | code | `<ul>` with one item per question part | one label per part |
 | case | One term | none |
 | formula | `\[ \]` display maths, then one sentence with the condition | none |

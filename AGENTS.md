@@ -9,12 +9,13 @@ long-lived `v3` branch; `main` still holds the shipping v2 app and merges with v
 |---|---|
 | `packages/engine` | headless TypeScript engine: reads a course folder, makes and checks cards, sends to Anki. Its one boundary is `src/api.ts` |
 | `packages/app` | Electron shell; talks to the engine only through that boundary (`src/shared/contract.ts`) |
-| `docs/` | product brief, architecture, engine decisions, reports |
-| `design/` | design kit (`KIT.md`, binding), decisions (`DIRECTION.md`), card system (`cards/`), canvas copies |
+| `docs/` | decisions as RFDs (`rfd/`), architecture from the code, status |
+| `design/` | design kit (`KIT.md`, binding), card field contract and gallery (`cards/`), canvas copies |
 
-Read before changing behaviour: `docs/status.md` and `docs/brief.md`, then
-`docs/engine-decisions.md` for engine work or `design/KIT.md` for interface work. A change that
-alters what `docs/status.md` says updates it in the same PR.
+Read before changing behaviour: `docs/status.md` and RFD 1 (`docs/rfd/0001-the-product.md`),
+then the RFDs on what you touch (index: `docs/README.md`) and `design/KIT.md` for interface work.
+A change that alters a decision updates its RFD, and a change that alters what `docs/status.md`
+says updates it, in the same PR. Anything still to do is an issue, never a note in a doc.
 
 What comes next is on the roadmap board (`gh project item-list 3 --owner stegra05`): one issue
 per piece of work, each with "Done when" criteria, areas as labels, releases as milestones. A PR

@@ -2,10 +2,11 @@
 
 Binding for every "V2" screen. It merges what Steffen picked on 2026-11-14: the Native Mac
 language (Language C) with the lecture colours and the winding track of the playful one
-(Language E), a full-width map, and mind maps. Background and reasons: `DIRECTION.md`.
+(Language E), a full-width map, and mind maps. Background and reasons:
+[RFD 11](../docs/rfd/0011-app-shape.md).
 
 Reference frames for the look: `AltLangC1.dc.html` and `AltLangC2.dc.html` (controls, type,
-materials) and `AltLangE1.dc.html` (lecture colours, the track) in the canvas project folder.
+materials) and `AltLangE1.dc.html` (lecture colours, the track) in [`canvas/project/`](canvas/).
 
 ## Principles
 

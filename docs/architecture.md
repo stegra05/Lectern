@@ -15,7 +15,7 @@ one PDF per lecture, states a goal, and the app writes cards and sends them to A
 | `packages/engine` (`@lectern/engine`) | The headless engine. Plain TypeScript, run by Node with type stripping, no build step, no interface code. Everything that makes cards lives here.                                                                        |
 | `packages/app` (`@lectern/app`)       | The Electron desktop app. A shell and a React interface around the engine.                                                                                                                                               |
 | `design/`                          | Design kit and card field contract (`cards/FIELDS.md`). The Anki templates and six stylesheets the engine installs live in `packages/engine/anki/`.                                                                                     |
-| `docs/`                            | Brief, decisions, plans, reports, this file.                                                                                                                                                                             |
+| `docs/`                            | Decisions as RFDs (`rfd/`), status, this file.                                                                                                                                                                                     |
 | `eval-results/`                       | Git-ignored. Real course folders and run logs (`v3-courses/`).                                                                                                                                                           |
 | `src/`, `src-tauri/`                  | **The old v2 app (Tauri), still shipping on `main`. Not part of v3.** `src/engine` is reference material for v3 (provider quirks), nothing imports it. The root `package.json` (`lectern-desktop` 2.17.0) belongs to v2. |
 
@@ -51,8 +51,7 @@ eval/refdeck.ts       a run measured against a reference deck in Anki (section 1
 
 ## 2. The three kinds of actor
 
-Every step of the pipeline is done by exactly one of these. The design rule (brief, principle
-5; `engine-decisions.md`, "How cards are created"): the model never decides how many cards exist
+Every step of the pipeline is done by exactly one of these. The design rule ([RFD 2](rfd/0002-code-decides.md)): the model never decides how many cards exist
 or what shape they take. Code owns numbers and structure, the generative model only writes words
 into small forms, the decision model only answers closed questions.
 
@@ -345,7 +344,7 @@ a fix, never a throw (`api.ts:240`).
 | Same card                 | predicate, for look-alike pairs | pair of cards             | 0.25 to 0.5: "looks like"; 0.5 and up: flag (calibrated: drop) |
 
 Thresholds are in `CALIBRATIONS` (`decide.ts:50`). Uncalibrated checks use `{ calibrated: false,
-threshold: 0.5 }`. The rule from `engine-decisions.md`: a check that has not been measured on
+threshold: 0.5 }`. The rule from [RFD 5](rfd/0005-decision-models.md): a check that has not been measured on
 labelled data flags and never drops. Only `organisation` has been measured. `Options.calibrations`
 on `createEngine` can override the table (the tests do).
 
@@ -393,7 +392,7 @@ euros at a fixed 0.9 per dollar, rounded up to 5 cents up to 50 cents, 10 cents 
 50 cents above (`shownEuros`). The app's bottom bar (also uncommitted) shows "About N cents" from
 it. In the committed state the bar shows dollars.
 
-**Policy for paid runs** (`status.md`, `engine-decisions.md`): only the engine session starts
+**Policy for paid runs** ([RFD 6](rfd/0006-money.md)): only the engine session starts
 them, on OpenAI only, within a 50 dollar budget agreed with Steffen. Reference cost: 11 decks, 356
 slides, about 17 to 19 cents on `gpt-6-luna` (engine report).
 
@@ -423,7 +422,7 @@ kind:
 There are two presets (`PRESET_IDS`): `concept` and `placeholder`. `presetFor` (`presets.ts:173`)
 gives `concept` to concept courses and `placeholder` to the other three kinds. The `concept`
 preset was written from Steffen's Entrepreneurship study kit and accepted by him on 2026-11-15
-as the working preset (`engine-profile-concept.md`). Its map rules forbid course organisation
+as the working preset ([RFD 7](rfd/0007-presets.md)). Its map rules forbid course organisation
 as a concept and ask for several angles per idea; its card rules say to lead with the key term,
 one fact per answer, about 12 words, a context prefix when a rival answer exists. The
 `placeholder` only exists so the pipeline runs on any course and says nothing about quality.
@@ -440,7 +439,7 @@ Both share one `plan` table:
 
 A build command can override the kind (`profile`) or the preset (`preset`, for trying a draft).
 The three other presets (formula, programming, fact-heavy) are not written; Steffen has to
-approve each one before it ships (`engine-decisions.md`).
+approve each one before it ships ([RFD 7](rfd/0007-presets.md)).
 
 ## 8. Card kinds and roles
 
@@ -692,61 +691,25 @@ the exam asked, and by subdeck.
 - **Live adapter test**: `LECTERN_LIVE=1 OPENAI_API_KEY=... pnpm --filter @lectern/engine test`.
 - **v2's harness** `src/engine/models.eval.test.ts` (env `LECTERN_EVAL=1`) belongs to the old app.
 
-Results so far are in `history/engine-report.md`. In short: the 11 decks become about 550 to 600 cards
+Results so far are in [RFD 14](rfd/0014-the-quality-bar.md). In short: the 11 decks become about 550 to 600 cards
 for under 20 cents on `gpt-6-luna` with no hard-limit violation; with the `concept` preset 30
 percent of the reference notes have a card on the same fact (strict judge, 2026-11-15). Of the
 misses, a third are stated in the slide text, a quarter are only in a picture, and nearly half
 are not on the slides at all.
 
-## 15. Where the docs lag the code
+## 15. Known gaps
 
-- `history/engine-plan.md` (milestone 1 text) describes a `CheckPort`, an Anthropic adapter, `prompts.ts`,
-  one JSON file per card, ten roles and a `ModelPort.complete({ task, system, prompt, schema })`.
-  The code has `DecisionsPort`, only the OpenAI adapters, prompts in `mapper.ts` and `writer.ts`,
-  one `cards.yaml` per lecture, twelve roles, and a request with `context`, `images`, `effort`.
-  Its "changed by" table is closer but still lists "a no sends the card back for a rewrite" as
-  fact: in code that only happens for a calibrated check, and only the organisation check is.
-- `history/engine-plan.md` lists two validator rules that are not validators: "at least one answer term
-  found on the cited slide" (it is the slide check, rule then decision, flag only) and "no
-  duplicate front within the course" (it is `findClashes`, step 17).
-- `engine-decisions.md` states 400 questions per decisions request; the adapter sends 200,
-  following the SDK's documented 1 to 200 (the report says so).
-- `engine-decisions.md` decision 7 says "stop cleanly"; the code fails the whole build and saves
-  nothing, after the call that passed the cap.
-- `engine-decisions.md` decision 11 says recurring concepts get more cards; the code gives
-  exactly one more, the first fact, whatever the goal.
-- `engine-decisions.md` step 2 says non-content slides are left out; uncalibrated, the label is
-  only the reason (the report states this).
-- The hand-off (now `status.md`) said 158 engine tests; the count is 225 (plus 2 skipped). Engine source is about
-  5,300 lines now against "3,800" in the report.
-- `brief.md` lists tags for exam part and exam weight, a card role "case anchor", a Lectern deck
-  preset, and "Lectern only touches its own Anki preset". The code writes tags for lecture, role
-  and own; it has no exam-part or weight tags (no past exams yet) and touches no deck options.
-- `history/engine-report.md` says the Slide field "names a PNG that nothing saves". Still true for the
-  course folder, but `send` now renders and stores the pictures in Anki's media folder.
-- `engine-decisions.md` expects the card file to be readable like the study kits; it holds field
-  HTML (the report raises this as open).
+Where the code falls short of a decision, the gap is an issue, not a note here.
 
-## 16. Surprising, inconsistent or unverified
+| Gap | Issue |
+| --- | ----- |
+| No fact kind plans `cloze`, so only a student's own card has that role | [#131](https://github.com/stegra05/lectern/issues/131) |
+| The profile is stored but never shown; only the `concept` preset exists | [#132](https://github.com/stegra05/lectern/issues/132), [#111](https://github.com/stegra05/lectern/issues/111) |
+| Five of six checks are uncalibrated and only flag; the concept check still gets the whole lecture | [#105](https://github.com/stegra05/lectern/issues/105) |
+| The cap can be passed by the last call and up to four in flight; a stopped run keeps nothing | [#109](https://github.com/stegra05/lectern/issues/109) |
+| A recurring concept gets exactly one more card, whatever the goal | [#133](https://github.com/stegra05/lectern/issues/133) |
+| The app's send, edit and remove have only met the in-memory Anki | [#112](https://github.com/stegra05/lectern/issues/112) |
 
-- `cloze` is never planned. No fact kind maps to it in either preset, so only a student's own
-  card can have that role; the `cloze` example in the `concept` preset is never shown to a model.
-  `name-two` is reached only from a `list` fact with exactly 2 items.
-- The profile is decided and stored but the app never shows or lets the student change it, and
-  only the `concept` preset exists. A formula or programming course is still written with the
-  placeholder.
-- Five of the six checks are unmeasured and only flag. Only `organisation` (0.2) acts. So at
-  present the pipeline drops cards for: failing hard limits after two repairs, organisation,
-  identical questions, and nothing else.
-- The concept-belongs check still gets the whole lecture, although the report's measurement says
-  the concept's own slides separate better (99 against 95 percent).
-- The cap can be exceeded by the last call and up to four in-flight calls, and a stopped run
-  loses all its paid work.
-- `survey` (also used by `estimate`) renders low-text slides to PNG locally, so an estimate is
-  free but not instant.
-- Unverified: the OpenAI prices in `openai.ts` against a bill (the report says so); whether
-  `gpt-6-luna` accepts an effort lower than `low`; the quality of cards in Anki on a phone; the
-  app's own send, edit and remove against a real Anki (the engine's ran against one on 2026-11-15,
-  the app's only against the in-memory Anki).
-- Uncommitted work present while this was written: `costEur` in `api.ts` and `cost.ts`, plus
-  related edits in `BottomBar.tsx`, `dev/fixture.ts`, `e2e/shots.spec.ts` and two engine tests.
+Also true and easy to miss: `survey`, which `estimate` uses, renders low-text slides to PNG
+locally, so an estimate is free but not instant. Unverified: the OpenAI prices in `openai.ts`
+against a bill, and whether `gpt-6-luna` accepts an effort below `low` ([RFD 6](rfd/0006-money.md)).

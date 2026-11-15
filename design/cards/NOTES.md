@@ -1,26 +1,26 @@
-# Cards: one system, two skins
+# Cards: one system, six designs
 
 ## The idea
 
-One field contract and one set of four templates; a skin is a stylesheet. Every card shows the
+One field contract and one set of four templates; a design is a stylesheet. Every card shows the
 shape of its answer on the front and fills the same shape on the back, names that shape in one
-cue line, and carries a print of its source slide at the foot of the back. Structure draws the
-answer space as dashed slots on dot grid paper in the survey sheet colours; Lamp draws it as the
-blank ruling of an index card and writes the answer on the same lines.
+cue line, and carries a print of its source slide at the foot of the back. Which designs exist
+and why: [RFD 10](../../docs/rfd/0010-card-designs.md). The tables below compare the first two,
+Structure and Lamp, which proved that one set of templates holds for very different looks.
 
 ## Files
 
 - `packages/engine/anki/front.html`, `back.html`, `cloze-front.html`, `cloze-back.html`: the shared templates.
-- `packages/engine/anki/style-structure.css` with `_StructureSans.woff2` (Atkinson Hyperlegible Next) and
-  `_StructureSerif.woff2` (Young Serif, Latin). Both OFL.
-- `packages/engine/anki/style-lamp.css` with `_LampSerif.woff2` (Source Serif 4) and `_LampMono.woff2`
-  (IBM Plex Mono). Both OFL. The four file names do not collide in `collection.media`.
+- `packages/engine/anki/style-<design>.css`: one stylesheet per design. Structure bundles
+  Atkinson Hyperlegible Next and Young Serif, Lamp bundles Source Serif 4 and IBM Plex Mono (all
+  OFL, file names that do not collide in `collection.media`); the others use system fonts.
 - `FIELDS.md`: the field contract, the typing rule, the diagram rule.
 - `gallery.html`: 17 cards (the twelve samples, typed variants 2t, 10t, 12t, and fallbacks 3x and
-  4x where Back is a sentence instead of a list). Switches for skin, light or night, 360 or 600,
+  4x where Back is a sentence instead of a list). Switches for design, light or night, 360 or 600,
   slide open or closed. URL parameters: `?cards=2t,10t&skin=both&mode=both&w=360&slide=open`.
 - `build.py` + `gallery.src.html`: rebuild with `uv run --with anki python build.py`.
-- `shots/`: the screenshots used to check every card in both skins and both modes.
+- `palette.py`: writes the lecture palette into `style-colours.css`.
+- `shots/`: the screenshots used to check every card in Structure and Lamp, both modes.
 
 ## How the gallery stays truthful
 
@@ -36,17 +36,6 @@ That last part found a bug in both explorations: the reviewer sets `body.nightMo
 background-color: var(--canvas) }`, which outranks `.card { background-color }`. In real Anki
 desktop both earlier night modes would have shown Anki's grey canvas instead of their own ground.
 Both skins now set the ground on `.card, .card.nightMode`.
-
-## Did one set of templates hold?
-
-Yes, fully. No template differs between the skins. The markup carries two things that only one
-skin needs, both harmless to the other:
-
-- `.lc-tab` sits before `.lc-sheet`, because Lamp draws the weight as a divider tab on top of the
-  card. Structure sets `.lc-sheet { display: contents }` and lays the tab out as a chip on the
-  topic line, dropping below it when both do not fit.
-- The cue sits right above the answer space. Lamp first had it in the card head; it now sits
-  above the ruled lines, and on the back it turns into Lamp's short amber rule.
 
 ## How role adaptation works (no JavaScript)
 
@@ -96,18 +85,6 @@ so the result does not depend on colour alone. The comparison replaces the answe
 hidden only when `code#typeans` exists, so where no box appears (AnkiWeb, the preview) the card
 still shows its answer.
 
-## Fixed from the explorations
-
-- **Diagram labels**: a drawing rule (viewBox at most 300 units, labels at least 11 units) plus a
-  figure that bleeds to about 330 px. Measured in the screenshots: about 12 px at 360 and 16 to 17 px at 600.
-- **Literal `[...]`**: both skins set the hidden cloze to `color: transparent` inside a sized slot.
-  Hints are banned in the contract for that reason.
-- **Long inline formulas**: the contract moves any inline formula over 30 TeX characters to
-  display maths (card 8's Extra), and display maths in Extra is set at 92 %. The sideways scroll
-  stays only as a safety net on display maths.
-- **Two-item roles**: the `:has()` baseline above.
-- **Night ground**: the `body.nightMode` specificity bug above.
-
 ## Contrast (WCAG 2.x, computed from the tokens)
 
 | | Structure light | Structure night | Lamp light | Lamp night |
@@ -141,6 +118,9 @@ Blank ruling, dot grid and dashed frames are decorative and below 3:1 by design.
   Diagram field in the editor may see raw markup.
 
 ## Not verified
+
+To be checked in real clients: [#134](https://github.com/stegra05/lectern/issues/134).
+
 
 - **Real clients.** Everything was rendered by Anki's own template engine, but displayed in
   headless Chrome, not in Anki desktop (Qt WebEngine), AnkiDroid, AnkiMobile or AnkiWeb.
@@ -183,10 +163,7 @@ Blank ruling, dot grid and dashed frames are decorative and below 3:1 by design.
 - Ran with `anki` 26.09.4: `{{type:Typed}}` inside `{{#Typed}}` renders, an empty Typed field
   renders nothing, and the comparison output shown in the gallery is the backend's own.
 
-## Open questions
+## Open
 
-- Should typing be offered to the student as a course setting (all eligible cards, none), with
-  code still deciding eligibility? The contract supports both.
-- Is `core` worth printing at all before the past-exams expansion, when every card is core?
-- Should Structure's topic use Young Serif in a card that is otherwise all sans? It ties the card
-  to the map's region names, and it is the first thing to cut if it reads as decoration.
+- Typing as a course setting, and the strict comparison: [#128](https://github.com/stegra05/lectern/issues/128).
+- The `core` label and Structure's serif topic: [#129](https://github.com/stegra05/lectern/issues/129).

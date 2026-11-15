@@ -40,7 +40,8 @@ Review and merge from the bottom of the stack up.
 
 Commit messages: `type(scope): what changed`, with types `feat`, `fix`, `docs`, `build`, `ci`,
 `chore`, `test`, `refactor` and scopes `engine`, `app`, `design`. A pull request that changes
-what is true in `docs/status.md` updates it.
+what is true in `docs/status.md` updates it, and one that changes a decision updates its RFD
+(`docs/README.md` says how to write one).
 
 ## Writing
 
