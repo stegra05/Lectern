@@ -31,7 +31,7 @@ PDFs go into `<course folder>/slides/`. A build needs `OPENAI_API_KEY`.
 
 | Run | Result |
 |---|---|
-| Engine tests | 222 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 9 files |
+| Engine tests | 223 passed, 2 skipped (the live OpenAI tests, which need `LECTERN_LIVE=1`), 9 files |
 | Live OpenAI tests, run once with a key | 2 passed |
 | Typecheck, lint, format | clean |
 | Root `pnpm test` (the v2 suite) | 406 passed, 12 skipped, unchanged |
@@ -55,7 +55,7 @@ All on `gpt-6-luna` for writing and for decisions, goal top grade, 2026-11-14.
 The two full runs happened at once by a coordination miss between the two sessions: each had
 Steffen's yes, and the messages crossed. Total spent on OpenAI on 2026-11-14, all sessions together:
 about 1.10 dollars of the 50 (this session about 90 cents, the quality session about 18 cents
-for grading 1,150 cards and for measuring its checks). Both results are kept. The reference deck has 636 notes for the same decks.
+for grading 1,150 cards and for measuring its checks). On 2026-11-15: 1.5 cents more. Both results are kept. The reference deck has 636 notes for the same decks.
 
 My full run in numbers (course folder under the shared notes folder, `courses/entrepreneurship`):
 
@@ -129,9 +129,27 @@ is its account, not re-measured by me:
 - **Leans on the slides.** A word rule for questions that only make sense with the slides at
   hand. A decision check for the same thing was measured against it and lost.
 - **A finding about the decision model.** Asked about one card while a whole lecture was the
-  input, it said yes to nearly everything. So the card checks give it the card alone. My slide
-  check ("slide N supports this card") and the concept check still pass the whole lecture as
-  input and have not been re-measured: treat their flags as weak until they are.
+  input, it said yes to nearly everything. So the card checks give it the card alone.
+
+**My two checks, re-measured on 2026-11-15** (approved by Steffen, 1.5 cents, on the concept
+draft run). Positives and negatives were built, not hand-labelled: a card with the slide it was
+written from against the same card with a far-away slide of the same lecture, and a concept of
+a lecture against a concept only another lecture has. These are easy negatives, so the numbers
+show whether a check can tell at all, not how it does on subtle cases.
+
+| Check | Input | Yes to the right case | Yes to the wrong case | Right at 0.5 |
+|---|---|---|---|---|
+| Slide supports the card | the whole lecture | 65 of 66 | 50 of 66 | 61% |
+| Slide supports the card | the slide alone | 65 of 66 | 12 of 66 | 90% |
+| Concept belongs to the lecture | the whole lecture | 54 of 55 | 5 of 55 | 95% |
+| Concept belongs to the lecture | the concept's slides alone | 54 of 55 | 0 of 55 | 99% |
+
+The slide check was close to useless as built: with the whole lecture as input it accepted
+three of four wrong slides. It now gets the slide alone, one request per slide, and goes from
+61 to 90 percent on this set (96 percent at a threshold of 0.65). The concept check already
+worked with the lecture as input and stays as it is. Both remain uncalibrated: they flag and
+never drop until a threshold is set on labelled data. The raw answers are in the shared notes
+folder, `courses/check-measurement-2026-11-15.json`.
 
 The cost estimate now counts one small decision request per card for the organisation check.
 
@@ -275,15 +293,12 @@ my guess, its examples are seven of the sample cards from `design/v3/samples.md`
 five lines. It exists so the pipeline runs. It is not one of the four presets Steffen will
 approve, and no result from it should be read as the quality of the method.
 
-A draft of the preset for concept courses now sits beside it as `concept-draft`, written from
-the Entrepreneurship study kit and waiting for approval: `engine-profile-concept.md`. A build
-uses it only when the command names it. In its comparison run it removed the course
-administration from the cards (71 such cards down to none) and brought "why" cards (11%), but
-definitions still restate their question and near-identical cards remain. Details and a table
-against the reference deck are in that document. The roles `why`,
-`name-two` and `cloze` validate but the placeholder never plans them.
-
-Nothing is calibrated. Every check that goes through the decision model only flags.
+The preset for concept courses, `concept`, was written from the Entrepreneurship study kit and
+accepted by Steffen on 2026-11-15 as the working preset: every course read as a concept course
+is built with it. In its comparison run it removed the course administration from the cards (71
+such cards down to none) and brought "why" cards (11%); definitions that restate their question
+and near-identical cards remained, and code checks for the first followed. Details and a table
+against the reference deck: `engine-profile-concept.md`.
 
 ## Where a decision met something already built
 
@@ -323,8 +338,8 @@ diagram card. The interface session should know these exist.
 
 1. Steffen's verdict on the concept draft: use it as the working preset for concept courses,
    or change it first. It and the organisation check remove the same defect from two ends.
-2. Re-measure the slide check and the concept check with the slide or the concept as the only
-   input, as the card checks now do.
+2. Calibrate the slide check on hand-labelled cards. It now tells a right slide from a wrong
+   one; whether it catches an answer that is only subtly off its slide is unmeasured.
 3. Checkpoints: a run saves nothing until the end, and one died on a dropped connection. The
    adapter now retries harder; saving per lecture would end the risk.
 4. Still open in code from the comparison run: merging near-identical facts before cards are

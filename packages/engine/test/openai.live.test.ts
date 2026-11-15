@@ -38,7 +38,7 @@ describe.skipIf(!process.env.LECTERN_LIVE)('OpenAI adapters, live', () => {
         {
           type: 'predicate',
           statement:
-            'Slide 1 supports this flashcard. Question: What is risk? Answer: A calculable outcome.',
+            'This slide supports this flashcard. Question: What is risk? Answer: A calculable outcome.',
         },
         {
           type: 'choice',

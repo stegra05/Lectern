@@ -65,6 +65,16 @@ export function cardInput(question: string, answer: string): string {
   return `A flashcard written from the slides of a university course.\nQuestion: ${question}\nAnswer: ${answer}`
 }
 
+/**
+ * One slide as the whole input of the slide check. Measured on 2026-11-15 on 66 cards, each
+ * with its own slide and with a far-away slide of the same lecture: with the whole lecture as
+ * input the model said yes to 50 of the 66 wrong slides, with the slide alone to 12, and it
+ * still said yes to 65 of the 66 right ones.
+ */
+export function slideInput(lines: string[]): string {
+  return `One slide of a university lecture:\n${lines.join('\n')}`
+}
+
 export const ask = {
   profile: (): Question => ({
     type: 'choice',
@@ -96,9 +106,9 @@ export const ask = {
     ask: `What kind of knowledge is this fact: "${fact}"`,
     choices: FACT_KINDS,
   }),
-  supported: (slide: number, question: string, answer: string): Question => ({
+  supported: (question: string, answer: string): Question => ({
     type: 'predicate',
-    statement: `Slide ${slide} supports this flashcard. Question: ${question} Answer: ${answer}`,
+    statement: `This slide supports this flashcard. Question: ${question} Answer: ${answer}`,
   }),
   organisation: (): Question => ({
     type: 'predicate',

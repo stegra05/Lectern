@@ -549,15 +549,20 @@ describe('building a course of two lectures, offline', () => {
       expect(doubted.since).toBeUndefined()
     })
 
-    it('sends a card to the decision model when the free slide check is not sure, and flags a no', async () => {
-      const asked = decider.requests
-        .flatMap((r) => r.questions)
-        .filter((q) => q.type === 'predicate' && q.statement.startsWith('Slide'))
-      expect(asked).toEqual([
+    it('sends a card to the decision model with its slide as the only input when the free slide check is not sure, and flags a no', async () => {
+      const checks = decider.requests.filter((r) =>
+        r.context.startsWith('One slide of a university lecture:'),
+      )
+      expect(checks).toHaveLength(1)
+      expect(checks[0]!.context).toBe(
+        'One slide of a university lecture:\nThe build measure learn loop\nBuild a minimum viable product\nMeasure how customers react\nLearn, then pivot or persevere\nRepeat the loop quickly and cheaply',
+      )
+      expect(checks[0]!.images).toEqual([])
+      expect(checks[0]!.questions).toEqual([
         {
           type: 'predicate',
           statement:
-            'Slide 2 supports this flashcard. Question: Lean startup: how does it lower risk? Answer: By trying ideas out before spending much.',
+            'This slide supports this flashcard. Question: Lean startup: how does it lower risk? Answer: By trying ideas out before spending much.',
         },
       ])
       expect((await card('03', '03-entrepreneurial-risk-definition-1')).flags).toEqual([

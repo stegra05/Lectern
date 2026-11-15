@@ -48,6 +48,7 @@ import {
 import {
   ask,
   cardInput,
+  slideInput,
   chosen,
   FACT_KINDS,
   probability,
@@ -488,21 +489,27 @@ export async function build(
           organisational.add(item)
         }
       })
-      for (const lecture of lectures) {
-        const unsure = passing.filter((item) => {
-          if (item.lecture !== lecture || item.problems.length > 0) return false
-          const slide = item.fact.slide
-          const seen = lecture.images.some((image) => image.slide === slide)
-          return seen || !groundedByRule(draftOf(item), lecture.text[slide - 1]!.join('\n'))
-        })
-        const questions = unsure.map((item) => {
-          const { question, answer } = questionAndAnswer(item.card!)
-          return ask.supported(item.fact.slide, question, answer)
-        })
+      // The slide check. A card the free rule cannot settle goes to the decision model, with
+      // its slide as the only input: all cards of one slide share one request.
+      const bySlide = new Map<string, Item[]>()
+      for (const item of passing) {
+        if (item.problems.length > 0) continue
+        const slide = item.fact.slide
+        const seen = item.lecture.images.some((image) => image.slide === slide)
+        if (!seen && groundedByRule(draftOf(item), item.lecture.text[slide - 1]!.join('\n')))
+          continue
+        const key = `${item.lecture.number}/${slide}`
+        bySlide.set(key, [...(bySlide.get(key) ?? []), item])
+      }
+      await pool([...bySlide.values()], async (unsure) => {
+        const { lecture, fact } = unsure[0]!
         const answers = await decide({
-          context: lecture.context,
-          images: lecture.images,
-          questions,
+          context: slideInput(lecture.text[fact.slide - 1]!),
+          images: lecture.images.filter((image) => image.slide === fact.slide),
+          questions: unsure.map((item) => {
+            const { question, answer } = questionAndAnswer(item.card!)
+            return ask.supported(question, answer)
+          }),
         })
         unsure.forEach((item, i) => {
           const p = probability(answers[i])
@@ -515,7 +522,7 @@ export async function build(
             item.flags.push('the answer may not be on its slide')
           }
         })
-      }
+      })
       for (const item of passing) {
         if (organisational.has(item)) dropped.push(item)
         else (item.problems.length > 0 ? failing : accepted).push(item)

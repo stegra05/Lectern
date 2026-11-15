@@ -31,10 +31,13 @@ const TOKENS = {
   reworkShare: 0.25,
   /** Calls per lecture that read the lecture at full price: the cache is kept per card type. */
   uncachedCalls: 10,
-  /** How often the whole lecture goes to the decision model: slide kinds, map checks, slide check. */
-  decisionPasses: 3,
-  /** Every card that passes the limits is its own small decision request: is it about the course's organisation. Not yet measured with one question; two questions took about 400. */
-  cardCheck: 250,
+  /** How often the whole lecture goes to the decision model: slide kinds, map checks. */
+  decisionPasses: 2,
+  /**
+   * Decision input per card: the organisation check on every card, and the slide check on the
+   * cards the free rule cannot settle, each with one slide as input. Rough, not yet measured.
+   */
+  cardCheck: 350,
 }
 
 export interface Prices {
