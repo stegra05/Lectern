@@ -1,6 +1,6 @@
 # Lectern v3: report on the base prototype
 
-Written 2026-11-14. Goal: `GOAL.md`. Branch `v3`, local commits only, nothing pushed, no pull
+Written 2026-11-14. Goal: `prototype-goal.md`. Branch `v3`, local commits only, nothing pushed, no pull
 request. Verified at commit `99ff4ab` in a clean checkout.
 
 ## Verdict

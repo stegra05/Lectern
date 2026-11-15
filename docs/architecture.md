@@ -393,7 +393,7 @@ euros at a fixed 0.9 per dollar, rounded up to 5 cents up to 50 cents, 10 cents 
 50 cents above (`shownEuros`). The app's bottom bar (also uncommitted) shows "About N cents" from
 it. In the committed state the bar shows dollars.
 
-**Policy for paid runs** (`HANDOFF.md`, `engine-decisions.md`): only the engine session starts
+**Policy for paid runs** (`status.md`, `engine-decisions.md`): only the engine session starts
 them, on OpenAI only, within a 50 dollar budget agreed with Steffen. Reference cost: 11 decks, 356
 slides, about 17 to 19 cents on `gpt-6-luna` (engine report).
 
@@ -692,7 +692,7 @@ the exam asked, and by subdeck.
 - **Live adapter test**: `LECTERN_LIVE=1 OPENAI_API_KEY=... pnpm --filter @lectern/engine test`.
 - **v2's harness** `src/engine/models.eval.test.ts` (env `LECTERN_EVAL=1`) belongs to the old app.
 
-Results so far are in `engine-report.md`. In short: the 11 decks become about 550 to 600 cards
+Results so far are in `history/engine-report.md`. In short: the 11 decks become about 550 to 600 cards
 for under 20 cents on `gpt-6-luna` with no hard-limit violation; with the `concept` preset 30
 percent of the reference notes have a card on the same fact (strict judge, 2026-11-15). Of the
 misses, a third are stated in the slide text, a quarter are only in a picture, and nearly half
@@ -700,13 +700,13 @@ are not on the slides at all.
 
 ## 15. Where the docs lag the code
 
-- `engine-plan.md` (milestone 1 text) describes a `CheckPort`, an Anthropic adapter, `prompts.ts`,
+- `history/engine-plan.md` (milestone 1 text) describes a `CheckPort`, an Anthropic adapter, `prompts.ts`,
   one JSON file per card, ten roles and a `ModelPort.complete({ task, system, prompt, schema })`.
   The code has `DecisionsPort`, only the OpenAI adapters, prompts in `mapper.ts` and `writer.ts`,
   one `cards.yaml` per lecture, twelve roles, and a request with `context`, `images`, `effort`.
   Its "changed by" table is closer but still lists "a no sends the card back for a rewrite" as
   fact: in code that only happens for a calibrated check, and only the organisation check is.
-- `engine-plan.md` lists two validator rules that are not validators: "at least one answer term
+- `history/engine-plan.md` lists two validator rules that are not validators: "at least one answer term
   found on the cited slide" (it is the slide check, rule then decision, flag only) and "no
   duplicate front within the course" (it is `findClashes`, step 17).
 - `engine-decisions.md` states 400 questions per decisions request; the adapter sends 200,
@@ -717,12 +717,12 @@ are not on the slides at all.
   exactly one more, the first fact, whatever the goal.
 - `engine-decisions.md` step 2 says non-content slides are left out; uncalibrated, the label is
   only the reason (the report states this).
-- `HANDOFF.md` says 158 engine tests; the count is 225 (plus 2 skipped). Engine source is about
+- The hand-off (now `status.md`) said 158 engine tests; the count is 225 (plus 2 skipped). Engine source is about
   5,300 lines now against "3,800" in the report.
 - `brief.md` lists tags for exam part and exam weight, a card role "case anchor", a Lectern deck
   preset, and "Lectern only touches its own Anki preset". The code writes tags for lecture, role
   and own; it has no exam-part or weight tags (no past exams yet) and touches no deck options.
-- `engine-report.md` says the Slide field "names a PNG that nothing saves". Still true for the
+- `history/engine-report.md` says the Slide field "names a PNG that nothing saves". Still true for the
   course folder, but `send` now renders and stores the pictures in Anki's media folder.
 - `engine-decisions.md` expects the card file to be readable like the study kits; it holds field
   HTML (the report raises this as open).

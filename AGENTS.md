@@ -12,8 +12,9 @@ long-lived `v3` branch; `main` still holds the shipping v2 app and merges with v
 | `docs/` | product brief, architecture, engine decisions, reports |
 | `design/` | design kit (`KIT.md`, binding), decisions (`DIRECTION.md`), card system (`cards/`), canvas copies |
 
-Read before changing behaviour: `docs/brief.md`, then `docs/engine-decisions.md` for engine
-work or `design/KIT.md` for interface work.
+Read before changing behaviour: `docs/status.md` and `docs/brief.md`, then
+`docs/engine-decisions.md` for engine work or `design/KIT.md` for interface work. A change that
+alters what `docs/status.md` says updates it in the same PR.
 
 ## Commands
 
