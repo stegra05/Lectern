@@ -1,0 +1,28 @@
+{
+  "name": "@lectern/engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/api.ts",
+    "./adapters/*": "./src/adapters/*.ts"
+  },
+  "scripts": {
+    "cli": "node src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.2",
+    "openai": "^7.38.0",
+    "pdfjs-dist": "^6.1.200",
+    "yaml": "^2.9.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "pdf-lib": "^1.17.1",
+    "typescript": "~5.8.3",
+    "vitest": "^3.2.0"
+  }
+}
