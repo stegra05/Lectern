@@ -1,0 +1,116 @@
+/* The form on one card, in the side panel where its lecture's cards were. */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.editor-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.editor-words {
+  font-weight: 400;
+  color: var(--label-2);
+}
+.editor-words.is-over {
+  color: var(--problem);
+  font-weight: 600;
+}
+.editor-text {
+  height: auto;
+  padding: 6px 8px;
+  line-height: 1.38;
+  resize: vertical;
+  font: inherit;
+}
+.editor-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre;
+}
+select.field {
+  appearance: none;
+  padding-right: 24px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--label-2) 50%),
+    linear-gradient(135deg, var(--label-2) 50%, transparent 50%);
+  background-position:
+    calc(100% - 13px) 12px,
+    calc(100% - 9px) 12px;
+  background-size:
+    4px 4px,
+    4px 4px;
+  background-repeat: no-repeat;
+}
+.editor-kind {
+  display: flex;
+}
+.editor-kind button {
+  flex: 1;
+}
+.editor-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 6px;
+}
+.editor-part {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.editor-add {
+  align-self: flex-start;
+  margin-left: -8px;
+  color: var(--accent-text);
+}
+.editor-problem {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--problem);
+}
+.editor-note {
+  line-height: 1.38;
+}
+.editor-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 0.5px solid var(--separator);
+}
+.editor-foot .btn {
+  height: 28px;
+}
+.editor-cancel {
+  margin-left: auto;
+}
+.editor-remove {
+  color: var(--problem);
+}
+.editor-ask {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
