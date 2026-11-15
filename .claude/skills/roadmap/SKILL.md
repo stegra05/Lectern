@@ -17,7 +17,11 @@ B=.claude/skills/roadmap/board.sh
 $B view "Agent queue"          # what an agent may start now, P0 first
 $B show 130                    # one issue's fields, labels and blockers
 $B set 130 Status "In progress"
+$B clear 193 Priority          # empty a board field
 ```
+
+`set` and `clear` only touch issues already on the board, and every value is checked against the
+board before anything is written.
 
 ## What an issue carries
 
@@ -47,7 +51,7 @@ his money. **Needs me** is that list.
 | Backlog | automatically, when an issue is opened (every open Lectern issue without `v2` joins the board) |
 | Next | Steffen, when he orders it |
 | In progress | you, when you start: `$B set <n> Status "In progress"` |
-| In review | the PR hook, when `gh pr create` names the issue. After `gh stack submit`, set it yourself |
+| In review | the PR hook, after `gh pr create` or `gh stack submit`, for each issue a PR closes |
 | Done | automatically, when the PR that closes it merges into v3 |
 
 ## Filing an issue
@@ -71,10 +75,15 @@ Moving an issue to another release, or changing what a release holds, is Steffen
 ## Pull requests
 
 A PR names its issue in the body with `Closes #N` (or `Fixes`, `Resolves`); one with no issue says
-`No issue: <why>`. A hook blocks `gh pr create` without either. GitHub itself only closes issues
-for PRs into the default branch, which is `main` (v2), so the `close-named-issues` workflow
-closes them for PRs merged into `v3`, and the board then moves them to Done. In a stack, each
-layer's PR names the issue it finishes.
+`No issue: <why>`, with that exact spelling. A hook blocks `gh pr create` without either. GitHub
+itself only closes issues for PRs into the default branch, which is `main` (v2), so the
+`close-named-issues` workflow closes them for PRs merged into `v3`, and the board then moves them
+to Done.
+
+In a stack, each layer's PR names the issue it finishes. `gh stack submit --auto` takes a
+single-commit layer's PR body from its commit body, so write `Closes #N` there. After a submit,
+the hook moves the named issues to In review and lists the stack PRs that name none; fix those
+with `gh pr edit <pr> --body-file <file>`.
 
 ## Views
 
