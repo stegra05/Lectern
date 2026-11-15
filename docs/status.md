@@ -1,7 +1,7 @@
 # Lectern v3: status
 
 What is true today. Update it in the pull request that changes it. What comes next lives on the
-roadmap board, not here. Last updated 2026-11-15.
+[roadmap board](https://github.com/users/stegra05/projects/3), not here. Last updated 2026-11-15.
 
 ## Design
 

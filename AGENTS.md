@@ -16,6 +16,10 @@ Read before changing behaviour: `docs/status.md` and `docs/brief.md`, then
 `docs/engine-decisions.md` for engine work or `design/KIT.md` for interface work. A change that
 alters what `docs/status.md` says updates it in the same PR.
 
+What comes next is on the roadmap board (`gh project item-list 3 --owner stegra05`): one issue
+per piece of work, each with "Done when" criteria, areas as labels, releases as milestones. A PR
+names its issue with "Closes #N".
+
 ## Commands
 
 ```sh

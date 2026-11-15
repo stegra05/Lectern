@@ -7,7 +7,8 @@ atomic cards with subdecks and tags, shows each card next to its slide, and send
 Anki. The method lives in tooling and presets; the model only fills slots.
 
 This is the long-lived `v3` branch. The shipping v2 app lives on `main` until v3.0 replaces it.
-Where v3 stands today: [`docs/status.md`](docs/status.md).
+Where v3 stands today: [`docs/status.md`](docs/status.md). What comes next: the
+[roadmap board](https://github.com/users/stegra05/projects/3).
 
 ## Quick start
 
