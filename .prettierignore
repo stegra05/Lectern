@@ -1,0 +1,3 @@
+packages/*/out
+packages/*/test-results
+pnpm-lock.yaml

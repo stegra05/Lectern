@@ -5,15 +5,15 @@ The Lectern v3 desktop app: an Electron shell around `@lectern/engine`. Design: 
 
 ## Commands
 
-| What | Command |
-|---|---|
-| Start the app | `pnpm --filter @lectern/app start` |
+| What                                                                                                  | Command                                           |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Start the app                                                                                         | `pnpm --filter @lectern/app start`                |
 | Start it on the offline models and an Anki in memory (no key, no cost, nothing reaches the real Anki) | `LECTERN_FAKE=1 pnpm --filter @lectern/app start` |
-| Develop with reload | `pnpm --filter @lectern/app dev` |
-| Unit tests | `pnpm --filter @lectern/app test` |
-| End-to-end test (builds first, offline models) | `pnpm --filter @lectern/app test:e2e` |
-| Pictures of every base screen into `docs/shots/` | `pnpm --filter @lectern/app shots` |
-| Typecheck | `pnpm --filter @lectern/app typecheck` |
+| Develop with reload                                                                                   | `pnpm --filter @lectern/app dev`                  |
+| Unit tests                                                                                            | `pnpm --filter @lectern/app test`                 |
+| End-to-end test (builds first, offline models)                                                        | `pnpm --filter @lectern/app test:e2e`             |
+| Pictures of every base screen into `docs/shots/`                                                      | `pnpm --filter @lectern/app shots`                |
+| Typecheck                                                                                             | `pnpm --filter @lectern/app typecheck`            |
 
 Environment: `LECTERN_FAKE=1` (offline models), `LECTERN_FAKE_DELAY=<ms>` (each offline call
 takes that long), `LECTERN_COURSES=<dir>` (where courses live), `LECTERN_DATA=<dir>` (settings
