@@ -1,0 +1,421 @@
+/* Settings: a sidebar of sections and the pane of the chosen one (V2Settings on the canvas). */
+
+.set {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The sidebar runs up under the title bar, so the bar here is only a drag region and a title. */
+.set .titlebar {
+  background: transparent;
+  border-bottom: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.set-window-title {
+  display: block;
+  line-height: 24px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------- Sidebar ---------- */
+
+.set-nav {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 224px;
+  padding: 50px 10px 16px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--separator);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.set-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.set-back span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-back:hover {
+  background: var(--control);
+}
+.set-nav-title {
+  margin: 0 10px;
+  line-height: 1.15;
+}
+.set-sections {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.set-section {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  background: transparent;
+}
+.set-section:hover {
+  background: var(--control);
+}
+.set-section[aria-current='page'] {
+  background: var(--selection);
+}
+.set-section-icon {
+  color: var(--label-2);
+}
+.set-section[aria-current='page'] .set-section-icon {
+  color: var(--accent-text);
+}
+.set-section-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.set-section-text b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.set-section-text span {
+  font-size: 12px;
+  color: var(--label-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-nav-foot {
+  margin: auto 10px 0;
+  font-size: 11px;
+  color: var(--label-2);
+}
+
+/* ---------- Pane ---------- */
+
+.set-main {
+  position: absolute;
+  left: 224px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  padding: 52px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+.set-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px;
+}
+.set-head .t-title {
+  line-height: 1.2;
+}
+.set-group {
+  background: var(--group);
+  border-radius: var(--r-group);
+  box-shadow:
+    0 0 0 0.5px var(--hairline),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* ---------- Card design ---------- */
+
+.set-designs {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+.set-design-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+}
+.set-design-about {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.set-design-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.set-design-title b {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.set-design-title span {
+  font-size: 12px;
+  color: var(--label-2);
+}
+.set-design-head > :last-child {
+  margin-left: auto;
+}
+.set-in-use {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-control);
+  background: var(--positive-fill);
+  color: var(--positive);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The chosen design in the middle; its neighbours peek in at the edges. */
+.set-carousel {
+  position: relative;
+  flex: none;
+  /* A card side, its label above it, and room for the shadow. */
+  height: calc(var(--card-h) + 23px);
+  overflow: hidden;
+}
+.set-stage {
+  position: absolute;
+  inset: 0;
+}
+.set-stage[data-direction='next'] {
+  animation: set-from-right 240ms ease-out;
+}
+.set-stage[data-direction='previous'] {
+  animation: set-from-left 240ms ease-out;
+}
+@keyframes set-from-right {
+  from {
+    opacity: 0.3;
+    transform: translateX(28px);
+  }
+}
+@keyframes set-from-left {
+  from {
+    opacity: 0.3;
+    transform: translateX(-28px);
+  }
+}
+.set-pair {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+}
+.set-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.set-side-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--label-2);
+  letter-spacing: 0.01em;
+}
+.set-peek {
+  position: absolute;
+  top: 44px;
+  opacity: 0.6;
+}
+/* Half the pair is one card and half its gap of 16. 22 is the gap from the pair to a peek. */
+.set-peek-previous {
+  left: calc(50% - var(--card-w) - 8px - 22px - var(--card-w));
+}
+.set-peek-next {
+  left: calc(50% + var(--card-w) + 8px + 22px);
+}
+
+.set-design-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 28px;
+  padding: 0 20px;
+}
+.set-mode button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 11px;
+}
+.set-mode button[aria-pressed='true'] {
+  font-weight: 600;
+}
+.set-nav-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.set-arrow {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--group);
+  box-shadow: var(--shadow-control);
+}
+.set-arrow:hover {
+  filter: brightness(0.96);
+}
+.set-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.set-dots button {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.set-dots button[aria-current='true'] {
+  width: 22px;
+}
+.set-dots i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--neutral-mark);
+  opacity: 0.55;
+  transition: width 200ms ease-out;
+}
+.set-dots button:hover i {
+  opacity: 0.85;
+}
+.set-dots button[aria-current='true'] i {
+  width: 18px;
+  background: var(--label);
+  opacity: 1;
+}
+.set-which {
+  margin-left: auto;
+  /* Ends clear of the arrows and dots in the middle. */
+  max-width: calc(50% - 140px);
+  font-size: 12px;
+  color: var(--label-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- AI provider and About ---------- */
+
+.set-rows > * + * {
+  border-top: 0.5px solid var(--separator);
+}
+.set-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 24px 16px;
+}
+.set-about img {
+  display: block;
+  margin-bottom: 8px;
+  /* The light icon is white, like the group behind it: a soft shadow gives it its edge. */
+  filter: drop-shadow(0 0 0.5px rgba(0, 0, 0, 0.25)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.12));
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 0 16px;
+}
+.set-key-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--positive);
+  font-weight: 500;
+}
+.set-key {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+.set-key-label {
+  font-weight: 600;
+}
+.set-key-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.set-key-line .field {
+  flex: 1;
+  height: 32px;
+  font-family: var(--mono);
+}
+.set-key-note {
+  min-height: 1.4em;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.set-key-failed {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--problem);
+}
+.set-key-failed svg {
+  margin-top: 1px;
+}
+.set-key-failed p {
+  color: var(--label);
+}
+.set-key-failed b {
+  color: var(--problem);
+  font-weight: 600;
+}
