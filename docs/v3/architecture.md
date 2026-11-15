@@ -124,10 +124,12 @@ flowchart TD
 | 2 | Estimate and cap | code | characters, slide and image counts, goal, model prices | `estimate` event: cards, `costUsd`, `capUsd` | `cost.ts`, `build.ts:211` |
 | 3 | Profile | decision model | First 6,000 characters of the new lectures' text | One of `concept`, `formula`, `programming`, `fact-heavy`; stored in `course.json`; picks the preset | `build.ts:215`, `decide.ts:79` |
 | 4 | Kind of slide | decision model | The lecture as text plus its low-text images; one question per slide | One of `title`, `agenda`, `recap`, `reading list`, `content` per slide | `build.ts:233`, `decide.ts:87` |
-| 5 | Map | generative model | The lecture, the preset's map rules, the names of all concepts of earlier lectures | `title`, topics, concepts (`core` flag), facts (text, slide, item count) | `mapper.ts` |
-| 6 | Settle the map | code | The model's map, the slide kinds, earlier concepts | A tree that is always usable, plus a list of problems; one more model call when there are problems | `tree.ts:55` |
+| 5 | Map | generative model | The lecture, the preset's map rules, the names of all concepts of earlier lectures | `title`, topics, concepts, facts (text, slide, item count) | `mapper.ts` |
+| 5b | Second reading | generative model | The lecture again, its map so far as text, which slides are pictures | The facts the map lacks, each with its topic and concept | `mapper.ts` (`askMore`), `tree.ts` (`withMore`) |
+| 6 | Settle the map | code | The model's map with the second reading put in, the slide kinds, earlier concepts | A tree that is always usable, plus a list of problems; the first map is asked once more when it has problems | `tree.ts` |
 | 7 | Map checks | decision model | The lecture as text; questions: concept belongs, same as earlier concept, kind of fact | Flags (or, once calibrated, removal or merge); a kind for every fact | `build.ts:291`, `decide.ts:96-108` |
-| 8 | Plan | code | Topics, goal, preset | A list of slots: concept, fact, card type | `plan.ts:24` |
+| 7b | Worth of a fact | decision model | One fact with the name of its concept, as the whole input of its own request | A score from 0 to 3 on four labelled levels (not examinable, detail, examinable, core), stored on the fact | `build.ts`, `decide.ts` (`WORTH_LEVELS`) |
+| 8 | Plan | code | Topics, the worth of every fact, slides of the lecture, goal, preset | A list of slots: concept, fact, card type. As many as the goal allows per slide, the facts worth most first | `plan.ts` |
 | 9 | Ids | code | Slot, lecture, concept id, role | `<lecture>-<concept>-<role>-<n>` | `cards/id.ts`, `build.ts:372` |
 | 10 | Fill | generative model | The whole lecture, concept, fact, card type, preset rules, one example of the type | One filled form (the card's slots) | `writer.ts:322` |
 | 11 | Gate: rules | code | The slots | A list of problems, empty means pass | `cards/validate.ts:60`, `:187`, `:216` |
@@ -173,17 +175,26 @@ slide unused ("Title slide", "Agenda slide", ... or "No testable fact found on t
 **5. Map (generative model).** One call per lecture (`mapper.ts:72`), effort `medium`. The
 model gets the whole lecture, the preset's `mapRules`, and the names of every concept earlier
 lectures introduced (told to reuse exactly that name when a concept comes back). It returns the
-lecture title (at most 32 characters), topics, concepts (name of at most 6 words, `core` true or
-false) and facts (one sentence, the one slide that states it, `items` for a list to recite). It
-sees no card limits here and decides nothing about cards.
+lecture title (at most 32 characters), topics, concepts (name of at most 6 words) and facts (one
+sentence, the one slide that states it, `items` for a list to recite). It sees no card limits
+here and decides nothing about cards.
+
+**5b. Second reading (generative model).** One more call per lecture (`askMore`, `mapper.ts`),
+effort `medium`. One call that maps a whole lecture passes over much of it: against the
+reference deck, 137 of 636 notes tested a fact the slide text states and the map lacked, and 81
+of 232 concepts had one fact. The model gets the lecture again, its own map as text, and the
+numbers of the slides shown as pictures, and returns only what the map lacks: facts, each with
+the topic and the concept it belongs to (an existing name, or a new one). `withMore`
+(`tree.ts`) puts them into the map before code settles it. A fact the map already has, word for
+word, is passed over.
 
 **6. Settle the map (code).** `settleMap` (`tree.ts:55`) checks the map and repairs it itself:
 empty or too long title, unnamed or over-long concept names, facts on slides that do not exist,
-facts without text, more than 6 facts per concept (cut), duplicate concept ids (slug of the name;
-the duplicate is dropped), no core concept (then all are core), content slides no fact uses. It
+facts without text, more than 12 facts per concept (cut), duplicate concept ids (slug of the name;
+the duplicate is dropped), content slides no fact uses. It
 returns the repaired tree and the list of what the model got wrong. When the list is not empty,
-`build` asks the model once more with the problems and the previous list (`build.ts:283-289`)
-and takes the second result whatever it contains, repaired again by code. A concept whose id
+`build` asks the model once more with the problems and takes the second map whatever it
+contains. The second reading is added to that map, and code settles the result. A concept whose id
 exists in an earlier lecture keeps the stored name and gets `since: <lecture>` (one vocabulary).
 
 **7. Map checks (decision model).** One request per lecture over the whole lecture, holding
@@ -201,15 +212,26 @@ lecture" (calibrated: removed); a same-concept probability at or above its thres
 (calibrated: merged into the earlier concept, or removed if the lecture already has that id).
 The fact kind is always applied. All of these are uncalibrated today, so they flag and keep.
 
-**8. Plan (code).** `plan` (`plan.ts:24`) is a pure function and the only place that decides how
+**7b. Worth of a fact (decision model).** One request per fact, the fact and the name of its
+concept as the whole input (`factInput`, `decide.ts`), one `score` question: "How much is this
+fact worth learning for the exam of the course?" on four levels, not examinable, detail,
+examinable, core (`WORTH_LEVELS`). The answer, 0 to 3, is stored on the fact as `worth`. It only
+orders facts; it drops nothing. Why: the order in which the map lists facts says nothing about
+what an exam asks. On the 633 facts of a full run, the 372 facts with the highest score kept 164
+of the 192 reference notes the run covered, the first 372 in map order kept 133, and 372 at
+random 129.
+
+**8. Plan (code).** `plan` (`plan.ts`) is a pure function and the only place that decides how
 many cards exist:
 
-- Goal `pass`: only concepts the map marked `core`, one fact each. `good`: every concept, up to
-  2 facts. `top`: every concept, up to 4 facts, and every `case` and `contrast` fact beyond that
-  (`GOAL_PRESETS`, `cards/roles.ts:207`).
-- The facts taken are the first ones in the order the model listed them. Nothing ranks them.
-- A concept that an earlier lecture introduced gets exactly 1 more card (`RECURRING_CARDS`), its
-  first fact, whatever the goal.
+- The goal is a number of cards per slide of the lecture, at most (`GOAL_PRESETS`,
+  `cards/roles.ts`): `pass` 0.5, `good` 1, `top` 1.8, rounded up per lecture. Top grade is the
+  size of the reference deck: 636 notes on 356 slides.
+- The facts worth most get the cards. Equal worth keeps the order of the map. A fact without a
+  verdict counts as examinable (2).
+- A concept left without a card is named in the decisions ("beyond-goal").
+- A concept that an earlier lecture introduced stands for exactly 1 more card
+  (`RECURRING_CARDS`), its fact worth most, whatever the goal.
 - The kind of a fact and the preset pick the card type from `preset.plan[kind]`, taken in turn
   within one concept (`turn % roles.length`). A `list` fact of exactly 2 items becomes `name-two`.
 - Concepts that the goal leaves without cards are returned as `outsideCore` and later written to
@@ -281,7 +303,7 @@ existing card is never the one that is dropped. No card is rewritten here.
 
 **18. Save (code).** Per new lecture: `cards.yaml` (the accepted cards, with `flags` where a check
 had a remark), `lecture.json` (the tree, left-out slides with reasons, dropped cards), then
-`decisions.json` (lines written by code from facts: goal, profile, left out, outside core,
+`decisions.json` (lines written by code from facts: goal, profile, left out, beyond the goal,
 recurring concepts, concepts without a card, dropped counts), `runs/NNN.json` (model, decision
 model, preset, goal, calls, decisions, tokens, estimate, cost, durations per phase) and last
 `course.json`. Because `course.json` lists a lecture only when everything else is saved, an
@@ -333,9 +355,11 @@ AnkiConnect on `127.0.0.1`.
 
 **Estimate.** `estimate()` in `cost.ts` is a pure function of per-lecture characters, slides and
 image counts, the goal and the two price lists. Its constants (quoted from the file, fitted to the
-two full runs of 2026-11-14): 0.25 tokens per character, 1,000 per image, 0.8 concepts per slide
-(0.65 of them core for `pass`), at most 2.4 facts per concept actually planned, 25 percent
-rework on top of the fill calls, 10 uncached calls per lecture, 350 decision tokens per card.
+full runs of 2026-11-14): 0.25 tokens per character, 1,000 per image, 2.2 facts per slide, cards
+as the smaller of the facts and what the goal allows per slide, 25 percent rework on top of the
+fill calls, 10 uncached calls per lecture, 225 decision tokens per fact for its worth, 350 per
+card for its check. The second reading counts as the lecture once more plus 120 input and 150
+output tokens per slide.
 Reasoning on the map is counted as 250 output tokens per slide. The result is the `estimate`
 event: lectures, slides, cards, `costUsd`, `capUsd`. The `estimate` command shows it without any
 model call; `build` emits it before the first paid call.
