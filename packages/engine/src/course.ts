@@ -24,6 +24,8 @@ export interface Fact {
   kind: FactKind
   /** How many items the fact lists, when it is a list to recite. */
   items?: number
+  /** How much it is worth learning, from 0 to 3 (`WORTH_LEVELS`). Absent without a verdict. */
+  worth?: number
 }
 
 export interface Concept {
@@ -33,11 +35,9 @@ export interface Concept {
   name: string
   /** The slides of its facts. */
   slides: number[]
-  /** A student who only wants to pass must still know it. */
-  core: boolean
   /** Set when an earlier lecture introduced the concept: that lecture's number. */
   since?: number
-  /** In the order the lecture weighs them. The goal decides how many get a card. */
+  /** In the order the map listed them. Their worth and the goal decide which get a card. */
   facts: Fact[]
   /** What an uncalibrated check noticed. Shown, never acted on. */
   flags?: string[]
@@ -85,7 +85,7 @@ export interface CourseFile {
 export interface Decision {
   /** The lecture the decision is about, or null for the whole course. */
   lecture: number | null
-  kind: 'goal' | 'profile' | 'left-out' | 'outside-core' | 'recurring' | 'no-card' | 'dropped'
+  kind: 'goal' | 'profile' | 'left-out' | 'beyond-goal' | 'recurring' | 'no-card' | 'dropped'
   text: string
 }
 

@@ -3,7 +3,7 @@ import { findClashes, similarity } from '../src/clash.ts'
 import { CAP_FLOOR_USD, CAP_MULTIPLE, estimate, shownEuros } from '../src/cost.ts'
 import type { Concept, Topic } from '../src/course.ts'
 import type { FactKind } from '../src/decide.ts'
-import { plan } from '../src/plan.ts'
+import { budget, plan } from '../src/plan.ts'
 import { validateDraft } from '../src/cards/validate.ts'
 import type { Role } from '../src/cards/roles.ts'
 import { presetFor, PRESETS } from '../src/presets.ts'
@@ -14,48 +14,60 @@ const concept = (name: string, kinds: FactKind[], extra: Partial<Concept> = {}):
   id: name,
   name,
   slides: [2],
-  core: true,
   facts: kinds.map((kind, i) => ({ text: `${name} fact ${i + 1}`, slide: 2, kind })),
   ...extra,
 })
 const topics = (...concepts: Concept[]): Topic[] => [{ name: 'T', concepts }]
 const shape = (result: ReturnType<typeof plan>) =>
   result.slots.map((s) => `${s.fact.text}: ${s.role}`)
+/** Sets the worth of the facts of a concept, in their order. */
+const worth = (c: Concept, ...values: number[]): Concept => {
+  values.forEach((value, i) => (c.facts[i]!.worth = value))
+  return c
+}
 
 describe('the plan: code decides how many cards exist and what shape they take', () => {
-  const all = topics(
-    concept('risk', ['definition', 'definition', 'case', 'definition', 'contrast', 'list']),
-    concept('loop', ['sequence', 'formula', 'code', 'diagram'], { core: false }),
-  )
+  const all = () =>
+    topics(
+      worth(concept('risk', ['definition', 'definition', 'case', 'contrast']), 3, 1.2, 2.4, 2.9),
+      worth(concept('loop', ['sequence', 'formula']), 2.6, 0.4),
+    )
 
-  it('pass: the core concepts, one card each', () => {
-    const result = plan(all, 'pass', preset)
-    expect(shape(result)).toEqual(['risk fact 1: definition'])
-    expect(result.outsideCore.map((c) => c.name)).toEqual(['loop'])
+  it('gives a lecture as many cards as its goal allows per slide, rounded up', () => {
+    expect([budget('pass', 4), budget('good', 4), budget('top', 4)]).toEqual([2, 4, 8])
+    expect(budget('top', 356)).toBe(641)
   })
 
-  it('good grade: every concept, two facts each', () => {
-    const result = plan(all, 'good', preset)
+  it('pass: the facts worth most, and says which concepts it left without a card', () => {
+    const result = plan(all(), 4, 'pass', preset)
+    expect(shape(result)).toEqual(['risk fact 1: definition', 'risk fact 4: contrast'])
+    expect(result.beyondGoal.map((c) => c.name)).toEqual(['loop'])
+  })
+
+  it('good grade: more of them, still in the order of the map', () => {
+    const result = plan(all(), 4, 'good', preset)
     expect(shape(result)).toEqual([
       'risk fact 1: definition',
-      'risk fact 2: reverse',
+      'risk fact 3: case',
+      'risk fact 4: contrast',
       'loop fact 1: chain',
-      'loop fact 2: formula',
     ])
-    expect(result.outsideCore).toEqual([])
+    expect(result.beyondGoal).toEqual([])
   })
 
-  it('top grade: four facts each, plus every case and contrast', () => {
-    expect(shape(plan(all, 'top', preset))).toEqual([
-      'risk fact 1: definition',
-      'risk fact 2: reverse',
-      'risk fact 3: case',
-      'risk fact 4: definition',
-      'risk fact 5: contrast',
-      'loop fact 1: chain',
-      'loop fact 2: formula',
-      'loop fact 3: code',
-      'loop fact 4: diagram',
+  it('top grade: every fact when the lecture has fewer than the goal allows', () => {
+    expect(plan(all(), 4, 'top', preset).slots).toHaveLength(6)
+  })
+
+  it('keeps the order of the map among facts of equal worth, and counts no verdict as examinable', () => {
+    const even = topics(
+      concept('a', ['definition', 'definition']),
+      worth(concept('b', ['definition']), 1),
+      worth(concept('c', ['definition']), 2.5),
+    )
+    expect(shape(plan(even, 4, 'pass', preset))).toEqual([
+      'a fact 1: definition',
+      'c fact 1: definition',
     ])
   })
 
@@ -70,7 +82,7 @@ describe('the plan: code decides how many cards exist and what shape they take',
       'case',
       'diagram',
     ]
-    const result = plan(topics(...kinds.map((kind) => concept(kind, [kind]))), 'good', preset)
+    const result = plan(topics(...kinds.map((kind) => concept(kind, [kind]))), 8, 'good', preset)
     expect(result.slots.map((s) => s.role)).toEqual([
       'definition',
       'contrast',
@@ -87,7 +99,7 @@ describe('the plan: code decides how many cards exist and what shape they take',
     const lists = concept('exit', ['list', 'list', 'list'])
     lists.facts[0]!.items = 2
     lists.facts[1]!.items = 5
-    expect(plan(topics(lists), 'top', preset).slots.map((s) => s.role)).toEqual([
+    expect(plan(topics(lists), 4, 'top', preset).slots.map((s) => s.role)).toEqual([
       'name-two',
       'cloze-list',
       'cloze-list',
@@ -95,14 +107,16 @@ describe('the plan: code decides how many cards exist and what shape they take',
   })
 
   it('turns a cause into a "why" card', () => {
-    expect(shape(plan(topics(concept('copyright', ['cause'])), 'good', preset))).toEqual([
+    expect(shape(plan(topics(concept('copyright', ['cause'])), 4, 'good', preset))).toEqual([
       'copyright fact 1: why',
     ])
   })
 
-  it('gives a concept that comes up again one more card, whatever the goal', () => {
-    const again = topics(concept('risk', ['definition', 'definition', 'case'], { since: 1 }))
-    expect(shape(plan(again, 'top', preset))).toEqual(['risk fact 1: definition'])
+  it('gives a concept that comes up again one more card, for its fact worth most', () => {
+    const again = topics(
+      worth(concept('risk', ['definition', 'definition', 'case'], { since: 1 }), 1, 3, 2),
+    )
+    expect(shape(plan(again, 4, 'top', preset))).toEqual(['risk fact 2: definition'])
   })
 })
 
@@ -151,9 +165,9 @@ describe('the estimate', () => {
     const [pass, good, top] = (['pass', 'good', 'top'] as const).map((goal) =>
       estimate(decks, goal, prices),
     )
-    expect(good).toMatchObject({ lectures: 11, slides: 352, cards: 561 })
-    expect(pass!.cards).toBe(187)
-    expect(top!.cards).toBe(671)
+    expect(good).toMatchObject({ lectures: 11, slides: 352, cards: 352 })
+    expect(pass!.cards).toBe(176)
+    expect(top!.cards).toBe(638)
     expect(pass!.costUsd).toBeLessThan(good!.costUsd)
     expect(good!.costUsd).toBeLessThan(top!.costUsd)
     expect(good!.costUsd).toBeGreaterThan(0.05)

@@ -51,20 +51,22 @@ import {
   slideInput,
   chosen,
   FACT_KINDS,
+  factInput,
   probability,
   PROFILE_KINDS,
+  score,
   SLIDE_KINDS,
   type Calibrations,
   type SlideKind,
 } from './decide.ts'
 import { EngineError } from './errors.ts'
-import { askMap, slidesBlock } from './mapper.ts'
+import { askMap, askMore, slidesBlock } from './mapper.ts'
 import { questionAndAnswer } from './outline.ts'
-import { plan } from './plan.ts'
+import { budget, plan } from './plan.ts'
 import type { Ports, SlideImage } from './ports.ts'
 import { presetFor, PRESETS } from './presets.ts'
 import { slideText } from './slides.ts'
-import { settleMap, unusedSlides } from './tree.ts'
+import { settleMap, unusedSlides, withMore } from './tree.ts'
 import { createWriter, type CardJob, type Slots } from './writer.ts'
 
 /** How often a rejected card is filled again before it is dropped. */
@@ -95,7 +97,7 @@ interface ReadLecture {
 interface OpenLecture extends Lecture, ReadLecture {
   /** The whole lecture as every card writer call sees it. */
   context: string
-  outsideCore: Concept[]
+  beyondGoal: Concept[]
 }
 
 /** One card on its way through the gate. Its identity is fixed, its wording may change. */
@@ -281,13 +283,16 @@ export async function build(
         fallbackTitle: titleFromFile(lecture.file, lecture.number),
       }
       const vocabulary = [...earlier.values()].map((concept) => concept.name)
-      let settled = settleMap(await askMap(askModel, source, preset.mapRules, vocabulary), ctx)
-      if (settled.problems.length > 0) {
-        settled = settleMap(
-          await askMap(askModel, source, preset.mapRules, vocabulary, settled.problems),
-          ctx,
-        )
+      let map = await askMap(askModel, source, preset.mapRules, vocabulary)
+      const { problems } = settleMap(map, ctx)
+      if (problems.length > 0) {
+        map = await askMap(askModel, source, preset.mapRules, vocabulary, problems)
       }
+      // The second reading: what the one call that mapped the whole lecture passed over.
+      const settled = settleMap(
+        withMore(map, await askMore(askModel, source, preset.mapRules, map)),
+        ctx,
+      )
 
       // Closed questions about the map, all in one request over the lecture.
       let concepts = settled.topics.flatMap((t) => t.concepts)
@@ -329,6 +334,19 @@ export async function build(
       facts.forEach((fact, f) => {
         fact.kind = chosen(answers[concepts.length + pairs.length + f], FACT_KINDS, 'definition')
       })
+      // How much each fact is worth learning, each fact as the whole input of its own request.
+      await pool(
+        concepts.flatMap((concept) => concept.facts.map((fact) => ({ concept, fact }))),
+        async ({ concept, fact }) => {
+          const [answer] = await decide({
+            context: factInput(concept.name, fact.text),
+            images: [],
+            questions: [ask.worth()],
+          })
+          const worth = score(answer)
+          if (worth !== null) fact.worth = Math.round(worth * 100) / 100
+        },
+      )
       const topics = settled.topics
         .map((topic) => ({
           ...topic,
@@ -341,7 +359,7 @@ export async function build(
           earlier.set(concept.id, { name: concept.name, lecture: lecture.number })
       }
 
-      const { slots, outsideCore } = plan(topics, goal, preset)
+      const { slots, beyondGoal } = plan(topics, lecture.text.length, goal, preset)
       const open: OpenLecture = {
         ...lecture,
         title: settled.title,
@@ -354,7 +372,7 @@ export async function build(
           lecture.text,
           lecture.images,
         ),
-        outsideCore,
+        beyondGoal,
       }
       planned.push(...slots.map((slot) => ({ lecture: open, ...slot })))
       out.push(open)
@@ -607,13 +625,11 @@ export async function build(
   // Save. `course.json` goes last: a lecture counts as built once it is listed there.
   const decisions: Decision[] = (await readJson<Decision[]>(store, paths.decisions(course))) ?? []
   if (!existing?.lectures.length) {
-    const depth = GOAL_PRESETS[goal]
-    const coverage = depth.coverage === 'core' ? 'the core concepts' : 'every concept'
-    const facts = depth.facts === 1 ? 'one card each' : `up to ${depth.facts} cards each`
+    const { label, cardsPerSlide } = GOAL_PRESETS[goal]
     decisions.push({
       lecture: null,
       kind: 'goal',
-      text: `Goal "${depth.label}": ${coverage}, ${facts}.`,
+      text: `Goal "${label}": the facts worth most get a card, at most ${cardsPerSlide} per slide.`,
     })
     decisions.push({
       lecture: null,
@@ -643,7 +659,9 @@ export async function build(
     const { number, title, file, slides, topics, leftOut } = lecture
     const tree: Lecture = { number, title, file, slides, topics, leftOut, dropped: lost }
     await writeJson(store, paths.lecture(course, number), tree)
-    decisions.push(...account(lecture, new Set(cards.map((item) => item.concept)), lost.length))
+    decisions.push(
+      ...account(lecture, goal, new Set(cards.map((item) => item.concept)), lost.length),
+    )
     const concepts = topics.flatMap((t) => t.concepts).length
     summary.push({ number, title, concepts, cards: cards.length })
   }
@@ -698,7 +716,12 @@ function flag(concept: Concept, text: string): void {
 }
 
 /** The decisions of one lecture, written by code from what happened. */
-function account(lecture: OpenLecture, withCards: Set<Concept>, dropped: number): Decision[] {
+function account(
+  lecture: OpenLecture,
+  goal: Goal,
+  withCards: Set<Concept>,
+  dropped: number,
+): Decision[] {
   const name = `${two(lecture.number)} ${lecture.title}`
   const out: Decision[] = []
   const add = (kind: Decision['kind'], text: string) =>
@@ -712,10 +735,10 @@ function account(lecture: OpenLecture, withCards: Set<Concept>, dropped: number)
   for (const [reason, slides] of byReason) {
     add('left-out', `No cards for ${slideRange(slides)} in ${name}: ${reason.toLowerCase()}.`)
   }
-  if (lecture.outsideCore.length > 0) {
+  if (lecture.beyondGoal.length > 0) {
     add(
-      'outside-core',
-      `No cards in ${name} for ${names(lecture.outsideCore)}: outside the core, and the goal is to pass.`,
+      'beyond-goal',
+      `No cards in ${name} for ${names(lecture.beyondGoal)}: other facts are worth more, and the goal allows ${budget(goal, lecture.slides)} cards here.`,
     )
   }
   const concepts = lecture.topics.flatMap((t) => t.concepts)
@@ -725,7 +748,7 @@ function account(lecture: OpenLecture, withCards: Set<Concept>, dropped: number)
       `"${concept.name}" comes up again in ${name}: one more card on top of lecture ${two(concept.since!)}.`,
     )
   }
-  const bare = concepts.filter((c) => !withCards.has(c) && !lecture.outsideCore.includes(c))
+  const bare = concepts.filter((c) => !withCards.has(c) && !lecture.beyondGoal.includes(c))
   if (bare.length > 0)
     add('no-card', `No card in ${name} for ${names(bare)}: no card passed the checks.`)
   if (dropped > 0) {

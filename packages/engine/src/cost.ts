@@ -21,12 +21,13 @@ const TOKENS = {
   mapReplyPerSlide: 250,
   fillPrompt: 600,
   fillReply: 120,
-  /** Measured on the two full runs of 2026-11-14: 268 and 295 concepts on 356 slides. */
-  conceptsPerSlide: 0.8,
-  /** The map found 2.4 facts per concept on average, whatever the goal asks for. */
-  factsPerConcept: 2.4,
-  /** Share of concepts that are core, for the goal that only covers those: 173 of 268. */
-  coreShare: 0.65,
+  /** The second reading gets the map back and answers with what it adds. */
+  morePromptPerSlide: 120,
+  moreReplyPerSlide: 150,
+  /** Facts the map finds per slide: 633 on 356 slides before the second reading. Rough. */
+  factsPerSlide: 2.2,
+  /** One decision request per fact for its worth: 142,375 tokens for 633 facts. */
+  factWorth: 225,
   /** Repairs and splits on top of the fill calls. */
   reworkShare: 0.25,
   /** Calls per lecture that read the lecture at full price: the cache is kept per card type. */
@@ -91,9 +92,8 @@ export function estimate(
   let cards = 0
   for (const lecture of lectures) {
     const source = lecture.chars * TOKENS.perChar + lecture.images * TOKENS.perImage
-    const concepts =
-      lecture.slides * TOKENS.conceptsPerSlide * (depth.coverage === 'core' ? TOKENS.coreShare : 1)
-    const fills = Math.round(concepts * Math.min(depth.facts, TOKENS.factsPerConcept))
+    const facts = lecture.slides * TOKENS.factsPerSlide
+    const fills = Math.round(Math.min(facts, depth.cardsPerSlide * lecture.slides))
     const calls = fills * (1 + TOKENS.reworkShare)
     const uncached = Math.min(calls, TOKENS.uncachedCalls)
     cards += fills
@@ -101,10 +101,15 @@ export function estimate(
       // The map reads the lecture once at full price.
       (source + TOKENS.mapPrompt) * prices.model.input +
       lecture.slides * TOKENS.mapReplyPerSlide * prices.model.output +
+      // The second reading: the lecture again, the map so far, and what it adds.
+      (source + TOKENS.mapPrompt + lecture.slides * TOKENS.morePromptPerSlide) *
+        prices.model.input +
+      lecture.slides * TOKENS.moreReplyPerSlide * prices.model.output +
       // Every card sees the whole lecture again, mostly from the provider's cache.
       source * (uncached * prices.model.input + (calls - uncached) * prices.model.cachedInput) +
       calls * (TOKENS.fillPrompt * prices.model.input + TOKENS.fillReply * prices.model.output) +
-      (source * TOKENS.decisionPasses + calls * TOKENS.cardCheck) * prices.decisions.input
+      (source * TOKENS.decisionPasses + facts * TOKENS.factWorth + calls * TOKENS.cardCheck) *
+        prices.decisions.input
   }
   const costUsd = dollars / 1_000_000
   return {

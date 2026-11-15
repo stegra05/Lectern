@@ -93,7 +93,7 @@ describe('building a course of two lectures, offline', () => {
         type: 'estimate',
         lectures: 2,
         slides: 9,
-        cards: 14,
+        cards: 9,
         costUsd: 0,
         costEur: 0,
         capUsd: 0.25,
@@ -103,10 +103,10 @@ describe('building a course of two lectures, offline', () => {
     expect(events.at(-1)).toEqual({
       type: 'built',
       lectures: [
-        { number: 1, title: 'Risk and uncertainty', concepts: 2, cards: 4 },
+        { number: 1, title: 'Risk and uncertainty', concepts: 2, cards: 5 },
         { number: 2, title: 'Effectuation', concepts: 3, cards: 3 },
       ],
-      cards: 7,
+      cards: 8,
       dropped: 2,
       flagged: 2,
       costUsd: 0,
@@ -118,9 +118,9 @@ describe('building a course of two lectures, offline', () => {
   it('never reports more done than in total, also when a split adds cards', () => {
     const checks = events.filter((e) => e.type === 'progress' && e.phase === 'check')
     expect(checks.map((e) => (e.type === 'progress' ? [e.done, e.total] : []))).toEqual([
-      [5, 8],
-      [8, 9],
-      [8, 9],
+      [6, 9],
+      [9, 10],
+      [9, 10],
     ])
   })
 
@@ -179,33 +179,44 @@ describe('building a course of two lectures, offline', () => {
             id: 'risk',
             name: 'risk',
             slides: [2],
-            core: true,
             facts: [
               {
                 text: 'Risk is an outcome whose probability can be calculated or known.',
                 slide: 2,
                 kind: 'definition',
+                worth: 2,
               },
               {
                 text: 'An outcome with a calculable probability is called risk.',
                 slide: 2,
                 kind: 'definition',
+                worth: 2,
               },
-              { text: 'Opening a hairdresser shop is an example of risk.', slide: 2, kind: 'case' },
+              {
+                text: 'Opening a hairdresser shop is an example of risk.',
+                slide: 2,
+                kind: 'case',
+                worth: 2,
+              },
             ],
           },
           {
             id: 'uncertainty',
             name: 'uncertainty',
             slides: [3, 5],
-            core: false,
             facts: [
               {
                 text: 'Uncertainty is an outcome whose probability cannot be calculated.',
                 slide: 3,
                 kind: 'definition',
+                worth: 2,
               },
-              { text: 'Risk can be insured, uncertainty cannot.', slide: 5, kind: 'contrast' },
+              {
+                text: 'Risk can be insured, uncertainty cannot.',
+                slide: 5,
+                kind: 'contrast',
+                worth: 2,
+              },
             ],
           },
         ],
@@ -220,16 +231,33 @@ describe('building a course of two lectures, offline', () => {
     ])
   })
 
-  it('plans the cards in code: two facts per concept for a good grade, the card type from the kind of fact', async () => {
+  it('plans the cards in code: one per slide at most for a good grade, the card type from the kind of fact', async () => {
     expect((await cards('01')).map((c) => c.id)).toEqual([
       '01-risk-definition-1',
       '01-risk-reverse-1',
+      '01-risk-case-1',
       '01-uncertainty-definition-1',
       '01-uncertainty-contrast-1',
     ])
-    expect(calls('fill')).toHaveLength(8)
-    expect(calls('fill').some(about('Opening a hairdresser shop is an example of risk.'))).toBe(
-      false,
+    expect(calls('fill')).toHaveLength(9)
+  })
+
+  it('reads every lecture a second time, with its map so far, for the facts the map passed over', () => {
+    expect(calls('deepen')).toHaveLength(2)
+    expect(calls('deepen')[0]!.prompt).toContain(
+      '    - Risk is an outcome whose probability can be calculated or known. (slide 2)',
+    )
+  })
+
+  it('asks how much each fact is worth, each fact as the whole input of its own request', () => {
+    const asked = decider.requests.filter((r) => r.context.startsWith('One fact taken'))
+    expect(asked).toHaveLength(9)
+    expect(asked[0]!.context.split('\n').slice(1)).toEqual([
+      'Concept: risk',
+      'Fact: Risk is an outcome whose probability can be calculated or known.',
+    ])
+    expect(asked.every((r) => r.questions.length === 1 && r.questions[0]!.type === 'score')).toBe(
+      true,
     )
   })
 
@@ -409,7 +437,7 @@ describe('building a course of two lectures, offline', () => {
 
   it('asks every closed question through the decisions port, batched per shared input', () => {
     const shape = decider.requests
-      .filter((r) => !r.context.startsWith('A flashcard written'))
+      .filter((r) => !/^(A flashcard written|One fact taken)/.test(r.context))
       .map((r) => [r.context.split('\n')[0], r.questions.length])
     expect(shape).toEqual([
       [expect.stringContaining('Entrepreneurship') as string, 1],
@@ -427,7 +455,7 @@ describe('building a course of two lectures, offline', () => {
       {
         lecture: null,
         kind: 'goal',
-        text: 'Goal "good grade": every concept, up to 2 cards each.',
+        text: 'Goal "good grade": the facts worth most get a card, at most 1 per slide.',
       },
       {
         lecture: null,
@@ -477,10 +505,10 @@ describe('building a course of two lectures, offline', () => {
       preset: 'concept',
       goal: 'good',
       lectures: [1, 2],
-      cards: 7,
+      cards: 8,
       dropped: 2,
-      calls: 14,
-      decisions: 34,
+      calls: 17,
+      decisions: 44,
       inputTokens: expect.any(Number) as number,
       cachedInputTokens: 0,
       outputTokens: expect.any(Number) as number,
@@ -502,7 +530,8 @@ describe('building a course of two lectures, offline', () => {
       before = await snapshot(join(root, 'course/lectures'))
       decisionsBefore = await json<Decision[]>('decisions.json')
       await addSlides(root, '03 Lean startup.pdf', SLIDES['03 Lean startup.pdf']!)
-      again = await run({ type: 'build', course: 'course' })
+      // Top grade, so that the two slides of this lecture may carry its three facts.
+      again = await run({ type: 'build', course: 'course', goal: 'top' })
     })
 
     it('builds only the new lecture', () => {
@@ -595,7 +624,7 @@ describe('building a course of two lectures, offline', () => {
         run: 2,
         lectures: [3],
         cards: 3,
-        calls: 4,
+        calls: 5,
       })
     })
 
@@ -661,8 +690,9 @@ describe('calibrated checks act instead of flagging', () => {
 
   beforeAll(async () => {
     await courseOf('01 Risk.pdf', '02 Effectuation.pdf', '03 Lean startup.pdf')
+    // Top grade, so that the two slides of lecture 3 may carry its three facts.
     events = await run(
-      { type: 'build', course: 'course' },
+      { type: 'build', course: 'course', goal: 'top' },
       { calibrations: { sameConcept: measured, supported: measured, sameCard: measured } },
     )
   })
@@ -701,7 +731,7 @@ describe('calibrated checks act instead of flagging', () => {
     expect((await card('02', '02-bird-in-hand-definition-2')).flags).toEqual([
       'looks like 02-bird-in-hand-definition-1',
     ])
-    expect(events.at(-1)).toMatchObject({ cards: 9, dropped: 3, flagged: 2 })
+    expect(events.at(-1)).toMatchObject({ cards: 10, dropped: 3, flagged: 2 })
   })
 })
 
@@ -771,24 +801,32 @@ describe('the card check and the rules on what a card says', () => {
 })
 
 describe('goal, profile and cost', () => {
-  it('pass: cards for the core concepts only, one each, and says which concepts it skipped', async () => {
+  it('pass: half a card per slide, for the facts worth most, and says which concepts it skipped', async () => {
     await courseOf('01 Risk.pdf')
     await run({ type: 'build', course: 'course', goal: 'pass' })
     expect((await json<CourseFile>('course.json')).goal).toBe('pass')
-    expect((await cards('01')).map((c) => c.id)).toEqual(['01-risk-definition-1'])
+    expect((await cards('01')).map((c) => c.id)).toEqual([
+      '01-risk-definition-1',
+      '01-risk-reverse-1',
+      '01-risk-case-1',
+    ])
     expect(await json<Decision[]>('decisions.json')).toEqual(
       expect.arrayContaining([
-        { lecture: null, kind: 'goal', text: 'Goal "pass": the core concepts, one card each.' },
+        {
+          lecture: null,
+          kind: 'goal',
+          text: 'Goal "pass": the facts worth most get a card, at most 0.5 per slide.',
+        },
         {
           lecture: 1,
-          kind: 'outside-core',
-          text: 'No cards in 01 Risk and uncertainty for "uncertainty": outside the core, and the goal is to pass.',
+          kind: 'beyond-goal',
+          text: 'No cards in 01 Risk and uncertainty for "uncertainty": other facts are worth more, and the goal allows 3 cards here.',
         },
       ]),
     )
   })
 
-  it('top grade: more facts per concept, and every case', async () => {
+  it('top grade: nearly two cards per slide, here every fact', async () => {
     await courseOf('01 Risk.pdf')
     await run({ type: 'build', course: 'course', goal: 'top' })
     expect((await cards('01')).map((c) => c.id)).toEqual([
@@ -853,7 +891,7 @@ describe('goal, profile and cost', () => {
         type: 'estimate',
         lectures: 2,
         slides: 9,
-        cards: 18,
+        cards: 16,
         costUsd: 0,
         costEur: 0,
         capUsd: 0.25,
@@ -885,8 +923,8 @@ describe('goal, profile and cost', () => {
       message: 'The run was stopped at 0.40 dollars, above its cap of 0.25 dollars.',
       fix: 'Nothing was saved. Build again, or build fewer lectures at once.',
     })
-    // One map call, then the four card calls that were already under way. The fifth card never starts.
-    expect(model.requests.map((r) => r.task)).toEqual(['map', 'fill', 'fill', 'fill', 'fill'])
+    // The map and its second reading pass the cap. No card call starts.
+    expect(model.requests.map((r) => r.task)).toEqual(['map', 'deepen'])
     expect(await readdir(join(root, 'course'))).toEqual(['slides'])
   })
 })
@@ -922,6 +960,8 @@ const OUTLINE = `# course
   A: An outcome with a probability that is known or can be worked out.
 - Q: Knight: which kind of outcome has a probability that can be calculated?
   A: Risk
+- Q: Opening a hairdresser shop: which kind of outcome?
+  A: risk
 
 #### uncertainty
 

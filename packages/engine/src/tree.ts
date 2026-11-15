@@ -10,8 +10,8 @@ import type { SlideKind } from './decide.ts'
 
 export const TITLE_CHARS = 32
 const CONCEPT_WORDS = 6
-/** More facts than this per concept means the map is split too finely; the rest is cut. */
-export const FACTS_PER_CONCEPT = 6
+/** More facts than this per concept means several ideas share one name; the rest is cut. */
+export const FACTS_PER_CONCEPT = 12
 
 export interface MapOutput {
   title: string
@@ -19,10 +19,39 @@ export interface MapOutput {
     name: string
     concepts: {
       name: string
-      core: boolean
       facts: { text: string; slide: number; items: number }[]
     }[]
   }[]
+}
+
+/** What a second reading of the lecture adds to the map: facts, each with its place. */
+export interface MoreOutput {
+  facts: { topic: string; concept: string; text: string; slide: number; items: number }[]
+}
+
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/**
+ * The map with the facts of the second reading put in: under the concept they name, or under
+ * a new concept in the topic they name, or in the last topic when the map has no such topic.
+ */
+export function withMore(map: MapOutput, more: MoreOutput): MapOutput {
+  const topics = map.topics.map((topic) => ({
+    ...topic,
+    concepts: topic.concepts.map((concept) => ({ ...concept, facts: [...concept.facts] })),
+  }))
+  for (const { topic, concept, text, slide, items } of more.facts) {
+    const fact = { text, slide, items }
+    const known = topics.flatMap((t) => t.concepts).find((c) => same(c.name, concept))
+    if (known) {
+      if (!known.facts.some((f) => same(f.text, text))) known.facts.push(fact)
+      continue
+    }
+    const home = topics.find((t) => same(t.name, topic)) ?? topics.at(-1)
+    if (home) home.concepts.push({ name: concept, facts: [fact] })
+    else topics.push({ name: topic, concepts: [{ name: concept, facts: [fact] }] })
+  }
+  return { title: map.title, topics }
 }
 
 export interface MapContext {
@@ -114,7 +143,6 @@ export function settleMap(out: MapOutput, ctx: MapContext): Settled {
         id,
         name: known?.name ?? name,
         slides,
-        core: concept.core,
         ...(known ? { since: known.lecture } : {}),
         facts,
       })
@@ -124,10 +152,6 @@ export function settleMap(out: MapOutput, ctx: MapContext): Settled {
   }
   const all = topics.flatMap((topic) => topic.concepts)
   if (all.length === 0) problems.push('the map has no concepts')
-  else if (!all.some((concept) => concept.core)) {
-    problems.push('no concept is marked as core; mark the ones a student needs to pass')
-    for (const concept of all) concept.core = true
-  }
 
   const leftOut = unusedSlides(topics, ctx.kinds)
   const unused = leftOut

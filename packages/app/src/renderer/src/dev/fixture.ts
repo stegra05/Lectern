@@ -86,12 +86,11 @@ function qa(
   }
 }
 
-function concept(name: string, slides: number[], core = true): Concept {
+function concept(name: string, slides: number[]): Concept {
   return {
     id: slug(name),
     name,
     slides,
-    core,
     // Counted once the lecture's cards exist, see `counted`.
     cards: 0,
     facts: slides.map((slide) => ({
@@ -108,8 +107,8 @@ function effectuation(): Lecture {
   const causation = concept('Causation vs effectuation', [17, 18, 19])
   const bird = concept('Bird in hand', [21, 22])
   const loss = concept('Affordable loss', [23, 24])
-  const quilt = concept('Crazy quilt', [25, 26], false)
-  const lemonade = concept('Lemonade', [27, 28], false)
+  const quilt = concept('Crazy quilt', [25, 26])
+  const lemonade = concept('Lemonade', [27, 28])
   const pilot = concept('Pilot in the plane', [29, 30])
   const cards: Card[] = [
     qa(
@@ -275,7 +274,7 @@ function fill(lecture: number, c: Concept, count: number): Card[] {
 function sample(number: number, cards: number, topics: number, concepts: number): Lecture {
   const title = TITLES[number - 1]!
   const all = Array.from({ length: concepts }, (_, i) =>
-    concept(`${title} concept ${i + 1}`, [5 + i * 2, 6 + i * 2], i % 3 !== 2),
+    concept(`${title} concept ${i + 1}`, [5 + i * 2, 6 + i * 2]),
   )
   const per = Math.floor(cards / concepts)
   const made = all.flatMap((c, i) => fill(number, c, i === 0 ? cards - per * (concepts - 1) : per))
@@ -320,7 +319,7 @@ function built(): CourseView {
       {
         lecture: null,
         kind: 'goal',
-        text: 'You are aiming for a top grade: every concept gets cards from several angles.',
+        text: 'Goal "top grade": the facts worth most get a card, at most 1.8 per slide.',
       },
       {
         lecture: 5,

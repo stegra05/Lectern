@@ -7,9 +7,9 @@ import './panels.css'
 
 /** What each goal makes, in one line, as the engine decides it. */
 const CONSEQUENCE: Record<Goal, string> = {
-  pass: 'The core concepts, one card each.',
-  good: 'Every concept, from about two angles.',
-  top: 'Every concept from several angles, plus cases and contrasts.',
+  pass: 'What matters most: about one card for every two slides.',
+  good: 'About one card per slide.',
+  top: 'Everything worth learning: nearly two cards per slide.',
 }
 
 /** Before the cards: what was found in the files, and the goal question. */

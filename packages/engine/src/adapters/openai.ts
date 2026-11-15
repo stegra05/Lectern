@@ -162,7 +162,8 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
               choice: String(answer.choice),
               confidence: answer.confidence,
             })
-          } else answers.push({ type: 'refusal' })
+          } else if (answer.type === 'score') answers.push({ type: 'score', score: answer.score })
+          else answers.push({ type: 'refusal' })
         }
       }
       // Only input is charged; answers are free. Cached input is billed lower by a factor
@@ -174,13 +175,17 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
 }
 
 function toQuestion(question: Question) {
-  return question.type === 'predicate'
-    ? { type: 'predicate' as const, instructions: question.statement }
-    : {
-        type: 'choice' as const,
-        instructions: question.ask,
-        choices: question.choices.map((value) => ({ value })),
-      }
+  if (question.type === 'predicate')
+    return { type: 'predicate' as const, instructions: question.statement }
+  if (question.type === 'score') {
+    const levels = question.levels.map(({ label, description }) => ({ label, description }))
+    return { type: 'score' as const, instructions: question.ask, levels }
+  }
+  return {
+    type: 'choice' as const,
+    instructions: question.ask,
+    choices: question.choices.map((value) => ({ value })),
+  }
 }
 
 function explain(error: unknown): Error {

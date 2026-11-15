@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { assignNumbers, inCourseOrder } from '../src/course.ts'
 import type { SlideKind } from '../src/decide.ts'
-import { FACTS_PER_CONCEPT, settleMap, type MapContext, type MapOutput } from '../src/tree.ts'
+import {
+  FACTS_PER_CONCEPT,
+  settleMap,
+  withMore,
+  type MapContext,
+  type MapOutput,
+} from '../src/tree.ts'
 
 const kinds: SlideKind[] = ['title', 'content', 'content', 'agenda', 'content', 'content']
 const ctx: MapContext = {
@@ -11,9 +17,8 @@ const ctx: MapContext = {
   fallbackTitle: 'Slides',
 }
 const fact = (slide: number, text = `A fact on slide ${slide}.`) => ({ text, slide, items: 0 })
-const concept = (name: string, slides: number[], core = true) => ({
+const concept = (name: string, slides: number[]) => ({
   name,
-  core,
   facts: slides.map((s) => fact(s)),
 })
 const good: MapOutput = {
@@ -21,7 +26,7 @@ const good: MapOutput = {
   topics: [
     {
       name: 'Principles',
-      concepts: [concept('effectual principles', [2]), concept('bird in hand', [3, 2], false)],
+      concepts: [concept('effectual principles', [2]), concept('bird in hand', [3, 2])],
     },
     { name: 'More', concepts: [concept('affordable loss', [5, 6])] },
   ],
@@ -39,14 +44,12 @@ describe('settleMap', () => {
           id: 'effectual-principles',
           name: 'effectual principles',
           slides: [2],
-          core: true,
           facts: [{ text: 'A fact on slide 2.', slide: 2, kind: 'definition' }],
         },
         {
           id: 'bird-in-hand',
           name: 'bird in hand',
           slides: [2, 3],
-          core: false,
           facts: [
             { text: 'A fact on slide 3.', slide: 3, kind: 'definition' },
             { text: 'A fact on slide 2.', slide: 2, kind: 'definition' },
@@ -59,7 +62,6 @@ describe('settleMap', () => {
   it('keeps the number of items of a list fact, and nothing for other facts', () => {
     const list = {
       name: 'five Cs',
-      core: true,
       facts: [
         { text: 'The five Cs of lending.', slide: 2, items: 5 },
         { text: 'One C.', slide: 2, items: 0 },
@@ -133,10 +135,12 @@ describe('settleMap', () => {
     ])
   })
 
-  it('cuts a concept with too many facts: a map split too finely', () => {
+  it('cuts a concept with too many facts: several ideas under one name', () => {
     const out = {
       ...good,
-      topics: [{ name: 'T', concepts: [concept('a', [2, 2, 2, 3, 3, 3, 5, 5, 6])] }],
+      topics: [
+        { name: 'T', concepts: [concept('a', [2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 5, 5, 6])] },
+      ],
     }
     const kept = settleMap(out, ctx).topics[0]!.concepts[0]!
     expect(kept.facts).toHaveLength(FACTS_PER_CONCEPT)
@@ -159,18 +163,6 @@ describe('settleMap', () => {
       'concept "one two three four five six seven" has more than 6 words',
     ])
     expect(settled.topics.map((t) => t.name)).toEqual(['A', 'C'])
-  })
-
-  it('needs a core: when nothing is marked, everything counts as core', () => {
-    const out = {
-      ...good,
-      topics: [{ name: 'T', concepts: [concept('a', [2, 3], false), concept('b', [5, 6], false)] }],
-    }
-    const settled = settleMap(out, ctx)
-    expect(settled.problems).toEqual([
-      'no concept is marked as core; mark the ones a student needs to pass',
-    ])
-    expect(settled.topics[0]!.concepts.every((c) => c.core)).toBe(true)
   })
 
   it('keeps the title within 32 characters', () => {
@@ -207,5 +199,55 @@ describe('lecture files', () => {
   it('take the next number otherwise, and never one that is taken', () => {
     expect(assignNumbers([], ['Intro.pdf', 'Effectuation.pdf'])).toEqual([1, 2])
     expect(assignNumbers([1, 2], ['02 Effectuation v2.pdf', 'Guest.pdf'])).toEqual([3, 4])
+  })
+})
+
+describe('the second reading', () => {
+  const map = {
+    title: 'Growth',
+    topics: [
+      {
+        name: 'Phases',
+        concepts: [{ name: 'Greiner', facts: [{ text: 'Five phases.', slide: 2, items: 0 }] }],
+      },
+      {
+        name: 'Exit',
+        concepts: [{ name: 'IPO', facts: [{ text: 'A sale of shares.', slide: 4, items: 0 }] }],
+      },
+    ],
+  }
+  const more = (topic: string, concept: string, text: string) => ({
+    topic,
+    concept,
+    text,
+    slide: 2,
+    items: 0,
+  })
+
+  it('puts a fact under the concept it names, however the name is cased', () => {
+    const out = withMore(map, {
+      facts: [more('Phases', 'greiner', 'Creativity ends in a crisis of leadership.')],
+    })
+    expect(out.topics[0]!.concepts[0]!.facts.map((f) => f.text)).toEqual([
+      'Five phases.',
+      'Creativity ends in a crisis of leadership.',
+    ])
+  })
+
+  it('opens a new concept in the topic it names, or in the last topic', () => {
+    const out = withMore(map, {
+      facts: [
+        more('Phases', 'Crisis of autonomy', 'It ends the phase of direction.'),
+        more('Nowhere', 'Trade sale', 'A sale to a firm.'),
+      ],
+    })
+    expect(out.topics[0]!.concepts.map((c) => c.name)).toEqual(['Greiner', 'Crisis of autonomy'])
+    expect(out.topics[1]!.concepts.map((c) => c.name)).toEqual(['IPO', 'Trade sale'])
+  })
+
+  it('passes over a fact the map already has, and leaves the map itself alone', () => {
+    const out = withMore(map, { facts: [more('Phases', 'Greiner', 'five phases.')] })
+    expect(out).toEqual(map)
+    expect(out).not.toBe(map)
   })
 })

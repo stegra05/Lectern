@@ -4,7 +4,7 @@
  * flags. It never drops or merges anything.
  */
 
-import type { Answer, Question } from './ports.ts'
+import type { Answer, Level, Question } from './ports.ts'
 
 export const PROFILE_KINDS = ['concept', 'formula', 'programming', 'fact-heavy'] as const
 export type ProfileKind = (typeof PROFILE_KINDS)[number]
@@ -75,7 +75,48 @@ export function slideInput(lines: string[]): string {
   return `One slide of a university lecture:\n${lines.join('\n')}`
 }
 
+/**
+ * One fact as the whole input of its own request, for the same reason as a card: the decision
+ * model judges statements about its input.
+ */
+export function factInput(concept: string, fact: string): string {
+  return `One fact taken from the slides of a university lecture.\nConcept: ${concept}\nFact: ${fact}`
+}
+
+/**
+ * How much a fact is worth learning, lowest first. The answer orders the facts of a lecture;
+ * the goal says how many get a card. Measured on 2026-11-15 on the 633 facts of a full
+ * Entrepreneurship run against the 636 notes of the reference deck: of the 192 notes the run's
+ * cards covered, the 372 facts with the highest answer kept 164, the first 372 in the order
+ * the map listed them kept 133, and 372 at random kept 129.
+ */
+export const WORTH_LEVELS: readonly Level[] = [
+  {
+    label: 'not examinable',
+    description:
+      'About the organisation of the course, the slides or the session itself, or it says nothing specific.',
+  },
+  {
+    label: 'detail',
+    description:
+      'True and on the subject, but an incidental detail, the trivia of an example, or obvious.',
+  },
+  { label: 'examinable', description: 'Subject matter an exam could ask.' },
+  {
+    label: 'core',
+    description: 'A central concept, model, framework or distinction of the course.',
+  },
+]
+
+/** The worth of a fact the decision model gave no answer for: examinable, neither first nor last. */
+export const WORTH_UNKNOWN = 2
+
 export const ask = {
+  worth: (): Question => ({
+    type: 'score',
+    ask: 'How much is this fact worth learning for the exam of the course?',
+    levels: WORTH_LEVELS,
+  }),
   profile: (): Question => ({
     type: 'choice',
     ask:
@@ -125,6 +166,11 @@ export const ask = {
 /** The probability of a predicate answer, or null when the model gave none. */
 export function probability(answer: Answer | undefined): number | null {
   return answer?.type === 'predicate' ? answer.probability : null
+}
+
+/** The score of a score answer, or null when the model gave none. */
+export function score(answer: Answer | undefined): number | null {
+  return answer?.type === 'score' ? answer.score : null
 }
 
 /** The chosen value when it is one of the allowed ones, otherwise the fallback. */

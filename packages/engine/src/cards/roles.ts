@@ -190,24 +190,23 @@ export const ROLE_SPECS: Record<Role, RoleSpec> = {
   },
 }
 
-/** The student's goal, asked once per course. It sets coverage and depth. */
+/** The student's goal, asked once per course. It sets how many cards a lecture gets. */
 export const GOALS = ['pass', 'good', 'top'] as const
 export type Goal = (typeof GOALS)[number]
 
 export interface GoalPreset {
   label: string
-  /** Which concepts get cards: only those the map marks as core, or all. */
-  coverage: 'core' | 'all'
-  /** How many facts of one concept get a card. */
-  facts: number
-  /** Facts of these kinds get a card even beyond that number. */
-  always: readonly string[]
+  /**
+   * Cards per slide of a lecture, at most. The facts worth most get them. Top grade is the
+   * size of the reference deck a student built for the exam: 636 notes on 356 slides.
+   */
+  cardsPerSlide: number
 }
 
 export const GOAL_PRESETS: Record<Goal, GoalPreset> = {
-  pass: { label: 'pass', coverage: 'core', facts: 1, always: [] },
-  good: { label: 'good grade', coverage: 'all', facts: 2, always: [] },
-  top: { label: 'top grade', coverage: 'all', facts: 4, always: ['case', 'contrast'] },
+  pass: { label: 'pass', cardsPerSlide: 0.5 },
+  good: { label: 'good grade', cardsPerSlide: 1 },
+  top: { label: 'top grade', cardsPerSlide: 1.8 },
 }
 
 /** A concept that comes up again in a later lecture gets this many more cards there. */

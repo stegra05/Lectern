@@ -184,7 +184,7 @@ describe('a course from creation to its cards, through the boundary only, with t
     expect(state.decisions[0]).toEqual({
       lecture: null,
       kind: 'goal',
-      text: 'Goal "top grade": every concept, up to 4 cards each.',
+      text: 'Goal "top grade": the facts worth most get a card, at most 1.8 per slide.',
     })
     const lecture = state.lectures[0]!
     expect(lecture).toMatchObject({
@@ -199,7 +199,6 @@ describe('a course from creation to its cards, through the boundary only, with t
       id: 'risk-knight-1921',
       name: 'Risk (Knight 1921)',
       slides: [2],
-      core: true,
       cards: 2,
     })
     expect(lecture.cards).toBe(

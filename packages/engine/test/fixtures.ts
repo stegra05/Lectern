@@ -101,12 +101,10 @@ const MAPS: Record<string, unknown> = {
         concepts: [
           {
             name: 'risk',
-            core: true,
             facts: [fact(F.riskIs, 2), fact(F.riskTerm, 2), fact(F.riskCase, 2)],
           },
           {
             name: 'uncertainty',
-            core: false,
             facts: [fact(F.uncertaintyIs, 3), fact(F.insurable, 5)],
           },
         ],
@@ -119,9 +117,9 @@ const MAPS: Record<string, unknown> = {
       {
         name: 'Principles',
         concepts: [
-          { name: 'effectual principles', core: true, facts: [fact(F.principles, 2, 5)] },
-          { name: 'bird in hand', core: true, facts: [fact(F.birdIs, 3), fact(F.birdMeans, 3)] },
-          { name: 'Risk', core: false, facts: [fact(F.riskAgain, 4)] },
+          { name: 'effectual principles', facts: [fact(F.principles, 2, 5)] },
+          { name: 'bird in hand', facts: [fact(F.birdIs, 3), fact(F.birdMeans, 3)] },
+          { name: 'Risk', facts: [fact(F.riskAgain, 4)] },
         ],
       },
     ],
@@ -132,8 +130,8 @@ const MAPS: Record<string, unknown> = {
       {
         name: 'Loop',
         concepts: [
-          { name: 'build measure learn', core: true, facts: [fact(F.loop, 2), fact(F.mvp, 2)] },
-          { name: 'entrepreneurial risk', core: false, facts: [fact(F.early, 2)] },
+          { name: 'build measure learn', facts: [fact(F.loop, 2), fact(F.mvp, 2)] },
+          { name: 'entrepreneurial risk', facts: [fact(F.early, 2)] },
         ],
       },
     ],
@@ -144,9 +142,9 @@ const MAPS: Record<string, unknown> = {
       {
         name: 'Deciding',
         concepts: [
-          { name: 'exam', core: true, facts: [fact(F.examDate, 2)] },
-          { name: 'pivot', core: true, facts: [fact(F.pivotIs, 3)] },
-          { name: 'persevere', core: true, facts: [fact(F.persevere, 3)] },
+          { name: 'exam', facts: [fact(F.examDate, 2)] },
+          { name: 'pivot', facts: [fact(F.pivotIs, 3)] },
+          { name: 'persevere', facts: [fact(F.persevere, 3)] },
         ],
       },
     ],
@@ -295,6 +293,8 @@ const SPLITS: Record<string, unknown> = {
 
 export function script(request: ModelRequest): unknown {
   if (request.task === 'map') return MAPS[/^Lecture file: (.+)$/m.exec(request.context)![1]!]
+  // The second reading finds nothing the maps do not have.
+  if (request.task === 'deepen') return { facts: [] }
   const told = /^Fact to test: (.+) \(slide \d+\)$/m.exec(request.prompt)![1]!
   return { fill: FILLS, repair: REPAIRS, split: SPLITS }[request.task][told]
 }
@@ -316,6 +316,8 @@ export function decisions(question: Question, request: DecisionRequest): Answer 
     const told = /^What kind of knowledge is this fact: "(.+)"$/.exec(question.ask)![1]!
     return { type: 'choice', choice: KINDS[told] ?? 'definition', confidence: 0.8 }
   }
+  // Every fact is examinable, so a goal that cuts keeps the first facts of the map.
+  if (question.type === 'score') return { type: 'score', score: 2 }
   // The card check sees one card as its whole input. One card of lecture 4 trips it.
   if (question.statement.startsWith('This flashcard is about the organisation of the course')) {
     const exam = request.context.includes('Question: When does the exam take place?')

@@ -6,7 +6,7 @@
 
 import type { Design } from './designs.ts'
 
-export type Task = 'map' | 'fill' | 'repair' | 'split'
+export type Task = 'map' | 'deepen' | 'fill' | 'repair' | 'split'
 
 /** A slide as a picture: a PNG in base64. */
 export interface SlideImage {
@@ -47,14 +47,26 @@ export interface ModelPort {
   complete(request: ModelRequest): Promise<{ data: unknown; usage: Usage }>
 }
 
-/** A closed question: how likely a statement is true, or which of a few values fits. */
+/** One step of an ordered scale, lowest first. */
+export interface Level {
+  label: string
+  description: string
+}
+
+/**
+ * A closed question: how likely a statement is true, which of a few values fits, or where the
+ * input stands on an ordered scale.
+ */
 export type Question =
   | { type: 'predicate'; statement: string }
   | { type: 'choice'; ask: string; choices: readonly string[] }
+  | { type: 'score'; ask: string; levels: readonly Level[] }
 
 export type Answer =
   | { type: 'predicate'; probability: number }
   | { type: 'choice'; choice: string; confidence: number }
+  /** From 0, the lowest level, to the number of levels minus one. Not a whole number. */
+  | { type: 'score'; score: number }
   | { type: 'refusal' }
 
 export interface DecisionRequest {

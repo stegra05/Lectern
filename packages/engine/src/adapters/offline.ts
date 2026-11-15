@@ -19,12 +19,12 @@ function map(context: string): unknown {
     lines: m[2]!.replace(' (see the picture of this slide)', '').split(' / ').filter(Boolean),
   }))
   const names = new Set<string>()
-  const concepts = slides.slice(1).flatMap(({ slide, lines }, i) => {
+  const concepts = slides.slice(1).flatMap(({ slide, lines }) => {
     const name = take(lines[0] ?? '', CONCEPT_WORDS)
     if (lines.length < 2 || names.has(name.toLowerCase())) return []
     names.add(name.toLowerCase())
     const facts = lines.slice(1, 1 + FACTS).map((text) => ({ text, slide, items: 0 }))
-    return [{ name, core: i % 2 === 0, facts }]
+    return [{ name, facts }]
   })
   const topics = []
   for (let i = 0; i < concepts.length; i += SLIDES_PER_TOPIC) {
@@ -76,15 +76,23 @@ export function offlineModel(delayMs = 0): ModelPort {
       const data =
         request.task === 'map'
           ? map(request.context)
-          : request.task === 'split'
-            ? { cards: [fill(request)] }
-            : fill(request)
+          : request.task === 'deepen'
+            ? { facts: [] }
+            : request.task === 'split'
+              ? { cards: [fill(request)] }
+              : fill(request)
       return { data, usage: free }
     },
   }
 }
 
-function decide(question: Question): Answer {
+function decide(question: Question, context: string): Answer {
+  // Every fact is examinable, some a little more: the sum of its letters decides, so the same
+  // slides always give the same cards.
+  if (question.type === 'score') {
+    const sum = [...context].reduce((total, letter) => total + letter.charCodeAt(0), 0)
+    return { type: 'score', score: 1.5 + (sum % 10) / 10 }
+  }
   if (question.type === 'predicate') {
     // Sure that concepts belong and slides support their cards, sure that no two things are the
     // same, and sure that no card is about the organisation of the course.
@@ -108,7 +116,10 @@ export function offlineDecisions(delayMs = 0): DecisionsPort {
     price: { input: 0 },
     async decide(request) {
       await wait(delayMs)
-      return { answers: request.questions.map(decide), usage: free }
+      return {
+        answers: request.questions.map((question) => decide(question, request.context)),
+        usage: free,
+      }
     },
   }
 }
