@@ -118,6 +118,8 @@ export interface Run {
   outputTokens: number
   estimateUsd: number
   costUsd: number
+  /** What the run cost as the student is shown it, by the same conversion as the estimate. */
+  costEur: number
   durationMs: number
   phaseMs: Record<'read' | 'map' | 'write' | 'check', number>
 }

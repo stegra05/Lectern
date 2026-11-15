@@ -21,7 +21,7 @@ import { GOAL_PRESETS, type Draft, type Goal, type Role } from './cards/roles.ts
 import { leansOnSlides, saysNothing, tooLong, validateDraft } from './cards/validate.ts'
 import { htmlToText, slideRange, slug, two } from './cards/words.ts'
 import { findClashes } from './clash.ts'
-import { estimate, LOW_TEXT_CHARS } from './cost.ts'
+import { estimate, LOW_TEXT_CHARS, shownEuros } from './cost.ts'
 import {
   assignNumbers,
   inCourseOrder,
@@ -256,6 +256,7 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       cards: accepted.length,
       dropped: dropped.length,
       ...meter,
+      costEur: shownEuros(meter.costUsd),
       estimateUsd: estimated.costUsd,
       durationMs: ports.now() - startedAt,
       phaseMs,

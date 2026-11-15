@@ -13,3 +13,10 @@ export function two(number: number): string {
 export function plural(count: number, one: string, many = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`
 }
+
+const eur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
+
+/** An amount in euros as the student reads it: "0,40 €". */
+export function euros(amount: number): string {
+  return eur.format(amount)
+}
