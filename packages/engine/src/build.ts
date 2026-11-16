@@ -12,8 +12,8 @@
  * phase is through, and files of earlier lectures are never touched.
  */
 
-import type { BuildCommand, Emit, EstimateCommand } from './commands.ts'
-import { createAsk, type Meter } from './ask.ts'
+import type { BuildCommand, Emit, EstimateCommand, Event } from './commands.ts'
+import { createAsk, type AskModel, type Decide, type Meter } from './ask.ts'
 import { assemble, type CardFile } from './cards/assemble.ts'
 import { cardId } from './cards/id.ts'
 import { questionAndAnswer } from './cards/question-answer.ts'
@@ -64,7 +64,7 @@ import { MAX_DECISION_IMAGES, type Ports, type SlideImage } from './ports.ts'
 import { CONCEPT as preset } from './presets.ts'
 import { slideText } from './slides.ts'
 import { fromGroups, settleMap } from './tree.ts'
-import { createWriter, type CardJob, type Slots } from './writer.ts'
+import { createWriter, type CardJob, type Slots, type Writer } from './writer.ts'
 
 /** How often a rejected card is filled again before it is dropped. */
 const REPAIRS = 2
@@ -110,6 +110,50 @@ interface Item {
   part: boolean
   problems: string[]
   card?: CardFile
+}
+
+/** Concepts the course knows, by id: the one name it uses and the lecture that introduced it. */
+type Vocabulary = Map<string, { name: string; lecture: number }>
+
+/** One planned card: this fact of this concept of this lecture, as this card type. */
+interface Planned {
+  lecture: OpenLecture
+  concept: Concept
+  fact: Fact
+  role: Role
+}
+
+/** The id of the next card of this concept and card type in this lecture. */
+type NextId = (lecture: OpenLecture, concept: Concept, role: Role) => string
+
+/** Cards after the checks, in the order of the plan, and the cards dropped on the way. */
+interface Checked {
+  accepted: Item[]
+  dropped: Item[]
+}
+
+/** A past paper not read before: its name and its pages. */
+interface Paper {
+  name: string
+  pages: string[][]
+}
+
+/** The past papers as the course keeps them, and what this build made of them. */
+interface Exams {
+  file: ExamsFile
+  tally: { questions: number; papers: number; families: number; fromSlides: number }
+}
+
+type BuiltLecture = Extract<Event, { type: 'built' }>['lectures'][number]
+
+/** What every step of a build works with. */
+interface Build {
+  ports: Ports
+  emit: Emit
+  course: string
+  model: AskModel
+  decide: Decide
+  writer: Writer
 }
 
 /** What both `estimate` and `build` need first: the course, its new lectures, the estimate. */
@@ -230,13 +274,12 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   }
   const capUsd = command.capUsd ?? estimated.capUsd
   emit({ type: 'estimate', ...estimated, capUsd })
-  const { model: askModel, decide } = createAsk(ports, meter, capUsd)
-  const writer = createWriter(askModel, preset)
+  const { model, decide } = createAsk(ports, meter, capUsd)
+  const b: Build = { ports, emit, course, model, decide, writer: createWriter(model, preset) }
   phaseMs.read = ports.now() - readStart
   emit({ type: 'phase', phase: 'read', status: 'done', total: read.length })
 
-  const accepted: Item[] = []
-  const dropped: Item[] = []
+  const checked: Checked = { accepted: [], dropped: [] }
   /**
    * The run's record, with what it spent. Written once: when the build is through, or when it
    * stopped, so that money spent on a run that failed still shows.
@@ -253,8 +296,8 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       ...(failed ? { failed: true as const } : {}),
       goal,
       lectures: read.map((l) => l.number),
-      cards: accepted.length,
-      dropped: dropped.length,
+      cards: checked.accepted.length,
+      dropped: checked.dropped.length,
       ...meter,
       costEur: shownEuros(meter.costUsd),
       estimateUsd: estimated.costUsd,
@@ -265,165 +308,13 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   }
 
   try {
-    // What the course already holds: its vocabulary, and the question of every card.
-    const earlier = new Map<string, { name: string; lecture: number }>()
-    const existingCards: { id: string; card: CardFile }[] = []
-    for (const { number } of existing?.lectures ?? []) {
-      const lecture = await readJson<Lecture>(store, paths.lecture(course, number))
-      for (const concept of lecture?.topics.flatMap((t) => t.concepts) ?? []) {
-        if (!earlier.has(concept.id))
-          earlier.set(concept.id, { name: concept.name, lecture: number })
-      }
-      for (const card of await readCards(store, course, number))
-        existingCards.push({ id: card.id, card })
-    }
+    const before = await courseSoFar(b, existing)
 
-    // Every slide of a lecture read on its own, with its picture. The first slide goes ahead and
-    // fills the provider's cache with the lecture; the rest read it there.
-    const readSlides = async (lecture: ReadLecture) => {
-      const all = lecture.text.map((_, s) => s + 1)
-      const context = slidesBlock(`Lecture file: ${lecture.file}`, lecture.text, [])
-      const slide = (s: number) => ({
-        number: s + 1,
-        lines: lecture.text[s]!,
-        image: lecture.pictures[s]!,
-      })
-      const first = await askSlide(askModel, context, slide(0), preset.mapRules)
-      const rest = await pool(all.slice(1), (n) =>
-        askSlide(askModel, context, slide(n - 1), preset.mapRules),
-      )
-      return [first, ...rest].flat()
-    }
-
-    /** The kind of each fact, in requests that carry only the pictures of the slides the facts come from. */
-    const kindsOf = async (source: { context: string; images: SlideImage[] }, facts: Fact[]) => {
-      const answers: Awaited<ReturnType<typeof decide>> = []
-      for (let start = 0; start < facts.length;) {
-        const pictured = new Map<number, SlideImage>()
-        let end = start
-        for (; end < facts.length; end++) {
-          const slide = facts[end]!.slide
-          const image = source.images.find((candidate) => candidate.slide === slide)
-          if (!image || pictured.has(slide)) continue
-          if (pictured.size === MAX_DECISION_IMAGES) break
-          pictured.set(slide, image)
-        }
-        answers.push(
-          ...(await decide({
-            context: source.context,
-            images: [...pictured.values()].sort((a, b) => a.slide - b.slide),
-            questions: facts.slice(start, end).map((fact) => ask.factKind(fact.text)),
-          })),
-        )
-        start = end
-      }
-      return answers
-    }
-
-    // Past exams: the papers not read before, read into their questions. Saved with the course.
-    let examsFile: ExamsFile = (await readJson<ExamsFile>(store, paths.examsFile(course))) ?? {
-      papers: [],
-    }
-    const examTally = { questions: 0, papers: 0, families: 0, fromSlides: 0 }
-    const addExamAnswers = async (lectures: OpenLecture[]) => {
-      const papers = await pool(freshPapers, async ({ name, pages }) => ({
-        file: name,
-        questions: await askQuestions(askModel, name.replace(/\.pdf$/i, ''), pages),
-      }))
-      examsFile = { papers: [...examsFile.papers, ...papers] }
-      const questions = papers.flatMap((paper) => paper.questions)
-      if (questions.length === 0) return
-      // Questions that ask the same thing, each placed in one lecture of this build.
-      const places = lectures.map((l) => ({
-        number: l.number,
-        title: l.title,
-        concepts: l.topics.flatMap((t) => t.concepts).map((c) => c.name),
-      }))
-      const families = await askFamilies(askModel, questions, places)
-      const answered = await pool(families, async (family) => {
-        const lecture = lectures.find((l) => l.number === family.lecture)!
-        const answer = await askAnswer(askModel, lecture, family)
-        return { family, lecture, answer }
-      })
-      const added = new Map<OpenLecture, Fact[]>()
-      for (const { family, lecture, answer } of answered) {
-        if (answer.answer.trim() === '') continue
-        const fact = examFact(lecture, family, answer)
-        added.set(lecture, [...(added.get(lecture) ?? []), fact])
-      }
-      // The kind of each answer, as for every other fact.
-      for (const [lecture, facts] of added) {
-        const kinds = await kindsOf(lecture, facts)
-        facts.forEach((fact, f) => (fact.kind = chosen(kinds[f], FACT_KINDS, 'definition')))
-      }
-      const all = [...added.values()].flat()
-      Object.assign(examTally, {
-        questions: questions.length,
-        papers: papers.length,
-        families: all.length,
-        fromSlides: all.filter((fact) => fact.exam!.fromSlides).length,
-      })
-    }
-
-    // Map each lecture, label its facts, plan its cards.
-    const planned: { lecture: OpenLecture; concept: Concept; fact: Fact; role: Role }[] = []
-    const lectures = await phase('map', read.length, async () => {
-      const out: OpenLecture[] = []
+    // Map each lecture, label its facts, add the exam questions, plan the cards.
+    const { lectures, exams, planned } = await phase('map', read.length, async () => {
+      const lectures: OpenLecture[] = []
       for (const [i, lecture] of read.entries()) {
-        const source = {
-          context: slidesBlock(`Lecture file: ${lecture.file}`, lecture.text, lecture.images),
-          images: lecture.images,
-        }
-        const ctx = {
-          slides: lecture.text.length,
-          earlier,
-          fallbackTitle: titleFromFile(lecture.file, lecture.number),
-        }
-        const vocabulary = [...earlier.values()].map((concept) => concept.name)
-        const found = await readSlides(lecture)
-        const grouping = await askGroups(askModel, source, found, preset.mapRules, vocabulary)
-        const settled = settleMap(fromGroups(found, grouping, factId), ctx)
-
-        // The kind of each fact, closed questions over the lecture.
-        const concepts = settled.topics.flatMap((t) => t.concepts)
-        const facts = concepts.flatMap((concept) => concept.facts)
-        const kinds = await kindsOf(source, facts)
-        facts.forEach((fact, f) => {
-          fact.kind = chosen(kinds[f], FACT_KINDS, 'definition')
-        })
-        // How much each fact is worth learning, each fact as the whole input of its own request.
-        await pool(
-          concepts.flatMap((concept) => concept.facts.map((fact) => ({ concept, fact }))),
-          async ({ concept, fact }) => {
-            const [answer] = await decide({
-              context: factInput(concept.name, fact.text),
-              images: [],
-              questions: [ask.worth()],
-            })
-            const worth = score(answer)
-            if (worth !== null) fact.worth = Math.round(worth * 100) / 100
-          },
-        )
-        for (const concept of concepts) {
-          if (!earlier.has(concept.id))
-            earlier.set(concept.id, { name: concept.name, lecture: lecture.number })
-        }
-
-        const open: OpenLecture = {
-          ...lecture,
-          title: settled.title,
-          slides: lecture.text.length,
-          topics: settled.topics,
-          leftOut: settled.leftOut,
-          dropped: [],
-          context: slidesBlock(
-            `Lecture ${two(lecture.number)} ${settled.title}`,
-            lecture.text,
-            lecture.images,
-          ),
-          beyondGoal: [],
-        }
-        out.push(open)
+        lectures.push(await mapLecture(b, lecture, before.earlier))
         emit({
           type: 'progress',
           phase: 'map',
@@ -432,254 +323,27 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
           lecture: lecture.number,
         })
       }
-      await addExamAnswers(out)
-      // One plan for all lectures of the build: the goal's cards go where the facts worth most are.
-      plan(out, goal, preset).forEach(({ slots, beyondGoal }, i) => {
-        out[i]!.beyondGoal = beyondGoal
-        planned.push(...slots.map((slot) => ({ lecture: out[i]!, ...slot })))
-      })
-      return out
+      const exams = await addExamAnswers(b, freshPapers, lectures)
+      return { lectures, exams, planned: planCards(lectures, goal) }
     })
+
     // Identity is fixed by the plan, before a single word is written.
-    const counters = new Map<string, number>()
-    const nextId = (lecture: OpenLecture, concept: Concept, role: Role) => {
-      const key = `${lecture.number}/${concept.id}/${role}`
-      const n = (counters.get(key) ?? 0) + 1
-      counters.set(key, n)
-      return cardId(lecture.number, concept.id, role, n)
-    }
-    const job = (item: Item): CardJob => ({
-      context: item.lecture.context,
-      images: item.lecture.images,
-      concept: item.concept,
-      fact: item.fact,
-      role: item.role,
-    })
-    const draftOf = (item: Item): Draft => ({
-      concept: item.concept.name,
-      role: item.role,
-      slide: item.fact.slide,
-      ...item.slots,
-    })
-
-    // Fill one form per planned card.
-    const items = await phase('write', planned.length, async () => {
-      let done = 0
-      const empty: Slots = { front: '', answers: [], labels: [], extra: '', code: '' }
-      const drafted: Item[] = planned.map((slot, order) => ({
-        ...slot,
-        id: nextId(slot.lecture, slot.concept, slot.role),
-        order,
-        slots: empty,
-        part: false,
-        problems: [],
-      }))
-      const fill = async (item: Item) => {
-        item.slots = await writer.fill(job(item))
-        emit({
-          type: 'progress',
-          phase: 'write',
-          done: ++done,
-          total: drafted.length,
-          lecture: item.lecture.number,
-        })
-      }
-      // The provider caches the lecture per card type. The first card of each type in a lecture
-      // goes ahead and fills that cache; the rest then read the lecture at the cached price.
-      const first = new Map<string, Item>()
-      for (const item of drafted) {
-        const key = `${item.lecture.number}/${item.role}`
-        if (!first.has(key)) first.set(key, item)
-      }
-      const ahead = new Set(first.values())
-      await pool([...ahead], fill)
-      await pool(
-        drafted.filter((item) => !ahead.has(item)),
-        fill,
-      )
-      return drafted
-    })
-
-    // The gate with repair and split, then the clashes.
+    const nextId = createIds()
+    const items = await phase('write', planned.length, () => fillCards(b, planned, nextId))
     await phase('check', items.length, async () => {
-      let pending = items
-      for (let round = 0; pending.length > 0; round++) {
-        // The gate: hard limits and the two rules on what a card says.
-        const failing: Item[] = []
-        const passing: Item[] = []
-        for (const item of pending) {
-          const text = item.lecture.text
-          const pictured = (slide: number) =>
-            item.lecture.images.some((image) => image.slide === slide)
-          item.problems = validateDraft(draftOf(item), {
-            slides: item.concept.slides,
-            slideText: (slide) => text[slide - 1]?.join('\n'),
-            seenAsImage: pictured,
-          })
-          // A card within every limit can still lean on the slides or say nothing. Both are
-          // asked of what the model wrote, never of a student's own card.
-          if (item.problems.length === 0) {
-            item.problems = [...leansOnSlides(draftOf(item)), ...saysNothing(draftOf(item))]
-          }
-          if (item.problems.length > 0) {
-            failing.push(item)
-            continue
-          }
-          item.card = assemble(draftOf(item), {
-            id: item.id,
-            lecture: item.lecture,
-            concept: item.concept,
-            slideLines: text[item.fact.slide - 1]!,
-            ...(item.fact.exam ? { exam: item.fact.exam } : {}),
-          })
-          passing.push(item)
-        }
-        // The card check, each card as the whole input of its own request. A card about the
-        // organisation of the course is dropped at once: no wording repairs such a fact.
-        await pool(passing, async (item) => {
-          const { question, answer } = questionAndAnswer(item.card!)
-          const [verdict] = await decide({
-            context: cardInput(question, answer),
-            images: [],
-            questions: [ask.organisation()],
-          })
-          const p = probability(verdict)
-          if (p === null || p < ORGANISATION_THRESHOLD) return
-          item.problems = [ORGANISATION]
-        })
-        for (const item of passing) {
-          if (item.problems.length > 0) dropped.push(item)
-          else accepted.push(item)
-        }
-        // A split adds cards, so the total is what is in play now, never less than what is done.
-        const total = accepted.length + failing.length + dropped.length
-        emit({ type: 'progress', phase: 'check', done: accepted.length, total })
-        if (round === REPAIRS) {
-          dropped.push(...failing)
-          break
-        }
-
-        // A card that is too long is split into atomic cards. Everything else is filled again.
-        const parts = await pool(failing, async (item) => {
-          if (!item.part && tooLong(draftOf(item)))
-            return writer.split(job(item), item.slots, item.problems)
-          item.slots = await writer.repair(job(item), item.slots, item.problems)
-          return null
-        })
-        pending = failing.flatMap((item, i) => {
-          const split = parts[i]
-          if (!split) return [item]
-          if (split.length === 0) {
-            dropped.push(item)
-            return []
-          }
-          return split.slice(0, SPLIT_INTO).map((slots, k) => ({
-            ...item,
-            // The first part keeps the id, so the plan's card is still there.
-            id: k === 0 ? item.id : nextId(item.lecture, item.concept, item.role),
-            order: item.order + k / (SPLIT_INTO + 1),
-            slots,
-            part: true,
-          }))
-        })
-      }
-      accepted.sort((a, b) => a.order - b.order)
-
-      // Clashes across the whole course: a new card whose question is word for word one that
-      // exists is dropped. No card is rewritten here.
-      const text = (card: CardFile) => htmlToText(card.fields.Front ?? card.fields.Text ?? '')
-      const clashes = findClashes(
-        existingCards.map(({ id, card }) => ({ id, text: text(card) })),
-        accepted.map((item) => ({ id: item.id, text: text(item.card!) })),
-      )
-      for (const [id, other] of clashes.same) {
-        const item = accepted.splice(
-          accepted.findIndex((candidate) => candidate.id === id),
-          1,
-        )[0]!
-        item.problems = [`asks the same question as ${other}`]
-        dropped.push(item)
-      }
+      await checkCards(b, items, nextId, checked)
+      dropClashes(before.existingCards, checked)
     })
 
-    // Save. `course.json` goes last: a lecture counts as built once it is listed there. What
-    // this run writes about a lecture replaces what an earlier run that did not finish wrote.
-    if (examsFile.papers.length > 0) await writeJson(store, paths.examsFile(course), examsFile)
-    const built = new Set(lectures.map((lecture) => lecture.number))
-    const decisions: Decision[] = existing?.lectures.length
-      ? ((await readJson<Decision[]>(store, paths.decisions(course))) ?? []).filter(
-          (decision) => decision.lecture === null || !built.has(decision.lecture),
-        )
-      : []
-    if (!existing?.lectures.length) {
-      const { label, cardsPerSlide } = GOAL_PRESETS[goal]
-      decisions.push({
-        lecture: null,
-        kind: 'goal',
-        text: `Goal "${label}": the facts worth most get a card, at most ${cardsPerSlide} per slide.`,
-      })
-    }
-    if (examTally.families > 0) {
-      const byModel = examTally.families - examTally.fromSlides
-      decisions.push({
-        lecture: null,
-        kind: 'exams',
-        text: `${examTally.questions} questions from ${examTally.papers} past papers came down to ${examTally.families} questions that get a card first. The slides answer ${examTally.fromSlides} of them; ${byModel} the model answered from what it knows, and those cards say so.`,
-      })
-    }
-    const summary = []
-    const allowed = budget(
-      goal,
-      lectures.reduce((sum, lecture) => sum + lecture.slides, 0),
-    )
-    for (const lecture of lectures) {
-      const cards = accepted.filter((item) => item.lecture === lecture)
-      const lost: Dropped[] = dropped
-        .filter((item) => item.lecture === lecture)
-        .map((item) => ({
-          concept: item.concept.name,
-          role: item.role,
-          front: item.slots.front,
-          problems: item.problems,
-        }))
-      await writeCards(
-        store,
-        course,
-        lecture.number,
-        cards.map((item) => item.card!),
-      )
-      const { number, title, file, slides, topics, leftOut } = lecture
-      const tree: Lecture = { number, title, file, slides, topics, leftOut, dropped: lost }
-      await writeJson(store, paths.lecture(course, number), tree)
-      decisions.push(
-        ...account(lecture, allowed, new Set(cards.map((item) => item.concept)), lost.length),
-      )
-      const concepts = topics.flatMap((t) => t.concepts).length
-      summary.push({ number, title, concepts, cards: cards.length })
-    }
-    await writeJson(store, paths.decisions(course), decisions)
-
+    const summary = await saveLectures(b, { existing, goal, exams, lectures, checked })
     await record(false)
-
-    const listed = lectures.map((l) => ({
-      number: l.number,
-      title: l.title,
-      file: l.file,
-      sha256: l.sha256,
-      slides: l.slides,
-    }))
-    await writeJson(store, paths.course(course), {
-      format: 1,
-      name: existing?.name ?? course.split('/').at(-1)!,
-      goal,
-      lectures: [...(existing?.lectures ?? []), ...listed].sort((a, b) => a.number - b.number),
-    } satisfies CourseFile)
+    await listLectures(b, existing, goal, lectures)
 
     emit({
       type: 'built',
       lectures: summary,
-      cards: accepted.length,
-      dropped: dropped.length,
+      cards: checked.accepted.length,
+      dropped: checked.dropped.length,
       costUsd: meter.costUsd,
       durationMs: ports.now() - startedAt,
     })
@@ -687,6 +351,488 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
     // A build that stopped before this point still records what it spent.
     await record(true).catch(() => undefined)
   }
+}
+
+/** What the course already holds: its vocabulary, and the question of every card. */
+async function courseSoFar(b: Build, existing: CourseFile | null) {
+  const { store } = b.ports
+  const earlier: Vocabulary = new Map()
+  const existingCards: { id: string; card: CardFile }[] = []
+  for (const { number } of existing?.lectures ?? []) {
+    const lecture = await readJson<Lecture>(store, paths.lecture(b.course, number))
+    for (const concept of lecture?.topics.flatMap((t) => t.concepts) ?? []) {
+      if (!earlier.has(concept.id)) earlier.set(concept.id, { name: concept.name, lecture: number })
+    }
+    for (const card of await readCards(store, b.course, number))
+      existingCards.push({ id: card.id, card })
+  }
+  return { earlier, existingCards }
+}
+
+/**
+ * One lecture mapped: read slide by slide, its facts sorted and settled into topics and
+ * concepts, every fact given its kind and its worth. New concepts join `earlier`.
+ */
+async function mapLecture(
+  b: Build,
+  lecture: ReadLecture,
+  earlier: Vocabulary,
+): Promise<OpenLecture> {
+  const source = {
+    context: slidesBlock(`Lecture file: ${lecture.file}`, lecture.text, lecture.images),
+    images: lecture.images,
+  }
+  const ctx = {
+    slides: lecture.text.length,
+    earlier,
+    fallbackTitle: titleFromFile(lecture.file, lecture.number),
+  }
+  const vocabulary = [...earlier.values()].map((concept) => concept.name)
+  const found = await readSlides(b, lecture)
+  const grouping = await askGroups(b.model, source, found, preset.mapRules, vocabulary)
+  const settled = settleMap(fromGroups(found, grouping, factId), ctx)
+
+  // The kind of each fact, closed questions over the lecture.
+  const concepts = settled.topics.flatMap((t) => t.concepts)
+  const facts = concepts.flatMap((concept) => concept.facts)
+  const kinds = await kindsOf(b, source, facts)
+  facts.forEach((fact, f) => {
+    fact.kind = chosen(kinds[f], FACT_KINDS, 'definition')
+  })
+  await askWorth(b, concepts)
+  for (const concept of concepts) {
+    if (!earlier.has(concept.id))
+      earlier.set(concept.id, { name: concept.name, lecture: lecture.number })
+  }
+
+  return {
+    ...lecture,
+    title: settled.title,
+    slides: lecture.text.length,
+    topics: settled.topics,
+    leftOut: settled.leftOut,
+    dropped: [],
+    context: slidesBlock(
+      `Lecture ${two(lecture.number)} ${settled.title}`,
+      lecture.text,
+      lecture.images,
+    ),
+    beyondGoal: [],
+  }
+}
+
+/**
+ * Every slide of a lecture read on its own, with its picture. The first slide goes ahead and
+ * fills the provider's cache with the lecture; the rest read it there.
+ */
+async function readSlides(b: Build, lecture: ReadLecture) {
+  const all = lecture.text.map((_, s) => s + 1)
+  const context = slidesBlock(`Lecture file: ${lecture.file}`, lecture.text, [])
+  const slide = (s: number) => ({
+    number: s + 1,
+    lines: lecture.text[s]!,
+    image: lecture.pictures[s]!,
+  })
+  const first = await askSlide(b.model, context, slide(0), preset.mapRules)
+  const rest = await pool(all.slice(1), (n) =>
+    askSlide(b.model, context, slide(n - 1), preset.mapRules),
+  )
+  return [first, ...rest].flat()
+}
+
+/** The kind of each fact, in requests that carry only the pictures of the slides the facts come from. */
+async function kindsOf(b: Build, source: { context: string; images: SlideImage[] }, facts: Fact[]) {
+  const answers: Awaited<ReturnType<Decide>> = []
+  for (let start = 0; start < facts.length;) {
+    const pictured = new Map<number, SlideImage>()
+    let end = start
+    for (; end < facts.length; end++) {
+      const slide = facts[end]!.slide
+      const image = source.images.find((candidate) => candidate.slide === slide)
+      if (!image || pictured.has(slide)) continue
+      if (pictured.size === MAX_DECISION_IMAGES) break
+      pictured.set(slide, image)
+    }
+    answers.push(
+      ...(await b.decide({
+        context: source.context,
+        images: [...pictured.values()].sort((x, y) => x.slide - y.slide),
+        questions: facts.slice(start, end).map((fact) => ask.factKind(fact.text)),
+      })),
+    )
+    start = end
+  }
+  return answers
+}
+
+/** How much each fact is worth learning, each fact as the whole input of its own request. */
+async function askWorth(b: Build, concepts: Concept[]): Promise<void> {
+  await pool(
+    concepts.flatMap((concept) => concept.facts.map((fact) => ({ concept, fact }))),
+    async ({ concept, fact }) => {
+      const [answer] = await b.decide({
+        context: factInput(concept.name, fact.text),
+        images: [],
+        questions: [ask.worth()],
+      })
+      const worth = score(answer)
+      if (worth !== null) fact.worth = Math.round(worth * 100) / 100
+    },
+  )
+}
+
+/**
+ * Past exams: the papers not read before, read into their questions, then the questions sorted
+ * into families, each answered as a fact of the lecture it belongs to. Saved with the course.
+ */
+async function addExamAnswers(b: Build, fresh: Paper[], lectures: OpenLecture[]): Promise<Exams> {
+  const { store } = b.ports
+  const saved: ExamsFile = (await readJson<ExamsFile>(store, paths.examsFile(b.course))) ?? {
+    papers: [],
+  }
+  const tally = { questions: 0, papers: 0, families: 0, fromSlides: 0 }
+  const papers = await pool(fresh, async ({ name, pages }) => ({
+    file: name,
+    questions: await askQuestions(b.model, name.replace(/\.pdf$/i, ''), pages),
+  }))
+  const file: ExamsFile = { papers: [...saved.papers, ...papers] }
+  const questions = papers.flatMap((paper) => paper.questions)
+  if (questions.length === 0) return { file, tally }
+  // Questions that ask the same thing, each placed in one lecture of this build.
+  const places = lectures.map((l) => ({
+    number: l.number,
+    title: l.title,
+    concepts: l.topics.flatMap((t) => t.concepts).map((c) => c.name),
+  }))
+  const families = await askFamilies(b.model, questions, places)
+  const answered = await pool(families, async (family) => {
+    const lecture = lectures.find((l) => l.number === family.lecture)!
+    const answer = await askAnswer(b.model, lecture, family)
+    return { family, lecture, answer }
+  })
+  const added = new Map<OpenLecture, Fact[]>()
+  for (const { family, lecture, answer } of answered) {
+    if (answer.answer.trim() === '') continue
+    const fact = examFact(lecture, family, answer)
+    added.set(lecture, [...(added.get(lecture) ?? []), fact])
+  }
+  // The kind of each answer, as for every other fact.
+  for (const [lecture, facts] of added) {
+    const kinds = await kindsOf(b, lecture, facts)
+    facts.forEach((fact, f) => (fact.kind = chosen(kinds[f], FACT_KINDS, 'definition')))
+  }
+  const all = [...added.values()].flat()
+  Object.assign(tally, {
+    questions: questions.length,
+    papers: papers.length,
+    families: all.length,
+    fromSlides: all.filter((fact) => fact.exam!.fromSlides).length,
+  })
+  return { file, tally }
+}
+
+/** One plan for all lectures of the build: the goal's cards go where the facts worth most are. */
+function planCards(lectures: OpenLecture[], goal: Goal): Planned[] {
+  const planned: Planned[] = []
+  plan(lectures, goal, preset).forEach(({ slots, beyondGoal }, i) => {
+    lectures[i]!.beyondGoal = beyondGoal
+    planned.push(...slots.map((slot) => ({ lecture: lectures[i]!, ...slot })))
+  })
+  return planned
+}
+
+/** Card ids, counted per lecture, concept and card type. */
+function createIds(): NextId {
+  const counters = new Map<string, number>()
+  return (lecture, concept, role) => {
+    const key = `${lecture.number}/${concept.id}/${role}`
+    const n = (counters.get(key) ?? 0) + 1
+    counters.set(key, n)
+    return cardId(lecture.number, concept.id, role, n)
+  }
+}
+
+const job = (item: Item): CardJob => ({
+  context: item.lecture.context,
+  images: item.lecture.images,
+  concept: item.concept,
+  fact: item.fact,
+  role: item.role,
+})
+
+const draftOf = (item: Item): Draft => ({
+  concept: item.concept.name,
+  role: item.role,
+  slide: item.fact.slide,
+  ...item.slots,
+})
+
+/** Fill one form per planned card. */
+async function fillCards(b: Build, planned: Planned[], nextId: NextId): Promise<Item[]> {
+  let done = 0
+  const empty: Slots = { front: '', answers: [], labels: [], extra: '', code: '' }
+  const drafted: Item[] = planned.map((slot, order) => ({
+    ...slot,
+    id: nextId(slot.lecture, slot.concept, slot.role),
+    order,
+    slots: empty,
+    part: false,
+    problems: [],
+  }))
+  const fill = async (item: Item) => {
+    item.slots = await b.writer.fill(job(item))
+    b.emit({
+      type: 'progress',
+      phase: 'write',
+      done: ++done,
+      total: drafted.length,
+      lecture: item.lecture.number,
+    })
+  }
+  // The provider caches the lecture per card type. The first card of each type in a lecture
+  // goes ahead and fills that cache; the rest then read the lecture at the cached price.
+  const first = new Map<string, Item>()
+  for (const item of drafted) {
+    const key = `${item.lecture.number}/${item.role}`
+    if (!first.has(key)) first.set(key, item)
+  }
+  const ahead = new Set(first.values())
+  await pool([...ahead], fill)
+  await pool(
+    drafted.filter((item) => !ahead.has(item)),
+    fill,
+  )
+  return drafted
+}
+
+/**
+ * The gate, the card check and the repair, in rounds. What fails is repaired or split and
+ * checked again, at most `REPAIRS` times, then dropped. Fills `checked` as cards are decided.
+ */
+async function checkCards(
+  b: Build,
+  items: Item[],
+  nextId: NextId,
+  { accepted, dropped }: Checked,
+): Promise<void> {
+  let pending = items
+  for (let round = 0; pending.length > 0; round++) {
+    const failing: Item[] = []
+    const passing: Item[] = []
+    for (const item of pending) (passesRules(item) ? passing : failing).push(item)
+    await checkOrganisation(b, passing)
+    for (const item of passing) {
+      if (item.problems.length > 0) dropped.push(item)
+      else accepted.push(item)
+    }
+    // A split adds cards, so the total is what is in play now, never less than what is done.
+    const total = accepted.length + failing.length + dropped.length
+    b.emit({ type: 'progress', phase: 'check', done: accepted.length, total })
+    if (round === REPAIRS) {
+      dropped.push(...failing)
+      break
+    }
+    pending = await rewrite(b, failing, nextId, dropped)
+  }
+  accepted.sort((x, y) => x.order - y.order)
+}
+
+/**
+ * The gate: hard limits and the two rules on what a card says. A card that passes is assembled;
+ * one that does not keeps its problems. A card within every limit can still lean on the slides
+ * or say nothing. Both are asked of what the model wrote, never of a student's own card.
+ */
+function passesRules(item: Item): boolean {
+  const text = item.lecture.text
+  item.problems = validateDraft(draftOf(item), {
+    slides: item.concept.slides,
+    slideText: (slide) => text[slide - 1]?.join('\n'),
+    seenAsImage: (slide) => item.lecture.images.some((image) => image.slide === slide),
+  })
+  if (item.problems.length === 0) {
+    item.problems = [...leansOnSlides(draftOf(item)), ...saysNothing(draftOf(item))]
+  }
+  if (item.problems.length > 0) return false
+  item.card = assemble(draftOf(item), {
+    id: item.id,
+    lecture: item.lecture,
+    concept: item.concept,
+    slideLines: text[item.fact.slide - 1]!,
+    ...(item.fact.exam ? { exam: item.fact.exam } : {}),
+  })
+  return true
+}
+
+/**
+ * The card check, each card as the whole input of its own request. A card about the
+ * organisation of the course is marked at once: no wording repairs such a fact.
+ */
+async function checkOrganisation(b: Build, passing: Item[]): Promise<void> {
+  await pool(passing, async (item) => {
+    const { question, answer } = questionAndAnswer(item.card!)
+    const [verdict] = await b.decide({
+      context: cardInput(question, answer),
+      images: [],
+      questions: [ask.organisation()],
+    })
+    const p = probability(verdict)
+    if (p === null || p < ORGANISATION_THRESHOLD) return
+    item.problems = [ORGANISATION]
+  })
+}
+
+/**
+ * A card that is too long is split into atomic cards. Everything else is filled again. Returns
+ * the cards to check next; a card that cannot be split is dropped.
+ */
+async function rewrite(
+  b: Build,
+  failing: Item[],
+  nextId: NextId,
+  dropped: Item[],
+): Promise<Item[]> {
+  const parts = await pool(failing, async (item) => {
+    if (!item.part && tooLong(draftOf(item)))
+      return b.writer.split(job(item), item.slots, item.problems)
+    item.slots = await b.writer.repair(job(item), item.slots, item.problems)
+    return null
+  })
+  return failing.flatMap((item, i) => {
+    const split = parts[i]
+    if (!split) return [item]
+    if (split.length === 0) {
+      dropped.push(item)
+      return []
+    }
+    return split.slice(0, SPLIT_INTO).map((slots, k) => ({
+      ...item,
+      // The first part keeps the id, so the plan's card is still there.
+      id: k === 0 ? item.id : nextId(item.lecture, item.concept, item.role),
+      order: item.order + k / (SPLIT_INTO + 1),
+      slots,
+      part: true,
+    }))
+  })
+}
+
+/**
+ * Clashes across the whole course: a new card whose question is word for word one that
+ * exists is dropped. No card is rewritten here.
+ */
+function dropClashes(existingCards: { id: string; card: CardFile }[], checked: Checked): void {
+  const { accepted, dropped } = checked
+  const text = (card: CardFile) => htmlToText(card.fields.Front ?? card.fields.Text ?? '')
+  const clashes = findClashes(
+    existingCards.map(({ id, card }) => ({ id, text: text(card) })),
+    accepted.map((item) => ({ id: item.id, text: text(item.card!) })),
+  )
+  for (const [id, other] of clashes.same) {
+    const item = accepted.splice(
+      accepted.findIndex((candidate) => candidate.id === id),
+      1,
+    )[0]!
+    item.problems = [`asks the same question as ${other}`]
+    dropped.push(item)
+  }
+}
+
+/**
+ * Save the past papers, the decisions and the files of every new lecture. What this run writes
+ * about a lecture replaces what an earlier run that did not finish wrote. Returns each
+ * lecture's line of the `built` event.
+ */
+async function saveLectures(
+  b: Build,
+  done: {
+    existing: CourseFile | null
+    goal: Goal
+    exams: Exams
+    lectures: OpenLecture[]
+    checked: Checked
+  },
+): Promise<BuiltLecture[]> {
+  const { store } = b.ports
+  const { course } = b
+  const { existing, goal, lectures } = done
+  const { accepted, dropped } = done.checked
+  const { file: examsFile, tally: examTally } = done.exams
+  if (examsFile.papers.length > 0) await writeJson(store, paths.examsFile(course), examsFile)
+  const built = new Set(lectures.map((lecture) => lecture.number))
+  const decisions: Decision[] = existing?.lectures.length
+    ? ((await readJson<Decision[]>(store, paths.decisions(course))) ?? []).filter(
+        (decision) => decision.lecture === null || !built.has(decision.lecture),
+      )
+    : []
+  if (!existing?.lectures.length) {
+    const { label, cardsPerSlide } = GOAL_PRESETS[goal]
+    decisions.push({
+      lecture: null,
+      kind: 'goal',
+      text: `Goal "${label}": the facts worth most get a card, at most ${cardsPerSlide} per slide.`,
+    })
+  }
+  if (examTally.families > 0) {
+    const byModel = examTally.families - examTally.fromSlides
+    decisions.push({
+      lecture: null,
+      kind: 'exams',
+      text: `${examTally.questions} questions from ${examTally.papers} past papers came down to ${examTally.families} questions that get a card first. The slides answer ${examTally.fromSlides} of them; ${byModel} the model answered from what it knows, and those cards say so.`,
+    })
+  }
+  const summary: BuiltLecture[] = []
+  const allowed = budget(
+    goal,
+    lectures.reduce((sum, lecture) => sum + lecture.slides, 0),
+  )
+  for (const lecture of lectures) {
+    const cards = accepted.filter((item) => item.lecture === lecture)
+    const lost: Dropped[] = dropped
+      .filter((item) => item.lecture === lecture)
+      .map((item) => ({
+        concept: item.concept.name,
+        role: item.role,
+        front: item.slots.front,
+        problems: item.problems,
+      }))
+    await writeCards(
+      store,
+      course,
+      lecture.number,
+      cards.map((item) => item.card!),
+    )
+    const { number, title, file, slides, topics, leftOut } = lecture
+    const tree: Lecture = { number, title, file, slides, topics, leftOut, dropped: lost }
+    await writeJson(store, paths.lecture(course, number), tree)
+    decisions.push(
+      ...account(lecture, allowed, new Set(cards.map((item) => item.concept)), lost.length),
+    )
+    const concepts = topics.flatMap((t) => t.concepts).length
+    summary.push({ number, title, concepts, cards: cards.length })
+  }
+  await writeJson(store, paths.decisions(course), decisions)
+  return summary
+}
+
+/** `course.json` goes last: a lecture counts as built once it is listed there. */
+async function listLectures(
+  b: Build,
+  existing: CourseFile | null,
+  goal: Goal,
+  lectures: OpenLecture[],
+): Promise<void> {
+  const listed = lectures.map((l) => ({
+    number: l.number,
+    title: l.title,
+    file: l.file,
+    sha256: l.sha256,
+    slides: l.slides,
+  }))
+  await writeJson(b.ports.store, paths.course(b.course), {
+    format: 1,
+    name: existing?.name ?? b.course.split('/').at(-1)!,
+    goal,
+    lectures: [...(existing?.lectures ?? []), ...listed].sort((x, y) => x.number - y.number),
+  } satisfies CourseFile)
 }
 
 /** The decisions of one lecture, written by code from what happened. */
