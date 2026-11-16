@@ -36,12 +36,16 @@ blind comparison by a person against this deck
 
 The test set is the four newest Entrepreneurship papers (Winter 24/25 to Summer 26, 60 marks
 each): 218 knowledge points, 181 to recall and 37 to apply to a case. Measured 2026-11-16 on
-two builds of 2026-11-15 (`gpt-6-luna`, goal top), judged by Claude Haiku:
+two builds of 2026-11-15 and three builds of v3 of 2026-11-16 (`gpt-6-luna`, goal top), judged
+by Claude Haiku:
 
 | Build                                  | Cards | Marks held | 95% interval | Points held |
 | -------------------------------------- | ----- | ---------- | ------------ | ----------- |
 | Slides only                            | 631   | 31.3%      | 23.7 to 37.2 | 56 of 218   |
 | With cards from the 18 older papers    | 633   | 43.8%      | 38.0 to 51.1 | 80 of 218   |
+| v3, 18 older papers, first build       | 661   | 46.0%      | 37.8 to 55.0 | 84 of 218   |
+| v3, 18 older papers, second build      | 668   | 53.1%      | 46.8 to 59.7 | 96 of 218   |
+| v3, 18 older papers, third build       | 663   | 49.0%      | 42.6 to 55.9 | 95 of 218   |
 
 - **The measure sees a known gain.** The paired difference is 12.5 points of coverage (6.8 to
   21.7): 35 points gained, 11 lost. The lost ones are facts the slides state that one build
@@ -51,16 +55,29 @@ two builds of 2026-11-15 (`gpt-6-luna`, goal top), judged by Claude Haiku:
   slides state would hold 39.8%. Cards from older papers are what lifts a build above that.
 - **Where the misses are.** Of the 138 points the better build misses, 120 have a card on the
   concept that lacks the fact, and 18 have nothing.
-- **How far to believe it.** One build is known to about 6.5 points either way, a paired
-  difference to about 7. Two judges on the same 240 pairs agree on 93% (kappa 0.88) and on 29 of
-  30 points. A rubric whose points bundled several facts scored the same deck at 35.2% and let
-  the judges part on 2 of 27 points, so a point is one fact.
+- **v3 holds about half the marks.** Its three builds average 49.4% (sd 3.6). Against the 43.8%
+  of the build of 2026-11-15 that is 5.6 points, less than three builds against one can show
+  (about 8).
+- **Builds of the same code differ, and the interval does not know it.** The interval of a
+  build, and of a paired difference, covers which questions an exam asks, not the luck of the
+  build. Two of the three pairs of v3 builds differ by more than their paired interval allows
+  (7.5 points, 0.6 to 13.1, and 4.6 points, 0.4 to 9.2), though the code is the same. Of the
+  218 points, 65 are held by all three builds, 51 by one or two, 102 by none. So a change of
+  code counts only when it beats the old figure by **about 10 points for one build each, 7 for
+  two, 6 for three** (twice the standard error of the difference, `eval/spread.ts`); three
+  builds give a rough sd, so these are rough too. The gain of exam cards over slides only
+  (12.5 points, one build each) clears that bar.
+- **The judge is steadier than the build.** Two judges on the same 240 pairs agree on 93%
+  (kappa 0.88) and on 29 of 30 points. A rubric whose points bundled several facts scored the
+  same deck at 35.2% and let the judges part on 2 of 27 points, so a point is one fact. A judge
+  mistypes a card id about once in a deck; the intake refuses the file and the id is corrected
+  by hand.
 - **What is model-made.** The papers have no official solutions. One Claude Sonnet reading per
   paper wrote the points, a second independent reading of one paper agreed on all five multiple
   choice answers and on the substance of the open questions, and the marks inside an open
   question are an allocation, not the examiner's. Steffen has not yet checked the rubric
   ([#264](https://github.com/stegra05/lectern/issues/264)).
-- **What a judging costs.** About 130,000 Haiku tokens per batch of 30 points, 780,000 for a
+- **What a judging costs.** About 140,000 Haiku tokens per batch of 30 points, 850,000 for a
   whole deck.
 
 ## What the reference deck says

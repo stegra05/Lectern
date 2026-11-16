@@ -18,7 +18,9 @@
  * of the pair, so a fact several papers share is judged once and a second look at a run asks
  * only about what is new. `report` gives
  * the share of the marks the deck holds with its 95 percent interval and refuses while pairs
- * are open. `compare` gives the difference between two runs on the same points.
+ * are open. `compare` gives the difference between two runs on the same points. Its interval
+ * says whether two decks differ on this exam; whether the code behind them does takes more
+ * than one build each, since builds of the same code differ by several points (RFD 14).
  */
 
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -194,9 +196,11 @@ async function compareRuns(first: string, second: string): Promise<void> {
     console.log(
       `Difference: ${sign(difference)} points of coverage (${sign(low)} to ${sign(high)})`,
     )
+    // The interval covers which questions an exam asks, not the luck of a build: two builds
+    // of the same code have differed by more than it allows (RFD 14).
     console.log(
       low > 0 || high < 0
-        ? 'The interval excludes zero.'
+        ? 'The interval excludes zero: these two decks differ on this exam. Builds of the same code differ too, so a change of code needs the bar of RFD 14.'
         : 'The interval holds zero: no difference shown.',
     )
   } else {
