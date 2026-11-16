@@ -196,12 +196,16 @@ export async function renderSlide(
   return (await pdf.renderSlides(bytes, [slide]))[0]!
 }
 
-/** A new, empty course. Its folder name is made from the name and never reused. */
+/**
+ * A new, empty course. Its folder name is made from the name and never reused, whatever the
+ * spelling of a folder there is: macOS and Windows take `Econ` and `econ` for the same folder.
+ */
 export async function createCourse(store: Store, name: string, goal: Goal): Promise<string> {
-  const taken = new Set(await store.list(''))
+  const spelling = (folder: string) => folder.normalize('NFC').toLowerCase()
+  const taken = new Set((await store.list('')).map(spelling))
   const base = slug(name) || 'course'
   let id = base
-  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
+  for (let n = 2; taken.has(spelling(id)); n++) id = `${base}-${n}`
   await writeJson(store, paths.course(id), {
     format: 1,
     name: name.trim(),

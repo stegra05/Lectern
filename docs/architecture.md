@@ -510,7 +510,8 @@ Properties that hold by construction and by test:
 - Card files hold the fields exactly as they go to Anki (HTML), plus `id`, `note`, `concept`, `slide`
   and `own`. The Slide picture is not saved in the course folder: the `slide` command and `send`
   render it from the PDF on request.
-- `createCourse` makes the folder name from a slug of the name and never reuses one.
+- `createCourse` makes the folder name from a slug of the name and never reuses one, nor one that
+  differs from it only by case (macOS and Windows take those for the same folder).
 - `nodeStore` writes a file beside its target (`*.part`, never listed) and renames it over the
   target, so a crash or a quit leaves the old file or the new one. A file that no longer parses
   fails with its path (`damaged` in `course.ts`); such a course stays in the list under its folder

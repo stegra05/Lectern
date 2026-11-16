@@ -1,4 +1,4 @@
-import { readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { memoryAnki } from '../src/adapters/memory-anki.ts'
@@ -472,6 +472,27 @@ describe('a sort that the decision model cannot finish', () => {
       fix: 'Check the key in OPENAI_API_KEY, then add the files again.',
     })
     expect(await readdir(join(root, course, 'slides'))).toEqual(['Introduction.pdf'])
+  })
+})
+
+describe('a course folder made elsewhere', () => {
+  it('is never written over by a new course whose name differs only by case', async () => {
+    const library = join(await tempRoot(), 'by-hand')
+    const held = '{"format": 1, "name": "Econ", "goal": "good", "lectures": []}\n'
+    await mkdir(join(library, 'Econ'), { recursive: true })
+    await writeFile(join(library, 'Econ', 'course.json'), held)
+    const events: Event[] = []
+    await createEngine({
+      store: nodeStore(library),
+      pdf: pdfjsReader,
+      model: offlineModel(),
+      decisions: offlineDecisions(),
+      anki: memoryAnki(),
+      templates,
+      now: Date.now,
+    }).run({ type: 'create', name: 'Econ' }, (event) => events.push(event))
+    expect(events).toEqual([{ type: 'created', course: 'econ-2' }])
+    expect(await readFile(join(library, 'Econ', 'course.json'), 'utf8')).toBe(held)
   })
 })
 
