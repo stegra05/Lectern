@@ -5,15 +5,16 @@
  *   <course>/exams/*.pdf               input, past exam papers
  *   <course>/course.json               CourseFile
  *   <course>/lectures/02/lecture.json  Lecture: the tree, and what was left out
- *   <course>/lectures/02/cards.yaml    CardFile[], one readable file per lecture
+ *   <course>/lectures/02/cards.yaml    Card[], one readable file per lecture
  *   <course>/decisions.json            Decision[]
  *   <course>/runs/001.json             Run
  *   <course>/anki.json                 which Anki note each sent card became
  */
 
 import { parse, stringify } from 'yaml'
-import type { CardFile } from './cards/assemble.ts'
-import type { Goal } from './cards/roles.ts'
+import type { Card } from './cards/card.ts'
+import type { Goal, Role } from './cards/roles.ts'
+import type { Slots } from './cards/slots.ts'
 import type { FactKind } from './decide.ts'
 import { two } from './cards/words.ts'
 import { EngineError } from './errors.ts'
@@ -176,29 +177,57 @@ export function writeJson(store: Store, path: string, value: unknown): Promise<v
   return store.write(path, `${JSON.stringify(value, null, 2)}\n`)
 }
 
-export async function readCards(
-  store: Store,
-  course: string,
-  lecture: number,
-): Promise<CardFile[]> {
-  const path = paths.cards(course, lecture)
-  const text = await store.read(path)
-  if (text === null) return []
-  try {
-    return (parse(text) as CardFile[] | null) ?? []
-  } catch {
-    throw damaged(path)
+/** A card as `cards.yaml` holds it: an empty slot, and an answer's empty key term, left out. */
+type CardInFile = Omit<Card, 'slots'> & {
+  slots: Partial<Omit<Slots, 'answers'>> & {
+    role: Role
+    answers?: { text: string; key?: string }[]
   }
 }
 
-/** Long lines stay whole, so a card field reads as one line. */
+export async function readCards(store: Store, course: string, lecture: number): Promise<Card[]> {
+  const path = paths.cards(course, lecture)
+  const text = await store.read(path)
+  if (text === null) return []
+  let cards: CardInFile[]
+  try {
+    cards = (parse(text) as CardInFile[] | null) ?? []
+  } catch {
+    throw damaged(path)
+  }
+  // Each card keeps the order of its keys, so a file read and written again stays the same.
+  return cards.map((card) => ({
+    ...card,
+    slots: {
+      role: card.slots.role,
+      front: card.slots.front ?? '',
+      answers: (card.slots.answers ?? []).map(({ text, key = '' }) => ({ text, key })),
+      labels: card.slots.labels ?? [],
+      hidden: card.slots.hidden ?? [],
+      at: card.slots.at ?? [],
+      extra: card.slots.extra ?? '',
+      code: card.slots.code ?? '',
+    },
+  }))
+}
+
+const empty = (value: unknown) => value === '' || (Array.isArray(value) && value.length === 0)
+
+/** Empty slots are left out, so the file reads like a study kit. Long lines stay whole. */
 export function writeCards(
   store: Store,
   course: string,
   lecture: number,
-  cards: CardFile[],
+  cards: Card[],
 ): Promise<void> {
-  return store.write(paths.cards(course, lecture), stringify(cards, { lineWidth: 0 }))
+  const inFile = cards.map((card) => {
+    const answers = card.slots.answers.map(({ text, key }) =>
+      key === '' ? { text } : { text, key },
+    )
+    const kept = Object.entries({ ...card.slots, answers }).filter(([, value]) => !empty(value))
+    return { ...card, slots: Object.fromEntries(kept) }
+  })
+  return store.write(paths.cards(course, lecture), stringify(inFile, { lineWidth: 0 }))
 }
 
 /** A lecture's name guessed from its file name, until the map gives the real one. */

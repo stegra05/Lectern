@@ -7,7 +7,7 @@ import { offlineDecisions, offlineModel } from '../src/adapters/offline.ts'
 import { pdfjsReader } from '../src/adapters/pdfjs.ts'
 import {
   createEngine,
-  type CardFile,
+  type ShownCard,
   type CourseState,
   type CourseSummary,
   type DecisionsPort,
@@ -279,8 +279,8 @@ describe('a course from creation to its cards, through the boundary only, with t
       Source: 'Past exams; the answer is not on the slides',
       Slide: '',
     })
-    const first: CardFile = cards[1]!
-    expect(first).toMatchObject({ id: '01-risk-knight-1921-definition-2', note: 'qa', slide: 2 })
+    const first: ShownCard = cards[1]!
+    expect(first).toMatchObject({ id: '01-risk-knight-1921-definition-2', slide: 2 })
     expect(first.fields).toMatchObject({
       Front: 'Risk (Knight 1921): how does the statement beginning "An outcome whose" go on?',
       Back: 'An outcome whose probability can be calculated <mark>or known</mark>',

@@ -25,7 +25,7 @@
 | File                       | Holds                                                                    |
 | -------------------------- | ------------------------------------------------------------------------ |
 | `course.json`              | lectures built, goal. Lists a lecture after its files are written, so a half-built lecture never counts |
-| `lectures/NN/cards.yaml`   | the accepted cards of one lecture                                        |
+| `lectures/NN/cards.yaml`   | the accepted cards of one lecture: slots in plain text and where each card comes from, no HTML |
 | `lectures/NN/lecture.json` | the map, slides left out with reasons, dropped cards                     |
 | `decisions.json`           | the decisions shown to the student, written by code from facts           |
 | `runs/NNN.json`            | model, preset, goal, calls, tokens, estimate, cost, phase durations      |
@@ -48,7 +48,6 @@ app on the same code, and plain files keep every run inspectable.
 ## Given up
 
 - **One JSON file per card.** One readable YAML per lecture instead, like Steffen's study
-  kits (his decision 10). The YAML holds field HTML, so it reads less like the kits than he
-  pictured. Plain slots instead: [#196](https://github.com/stegra05/lectern/issues/196).
+  kits (his decision 10).
 - **Courses in the Documents folder.** It triggered a permission prompt.
 - **Reading v2's keychain entry** for the key.

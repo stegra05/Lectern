@@ -1,11 +1,10 @@
 /**
- * A card as a student edits it: the slots of its role in plain text, without markup. `toSlots`
- * reads them back out of the stored fields, the reverse of `assemble.ts`; `toDraft` turns them
- * into the draft that the validator checks and `assemble` builds the fields from. Pure.
+ * A card's slots: its role's words in plain text, without markup, as `cards.yaml` stores them
+ * and a student edits them. `fromDraft` takes them out of what the model wrote, `tidy` out of
+ * what a student wrote, and `toDraft` turns them into the draft the validator checks. Pure.
  */
 
-import type { CardFile } from './assemble.ts'
-import { isRole, ROLE_SPECS, type Draft, type Role } from './roles.ts'
+import { ROLE_SPECS, type Draft, type Role } from './roles.ts'
 import { isYesNo, LIMITS } from './validate.ts'
 import { CLOZE, words } from './words.ts'
 
@@ -20,8 +19,8 @@ export interface Slots {
   /** Gap card: the parts of the sentence that are hidden, in the order they stand in it. */
   hidden: string[]
   /**
-   * Gap card: where each hidden part starts in `front`, as `toSlots` read it. The editor hands it
-   * back untouched, so a part that stands twice in the sentence stays at the place it had.
+   * Gap card: where each hidden part starts in `front`. The editor hands it back untouched, so a
+   * part that stands twice in the sentence stays at the place it had.
    */
   at: number[]
   extra: string
@@ -43,68 +42,6 @@ export const FORM_LIMITS = {
   extra: LIMITS.extraWords,
   gapSentence: LIMITS.clozeWords,
 } as const
-
-const unescape = (html: string) =>
-  html.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-
-/** Field HTML back to the text it was made from: `<sub>` and `<sup>` stay, nothing is marked. */
-function plain(html: string): string {
-  return unescape(html.replace(/<\/?mark>/g, ''))
-}
-
-/** One answer out of its field HTML: its text and the term the field marks in it. */
-function answerOf(html: string, markWhole: boolean): Slots['answers'][number] {
-  const marked = /<mark>(.*?)<\/mark>/.exec(html)
-  // Where an unmarked answer is the key term as a whole, the mark around all of it says nothing.
-  const whole = markWhole && marked !== null && marked[0] === html
-  return { text: plain(html), key: marked && !whole ? unescape(marked[1]!) : '' }
-}
-
-const items = (html: string) => [...html.matchAll(/<li>(.*?)<\/li>/gs)].map((m) => m[1]!)
-
-export function toSlots(card: CardFile): Slots {
-  const f = card.fields
-  const role = f.Role ?? ''
-  if (!isRole(role)) throw new Error(`Card ${card.id} has the unknown role "${role}"`)
-  const spec = ROLE_SPECS[role]
-  const slots: Slots = {
-    role,
-    front: plain(f.Front ?? ''),
-    answers: [],
-    labels: [...(f.Slots ?? '').matchAll(/<span>(.*?)<\/span>/g)]
-      .map((m) => plain(m[1]!))
-      .filter((label) => label !== ''),
-    hidden: [],
-    at: [],
-    extra: plain(f.Extra ?? ''),
-    code: unescape(f.Code ?? ''),
-  }
-  const back = f.Back ?? ''
-  const text = f.Text ?? ''
-  if (role === 'cloze') {
-    let front = ''
-    let end = 0
-    for (const m of text.matchAll(CLOZE)) {
-      front += plain(text.slice(end, m.index))
-      slots.at.push(front.length)
-      slots.hidden.push(plain(m[2]!))
-      front += plain(m[2]!)
-      end = m.index + m[0].length
-    }
-    slots.front = front + plain(text.slice(end))
-  } else if (role === 'cloze-list') {
-    slots.front = plain(text.replace(/<ul>.*$/s, ''))
-    slots.answers = items(text).map((item) => ({ text: plain(item.replace(CLOZE, '$2')), key: '' }))
-  } else if (spec.back === 'formula') {
-    const [, tex = '', condition = ''] = /^\\\[ (.*?) \\\] (.*)$/s.exec(back) ?? []
-    slots.answers = [{ text: unescape(tex), key: '' }, answerOf(condition, false)]
-  } else if (back.startsWith('<ul>')) {
-    slots.answers = items(back).map((item) => answerOf(item, spec.markWhole))
-  } else {
-    slots.answers = [answerOf(back, spec.markWhole)]
-  }
-  return slots
-}
 
 export interface Problem {
   /** The field of the form the problem is about. `card` when it is about the card as a whole. */
@@ -321,25 +258,41 @@ export function fromDraft(draft: Draft): Slots {
   return slots
 }
 
-/** The draft of the slots, for the validator and for `assemble`. Run `checkSlots` first. */
-export function toDraft(slots: Slots, card: { concept: string; slide: number }): Draft {
+/** The slots a student wrote, trimmed, with each hidden part at its place. Run `checkSlots` first. */
+export function tidy(slots: Slots): Slots {
+  const front = slots.front.trim()
   const hidden = slots.hidden.map((part) => part.trim())
-  const placed = placeGaps(slots.front, hidden, slots.at)
-  const front = 'starts' in placed ? gapSentence(slots.front, hidden, placed.starts) : slots.front
+  const placed = placeGaps(front, hidden, slots.at)
+  return {
+    role: slots.role,
+    front,
+    answers: slots.answers.map(({ text, key }) => ({ text: text.trim(), key: key.trim() })),
+    labels: slots.labels.map((label) => label.trim()),
+    hidden,
+    at: 'starts' in placed ? placed.starts : [],
+    extra: slots.extra.trim(),
+    code: slots.code.replace(/\s+$/, ''),
+  }
+}
+
+/**
+ * The draft of tidy slots, for the validator, which reads marks in the text as the model writes
+ * them. A `==` the student wrote is left out of it, so only the key term reads as a mark.
+ */
+export function toDraft(slots: Slots, card: { concept: string; slide: number }): Draft {
+  const plain = (text: string) => text.replace(/==/g, '')
   return {
     concept: card.concept,
     role: slots.role,
     slide: card.slide,
-    front: front.trim(),
+    front: slots.role === 'cloze' ? gapSentence(slots.front, slots.hidden, slots.at) : slots.front,
     answers: slots.answers.map(({ text, key }) => {
-      const answer = text.trim()
-      const term = key.trim()
-      return term !== '' && answer.includes(term)
-        ? answer.replace(term, () => `==${term}==`)
-        : answer
+      const at = keyAt(text, key)
+      if (at < 0) return plain(text)
+      return `${plain(text.slice(0, at))}==${plain(key)}==${plain(text.slice(at + key.length))}`
     }),
-    labels: slots.labels.map((label) => label.trim()),
-    extra: slots.extra.trim(),
+    labels: slots.labels,
+    extra: slots.extra,
     code: slots.code,
   }
 }

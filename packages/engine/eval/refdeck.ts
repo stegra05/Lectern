@@ -150,7 +150,7 @@ async function run(folder: string, out: string): Promise<void> {
   for (const { number, file: pdf } of file.lectures) {
     const lecture = (await readJson<Lecture>(store, paths.lecture(course, number)))!
     for (const card of await readCards(store, course, number)) {
-      const role = card.fields.Role ?? card.note
+      const role = card.slots.role
       cards.push({ id: card.id, role, slide: card.slide, ...questionAndAnswer(card) })
     }
     for (const concept of lecture.topics.flatMap((topic) => topic.concepts)) {

@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parse } from 'yaml'
 import {
   scriptedDecisions,
   scriptedModel,
@@ -10,7 +9,9 @@ import {
 import { memoryAnki } from '../src/adapters/memory-anki.ts'
 import { nodeStore } from '../src/adapters/node-store.ts'
 import { pdfjsReader } from '../src/adapters/pdfjs.ts'
-import { createEngine, type CardFile, type Event } from '../src/api.ts'
+import { createEngine, type Event } from '../src/api.ts'
+import { withFields } from '../src/cards/fields.ts'
+import { readCards } from '../src/course.ts'
 import type { ModelPort, ModelRequest } from '../src/ports.ts'
 import { decisions, script, SLIDES } from './fixtures.ts'
 import { addSlides, tempRoot, templates } from './helpers.ts'
@@ -53,7 +54,7 @@ export function pipeline() {
   const text = (path: string) => readFile(join(root, 'course', path), 'utf8')
   const json = async <T = unknown>(path: string) => JSON.parse(await text(path)) as T
   const cards = async (lecture: string) =>
-    parse(await text(`lectures/${lecture}/cards.yaml`)) as CardFile[]
+    (await readCards(nodeStore(root), 'course', Number(lecture))).map(withFields)
 
   return {
     get root() {

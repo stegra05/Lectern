@@ -1,12 +1,13 @@
 import { CLOZE, htmlToText } from './words.ts'
-import type { CardFile } from './assemble.ts'
+import type { Card } from './card.ts'
+import { cardFields } from './fields.ts'
 
-/** A card as one question and one answer in plain text, read back from its fields. */
-export function questionAndAnswer(card: CardFile): { question: string; answer: string } {
-  const f = card.fields
-  if (card.note === 'cloze') {
-    const hidden = [...f.Text!.matchAll(CLOZE)].map((m) => htmlToText(m[2]!))
-    return { question: htmlToText(f.Text!.replace(CLOZE, '[...]')), answer: hidden.join('; ') }
+/** A card as one question and one answer in plain text, read from its fields. */
+export function questionAndAnswer(card: Card): { question: string; answer: string } {
+  const f = cardFields(card)
+  if (f.Text !== undefined) {
+    const hidden = [...f.Text.matchAll(CLOZE)].map((m) => htmlToText(m[2]!))
+    return { question: htmlToText(f.Text.replace(CLOZE, '[...]')), answer: hidden.join('; ') }
   }
   const items = [...f.Back!.matchAll(/<li>(.*?)<\/li>/g)].map((m) => htmlToText(m[1]!))
   const labels = [...f.Slots!.matchAll(/<span>(.+?)<\/span>/g)].map((m) => htmlToText(m[1]!))

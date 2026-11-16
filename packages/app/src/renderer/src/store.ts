@@ -592,7 +592,7 @@ export const useStore = create<State>((set, get) => {
     async editCard(card) {
       const { view } = get()
       if (view.level !== 'lecture') return
-      const key = draftKey({ lecture: view.lecture, card: card.id, concept: card.concept })
+      const key = draftKey({ lecture: view.lecture, card: card.id, concept: card.concept.id })
       const draft = get().drafts[key]
       if (draft) return reopen(key)
       const found = await slotsFor(view.lecture, { card: card.id })
@@ -601,7 +601,7 @@ export const useStore = create<State>((set, get) => {
         editor: {
           lecture: view.lecture,
           card: card.id,
-          concept: card.concept,
+          concept: card.concept.id,
           ...found,
           start: JSON.stringify(found.slots),
           problems: [],
@@ -775,7 +775,7 @@ export function conceptCount(course: CourseView): number {
 
 /** The cards of one concept of a lecture. */
 export function cardsOfConcept(lecture: Lecture, concept: string): Card[] {
-  return lecture.cards.filter((c) => c.concept === concept)
+  return lecture.cards.filter((c) => c.concept.id === concept)
 }
 
 /** The cards the side panel lists for the map's selection, in the lecture's own order. */
@@ -784,7 +784,7 @@ export function selectedCards(lecture: Lecture, view: View): Card[] {
   if (view.concept) return cardsOfConcept(lecture, view.concept)
   if (view.topic !== undefined) {
     const ids = new Set(lecture.topics[view.topic]?.concepts.map((c) => c.id))
-    return lecture.cards.filter((c) => ids.has(c.concept))
+    return lecture.cards.filter((c) => ids.has(c.concept.id))
   }
   return lecture.cards
 }

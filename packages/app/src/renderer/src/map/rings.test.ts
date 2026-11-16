@@ -30,7 +30,9 @@ function lecture(title: string, topics: [string, [string, number][]][]): RingsIn
       concepts: concepts.map(([c], i) => ({ id: ids[t]![i]!, name: c })),
     })),
     cards: topics.flatMap(([, concepts], t) =>
-      concepts.flatMap(([, n], i) => Array.from({ length: n }, () => ({ concept: ids[t]![i]! }))),
+      concepts.flatMap(([, n], i) =>
+        Array.from({ length: n }, () => ({ concept: { id: ids[t]![i]! } })),
+      ),
     ),
   }
 }

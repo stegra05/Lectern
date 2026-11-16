@@ -46,7 +46,7 @@ export interface Box {
 export interface RingsInput {
   title: string
   topics: { name: string; concepts: { id: string; name: string }[] }[]
-  cards: { concept: string }[]
+  cards: { concept: { id: string } }[]
 }
 
 export interface RingTopic {
@@ -140,7 +140,8 @@ export function wrapTitle(title: string, measure: Measure): { lines: string[]; d
 
 export function layoutRings(lecture: RingsInput, measure: Measure): Rings {
   const counts = new Map<string, number>()
-  for (const card of lecture.cards) counts.set(card.concept, (counts.get(card.concept) ?? 0) + 1)
+  for (const card of lecture.cards)
+    counts.set(card.concept.id, (counts.get(card.concept.id) ?? 0) + 1)
   const { lines, disc } = wrapTitle(lecture.title, measure)
   const pills = lecture.topics.map((t) => Math.min(PILL_MAX, measure(t.name, 600) + 26))
   const widths = lecture.topics.map((t) =>

@@ -8,7 +8,9 @@
  */
 
 import type { Emit } from './commands.ts'
-import type { CardFile } from './cards/assemble.ts'
+import type { Card } from './cards/card.ts'
+import { cardFields } from './cards/fields.ts'
+import { ROLE_SPECS } from './cards/roles.ts'
 import { slug, two } from './cards/words.ts'
 import { paths, readCards, readJson, writeJson, type CourseFile } from './course.ts'
 import { EngineError } from './errors.ts'
@@ -122,9 +124,9 @@ const tagged = (course: string) => slug(course) || 'course'
 const mediaName = (course: string, lecture: number, slide: number) =>
   `lectern-${tagged(course)}-l${two(lecture)}-s${two(slide)}.png`
 
-function fieldsForAnki(course: string, card: CardFile): Record<string, string> {
+function fieldsForAnki(course: string, card: Card): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(card.fields).map(([name, value]) => [
+    Object.entries(cardFields(card)).map(([name, value]) => [
       name,
       value.replace(/(<img src=")(l\d+-s\d+\.png">)/g, `$1lectern-${tagged(course)}-$2`),
     ]),
@@ -135,17 +137,17 @@ function fieldsForAnki(course: string, card: CardFile): Record<string, string> {
  * Marks the note of a card, so a note that Anki added after the add-on gave up is found again.
  * It names the course: two courses may have cards with the same id.
  */
-const idTag = (course: string, card: CardFile) => `lectern-id::${tagged(course)}::${card.id}`
+const idTag = (course: string, card: Card) => `lectern-id::${tagged(course)}::${card.id}`
 
 /**
  * Tags are hierarchical in Anki: `entrepreneurship::lecture::02`, `entrepreneurship::role::case`,
  * and `entrepreneurship::own` on a card the student wrote.
  */
-function tags(course: string, lecture: number, card: CardFile): string[] {
+function tags(course: string, lecture: number, card: Card): string[] {
   const name = tagged(course)
   return [
     `${name}::lecture::${two(lecture)}`,
-    `${name}::role::${card.fields.Role}`,
+    `${name}::role::${card.slots.role}`,
     ...(card.own ? [`${name}::own`] : []),
     idTag(course, card),
   ]
@@ -155,7 +157,7 @@ function tags(course: string, lecture: number, card: CardFile): string[] {
  * The student changed a card. When it is in Anki, its note takes the new wording and keeps its
  * progress. A note the student has deleted there is forgotten, so the card counts as not sent.
  */
-export async function updateSent({ store, anki }: Ports, course: string, card: CardFile) {
+export async function updateSent({ store, anki }: Ports, course: string, card: Card) {
   const delivery = await readDelivery(store, course)
   const note = delivery.notes[card.id]
   if (note === undefined) return
@@ -187,7 +189,7 @@ export async function send(
   if (!file) throw new EngineError(`No course found in ${course}.`, 'Create the course first.')
 
   const delivery = await readDelivery(store, course)
-  const waiting: { lecture: CourseFile['lectures'][number]; cards: CardFile[] }[] = []
+  const waiting: { lecture: CourseFile['lectures'][number]; cards: Card[] }[] = []
   for (const lecture of file.lectures) {
     const cards = (await readCards(store, course, lecture.number)).filter(
       (card) => !(card.id in delivery.notes),
@@ -209,7 +211,7 @@ export async function send(
     await writeJson(store, paths.anki(course), delivery)
   }
   interface Item {
-    card: CardFile
+    card: Card
     lecture: number
     deck: string
   }
@@ -235,7 +237,7 @@ export async function send(
           try {
             note = await anki.addNote({
               deck,
-              noteType: NOTE_TYPE_NAMES[card.note],
+              noteType: NOTE_TYPE_NAMES[ROLE_SPECS[card.slots.role].note],
               fields: fieldsForAnki(course, card),
               tags: tags(course, lecture, card),
             })

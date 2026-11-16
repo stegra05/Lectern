@@ -47,7 +47,7 @@ src/library.ts        non-building commands: courses, course, cards, slide, crea
 src/sort.ts           the kind of an added file: name rules, the choice question, SORT_THRESHOLD
 src/edit.ts           slots, edit, remove, write (single cards)
 src/deliver.ts        send (Anki)
-src/cards/            roles, validate, assemble, slots, id, words, question-answer
+src/cards/            roles, validate, slots, card, fields, id, words, question-answer
 src/adapters/         openai, pdfjs, node-store, node-templates, ankiconnect, memory-anki, offline, fake
 src/cli.ts            command line: estimate, build, send (LECTERN_FAKE=1: offline models, Anki in memory)
 eval/                 bench.ts, refdeck.ts, read-slides.ts and the judge instructions (section 14)
@@ -140,7 +140,7 @@ flowchart TD
 | 11 | Fill | generative | The whole lecture, concept, fact, card type, preset rules, one example of the type | One filled form | `createWriter` in `writer.ts` |
 | 12 | Gate | code | The slots | A list of problems, empty means pass | `validateDraft`, `leansOnSlides`, `saysNothing` in `cards/validate.ts` |
 | 13 | Split or repair | generative | The rejected slots, every problem, the same brief | A fixed form, or two or three forms | `writer.repair`, `writer.split` |
-| 14 | Assemble | code | Passing slots, place in the course, slide text | Card fields: HTML, Slots, Typed (empty), Source, Excerpt, Slide, Key | `assemble` in `cards/assemble.ts` |
+| 14 | Store | code | Passing slots, place in the course, slide text | The card as stored: slots in plain text, lecture, concept, slide, excerpt, exam | `fromDraft` in `cards/slots.ts`, `toCard` in `cards/card.ts` |
 | 15 | Organisation check | decision | The card alone: question and answer | Probability that the card is about course organisation; at 0.2 or more the card is dropped | `ORGANISATION_THRESHOLD`, `cardInput` in `decide.ts` |
 | 16 | Exact twins | code | Questions of new cards against earlier and new cards | An identical question is dropped | `findClashes` in `clash.ts` |
 | 17 | Save | code | One finished lecture | `cards.yaml`, `lecture.json`, `decisions.json`, `course.json`; with the last lecture `exams.json`; once per run `runs/NNN.json` | `saveLecture`, `saveExams`, `build` in `build.ts` |
@@ -259,12 +259,20 @@ part goes through the gate again but is never split again. Every other failure i
 same form again with the previous attempt and the full list of problems. A card that still fails
 after two rounds is dropped and listed in `lecture.json` with concept, role, question and reasons.
 
-**13. Assemble (code).** `assemble` builds every field from the slots: escaped HTML with `==x==`
-turned into `<mark>`, `Back` by role, `Slots` labels, cloze text for `cloze` and `cloze-list` (the
-list items become `{{cN::...}}` items), `Source` ("Lecture 2, slide 14"), `Excerpt` (the slide line
-sharing most terms, at most 30 words), `Slide` (an `<img>` named `l02-s14.png`), `Diagram` (the slide
-image, for the `diagram` role only), `Key` (the concept name). `Typed` is always empty and `Part`
-is always empty.
+**13. Store (code).** `fromDraft` takes the model's marks out of the text: the `==x==` of an
+answer becomes its key term, kept apart from the answer, and the deletions of a gap sentence become
+its hidden parts with their positions (`at`); any other `==x==` (in the question or lead-in, a label,
+the extra, or a second mark in one answer) has no place in the slots and is unwrapped to its words.
+`toCard` adds where the card comes from: lecture, concept, slide, `excerpt` (the slide line sharing
+most terms, at most 30 words, empty when the answer is not on the slides) and the exam it answers.
+That is what `cards.yaml` holds: plain text, no HTML.
+
+The fields of `design/cards/FIELDS.md` are built from the stored card by one function,
+`cardFields` in `cards/fields.ts`, when a card is sent or shown: escaped HTML with the key term in
+`<mark>`, `Back` by role, `Slots` labels, cloze text for `cloze` and `cloze-list` (the list items
+become `{{cN::...}}` items), `Source` ("Lecture 2, slide 14"), `Excerpt`, `Slide` (an `<img>` named
+`l02-s14.png`), `Diagram` (the slide image, for the `diagram` role only), `Key` (the concept name).
+`Typed` is always empty and `Part` is always empty.
 
 **14. Organisation check (decision model).** One request per card that passed the gate, the card
 alone as the input (`cardInput`): predicate "This flashcard is about the organisation of the
@@ -512,8 +520,11 @@ Properties that hold by construction and by test:
   request. One already in the course is marked `unreadable` on its pending lecture or paper in
   `course`, and `estimate` and `build` leave it out and name it (`unreadable` on the estimate); a
   build with nothing else to do fails with its name.
-- Card files hold the fields exactly as they go to Anki (HTML), plus `id`, `note`, `concept`, `slide`
-  and `own`. The Slide picture is not saved in the course folder: the `slide` command and `send`
+- Card files hold each card's slots in plain text (`role`, `front`, `answers` with their key term,
+  `labels`, `hidden` with `at`, `extra`, `code`) and where it comes from (`lecture`, `concept`,
+  `slide`, `excerpt`, `exam`, `own`), never HTML; an empty slot is left out. A course built
+  before the slots were stored is built again. The Slide picture is not saved in the course
+  folder: the `slide` command and `send`
   render it from the PDF on request.
 - `createCourse` makes the folder name from a slug of the name and never reuses one, nor one that
   differs from it only by case (macOS and Windows take those for the same folder).
@@ -559,8 +570,9 @@ flowchart LR
 
 The app side (`packages/app`):
 
-- `src/shared/contract.ts` re-exports the engine's own types (`Command`, `Event`, `CardFile`,
-  `CourseState`, ...), so a change of the boundary fails the app's typecheck.
+- `src/shared/contract.ts` re-exports the engine's own types (`Command`, `Event`, `ShownCard`,
+  `CourseState`, ...), so a change of the boundary fails the app's typecheck. The engine hands out
+  each card with its fields from `cardFields`; the card list shows those, typeset with KaTeX.
 - `src/main/index.ts`: handler `engine:run` builds an engine per command through `engineFor`
   (`src/main/engine.ts`), runs it and sends each event to the window as `engine:event`, then returns
   how many events it sent. The preload script waits for that many before the call resolves, because
@@ -624,9 +636,10 @@ deleted does not come back. Lectern does not touch any deck options or preset.
 
 - `slots` returns a card as a form holds it (role slots in plain text, key term apart from the
   answer, hidden parts of a gap sentence as a list) with the word limits, or blank slots for a new
-  card. `toSlots` reads the stored fields back (the reverse of `assemble`).
-- `edit` checks the form with `checkSlots` (messages written for a student), then `validateDraft`,
-  then `assemble`. The role cannot change. The card keeps its id, slide and place. The code listing
+  card. They are the slots `cards.yaml` stores.
+- `edit` checks the form with `checkSlots` (messages written for a student), then `validateDraft`
+  on `toDraft` (a `==` the student wrote is left out there, so only the key term reads as a mark),
+  then stores the trimmed slots (`tidy`, `toCard`). The role cannot change. The card keeps its id, slide and place. The code listing
   check is skipped (`seenAsImage: () => true`) because a student may write what the slide only
   shows. If the card is in Anki, `updateSent` changes the note and keeps its progress; Anki is
   touched first, so with Anki closed nothing changes anywhere. A note the student deleted in Anki is
@@ -745,7 +758,6 @@ Each of these is an issue; none is a promise in this file.
 - Card designs beyond Native, and a choice between them: #193.
 - Presets for other kinds of course, and a way to tell the kinds apart: #194.
 - Copy for chat, the card outline for a chat model: #195.
-- Card slots stored in `cards.yaml`, so a card is not read back from its HTML: #196.
 - Calibrating further checks before any of them may drop a card: #105.
 - Typed answers, the `Typed` field being kept empty until then: #128.
 

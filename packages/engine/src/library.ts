@@ -5,7 +5,7 @@
  * involved.
  */
 
-import type { CardFile } from './cards/assemble.ts'
+import type { Card } from './cards/card.ts'
 import type { Goal } from './cards/roles.ts'
 import { slug } from './cards/words.ts'
 import {
@@ -133,7 +133,7 @@ export async function readCourse({ store, pdf }: Ports, course: string): Promise
   for (const { number } of file.lectures) {
     const lecture = (await readJson<Lecture>(store, paths.lecture(course, number)))!
     const cards = await readCards(store, course, number)
-    const count = (concept: string) => cards.filter((card) => card.concept === concept).length
+    const count = (concept: string) => cards.filter((card) => card.concept.id === concept).length
     lectures.push({
       ...lecture,
       cards: cards.length,
@@ -174,7 +174,7 @@ export async function readLectureCards(
   store: Store,
   course: string,
   lecture: number,
-): Promise<CardFile[]> {
+): Promise<Card[]> {
   await courseFile(store, course)
   return readCards(store, course, lecture)
 }

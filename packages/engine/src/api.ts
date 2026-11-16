@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { build, estimateCourse } from './build.ts'
 import { CommandSchema, type Emit } from './commands.ts'
 import { send, sentCards } from './deliver.ts'
+import { withFields } from './cards/fields.ts'
 import { edit, remove, slots, write } from './edit.ts'
 import { EngineError, ProviderError } from './errors.ts'
 import {
@@ -53,7 +54,7 @@ export function createEngine(ports: Ports): Engine {
             return emit({
               type: 'cards',
               lecture: known.lecture,
-              cards,
+              cards: cards.map(withFields),
               sent: cards.map((card) => card.id).filter((id) => inAnki.has(id)),
             })
           }
@@ -99,7 +100,8 @@ export function createEngine(ports: Ports): Engine {
 export type { BuildCommand, Command, Emit, EstimateCommand, Event } from './commands.ts'
 export { EngineError, type Unreadable } from './errors.ts'
 export type * from './ports.ts'
-export type { CardFile } from './cards/assemble.ts'
+export type { Card } from './cards/card.ts'
+export type { ShownCard } from './cards/fields.ts'
 export type { Problem, Slots } from './cards/slots.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
 export type {

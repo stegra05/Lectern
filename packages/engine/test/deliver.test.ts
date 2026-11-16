@@ -9,7 +9,7 @@ import { pdfjsReader } from '../src/adapters/pdfjs.ts'
 import {
   createEngine,
   type AnkiPort,
-  type CardFile,
+  type ShownCard,
   type CourseState,
   type Event,
 } from '../src/api.ts'
@@ -53,7 +53,7 @@ async function state(): Promise<CourseState> {
   return event.course
 }
 
-async function cardsOf(lecture: number): Promise<CardFile[]> {
+async function cardsOf(lecture: number): Promise<ShownCard[]> {
   const event = await last({ type: 'cards', course: COURSE, lecture })
   return event.type === 'cards' ? event.cards : []
 }
@@ -138,7 +138,7 @@ describe('sending a course to Anki', () => {
     const { notes } = await deliveryFile()
     for (const card of cards) {
       const note = anki.notes.find((n) => n.id === notes[card.id])!
-      expect(note.noteType).toBe(card.note === 'cloze' ? CLOZE : QA)
+      expect(note.noteType).toBe(card.fields.Text === undefined ? QA : CLOZE)
       expect(note.tags).toEqual([
         'entrepreneurship-ws26::lecture::02',
         `entrepreneurship-ws26::role::${card.fields.Role}`,

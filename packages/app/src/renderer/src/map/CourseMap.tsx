@@ -346,7 +346,7 @@ const colourOf = (n: number) => ({ '--lec': lectureColour(n) }) as CSSProperties
 function topicCards(lecture: Lecture): number[] {
   return lecture.topics.map((t) => {
     const ids = new Set(t.concepts.map((c) => c.id))
-    return lecture.cards.filter((c) => ids.has(c.concept)).length
+    return lecture.cards.filter((c) => ids.has(c.concept.id)).length
   })
 }
 

@@ -5,7 +5,6 @@
  */
 
 import type {
-  CardFile,
   Command,
   CourseState,
   CourseSummary,
@@ -17,6 +16,7 @@ import type {
   PendingLecture,
   Problem,
   Run,
+  ShownCard,
   Slots,
   Unreadable,
 } from '@lectern/engine'
@@ -28,8 +28,8 @@ export type Phase = Extract<Event, { type: 'phase' }>['phase']
 export const PHASES: readonly Phase[] = ['read', 'map', 'write', 'check']
 export type Estimate = Extract<Event, { type: 'estimate' }>
 
-/** One card, with every field of `design/cards/FIELDS.md`. */
-export type Card = CardFile
+/** One card: its slots, where it comes from, and every field of `design/cards/FIELDS.md`. */
+export type Card = ShownCard
 export type Topic = LectureState['topics'][number]
 export type Concept = Topic['concepts'][number]
 

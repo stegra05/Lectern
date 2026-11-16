@@ -125,8 +125,8 @@ function summary(cards: Card[]): string {
 /** The card's question as plain text. A cloze card is known by its sentence with gaps. */
 function questionOf(card: Card): string {
   const html =
-    card.note === 'cloze'
-      ? (card.fields.Text ?? '').replace(/\{\{c\d+::.*?\}\}/g, '...')
+    card.fields.Text !== undefined
+      ? card.fields.Text.replace(/\{\{c\d+::.*?\}\}/g, '...')
       : (card.fields.Front ?? '')
   return (new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '').trim()
 }
@@ -134,7 +134,7 @@ function questionOf(card: Card): string {
 function CardRow({ card, lecture, course }: { card: Card; lecture: Lecture; course: string }) {
   const editCard = useStore((s) => s.editCard)
   const f = card.fields
-  const cloze = card.note === 'cloze'
+  const cloze = f.Text !== undefined
   return (
     <li className="cards-row">
       <span className="cards-side">
