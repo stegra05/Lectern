@@ -35,8 +35,10 @@ the time.
 
 The eval (`packages/engine/eval`) scores a deck two ways: on the marks of past papers its build
 never saw (`bench.ts`), and against Steffen's reference deck (`refdeck.ts`). On the four newest
-Entrepreneurship papers a build of 2026-11-15 with cards from the older papers holds 43.8% of
-the marks, a build from slides only 31.3% ([RFD 14](rfd/0014-the-quality-bar.md)).
+Entrepreneurship papers three builds of v3 of 2026-11-16 hold 46.0%, 53.1% and 49.0% of the
+marks (mean 49.4), a build of 2026-11-15 with cards from the older papers 43.8%, and a build
+from slides only 31.3%. Builds of the same code differ by several points, so a change counts
+only above about 10 points for one build each ([RFD 14](rfd/0014-the-quality-bar.md)).
 
 Engine tests: 258 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
@@ -64,12 +66,7 @@ card arrived tagged `::own`.
   only for lectures built later. Answers the model wrote are not checked against the readings.
 - The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
 - The exam rubric is model-made and no person has checked it
-  ([#264](https://github.com/stegra05/lectern/issues/264)). It exists for one course, and v3 as
-  it stands today has not been scored on it: both scored builds are from 2026-11-15.
-- The release workflow has not run: only a pushed `v3.*` tag tests it. The Windows and Linux
-  installers have not been built. The macOS installer is arm64 only and signed ad hoc, so a
-  downloaded copy is quarantined by Gatekeeper; nothing is signed or notarised
-  ([#191](https://github.com/stegra05/lectern/issues/191)).
+  ([#264](https://github.com/stegra05/lectern/issues/264)). It exists for one course.
 
 ## Not built
 
