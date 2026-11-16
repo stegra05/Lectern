@@ -60,7 +60,8 @@ panel, where the student can add a file by hand.
   course folders the name rules named a kind for 536.
 - **The same file comes in once.** A file whose content the course already holds, under any
   name, stays out (sha256 of the bytes), so a paper kept twice does not double how often its
-  questions were asked. A copy that differs in its bytes, a graded scan of the same midterm
+  questions were asked. It is caught before the model is asked, so adding a folder again pays
+  nothing for what it took in before. A copy that differs in its bytes, a graded scan of the same midterm
   for instance, is not caught.
 - **Junk is dropped unseen.** A file inside a hidden folder or a code project (`.venv`,
   `node_modules`, `build`) is not even listed: 14 of the 740.
@@ -69,6 +70,10 @@ panel, where the student can add a file by hand.
   picture when they hold no text. One choice question over the eight kinds; the chosen kind
   is taken from `SORT_THRESHOLD` on, and below it the file stays out as unsure. A stray PDF
   never becomes a lecture; a lecture left out is listed and added with one click.
+- **A failed request costs one file, a failed account the add.** A request the provider rejects
+  for what one file holds leaves that file out as unsure and the others go on. A rejected key,
+  an account without credit or no connection stops the add before anything is written, with
+  what to do before adding the files again.
 - **One choice, not eight predicates.** The first run on a real folder (2026-11-16,
   Entrepreneurship, 58 PDFs, 56 requests, 0.96 cents) asked one predicate per kind and took
   the most likely. All 11 decks and all 22 exam papers came in, the three exam rule sheets,

@@ -6,6 +6,7 @@
  */
 
 import PQueue from 'p-queue'
+import { EngineError, ProviderError } from './errors.ts'
 import type { Answer, DecisionsPort, PdfPort, Question, SlideImage, Usage } from './ports.ts'
 
 export const FILE_KINDS = [
@@ -168,8 +169,20 @@ export async function askKind(
   return answer
 }
 
+/** What to do before adding the files again, by what stopped the decision model. */
+const ADD_AGAIN: Record<Exclude<ProviderError['reason'], 'rejected'>, string> = {
+  key: 'Check the key in OPENAI_API_KEY, then add the files again.',
+  credit: 'Add credit to the account, then add the files again.',
+  limit: 'Wait a minute, then add the files again.',
+  connection: 'Check the internet connection, then add the files again.',
+  server: 'Wait a few minutes, then add the files again.',
+}
+
 /**
  * The kind of every file, in order, or null where the decision model is not sure.
+ *
+ * A request the provider rejects for what one file holds leaves only that file unsure. A failure
+ * of the key, the account or the connection stops the sort, with what to do before adding again.
  *
  * A name can keep a file out and nothing more: a file named as an exercise sheet or a reading
  * stays out unread, which costs the student one click when the name was wrong. A file that would
@@ -186,7 +199,12 @@ export async function sortFiles(
     queue.add(async () => {
       const named = kindFromName(file.path)
       if (named && !entersCourse(named)) return named
-      return kindFromAnswer(await askKind(ports, file))
+      const answer = await askKind(ports, file).catch((error: unknown) => {
+        if (!(error instanceof ProviderError)) throw error
+        if (error.reason === 'rejected') return undefined
+        throw new EngineError(error.message, ADD_AGAIN[error.reason])
+      })
+      return kindFromAnswer(answer)
     }),
   )
   return Promise.all(kinds).finally(() => queue.clear())

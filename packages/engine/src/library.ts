@@ -200,10 +200,6 @@ export async function createCourse(store: Store, name: string, goal: Goal): Prom
   return id
 }
 
-/**
- * Adds PDFs to the course. Nothing is added unless every file can be: a lecture is known by
- * its file name, so a name is never taken twice.
- */
 /** The past papers of a course: those a build read, with their questions, and those it has not. */
 async function papers(store: Store, course: string): Promise<PaperState[]> {
   const read = (await readJson<ExamsFile>(store, paths.examsFile(course)))?.papers ?? []
@@ -223,8 +219,8 @@ export interface LeftOut {
   path: string
   /**
    * `kind`: a kind the course does not use yet, such as an exercise sheet. `unsure`: the
-   * decision model could not tell. `already`: the course has a file of that name, or the same
-   * file under another name. `unreadable`: not a PDF that can be read.
+   * decision model could not tell. `already`: the course has a file of that name or that
+   * content, or this add holds the same file twice. `unreadable`: not a PDF that can be read.
    */
   why: 'kind' | 'unsure' | 'already' | 'unreadable'
   kind: FileKind | null
@@ -284,13 +280,22 @@ export async function addFiles(
 
   // Files in hidden folders or code projects are no course material; they are not even listed.
   const courseFiles = pdfs.filter(({ path }) => !isJunkPath(path))
+  // Content the course holds, and a second copy inside this add, stay out before any request is
+  // paid for them, so adding a folder again costs nothing for what it took in before.
+  const held = new Set<string>()
+  for (const shelf of ['slides', 'exams'] as const) {
+    for (const name of await store.list(paths[shelf](course)))
+      held.add(await sha256(await store.readBytes(`${paths[shelf](course)}/${name}`)))
+  }
   const left: LeftOut[] = []
   const readable: ((typeof pdfs)[number] & { pages: string[][] })[] = []
   for (const file of courseFiles) {
-    if (taken(file.name, pdfs.indexOf(file))) {
+    const content = await sha256(file.bytes)
+    if (taken(file.name, pdfs.indexOf(file)) || held.has(content)) {
       left.push({ path: file.path, why: 'already', kind: null })
       continue
     }
+    held.add(content)
     const pages = looksLikePdf(file.name, file.bytes)
       ? await pdf.readSlides(file.bytes).catch(() => null)
       : null
@@ -298,11 +303,6 @@ export async function addFiles(
     else left.push({ path: file.path, why: 'unreadable', kind: null })
   }
   const kinds = await sortFiles({ pdf, decisions }, readable)
-  const held = new Set<string>()
-  for (const shelf of ['slides', 'exams'] as const) {
-    for (const name of await store.list(paths[shelf](course)))
-      held.add(await sha256(await store.readBytes(`${paths[shelf](course)}/${name}`)))
-  }
   const added: Added['added'] = []
   for (const [i, { path, name, bytes }] of readable.entries()) {
     const kind = kinds[i]!
@@ -310,12 +310,6 @@ export async function addFiles(
       left.push({ path, why: kind ? 'kind' : 'unsure', kind })
       continue
     }
-    const content = await sha256(bytes)
-    if (held.has(content)) {
-      left.push({ path, why: 'already', kind: null })
-      continue
-    }
-    held.add(content)
     const shelf: Shelf = kind === 'slides' ? 'slides' : 'exams'
     await store.writeBytes(`${paths[shelf](course)}/${name}`, bytes)
     added.push({ file: name, to: shelf })
