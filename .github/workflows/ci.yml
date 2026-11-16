@@ -44,6 +44,8 @@ jobs:
         with:
           path: ~/.cache/electron
           key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      # Unpacks the cached binary in a step of its own, so its time is not the test's.
+      - run: node packages/app/node_modules/electron/install.js
       # Ubuntu 24 blocks the user namespaces Chromium's sandbox needs.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       # Electron needs a display; xvfb-run gives it a virtual one.

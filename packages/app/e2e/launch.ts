@@ -20,7 +20,7 @@ export interface AnkiNote {
 
 /**
  * Starts the built app on the offline models, with its own empty data folder and its window
- * off the screen, so a test never touches the student's courses, key, money or desktop.
+ * hidden, so a test never touches the student's courses, key, money or desktop.
  */
 export async function launch(
   options: { courses?: string; delayMs?: number } = {},
@@ -35,7 +35,9 @@ export async function launch(
       LECTERN_FAKE_DELAY: String(options.delayMs ?? 0),
       LECTERN_DATA: data,
       LECTERN_COURSES: courses,
-      LECTERN_SHOW: '0',
+      // In CI the window is on the virtual display, where it disturbs nobody. A window never
+      // shown draws no frames there, and Playwright waits 2 s for them before every action.
+      LECTERN_SHOW: process.env.CI ? '1' : '0',
     },
   })
   const page = await app.firstWindow()

@@ -5,6 +5,6 @@ export default defineConfig({
   testDir: 'e2e',
   timeout: 90_000,
   workers: 1,
-  reporter: 'list',
-  use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  // Each step with its time, so a slow run shows where the time went.
+  reporter: [['list', { printSteps: true }]],
 })
