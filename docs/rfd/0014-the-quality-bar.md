@@ -90,8 +90,14 @@ by Claude Haiku:
   guards (664 cards against 631, 36 percent more tokens written). Cards from past exams buy
   their marks with a bigger deck and more writing, which was Steffen's call
   ([RFD 8](0008-past-exams.md)). The build of 2026-11-15 with exam cards against v3: 4.9 points
-  up where 12.9 are believable from one build against three, every guard holds, so unclear. These builds read 18 papers, the
-  dev papers among them, so none of them can be scored on the dev set yet
+  up where 12.9 are believable from one build against three, every guard holds, so unclear.
+  These builds read 18 papers, the dev papers among them, so they count on the test set only.
+- **The dev baseline.** Three builds of v3 on the 14 papers before 2022 (2026-11-16: 671, 653
+  and 673 cards, 1.08 dollars together) hold 48.5%, 47.7% and 55.2% of the marks of the dev
+  papers: mean 50.5, sd 4.1. Of the 221 points, 71 are held by all three, 55 by one or two, 95
+  by none. With this spread a change shows from about 9 points with three builds a side and
+  from 6 with five. The builds took 876 to 937 calls and 265,000 to 276,000 tokens written.
+  Their score on the test papers has not been read
   ([#270](https://github.com/stegra05/lectern/issues/270)).
 - **A run's score counts its own pairs only.** Its shortlist, and what its own judges found
   by searching the deck. Verdicts are kept under the texts of a pair, and builds share some
@@ -171,4 +177,4 @@ with official solutions. Datenbanken has a deck from AnkiTUM as a reference, jud
 - Coverage at the fact level: [#108](https://github.com/stegra05/lectern/issues/108).
 - Facts only in pictures: [#106](https://github.com/stegra05/lectern/issues/106).
 - The exam rubric checked by Steffen: [#264](https://github.com/stegra05/lectern/issues/264).
-- The baseline of v3 on the dev papers: [#270](https://github.com/stegra05/lectern/issues/270).
+- The dev baseline read on the test papers: [#270](https://github.com/stegra05/lectern/issues/270).
