@@ -303,6 +303,18 @@
   fill: var(--label-2);
   font-weight: 600;
 }
+/* The lectures a full card has no room for: one quiet stop with their number. */
+.mini-rest {
+  fill: var(--ground);
+  stroke: var(--neutral-mark);
+  stroke-width: 1.2;
+}
+.mini-num-rest {
+  fill: var(--neutral-mark);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
 .mini-stop {
   transition: transform 220ms ease-out;
   transition-delay: calc(var(--i) * 22ms);

@@ -32,6 +32,52 @@ async function shoot(page: Page, name: string): Promise<void> {
   await page.emulateMedia({ colorScheme: 'light' })
 }
 
+test('pictures of course cards of every length', async () => {
+  await mkdir(out!, { recursive: true })
+  const courses = await mkdtemp(join(tmpdir(), 'lectern-shots-'))
+  const lengths = {
+    Ethics: 1,
+    Statistics: 5,
+    'Linear Algebra': 12,
+    Marketing: 30,
+    'Entrepreneurship and Innovation Management': 60,
+  }
+  for (const [i, [name, count]] of Object.entries(lengths).entries()) {
+    // The last two lectures of a course are PDFs still waiting for cards.
+    const built = count > 1 ? count - 2 : count
+    const id = `course-${i}`
+    const lectures = Array.from({ length: built }, (_, n) => ({
+      number: n + 1,
+      title: `Lecture ${n + 1}`,
+      file: `${String(n + 1).padStart(2, '0')}.pdf`,
+      sha256: '',
+      slides: 1,
+    }))
+    await mkdir(join(courses, id, 'slides'), { recursive: true })
+    await writeFile(
+      join(courses, id, 'course.json'),
+      JSON.stringify({ format: 1, name, goal: 'good', lectures }),
+    )
+    for (let n = 1; n <= count; n++)
+      await writeFile(join(courses, id, 'slides', `${String(n).padStart(2, '0')}.pdf`), '')
+  }
+  const { app, page } = await launch({ courses })
+  try {
+    await page.getByPlaceholder('sk-...').fill('sk-offline')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page.locator('.course-card')).toHaveCount(5)
+    await shoot(page, '02-courses-lengths-1100x720')
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setContentSize(900, 600),
+    )
+    await shoot(page, '02-courses-lengths-900x600')
+    await page.locator('.course-card').last().scrollIntoViewIfNeeded()
+    await shoot(page, '02-courses-lengths-900x600-scrolled')
+  } finally {
+    await app.close()
+  }
+})
+
 test('pictures of every base screen', async () => {
   await mkdir(out!, { recursive: true })
   const courses = await mkdtemp(join(tmpdir(), 'lectern-shots-'))

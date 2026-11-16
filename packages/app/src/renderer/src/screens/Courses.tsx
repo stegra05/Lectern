@@ -174,10 +174,30 @@ const MAX_WIDTH = 300
 /** Room left and right of a row for the turn of the track. */
 const MARGIN = ROW_GAP / 2 + 6
 const PAD = 8
+/** Every course card holds at most this many rows, so all cards have the same height. */
+const MAX_ROWS = 3
+
+/**
+ * Which stops a small track shows. `perRow` stops go in a row and at most three rows fit. A
+ * longer course shows its first lectures and ends in one stop that counts the rest.
+ */
+export function miniStops(
+  count: number,
+  perRow?: number,
+): { perRow: number; shown: number; rest: number } {
+  const cols = Math.max(
+    1,
+    perRow ?? (count <= 5 ? count : Math.min(8, Math.max(4, Math.ceil(count / MAX_ROWS)))),
+  )
+  const room = cols * MAX_ROWS
+  if (count <= room) return { perRow: cols, shown: count, rest: 0 }
+  return { perRow: cols, shown: room - 1, rest: count - room + 1 }
+}
 
 /**
  * A course as a small version of its track: its lectures as stops in course order, snaking in
- * rows like the map does. Lectures still waiting for cards are dashed and empty.
+ * rows like the map does. Lectures still waiting for cards are dashed and empty. A course too
+ * long for the rows ends in a neutral stop with the number of lectures not shown.
  */
 export function MiniTrack({
   lectures,
@@ -191,9 +211,10 @@ export function MiniTrack({
   animate?: boolean
 }) {
   const waiting = new Set(pending)
-  const stops = [...lectures, ...pending].sort((a, b) => a - b)
-  const n = stops.length
-  const cols = Math.max(1, perRow ?? (n <= 5 ? n : Math.min(8, Math.max(4, Math.ceil(n / 3)))))
+  const all = [...lectures, ...pending].sort((a, b) => a - b)
+  const { perRow: cols, shown, rest } = miniStops(all.length, perRow)
+  const stops = all.slice(0, shown)
+  const n = shown + (rest > 0 ? 1 : 0)
   const rows = Math.ceil(n / cols)
   const step = cols > 1 ? Math.min(MAX_STEP, (MAX_WIDTH - 2 * MARGIN) / (cols - 1)) : 0
   const width = (cols - 1) * step + 2 * MARGIN
@@ -207,13 +228,14 @@ export function MiniTrack({
 
   // The band runs through every stop and turns at the row ends, left and right in turn.
   let band = ''
-  stops.forEach((_, i) => {
+  for (let i = 0; i < n; i++) {
     const { x, y } = at(i)
     if (i === 0) band = `M${x} ${y}`
     else if (i % cols === 0)
       band += ` A${ROW_GAP / 2} ${ROW_GAP / 2} 0 0 ${(i / cols) % 2 === 1 ? 1 : 0} ${x} ${y}`
     else band += ` L${x} ${y}`
-  })
+  }
+  const end = at(shown)
 
   return (
     <svg
@@ -248,6 +270,24 @@ export function MiniTrack({
           </g>
         )
       })}
+      {rest > 0 && (
+        <g
+          className="mini-stop"
+          style={{ '--i': shown, transformOrigin: `${end.x}px ${end.y}px` } as CSSProperties}
+        >
+          <rect
+            className="mini-rest"
+            x={end.x - STOP / 2}
+            y={end.y - STOP / 2}
+            width={STOP}
+            height={STOP}
+            rx={6.5}
+          />
+          <text x={end.x} y={end.y} className="mini-num mini-num-rest">
+            +{rest}
+          </text>
+        </g>
+      )}
     </svg>
   )
 }
