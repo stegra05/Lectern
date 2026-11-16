@@ -372,8 +372,19 @@ export function script(request: ModelRequest): unknown {
       repeats: [],
     }
   }
+  // Writing: one card for each fact the request names, tagged with its card type.
+  if (request.task === 'fill') {
+    const cards = request.prompt
+      .split(/^Fact to test: /m)
+      .slice(1)
+      .map((block) => ({
+        cardType: /^Card type: ([^.]+)\./m.exec(block)![1]!,
+        ...(FILLS[/^(.+) \(slide \d+\)$/m.exec(block)![1]!] as object),
+      }))
+    return { cards }
+  }
   const told = /^Fact to test: (.+) \(slide \d+\)$/m.exec(request.prompt)![1]!
-  return { fill: FILLS, repair: REPAIRS, split: SPLITS }[request.task][told]
+  return { repair: REPAIRS, split: SPLITS }[request.task][told]
 }
 
 /** The decision model: sure about most things, with a few doubts. */

@@ -113,7 +113,7 @@ flowchart TD
   T --> K[Kind and worth of every fact<br/>DECISION]
   K --> X[Past exam answers as facts<br/>GENERATIVE, only with exams/]
   X --> PL[Plan the cards: slots, roles, ids<br/>CODE]
-  PL --> F[Fill one form per planned card<br/>GENERATIVE, effort low]
+  PL --> F[Fill one form per planned card,<br/>up to three of a concept a call<br/>GENERATIVE, effort low]
   F --> G[Gate: limits, leans-on-slides, says-nothing<br/>CODE]
   G --> O[Organisation check<br/>DECISION, card alone]
   O -->|failed gate| RS[Split or repair<br/>GENERATIVE, effort low]
@@ -231,15 +231,21 @@ measurement is in the comment at the top of `exams.ts`.
 not part of it, so a reworded card keeps its id, its place in the file and its Anki note. Ids are
 fixed by the plan, before a word is written.
 
-**11. Fill (generative model).** One call per planned card (`createWriter` in `writer.ts`), effort
-`low`. The input is the whole lecture again (cached by the provider), the concept name, the fact and
-its slide, the card type with a one-line description (`ROLE_SPECS[role].use`), the preset's
-`rules`, and the preset's example of that card type. The reply schema is a small form per card type
-(`FORMS` in `writer.ts`) with the limits written into the field descriptions: for example a
-definition has `question`, `answer`, `extra`; a contrast has `question`, two sides, two values,
-`extra`. The model never writes HTML, list markup, slot labels, cloze numbers of a list, or any
-provenance field. The first card of each card type in a lecture runs ahead of the others to fill
-the provider's prompt cache.
+**11. Fill (generative model).** One call per concept for up to three of its planned cards
+(`CARDS_PER_CALL`, `createWriter` in `writer.ts`), effort `low`. The input is the whole lecture as
+text again (`cardContext`, cached by the provider), then the pictures of the call's own cards'
+slides only, then the concept name, per card the fact and its slide, the card type with a one-line
+description (`ROLE_SPECS[role].use`) and the preset's example of that card type, then the preset's
+`rules` once. The reply is a list of forms, each tagged with its card type; every call has that one
+reply format, so the provider's cache of the lecture holds for all of them. A card the reply leaves
+out or writes in another form is asked again on its own. Each card type has a small form (`FORMS`
+in `writer.ts`) with the limits written into the field descriptions: for example a definition has
+`question`, `answer`, `extra`; a contrast has `question`, two sides, two values, `extra`. The model
+never writes HTML, list markup, slot labels, cloze numbers of a list, or any provenance field. The
+first call of each lecture runs ahead of the others to fill the provider's prompt cache. Why three
+cards and only their own pictures: the lecture, and above all its pictures, made most of every
+call's input, and the key's tokens a minute hold the build; judged blind, neither change lost
+anything ([RFD 4](rfd/0004-lecture-to-cards.md)).
 
 **12. Gate, split and repair.** For every filled card, `validateDraft` (all hard limits, section 9),
 then, only if that passes, `leansOnSlides` (the question points at the slides or the session, a

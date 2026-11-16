@@ -99,12 +99,21 @@ describe('building again with a new past paper', () => {
     if (request.prompt.startsWith('A question past exams')) {
       return { answer: ANSWER, items: 0, slide: 2, fromSlides: true }
     }
-    if (request.prompt.includes(`Fact to test: ${ANSWER}`)) {
-      return {
-        question: 'Lean startup: why test early?',
-        answer: 'It ==lowers risk== before money is spent.',
-        extra: '',
-      }
+    // Writing: the exam answer's card as here, the other cards of its call as the fixture writes them.
+    if (request.task === 'fill' && request.prompt.includes(`Fact to test: ${ANSWER}`)) {
+      const blocks = request.prompt.split(/^Fact to test: /m).slice(1)
+      const cards = blocks.map((block) =>
+        block.startsWith(ANSWER)
+          ? {
+              cardType: /^Card type: ([^.]+)\./m.exec(block)![1],
+              question: 'Lean startup: why test early?',
+              answer: 'It ==lowers risk== before money is spent.',
+              extra: '',
+            }
+          : (script({ ...request, prompt: `Fact to test: ${block}` }) as { cards: unknown[] })
+              .cards[0],
+      )
+      return { cards }
     }
     return script(request)
   }

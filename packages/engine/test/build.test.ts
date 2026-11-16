@@ -181,7 +181,11 @@ describe('building a course of two lectures, offline', () => {
       '01-uncertainty-definition-1',
       '01-uncertainty-contrast-1',
     ])
-    expect(calls('fill')).toHaveLength(9)
+    // Nine cards, up to three of one concept in a call: one call per concept here.
+    const told = calls('fill').map((r) => r.prompt.match(/^Fact to test: /gm)!.length)
+    expect(told.reduce((sum, n) => sum + n, 0)).toBe(9)
+    expect(calls('fill')).toHaveLength(5)
+    expect(Math.max(...told)).toBeLessThanOrEqual(3)
   })
 
   it('reads every slide on its own with its picture, then sorts what it found in one call per lecture', () => {
@@ -294,12 +298,24 @@ describe('building a course of two lectures, offline', () => {
       expect(fill.context).toMatch(/^Lecture 0[12] /)
       expect(fill.context).toContain('[2] ')
       expect(fill.effort).toBe('low')
+      // The lecture as text; only the pictures of the call's own cards come with it.
+      expect(fill.images).toEqual([])
+      expect(fill.context).not.toContain('see the picture')
+      const slides = [...fill.prompt.matchAll(/^Fact to test: .+ \(slide (\d+)\)$/gm)].map((m) =>
+        Number(m[1]),
+      )
+      for (const image of fill.shown ?? []) expect(slides).toContain(image.slide)
     }
   })
 
   it('gives the model one small form per card type, with the limits and an example', () => {
     const fill = calls('fill').find(about('Risk can be insured, uncertainty cannot.'))!
-    expect(Object.keys((fill.schema as { properties: object }).properties)).toEqual([
+    // One reply format for every call, each card in the form of its card type.
+    type Forms = { properties: { cards: { items: { anyOf: { properties: object }[] } } } }
+    const forms = (fill.schema as Forms).properties.cards.items.anyOf
+    const contrast = forms.find((f) => JSON.stringify(f).includes('"enum":["contrast"]'))!
+    expect(Object.keys(contrast.properties)).toEqual([
+      'cardType',
       'question',
       'sideA',
       'valueA',
@@ -423,7 +439,7 @@ describe('building a course of two lectures, offline', () => {
       lectures: [1, 2],
       cards: 8,
       dropped: 2,
-      calls: 24,
+      calls: 20,
       decisions: 27,
       inputTokens: expect.any(Number) as number,
       cachedInputTokens: 0,
@@ -515,7 +531,7 @@ describe('building a course of two lectures, offline', () => {
         run: 2,
         lectures: [3],
         cards: 3,
-        calls: 6,
+        calls: 5,
       })
     })
 

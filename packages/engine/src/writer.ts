@@ -1,7 +1,7 @@
 /**
  * Step 5 and the model's part of step 6: the card writer. The model fills one small form per
- * planned card while it sees the whole lecture, fills it again when the gate rejects it, and
- * splits a card that is too long. This file is the seam: how cards are worded lives here
+ * planned card while it sees the whole lecture, up to three cards of one concept in a call,
+ * fills a card again when the gate rejects it, and splits a card that is too long. This file is the seam: how cards are worded lives here
  * and in the preset, nowhere else.
  */
 
@@ -18,16 +18,24 @@ import type { Preset } from './presets.ts'
 export type Slots = Omit<Draft, 'concept' | 'role' | 'slide'>
 
 export interface CardJob {
-  /** The whole lecture, shared by every card of it. */
+  /** The whole lecture as text, shared by every card of it, so the provider caches it. */
   context: string
+  /** The pictures of this card's own slide, if it has one. They come after the lecture. */
   images: SlideImage[]
   concept: Concept
   fact: Fact
   role: Role
 }
 
+/** Cards of one concept written in one call, at most. */
+export const CARDS_PER_CALL = 3
+
 export interface Writer {
-  fill(job: CardJob): Promise<Slots>
+  /**
+   * Fill the forms of up to `CARDS_PER_CALL` cards of one concept of one lecture, in one call.
+   * Each card sees the whole lecture once instead of once per card (#199).
+   */
+  fill(jobs: CardJob[]): Promise<Slots[]>
   /** Fill the form again, with everything the gate found wrong. */
   repair(job: CardJob, rejected: Slots, problems: string[]): Promise<Slots>
   /** Turn one card that is too long into two or three atomic ones. */
@@ -37,12 +45,13 @@ export interface Writer {
 type Values = Record<string, unknown>
 
 interface Form {
-  schema: z.ZodType<Values>
+  schema: z.ZodObject
   toSlots: (values: Values) => Slots
   fromSlots: (slots: Slots) => Values
 }
 
 const none = { answers: [], labels: [], code: '' }
+const empty: Slots = { front: '', extra: '', ...none }
 const question = z
   .string()
   .describe(`The question. At most ${LIMITS.frontWords} words. Never a yes/no question.`)
@@ -63,7 +72,7 @@ const short = (what: string) => z.string().describe(`${what} At most ${LIMITS.sl
 const half = (what: string) =>
   z.string().describe(`${what} About 10 words; both together at most ${LIMITS.answerWords}.`)
 
-function form<S extends z.ZodType<Values>>(
+function form<S extends z.ZodObject>(
   schema: S,
   toSlots: (values: z.infer<S>) => Slots,
   fromSlots: (slots: Slots) => z.infer<S>,
@@ -253,6 +262,21 @@ const FORMS: Record<Role, Form> = {
   ),
 }
 
+/**
+ * Every card form, each with its card type. One reply format for every batch of cards, whatever
+ * types it holds, so the provider's cache of the lecture holds for all of them.
+ */
+const ROLES = Object.keys(FORMS) as Role[]
+const Batch = z.object({
+  cards: z.array(
+    z.union(
+      ROLES.map((role) =>
+        z.object({ cardType: z.enum([role]), ...FORMS[role].schema.shape }),
+      ) as unknown as [z.ZodObject, z.ZodObject, ...z.ZodObject[]],
+    ),
+  ),
+})
+
 /** A filled form as the slots of a draft. Checks the form first, as a model's reply is checked. */
 export function slotsFromForm(role: Role, values: unknown): Slots {
   const { schema, toSlots } = FORMS[role]
@@ -260,10 +284,10 @@ export function slotsFromForm(role: Role, values: unknown): Slots {
 }
 
 export function createWriter(ask: AskModel, preset: Preset): Writer {
-  const brief = (job: CardJob) => {
+  /** What one card is about: its fact, the exam question it answers, its type and an example. */
+  const card = (job: CardJob) => {
     const example = preset.examples[job.role]
     return [
-      `Concept: ${job.concept.name}`,
       `Fact to test: ${job.fact.text} (slide ${job.fact.slide})`,
       ...(job.fact.exam
         ? [
@@ -272,19 +296,23 @@ export function createWriter(ask: AskModel, preset: Preset): Writer {
           ]
         : []),
       `Card type: ${job.role}. ${ROLE_SPECS[job.role].use}`,
-      '',
-      'Rules:',
-      ...preset.rules.map((rule) => `- ${rule}`),
       ...(example
-        ? ['', 'An example of this card type, from another course:', JSON.stringify(example)]
+        ? ['An example of this card type, from another course:', JSON.stringify(example)]
         : []),
-    ].join('\n')
+    ]
   }
-  const request = (job: CardJob, task: 'fill' | 'repair' | 'split', prompt: string) => ({
+  const rules = ['Rules:', ...preset.rules.map((rule) => `- ${rule}`)]
+  const brief = (job: CardJob) =>
+    [`Concept: ${job.concept.name}`, ...card(job), '', ...rules].join('\n')
+  const request = (jobs: CardJob[], task: 'fill' | 'repair' | 'split', prompt: string) => ({
     task,
     system: SYSTEM,
-    context: job.context,
-    images: job.images,
+    context: jobs[0]!.context,
+    images: [],
+    // Each picture once, though several cards of the call may stand on its slide.
+    shown: [
+      ...new Map(jobs.flatMap((job) => job.images).map((image) => [image.slide, image])).values(),
+    ],
     prompt,
     effort: 'low' as const,
   })
@@ -295,10 +323,31 @@ export function createWriter(ask: AskModel, preset: Preset): Writer {
   ]
 
   return {
-    async fill(job) {
-      const prompt = `Fill the form for one flashcard.\n\n${brief(job)}`
-      const { schema, toSlots } = FORMS[job.role]
-      return toSlots(await ask(request(job, 'fill', prompt), schema))
+    async fill(jobs) {
+      const prompt = [
+        jobs.length === 1
+          ? 'Fill the form for one flashcard. Give it its card type.'
+          : `Fill one form for each of these ${jobs.length} flashcards, in this order. Give each card its card type. Each card tests its own fact only.`,
+        '',
+        `Concept: ${jobs[0]!.concept.name}`,
+        ...jobs.flatMap((job, i) => [
+          '',
+          ...(jobs.length > 1 ? [`Card ${i + 1}`] : []),
+          ...card(job),
+        ]),
+        '',
+        ...rules,
+      ].join('\n')
+      const reply = await ask(request(jobs, 'fill', prompt), Batch)
+      return Promise.all(
+        jobs.map(async (job, i) => {
+          const values = reply.cards[i]
+          if (values?.cardType === job.role) return FORMS[job.role].toSlots(values)
+          // A card the reply left out or wrote in another form is asked again on its own; alone
+          // and still wrong, it goes to the gate empty, and the gate has it filled again.
+          return jobs.length > 1 ? (await this.fill([job]))[0]! : empty
+        }),
+      )
     },
     async repair(job, slots, problems) {
       const prompt = [
@@ -308,7 +357,7 @@ export function createWriter(ask: AskModel, preset: Preset): Writer {
         brief(job),
       ].join('\n')
       const { schema, toSlots } = FORMS[job.role]
-      return toSlots(await ask(request(job, 'repair', prompt), schema))
+      return toSlots(await ask(request([job], 'repair', prompt), schema))
     },
     async split(job, slots, problems) {
       const prompt = [
@@ -319,7 +368,7 @@ export function createWriter(ask: AskModel, preset: Preset): Writer {
         brief(job),
       ].join('\n')
       const { schema, toSlots } = FORMS[job.role]
-      const reply = await ask(request(job, 'split', prompt), z.object({ cards: z.array(schema) }))
+      const reply = await ask(request([job], 'split', prompt), z.object({ cards: z.array(schema) }))
       return reply.cards.map(toSlots)
     },
   }

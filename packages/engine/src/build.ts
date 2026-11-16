@@ -68,7 +68,7 @@ import { MAX_DECISION_IMAGES, type Ports, type SlideImage } from './ports.ts'
 import { CONCEPT as preset } from './presets.ts'
 import { slideText } from './slides.ts'
 import { fromGroups, settleMap } from './tree.ts'
-import { createWriter, type CardJob, type Slots, type Writer } from './writer.ts'
+import { CARDS_PER_CALL, createWriter, type CardJob, type Slots, type Writer } from './writer.ts'
 
 /** How often a rejected card is filled again before it is dropped. */
 const REPAIRS = 2
@@ -98,8 +98,14 @@ interface ReadLecture {
 
 /** A new lecture on its way through the build. */
 interface OpenLecture extends Lecture, ReadLecture {
-  /** The whole lecture as every card writer call sees it. */
+  /** The whole lecture with its pictures, as exam answers see it. */
   context: string
+  /**
+   * The whole lecture as text, as every card writer call sees it. A call adds only the pictures
+   * of its own cards' slides: sent with every card, a lecture's pictures made most of the tokens
+   * that hold a build (#199).
+   */
+  cardContext: string
   beyondGoal: Concept[]
 }
 
@@ -576,6 +582,7 @@ async function mapLecture(
       lecture.text,
       lecture.images,
     ),
+    cardContext: slidesBlock(`Lecture ${two(lecture.number)} ${settled.title}`, lecture.text, []),
     beyondGoal: [],
   }
 }
@@ -744,8 +751,8 @@ function createIds(): NextId {
 }
 
 const job = (item: Item): CardJob => ({
-  context: item.lecture.context,
-  images: item.lecture.images,
+  context: item.lecture.cardContext,
+  images: item.lecture.images.filter((image) => image.slide === item.fact.slide),
   concept: item.concept,
   fact: item.fact,
   role: item.role,
@@ -758,7 +765,10 @@ const draftOf = (item: Item): Draft => ({
   ...item.slots,
 })
 
-/** Fill one form per planned card. `written` counts the cards of the whole build. */
+/**
+ * Fill one form per planned card, up to `CARDS_PER_CALL` cards of one concept in a call.
+ * `written` counts the cards of the whole build.
+ */
 async function fillCards(
   b: Build,
   planned: Planned[],
@@ -774,27 +784,39 @@ async function fillCards(
     part: false,
     problems: [],
   }))
-  const fill = async (item: Item) => {
-    item.slots = await b.writer.fill(job(item))
-    b.emit({
-      type: 'progress',
-      phase: 'write',
-      done: ++written.done,
-      total: written.total,
-      lecture: item.lecture.number,
+  // The cards of each concept, in the order of the plan, in groups of up to `CARDS_PER_CALL`.
+  const byConcept = new Map<string, Item[]>()
+  for (const item of drafted) {
+    const key = `${item.lecture.number}/${item.concept.id}`
+    byConcept.set(key, [...(byConcept.get(key) ?? []), item])
+  }
+  const batches = [...byConcept.values()].flatMap((items) =>
+    Array.from({ length: Math.ceil(items.length / CARDS_PER_CALL) }, (_, k) =>
+      items.slice(k * CARDS_PER_CALL, (k + 1) * CARDS_PER_CALL),
+    ),
+  )
+  const fill = async (batch: Item[]) => {
+    const slots = await b.writer.fill(batch.map(job))
+    batch.forEach((item, i) => {
+      item.slots = slots[i]!
+      b.emit({
+        type: 'progress',
+        phase: 'write',
+        done: ++written.done,
+        total: written.total,
+        lecture: item.lecture.number,
+      })
     })
   }
-  // The provider caches the lecture per card type. The first card of each type in a lecture
-  // goes ahead and fills that cache; the rest then read the lecture at the cached price.
-  const first = new Map<string, Item>()
-  for (const item of drafted) {
-    const key = `${item.lecture.number}/${item.role}`
-    if (!first.has(key)) first.set(key, item)
-  }
+  // Every batch has the same reply format, so the provider caches the lecture once. The first
+  // batch of each lecture goes ahead and fills that cache; the rest read it at the cached price.
+  const first = new Map<number, Item[]>()
+  for (const batch of batches)
+    if (!first.has(batch[0]!.lecture.number)) first.set(batch[0]!.lecture.number, batch)
   const ahead = new Set(first.values())
   await each([...ahead], fill)
   await each(
-    drafted.filter((item) => !ahead.has(item)),
+    batches.filter((batch) => !ahead.has(batch)),
     fill,
   )
   return drafted

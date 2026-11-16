@@ -356,11 +356,31 @@ describe('the offline model', () => {
       context: '',
       images: [],
       prompt:
-        'Concept: risk\nFact to test: An outcome whose probability can be calculated or known (slide 2)',
-      schema: { type: 'object', properties: { question: {}, answer: {}, extra: {} } },
+        'Concept: risk\n\nFact to test: An outcome whose probability can be calculated or known (slide 2)\nCard type: definition. What a term means.',
+      schema: {
+        type: 'object',
+        properties: {
+          cards: {
+            items: {
+              anyOf: [
+                {
+                  properties: {
+                    cardType: { enum: ['definition'] },
+                    question: {},
+                    answer: {},
+                    extra: {},
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
       effort: 'low',
     })
-    const form = reply as { question: string; answer: string }
+    const form = (reply as { cards: { cardType: string; question: string; answer: string }[] })
+      .cards[0]!
+    expect(form.cardType).toBe('definition')
     const draft = {
       concept: 'risk',
       role: 'definition',
