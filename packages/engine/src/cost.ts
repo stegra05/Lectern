@@ -124,7 +124,7 @@ export function estimate(
   for (const lecture of lectures) {
     const source = lecture.chars * TOKENS.perChar + lecture.images * TOKENS.perImage
     const facts = lecture.slides * TOKENS.factsPerSlide
-    const fills = Math.round(Math.min(facts, depth.cardsPerSlide * lecture.slides))
+    const fills = Math.round(depth.cardsPerSlide * lecture.slides)
     const calls = fills * (1 + TOKENS.reworkShare)
     const uncached = Math.min(calls, TOKENS.uncachedCalls)
     cards += fills
