@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+import renderMathInElement from 'katex/contrib/auto-render'
+import 'katex/dist/katex.min.css'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Card, Lecture } from '../../../../shared/contract.ts'
 import { selectedCards, useStore } from '../../store.ts'
 import { lectureColour, plural, two } from '../../lecture.ts'
@@ -141,14 +143,11 @@ function CardRow({ card, lecture, course }: { card: Card; lecture: Lecture; cour
       </span>
       <span className="cards-text">
         {/* The fields are the engine's own escaped HTML, as FIELDS.md defines them. */}
-        {!cloze && (
-          <b className="cards-front" dangerouslySetInnerHTML={{ __html: f.Front ?? '' }} />
-        )}
-        <span
+        {!cloze && <Tex as="b" className="cards-front" html={f.Front ?? ''} />}
+        <Tex
+          as="span"
           className="cards-back"
-          dangerouslySetInnerHTML={{
-            __html: cloze ? clozeAnswer(f.Text ?? '') : answer(f.Back ?? '', f.Slots ?? ''),
-          }}
+          html={cloze ? clozeAnswer(f.Text ?? '') : answer(f.Back ?? '', f.Slots ?? '')}
         />
       </span>
       <button
@@ -161,6 +160,26 @@ function CardRow({ card, lecture, course }: { card: Card; lecture: Lecture; cour
       </button>
     </li>
   )
+}
+
+/**
+ * A card field's HTML with its TeX typeset, the way Anki's MathJax reads `\( \)` and `\[ \]`.
+ * KaTeX is bundled, so nothing is fetched, and a formula takes the colour of the text around it.
+ */
+function Tex({ as: Tag, className, html }: { as: 'b' | 'span'; className: string; html: string }) {
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!ref.current) return
+    ref.current.innerHTML = html
+    renderMathInElement(ref.current, {
+      delimiters: [
+        { left: '\\[', right: '\\]', display: true },
+        { left: '\\(', right: '\\)', display: false },
+      ],
+      throwOnError: false,
+    })
+  }, [html])
+  return <Tag ref={ref} className={className} />
 }
 
 /** The cloze sentence with every deletion marked as the answer. */
