@@ -178,9 +178,10 @@ reads his filled sample and the key.
   skipped. Concepts are not weighted by how often past exams asked them: this comparison asks
   whether a card reads as well as the reference card, and what the deck covers is measured by the
   exam marks above.
-- **One card from each side.** When a concept has several cards or notes on a side, one is drawn
-  at random, so the two cards of a pair need not test the same fact. Which side is A or B is
-  random per pair. One seed makes a draw repeatable, and it is written into the key.
+- **A pair is a reference note and the card the judge matched it to**, so both test the same
+  fact as far as the judge's `same` or `partial` holds. When a concept has several such pairs,
+  one is drawn at random. Which side is A or B is random per pair. One seed makes a draw
+  repeatable, and it is written into the key.
 - **Only what both decks have is shown**: front and back, or the gap sentence with its hidden
   words. Note types, tags, ids, source lines and slide marks never reach the sample.
 - **Two answers per pair**, typed into the sample file: which card is Lectern's (A, B or ? for

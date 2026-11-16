@@ -7,8 +7,8 @@
  *
  * `draw` reads an eval folder of `refdeck.ts` that holds `cards.json`, `reference.json` and the
  * judged `labels/`. A reference note the judge labelled `same` or `partial` names a run card, and
- * that card's concept is a concept both decks have. The sample pairs one card of each deck on
- * such a concept, shows only front and back, hides which is which and numbers the pairs. The key
+ * that card's concept is a concept both decks have. The sample draws one such (note, card) pair
+ * per concept, so both cards test the same fact as far as the judge's label holds. It shows only front and back, hides which is which and numbers the pairs. The key
  * (kept apart) says which side is Lectern's, and holds the seed. In the filled sample each pair
  * has two lines: `Lectern is:` A, B or ? (cannot tell), and `Prefer:` A, B or = (no preference).
  */
@@ -84,16 +84,17 @@ async function draw(
   for (const name of (await readdir(join(folder, 'labels'))).filter((n) => n.endsWith('.json')))
     labels.push(...(await json<Label[]>(join(folder, 'labels', name))))
 
-  const cardIds = new Set(cards.map((card) => card.id))
+  const cardOf = new Map(cards.map((card) => [card.id, card]))
   const noteIds = new Map(notes.map((note) => [note.id, note]))
-  // The reference notes and the run cards of each concept the judge matched.
-  const matched = new Map<string, Note[]>()
+  // The (note, card) pairs the judge matched, by concept.
+  const matched = new Map<string, { note: Note; card: Card }[]>()
   for (const label of labels) {
     const cardId = label.match === 'none' ? null : (label.card ?? label.cards?.[0])
     const note = noteIds.get(label.id)
-    if (!cardId || !cardIds.has(cardId) || !note) continue
-    const concept = conceptOf(cardId)
-    matched.set(concept, [...(matched.get(concept) ?? []), note])
+    const card = cardId ? cardOf.get(cardId) : undefined
+    if (!card || !note) continue
+    const concept = conceptOf(card.id)
+    matched.set(concept, [...(matched.get(concept) ?? []), { note, card }])
   }
 
   // Lectures in random order, one concept from each in turn, until the sample is full.
@@ -112,11 +113,7 @@ async function draw(
   const key: Key = { seed, pairs: [] }
   const text: string[] = []
   concepts.forEach((concept, i) => {
-    const note = pick(matched.get(concept)!, random)
-    const card = pick(
-      cards.filter((c) => conceptOf(c.id) === concept),
-      random,
-    )
+    const { note, card } = pick(matched.get(concept)!, random)
     const lectern = pick([...SIDES], random)
     const shown = lectern === 'A' ? [card, note] : [note, card]
     key.pairs.push({ pair: i + 1, concept, lectern, card: card.id, note: note.id })

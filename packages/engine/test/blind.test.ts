@@ -80,6 +80,15 @@ describe('the blind sample', () => {
     expect(a).toContain(first.lectern === 'A' ? 'Lectern' : 'Reference')
     expect(b).toContain(first.lectern === 'A' ? 'Reference' : 'Lectern')
 
+    // The pair is the labelled note and its card, never the concept's other card.
+    expect(text).not.toContain('[...]')
+    for (const { pair, concept } of pairs) {
+      const block = text.split(/^Pair /m)[pair]!
+      expect(block.match(/Lectern \S+\?|Reference \S+\?/g)).toEqual(
+        expect.arrayContaining([`Lectern ${concept}?`, `Reference ${concept}?`]),
+      )
+    }
+
     const again = join(root, 'key2.json')
     await run('draw', folder, join(root, 'sample2.txt'), again, '--size', '3', '--seed', '7')
     expect(await readFile(again, 'utf8')).toBe(await readFile(key, 'utf8'))
