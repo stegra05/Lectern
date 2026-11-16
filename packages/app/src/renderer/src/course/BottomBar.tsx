@@ -107,7 +107,7 @@ export function BottomBar() {
     // and not on Details, which would close the run panel.
     action = (
       <button type="button" className="btn btn-primary" disabled>
-        Making your cards
+        Working
       </button>
     )
   } else if (sending?.course === course.id) {
