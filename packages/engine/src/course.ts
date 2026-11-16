@@ -16,6 +16,7 @@ import type { CardFile } from './cards/assemble.ts'
 import type { Goal } from './cards/roles.ts'
 import type { FactKind } from './decide.ts'
 import { two } from './cards/words.ts'
+import { EngineError } from './errors.ts'
 import type { Store } from './ports.ts'
 
 /** One thing a card can test, as the lecture states it. */
@@ -153,9 +154,22 @@ export const paths = {
   anki: (course: string) => `${course}/anki.json`,
 }
 
+/** A course file that no longer parses, cut short by a crash or edited by hand. */
+export function damaged(path: string): EngineError {
+  return new EngineError(
+    `The file ${path} in your course library is damaged and cannot be read.`,
+    'Restore the file from a backup, then open the course again.',
+  )
+}
+
 export async function readJson<T>(store: Store, path: string): Promise<T | null> {
   const text = await store.read(path)
-  return text === null ? null : (JSON.parse(text) as T)
+  if (text === null) return null
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw damaged(path)
+  }
 }
 
 export function writeJson(store: Store, path: string, value: unknown): Promise<void> {
@@ -167,8 +181,14 @@ export async function readCards(
   course: string,
   lecture: number,
 ): Promise<CardFile[]> {
-  const text = await store.read(paths.cards(course, lecture))
-  return text === null ? [] : ((parse(text) as CardFile[] | null) ?? [])
+  const path = paths.cards(course, lecture)
+  const text = await store.read(path)
+  if (text === null) return []
+  try {
+    return (parse(text) as CardFile[] | null) ?? []
+  } catch {
+    throw damaged(path)
+  }
 }
 
 /** Long lines stay whole, so a card field reads as one line. */

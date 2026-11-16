@@ -95,10 +95,21 @@ async function pendingFiles(store: Store, course: string, file: CourseFile) {
 export async function listCourses(store: Store): Promise<CourseSummary[]> {
   const out: CourseSummary[] = []
   for (const id of (await store.list('')).sort()) {
-    const file = await readJson<CourseFile>(store, paths.course(id)).catch(() => null)
+    let file: CourseFile | null
+    try {
+      file = await readJson<CourseFile>(store, paths.course(id))
+    } catch (error) {
+      if (!(error instanceof EngineError)) throw error
+      // A damaged course stays in the list under its folder name, and opening it names the file.
+      out.push({ id, name: id, goal: 'good', built: [], pending: [], cards: 0 })
+      continue
+    }
     if (!file) continue
     let cards = 0
-    for (const { number } of file.lectures) cards += (await readCards(store, id, number)).length
+    for (const { number } of file.lectures) {
+      // A damaged card file counts as none here; opening the course names it.
+      cards += (await readCards(store, id, number).catch(() => [])).length
+    }
     out.push({
       id,
       name: file.name,

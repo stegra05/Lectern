@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { memoryAnki } from '../src/adapters/memory-anki.ts'
@@ -472,6 +472,47 @@ describe('a sort that the decision model cannot finish', () => {
       fix: 'Check the key in OPENAI_API_KEY, then add the files again.',
     })
     expect(await readdir(join(root, course, 'slides'))).toEqual(['Introduction.pdf'])
+  })
+})
+
+describe('a library with a damaged course', () => {
+  it('lists every course, and opening the damaged one names the file', async () => {
+    const library = join(await tempRoot(), 'damaged')
+    const engine = createEngine({
+      store: nodeStore(library),
+      pdf: pdfjsReader,
+      model: offlineModel(),
+      decisions: offlineDecisions(),
+      anki: memoryAnki(),
+      templates,
+      now: Date.now,
+    })
+    const events: Event[] = []
+    const last = async (command: unknown) => {
+      await engine.run(command, (event) => events.push(event))
+      return events.at(-1)!
+    }
+    for (const name of ['Econ', 'Cut', 'Sent']) await last({ type: 'create', name })
+    // A write that was cut short: a course file half written, and one left beside its target.
+    await writeFile(join(library, 'cut', 'course.json'), '{"format": 1, "na')
+    await writeFile(join(library, 'sent', 'anki.json'), '{"notes": {"01-')
+    await writeFile(join(library, 'econ', 'course.json.0b1d.part'), '{')
+
+    const { courses } = (await last({ type: 'courses' })) as Extract<Event, { type: 'courses' }>
+    expect(courses.map((c) => [c.id, c.name])).toEqual([
+      ['cut', 'cut'],
+      ['econ', 'Econ'],
+      ['sent', 'Sent'],
+    ])
+    expect(await last({ type: 'course', course: 'cut' })).toEqual({
+      type: 'failed',
+      message: 'The file cut/course.json in your course library is damaged and cannot be read.',
+      fix: 'Restore the file from a backup, then open the course again.',
+    })
+    expect(await last({ type: 'course', course: 'sent' })).toMatchObject({
+      message: 'The file sent/anki.json in your course library is damaged and cannot be read.',
+    })
+    expect(await last({ type: 'course', course: 'econ' })).toMatchObject({ type: 'course' })
   })
 })
 
