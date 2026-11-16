@@ -260,6 +260,18 @@ test('pictures of a course folder added whole', async () => {
     await panel.getByText('Lecture files').click()
     await page.waitForTimeout(1500)
     await shoot(page, '14-lecture-files-moves')
+
+    await panel.getByRole('button', { name: 'Move Blatt 1 to past exams' }).click()
+    const takeOut = panel.getByRole('button', { name: 'Take Blatt 1 out of the course' })
+    await expect(panel.getByRole('button', { name: 'Move Blatt 1 to lectures' })).toBeVisible()
+    await takeOut.scrollIntoViewIfNeeded()
+    await page.mouse.move(0, 0)
+    await page.waitForTimeout(1500)
+    await shoot(page, '15-take-out-exam')
+    await takeOut.click()
+    await expect(panel.locator('.setup-exams')).not.toContainText('Blatt 1')
+    await page.waitForTimeout(1500)
+    await shoot(page, '16-taken-out')
   } finally {
     await app.close()
   }

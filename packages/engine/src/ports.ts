@@ -130,6 +130,8 @@ export interface Store {
   writeBytes(path: string, data: Uint8Array): Promise<void>
   /** Moves a file, and creates missing folders. */
   move(from: string, to: string): Promise<void>
+  /** Deletes a file. */
+  remove(path: string): Promise<void>
 }
 
 /** A note type as Anki holds it: its fields in order, one stylesheet and one card template. */

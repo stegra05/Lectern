@@ -51,6 +51,7 @@ export function nodeStore(root: string): Store {
       await mkdir(dirname(at(to)), { recursive: true })
       await rename(at(from), at(to))
     },
+    remove: (path) => rm(at(path)),
     async list(dir) {
       try {
         return (await readdir(at(dir))).filter((name) => !name.endsWith(PART))
