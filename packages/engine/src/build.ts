@@ -31,6 +31,7 @@ import {
   paths,
   readCards,
   readJson,
+  sha256,
   titleFromFile,
   writeCards,
   writeJson,
@@ -1117,11 +1118,6 @@ function examFact(lecture: OpenLecture, family: Family, answer: Answer): Fact {
   if (!concept.slides.includes(slide))
     concept.slides = [...concept.slides, slide].sort((a, b) => a - b)
   return fact
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 /** `work` over every item at once, results in order. `createAsk` limits the model calls. */

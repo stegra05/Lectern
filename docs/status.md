@@ -73,6 +73,8 @@ card arrived tagged `::own`.
 - The dev baseline (three builds of v3 on the 14 papers before 2022: 48.5%, 47.7% and 55.2% of
   the dev marks, mean 50.5) has not been read on the test papers
   ([#270](https://github.com/stegra05/lectern/issues/270)). No change has passed the gate yet.
+- How well the decision model sorts added files, every lecture and past exam among them: run on
+  one folder, its threshold is unmeasured ([#219](https://github.com/stegra05/lectern/issues/219)).
 
 ## Not built
 

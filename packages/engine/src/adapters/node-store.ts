@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import type { Store } from '../ports.ts'
 
@@ -30,6 +30,10 @@ export function nodeStore(root: string): Store {
     async writeBytes(path, data) {
       await mkdir(dirname(at(path)), { recursive: true })
       await writeFile(at(path), data)
+    },
+    async move(from, to) {
+      await mkdir(dirname(at(to)), { recursive: true })
+      await rename(at(from), at(to))
     },
     async list(dir) {
       try {

@@ -31,6 +31,11 @@
 - **Paid runs only through the engine**, each preceded by its estimate, within the 50 dollars
   he set for evals. Any other paid run needs his yes. Keys come from the macOS keychain by
   environment variable, never from a file.
+- **Sorting added files is the one paid call outside a build.** A file whose name does not
+  keep it out costs one decision request of about 700 tokens, under a hundredth of a cent
+  (56 files of the Entrepreneurship folder: 0.38 cents); a course folder of a hundred such
+  files costs under a cent. It has no estimate first and its cost is not recorded,
+  since showing a price for it would cost the student more attention than it costs money.
 - **The prompt cache is set on purpose**: an explicit breakpoint, the same reply form and
   effort, and the first card of each type runs ahead to fill the cache.
 - **Calls are paced to the key's tokens a minute.** A key's limit counts cached input too, so

@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { GOALS, ROLES } from './cards/roles.ts'
 import { OWN_ROLES, type Problem, type Slots } from './cards/slots.ts'
 import type { CardFile } from './cards/assemble.ts'
-import type { CourseState, CourseSummary } from './library.ts'
+import type { Added, CourseState, CourseSummary, Shelf } from './library.ts'
 
 /** The course folder inside the store. */
 const course = z.string().min(1)
@@ -54,15 +54,22 @@ export const CommandSchema = z.discriminatedUnion('type', [
   }),
   /**
    * Adds PDFs to the course, each as its file name, or its path inside a folder the student
-   * added, and its bytes: lecture slides,
-   * which the next `build` builds, or past exam papers (`to: 'exams'`), whose questions the
-   * next `build` turns into cards first.
+   * added, and its bytes. Lecture slides are what the next `build` builds; past exam papers are
+   * what it turns into cards first. With `to`, every file goes there; without it, each file is
+   * sorted by its kind, and what is neither stays out.
    */
   z.object({
     type: z.literal('add'),
     course,
     files: z.array(z.object({ name: z.string().min(1), data: z.instanceof(Uint8Array) })).min(1),
     to: z.enum(['slides', 'exams']).optional(),
+  }),
+  /** Moves a file without cards between lecture slides and past exams. */
+  z.object({
+    type: z.literal('move'),
+    course,
+    file: z.string().min(1),
+    to: z.enum(['slides', 'exams']),
   }),
   /** Sends the cards that are not in Anki yet. */
   z.object({ type: z.literal('send'), course }),
@@ -119,8 +126,9 @@ export type Event =
   /** A PNG in base64. */
   | { type: 'slide'; lecture: number; slide: number; png: string }
   | { type: 'created'; course: string }
-  /** The file names as they now are in the course. */
-  | { type: 'added'; course: string; files: string[] }
+  /** What came in, under the names it now has in the course, and what stayed out. */
+  | ({ type: 'added'; course: string } & Added)
+  | { type: 'moved'; course: string; file: string; to: Shelf }
   /** After each card that reached Anki. `lecture` is the lecture being sent. */
   | { type: 'sending'; lecture: number; done: number; total: number }
   /** `deck` is the course's deck in Anki, with one subdeck per lecture. */

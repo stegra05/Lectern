@@ -283,7 +283,12 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
           if (answer.type === 'predicate')
             answers.push({ type: 'predicate', probability: answer.probability })
           else if (answer.type === 'choice') {
-            answers.push({ type: 'choice', choice: String(answer.choice) })
+            answers.push({
+              type: 'choice',
+              choice: String(answer.choice),
+              probability:
+                answer.probabilities.find((p) => p.value === answer.choice)?.probability ?? 0,
+            })
           } else if (answer.type === 'score') answers.push({ type: 'score', score: answer.score })
           else answers.push({ type: 'refusal' })
         }
@@ -303,7 +308,10 @@ function toQuestion(question: Question) {
   return {
     type: 'choice' as const,
     instructions: question.ask,
-    choices: question.choices.map((value) => ({ value })),
+    choices: question.choices.map((value) => {
+      const description = question.descriptions?.[value]
+      return description ? { value, description } : { value }
+    }),
   }
 }
 

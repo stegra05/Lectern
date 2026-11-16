@@ -69,12 +69,19 @@ export interface Level {
  */
 export type Question =
   | { type: 'predicate'; statement: string }
-  | { type: 'choice'; ask: string; choices: readonly string[] }
+  | {
+      type: 'choice'
+      ask: string
+      choices: readonly string[]
+      /** What a choice means, by its value, where its name alone does not say it. */
+      descriptions?: Readonly<Record<string, string>>
+    }
   | { type: 'score'; ask: string; levels: readonly Level[] }
 
 export type Answer =
   | { type: 'predicate'; probability: number }
-  | { type: 'choice'; choice: string }
+  /** `probability`: how likely the chosen value is, with all choices sharing one whole. */
+  | { type: 'choice'; choice: string; probability: number }
   /** From 0, the lowest level, to the number of levels minus one. Not a whole number. */
   | { type: 'score'; score: number }
   | { type: 'refusal' }
@@ -120,6 +127,8 @@ export interface Store {
   list(dir: string): Promise<string[]>
   /** Writes a binary file, such as an added PDF, and creates missing folders. */
   writeBytes(path: string, data: Uint8Array): Promise<void>
+  /** Moves a file, and creates missing folders. */
+  move(from: string, to: string): Promise<void>
 }
 
 /** A note type as Anki holds it: its fields in order, one stylesheet and one card template. */

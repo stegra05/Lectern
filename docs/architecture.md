@@ -43,7 +43,8 @@ src/clash.ts          exact twins among the questions of a course
 src/cost.ts           the estimate and the cap constants
 src/course.ts         the course folder: shapes, paths, read and write
 src/slides.ts         slide text without the lines every slide repeats
-src/library.ts        non-building commands: courses, course, cards, slide, create, add
+src/library.ts        non-building commands: courses, course, cards, slide, create, add, move
+src/sort.ts           the kind of an added file: name rules, the choice question, SORT_THRESHOLD
 src/edit.ts           slots, edit, remove, write (single cards)
 src/deliver.ts        send (Anki)
 src/cards/            roles, validate, assemble, slots, id, words, question-answer
@@ -343,7 +344,8 @@ only the organisation check exists as a decision that acts. Further checks are i
 
 Money is spent in exactly two places, both wrapped in `createAsk` (`ask.ts`): each generative
 model call and each decision request. Nothing else in the engine calls the network except
-AnkiConnect on `127.0.0.1`.
+AnkiConnect on `127.0.0.1`, and `add` without a target shelf, which sends one decision request
+per file it sorts (`sort.ts`), unmetered and without an estimate ([RFD 6](rfd/0006-money.md)).
 
 - **Generative model**: `openaiModel` computes the dollar cost of each call from the usage the API
   returns: uncached input at `input`, cached input at `cachedInput`, output (reasoning included) at
@@ -499,8 +501,11 @@ Properties that hold by construction and by test:
 
 - A lecture that is listed in `course.json` is never built again. Adding a lecture leaves the files
   of earlier lectures byte-identical.
-- A lecture keeps its number forever (`assignNumbers`); a PDF is known by its file name, and `add`
-  refuses a name the course already has. A changed PDF behind a built lecture is ignored (the sha256
+- A lecture keeps its number forever (`assignNumbers`); a PDF is known by its file name. `add` with
+  a target shelf refuses a name the course already has; `add` without one sorts each file
+  (`sort.ts`, [RFD 5](rfd/0005-decision-models.md)), stores only lecture slides and past exams, and
+  returns the rest as `left` with the reason, a name or a content the course already has among them. `move`
+  shifts a file without cards between `slides/` and `exams/`. A changed PDF behind a built lecture is ignored (the sha256
   is stored, nothing compares it).
 - Card files hold the fields exactly as they go to Anki (HTML), plus `id`, `note`, `concept`, `slide`
   and `own`. The Slide picture is not saved in the course folder: the `slide` command and `send`
@@ -513,13 +518,14 @@ One function: `createEngine(ports).run(command, emit)` (`api.ts`). Commands in a
 plain data, so the in-app channel can later be swapped for HTTP. A command is parsed with a zod
 discriminated union (`CommandSchema` in `commands.ts`); a bad command, or any thrown
 `EngineError`, becomes a `failed` event with `message` and `fix`. Nothing throws out of `run`.
-PDFs cross the boundary as `Uint8Array`: the `add` command carries each file as its name and its
-bytes. A slide picture leaves it as a base64 PNG in the `slide` event.
+PDFs cross the boundary as `Uint8Array`: the `add` command carries each file as its name, or its
+path inside the folder it came in, and its bytes. A slide picture leaves it as a base64 PNG in the `slide` event.
 
 | Commands | Model or network? | Answered by events |
 | --- | --- | --- |
 | `build`, `estimate` | `build` calls both models, `estimate` neither | `phase`, `progress`, `estimate`, `built` |
-| `courses`, `course`, `cards`, `create`, `add`, `slide` | no model | `courses`, `course`, `cards`, `created`, `added`, `slide` |
+| `add` | the decision model, for every file whose name does not keep it out, and only without `to` | `added` |
+| `courses`, `course`, `cards`, `create`, `move`, `slide` | no model | `courses`, `course`, `cards`, `created`, `moved`, `slide` |
 | `send` | AnkiConnect only | `sending`, `sent` |
 | `slots`, `edit`, `remove`, `write` | none (Anki when the card is there) | `slots`, `edited`, `removed`, `written`, `refused` |
 
