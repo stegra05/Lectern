@@ -374,6 +374,20 @@ describe('wrapTitle', () => {
     expect(lines).toHaveLength(2)
     expect(lines[1]!.endsWith('…')).toBe(true)
   })
+
+  it('cuts a single very long word with an ellipsis, inside the disc', () => {
+    const { lines, disc } = wrapTitle('Wahrscheinlichkeitsrechnungsgrundlagen', measure)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]!.endsWith('…')).toBe(true)
+    expect((measure(lines[0]!, 600) * 14) / 13).toBeLessThanOrEqual(2 * disc)
+  })
+
+  it('cuts a long first word and keeps the words after it', () => {
+    const { lines } = wrapTitle('Wahrscheinlichkeitsrechnungsgrundlagen und mehr', measure)
+    expect(lines).toHaveLength(2)
+    expect(lines[0]!.endsWith('…')).toBe(true)
+    expect(lines[1]).toBe('und mehr')
+  })
 })
 
 describe('placeRings', () => {
@@ -473,6 +487,32 @@ describe('placePills', () => {
     const { widths } = placePills(rings, 1)
     widths.forEach((w, i) => expect(w).toBeGreaterThan(rings.topics[i]!.width * 0.95))
   })
+})
+
+describe('the smallest window with the panel open', () => {
+  for (const per of [1, 4, 6, 0]) {
+    for (let count = 2; count <= 8; count++) {
+      it(`${count} topics of ${per || 'mixed'} concepts: no dot centre lies under a pill`, () => {
+        const topics = Array.from({ length: count }, (_, t): [string, [string, number][]] => [
+          `Topic number ${t + 1} of the lecture`,
+          Array.from({ length: per || (t % 6) + 1 }, (_, c): [string, number] => [
+            `Concept ${t + 1}.${c + 1} with a name`,
+            1 + ((t + c) % 5),
+          ]),
+        ])
+        const rings = layoutRings(lecture('Small window', topics), measure)
+        const f = frame(rings, true, 900, 600)
+        const { pills, dots } = drawn(rings, f, placeRings(rings, f))
+        for (const d of dots) {
+          const x = (d.left + d.right) / 2
+          const y = (d.top + d.bottom) / 2
+          pills.forEach((p) =>
+            expect(x >= p.left && x <= p.right && y >= p.top && y <= p.bottom).toBe(false),
+          )
+        }
+      })
+    }
+  }
 })
 
 describe('layoutRings edge cases', () => {
