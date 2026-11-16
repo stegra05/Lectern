@@ -190,3 +190,35 @@ test('pictures of every base screen', async () => {
     await app.close()
   }
 })
+
+test('picture of a formula card in the side panel', async () => {
+  await mkdir(out!, { recursive: true })
+  const { app, page } = await launch()
+  try {
+    await page.getByPlaceholder('sk-...').fill('sk-offline')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'New course' }).click()
+    await page.getByLabel('Name of the new course').fill('Entrepreneurship')
+    await page.keyboard.press('Enter')
+    const folder = await mkdtemp(join(tmpdir(), 'lectern-shots-'))
+    for (const [name, slides] of Object.entries(LECTURES))
+      await writeFile(join(folder, name), await makePdf(slides))
+    await page.getByLabel('Folder of lecture PDFs').setInputFiles(folder)
+    await page.getByRole('button', { name: 'Make my cards' }).click()
+    await expect(page.getByRole('region', { name: 'Status' })).toContainText(/\d+ cards/, {
+      timeout: 60_000,
+    })
+    await page.getByRole('button', { name: /^(Open|Go to) lecture 02/ }).click()
+    const panel = page.getByRole('complementary')
+    await page.getByRole('button', { name: /^Affordable loss, \d+ cards?$/ }).click()
+    await panel.getByRole('button', { name: 'Add your own card' }).click()
+    await panel.getByLabel('Question').fill('What is the energy of a mass \\(m\\)?')
+    await panel.getByLabel('Answer').fill('Energy is \\[ E = mc^2 \\]')
+    await panel.getByLabel('Key term, in bold').fill('Energy')
+    await panel.getByRole('button', { name: 'Add card' }).click()
+    await expect(panel.locator('.katex-display')).toBeVisible()
+    await shoot(page, '09-formula-card')
+  } finally {
+    await app.close()
+  }
+})
