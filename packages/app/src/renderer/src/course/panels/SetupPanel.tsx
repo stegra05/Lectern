@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import type { FileKind, Goal, LeftFile } from '../../../../shared/contract.ts'
+import type { FileKind, Goal, LeftFile, Unreadable } from '../../../../shared/contract.ts'
 import { cardCount, useStore } from '../../store.ts'
 import { plural } from '../../lecture.ts'
 import { fromInput } from '../../picked.ts'
@@ -23,12 +23,19 @@ const KIND_REASON: Partial<Record<FileKind, string>> = {
   organisation: 'About how the course is run, not its subject.',
 }
 
+/** Why a PDF cannot be read, and what to do, for a file left out and for one in the course. */
+const UNREADABLE: Record<Unreadable, string> = {
+  password:
+    'This file cannot be read: it is protected by a password. Add a copy without the password.',
+  damaged: 'This file cannot be read: it is damaged. Download or export it again and add that.',
+}
+
 function reason(left: LeftFile): string {
+  if (left.why === 'password' || left.why === 'damaged') return UNREADABLE[left.why]
   const kind = left.why === 'kind' && left.kind ? KIND_REASON[left.kind] : undefined
   if (kind) return kind
-  if (left.why === 'unsure') return 'I could not tell what this is.'
   if (left.why === 'format') return 'Not a PDF. Export it as PDF and add that.'
-  return 'This PDF could not be read.'
+  return 'I could not tell what this is.'
 }
 
 const nameOf = (path: string) =>
@@ -51,7 +58,8 @@ export function SetupPanel({ close }: { close: ReactNode }) {
   const picker = useRef<HTMLInputElement>(null)
   if (!course) return null
 
-  const lectures = course.pending.length
+  const lectures = course.pending.filter((p) => !p.unreadable).length
+  const unreadable = course.pending.some((p) => p.unreadable)
   const slides = course.pending.reduce((n, p) => n + p.slides, 0)
   const adding = cardCount(course) > 0
   const already = leftOut.filter((l) => l.why === 'already').length
@@ -72,37 +80,46 @@ export function SetupPanel({ close }: { close: ReactNode }) {
             Looking at the files you added: which are lectures, which are past exams.
           </p>
         )}
-        {lectures > 0 && (
+        {course.pending.length > 0 && (
           <section className="panel-section">
-            <p>
-              {adding
-                ? `I found ${plural(lectures, 'new lecture PDF')} and put them on the map after your other lectures.`
-                : `I read your ${plural(lectures, 'lecture PDF')} and put them on the map in course order.`}
-            </p>
-            <ul className="panel-group">
-              <li className="setup-found">
-                <span className="setup-count num">{lectures}</span>
-                <span>
-                  <b>{lectures === 1 ? 'lecture' : 'lectures'}</b>
-                  <span className="t-secondary">: {plural(slides, 'slide')}</span>
-                </span>
-              </li>
-            </ul>
-            <details className="setup-files">
+            {lectures > 0 && (
+              <>
+                <p>
+                  {adding
+                    ? `I found ${plural(lectures, 'new lecture PDF')} and put them on the map after your other lectures.`
+                    : `I read your ${plural(lectures, 'lecture PDF')} and put them on the map in course order.`}
+                </p>
+                <ul className="panel-group">
+                  <li className="setup-found">
+                    <span className="setup-count num">{lectures}</span>
+                    <span>
+                      <b>{lectures === 1 ? 'lecture' : 'lectures'}</b>
+                      <span className="t-secondary">: {plural(slides, 'slide')}</span>
+                    </span>
+                  </li>
+                </ul>
+              </>
+            )}
+            {/* Open when a file cannot be read, so the student sees which one. */}
+            <details className="setup-files" open={unreadable}>
               <summary>Lecture files</summary>
               <ul className="panel-group">
                 {course.pending.map((p) => (
                   <li key={p.file} className="setup-row">
                     <span className="setup-paper-name">{nameOf(p.file)}</span>
-                    <button
-                      type="button"
-                      className="btn btn-quiet btn-accent"
-                      disabled={sorting}
-                      aria-label={`Move ${nameOf(p.file)} to past exams`}
-                      onClick={() => void moveFile(p.file, 'exams')}
-                    >
-                      Move to past exams
-                    </button>
+                    {p.unreadable ? (
+                      <span className="t-secondary">{UNREADABLE[p.unreadable]}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-quiet btn-accent"
+                        disabled={sorting}
+                        aria-label={`Move ${nameOf(p.file)} to past exams`}
+                        onClick={() => void moveFile(p.file, 'exams')}
+                      >
+                        Move to past exams
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -165,7 +182,12 @@ export function SetupPanel({ close }: { close: ReactNode }) {
           {course.exams.length > 0 && (
             <ul className="panel-group">
               {course.exams.map((paper) =>
-                paper.questions === null ? (
+                paper.unreadable ? (
+                  <li key={paper.file} className="setup-row">
+                    <span className="setup-paper-name">{nameOf(paper.file)}</span>
+                    <span className="t-secondary">{UNREADABLE[paper.unreadable]}</span>
+                  </li>
+                ) : paper.questions === null ? (
                   <li key={paper.file} className="setup-row">
                     <span className="setup-paper-name">{nameOf(paper.file)}</span>
                     <span className="t-secondary">read with these cards</span>
