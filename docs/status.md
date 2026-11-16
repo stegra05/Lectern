@@ -27,7 +27,7 @@ Engine tests: 217 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 `packages/app` is the base prototype on the engine's one boundary: first run, courses, files and
 goal, the run with the real phases, the result track, a lecture as rings, cards in the side
 panel with changing, removing and writing a card, course details, settings with the OpenAI key,
-sending to Anki, in light and dark. 44 unit tests and one Playwright test from a new course to
+sending to Anki, past exam papers added in the course setup, in light and dark. 44 unit tests and one Playwright test from a new course to
 its cards pass on the offline models. `pnpm --filter @lectern/app shots` takes pictures of the
 screens into `out/shots`.
 
@@ -36,6 +36,9 @@ screens into `out/shots`.
 - The app's own send, edit and remove against a real Anki (the engine's ran against one; the
   app's only against the in-memory Anki).
 - A real build started from inside the app (only from the engine's command line so far).
+- Past papers added after a course's lectures are built change no card already made; they count
+  only for lectures built later. Answers the model wrote are not checked against the readings.
+- The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
 - Packaging: the app reads the Anki templates from `packages/engine/anki` in the repository.
 
 ## Not built
