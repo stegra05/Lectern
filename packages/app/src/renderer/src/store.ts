@@ -417,16 +417,37 @@ export const useStore = create<State>((set, get) => {
     detailsTab: 'decisions',
 
     async start() {
-      const settings = await window.lectern.settings()
+      let settings: Settings
+      try {
+        settings = await window.lectern.settings()
+      } catch {
+        // Better a screen that says so than a blank window. The list comes up without settings.
+        await get().openCourses()
+        set({
+          failure: {
+            message: 'Lectern could not read its settings.',
+            fix: 'Restart Lectern. If it keeps failing, check that its data folder can be read.',
+          },
+        })
+        return
+      }
       set({ settings })
       if (settings.hasKey) await get().openCourses()
       else set({ screen: 'first-run' })
     },
 
     async saveKey(key) {
-      const result = await window.lectern.saveKey(key)
-      if (result.ok) set({ settings: await window.lectern.settings() })
-      return result
+      try {
+        const result = await window.lectern.saveKey(key)
+        if (result.ok) set({ settings: await window.lectern.settings() })
+        return result
+      } catch {
+        return {
+          ok: false,
+          message: 'Lectern could not store the key.',
+          fix: 'Save the key again. If it keeps failing, restart Lectern.',
+        }
+      }
     },
 
     async openCourses() {

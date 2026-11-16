@@ -51,3 +51,24 @@ test('a build that failed while the student was on the list', async () => {
     await app.close()
   }
 })
+
+test('a key that cannot be stored, on first run', async () => {
+  await mkdir(out!, { recursive: true })
+  const { app, page } = await launch()
+  try {
+    // The shell's key call fails the way a full disk or a refusing keychain makes it fail.
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('key:save')
+      ipcMain.handle('key:save', () => {
+        throw new Error('ENOSPC')
+      })
+    })
+    await page.getByPlaceholder('sk-...').fill('sk-offline')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page.getByRole('alert')).toContainText('could not store the key')
+    await expect(page.getByPlaceholder('sk-...')).toBeEditable()
+    await shoot(page, 'key-not-stored-first-run')
+  } finally {
+    await app.close()
+  }
+})

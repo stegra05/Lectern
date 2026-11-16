@@ -198,6 +198,28 @@ describe('a form with unsaved text', () => {
   })
 })
 
+describe('the key and the start', () => {
+  /** The bridge with the calls of the shell added to its run. */
+  function bridge(extra: object) {
+    const { lectern } = (globalThis as unknown as { window: { lectern: object } }).window
+    Object.assign(lectern, extra)
+  }
+
+  it('turns a saveKey that rejects into a message and a fix', async () => {
+    bridge({ saveKey: () => Promise.reject(new Error('EACCES')) })
+    const result = await useStore.getState().saveKey('sk-test')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.fix).not.toBe('')
+  })
+
+  it('shows a message and the courses when settings rejects', async () => {
+    bridge({ settings: () => Promise.reject(new Error('EACCES')) })
+    await useStore.getState().start()
+    expect(useStore.getState().screen).toBe('courses')
+    expect(useStore.getState().failure?.message).toBe('Lectern could not read its settings.')
+  })
+})
+
 describe('a problem from adding files', () => {
   const bad = { path: 'bad.pdf', file: new File(['x'], 'bad.pdf') }
 
