@@ -6,6 +6,7 @@
  *   node eval/bench.ts batches <rubric.json> <run folder> [--size 27]
  *   node eval/bench.ts report <rubric.json> <run folder>
  *   node eval/bench.ts compare <rubric.json> <run folder> <run folder>
+ *   node eval/bench.ts gate <rubric.json> --old <run folder>... --new <run folder>...
  *
  * The rubric is the test set: the knowledge points of the held-out papers, each with its
  * marks. Extractors (`RUBRIC.md`) write one file per paper, and `rubric` checks their marks
@@ -16,20 +17,29 @@
  * has decided yet into `pairs/NN.json`. A judge (`JUDGE-PAIRS.md`) answers each batch into
  * `verdicts/NN.json`. Verdicts are kept in `verdicts.json` beside the rubric under the texts
  * of the pair, so a fact several papers share is judged once and a second look at a run asks
- * only about what is new. `report` gives
+ * only about what is new. A run's score counts its shortlist and what its own judges found,
+ * nothing else, so it does not move when other runs are judged. `report` gives
  * the share of the marks the deck holds with its 95 percent interval and refuses while pairs
  * are open. `compare` gives the difference between two runs on the same points. Its interval
  * says whether two decks differ on this exam; whether the code behind them does takes more
  * than one build each, since builds of the same code differ by several points (RFD 14).
+ *
+ * `gate` is the one verdict on a change of the engine: the builds of the old code against the
+ * builds of the new, judged runs both. It says `better` only when the mean score rose by more
+ * than builds of the same code differ and no guard fails: deck size, answer length, calls and
+ * tokens written (`bench/gate.ts`). A run folder for the gate also holds `meta.json`.
  */
 
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { z } from 'zod'
+import { answerLengths, gate, type Build } from './bench/gate.ts'
 import { assemble, PaperSchema } from './bench/rubric.ts'
 import {
   compare,
+  considered,
+  coverage,
   ingest,
   LabelSchema,
   open,
@@ -38,6 +48,7 @@ import {
   shortlist,
   standings,
   type Card,
+  type Label,
   type Rubric,
   type Standing,
   VERDICTS,
@@ -53,7 +64,11 @@ const SHORTLIST = 8
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
-  options: { size: { type: 'string' } },
+  options: {
+    size: { type: 'string' },
+    old: { type: 'string', multiple: true },
+    new: { type: 'string', multiple: true },
+  },
 })
 const [step, rubricPath, ...runs] = positionals
 
@@ -82,8 +97,13 @@ async function files(folder: string): Promise<string[]> {
   return names.filter((name) => name.endsWith('.json')).sort()
 }
 
-/** The rubric, the run's cards and every verdict so far, the run's own new ones taken in. */
-async function load(run: string): Promise<{ rubric: Rubric; cards: Card[]; verdicts: Verdicts }> {
+/**
+ * The rubric, the run's cards, the labels of the run's own judges and every verdict kept so
+ * far, the run's new ones taken in.
+ */
+async function load(
+  run: string,
+): Promise<{ rubric: Rubric; cards: Card[]; labels: Label[]; verdicts: Verdicts }> {
   const rubric = RubricSchema.parse(await json(rubricPath!))
   const cards = z
     .array(z.object({ id: z.string(), question: z.string(), answer: z.string() }))
@@ -100,16 +120,18 @@ async function load(run: string): Promise<{ rubric: Rubric; cards: Card[]; verdi
       throw new Error(`${kept} cannot be read: ${(error as Error).message}`)
     }),
   )
-  let added = 0
-  for (const name of await files(join(run, 'verdicts'))) {
-    const labels = z.array(LabelSchema).parse(await json(join(run, 'verdicts', name)))
-    added += ingest(labels, rubric.points, cards, verdicts)
-  }
+  const labels: Label[] = []
+  for (const name of await files(join(run, 'verdicts')))
+    labels.push(...z.array(LabelSchema).parse(await json(join(run, 'verdicts', name))))
+  const { added, differing } = ingest(labels, rubric.points, cards, verdicts)
   if (added > 0) {
     await writeFile(kept, `${JSON.stringify(verdicts, null, 1)}\n`)
     console.log(`${added} new verdicts kept in ${kept}`)
   }
-  return { rubric, cards, verdicts }
+  if (differing > 0) {
+    console.log(`${differing} verdicts differ from ones kept earlier, which stand.`)
+  }
+  return { rubric, cards, labels, verdicts }
 }
 
 async function batches(run: string, size: number): Promise<void> {
@@ -144,12 +166,13 @@ async function batches(run: string, size: number): Promise<void> {
 
 /** Where every point stands in a run. Fails while the shortlist has undecided pairs. */
 async function judged(run: string): Promise<Standing[]> {
-  const { rubric, cards, verdicts } = await load(run)
-  const pairs = open(rubric.points, shortlist(rubric.points, cards, SHORTLIST), verdicts)
+  const { rubric, cards, labels, verdicts } = await load(run)
+  const short = shortlist(rubric.points, cards, SHORTLIST)
+  const pairs = open(rubric.points, short, verdicts)
   if (pairs.length > 0) {
     throw new Error(`${run}: ${pairs.length} points have undecided pairs. Run batches and judge.`)
   }
-  return standings(rubric.points, cards, verdicts)
+  return standings(rubric.points, considered(rubric.points, cards, short, labels), verdicts)
 }
 
 const percent = (share: number) => `${(100 * share).toFixed(1)}%`
@@ -196,8 +219,8 @@ async function compareRuns(first: string, second: string): Promise<void> {
     console.log(
       `Difference: ${sign(difference)} points of coverage (${sign(low)} to ${sign(high)})`,
     )
-    // The interval covers which questions an exam asks, not the luck of a build: two builds
-    // of the same code have differed by more than it allows (RFD 14).
+    // The interval covers which questions an exam asks, not the luck of a build, and builds
+    // of the same code differ by several points (RFD 14).
     console.log(
       low > 0 || high < 0
         ? 'The interval excludes zero: these two decks differ on this exam. Builds of the same code differ too, so a change of code needs the bar of RFD 14.'
@@ -211,6 +234,56 @@ async function compareRuns(first: string, second: string): Promise<void> {
   for (const point of lost) console.log(`  lost   ${point.id}: ${point.knows}`)
 }
 
+/** What the gate needs of one judged run: its score, its deck and what its build took. */
+async function build(run: string): Promise<Build> {
+  const list = await judged(run)
+  const cards = z.array(z.object({ answer: z.string() })).parse(await json(join(run, 'cards.json')))
+  const { effort } = z
+    .object({ effort: z.object({ calls: z.number(), outputTokens: z.number() }) })
+    .parse(await json(join(run, 'meta.json')))
+  const { mean, p90 } = answerLengths(cards.map((card) => card.answer))
+  return {
+    coverage: coverage(list),
+    cards: cards.length,
+    answerWords: mean,
+    answerWordsP90: p90,
+    calls: effort.calls,
+    outputTokens: effort.outputTokens,
+  }
+}
+
+const GUARD_NAMES = {
+  cards: 'cards',
+  answerWords: 'words an answer',
+  answerWordsP90: 'words, nine answers in ten',
+  calls: 'calls',
+  outputTokens: 'tokens written',
+} as const
+
+async function gateRuns(oldRuns: string[], newRuns: string[]): Promise<void> {
+  // One after the other: every run takes its new verdicts into the one file of kept verdicts.
+  const old: Build[] = []
+  for (const run of oldRuns) old.push(await build(run))
+  const next: Build[] = []
+  for (const run of newRuns) next.push(await build(run))
+  const result = gate(old, next)
+  const side = (name: string, builds: Build[], score: number) =>
+    `${name}: ${percent(score)} of the marks over ${builds.length} builds (${builds.map((b) => percent(b.coverage)).join(', ')})`
+  console.log(side('Old', old, result.old))
+  console.log(side('New', next, result.new))
+  const points = (share: number) => `${share >= 0 ? '+' : ''}${(100 * share).toFixed(1)}`
+  console.log(
+    `Difference: ${points(result.difference)} points, where builds of the same code make ${(100 * result.bar).toFixed(1)} believable`,
+  )
+  for (const g of result.guards) {
+    const figure = (value: number) => (value >= 100 ? value.toFixed(0) : value.toFixed(1))
+    console.log(
+      `  ${g.holds ? 'holds' : 'FAILS'}  ${GUARD_NAMES[g.guard]}: ${figure(g.old)} to ${figure(g.new)}, at most ${figure(g.limit)}`,
+    )
+  }
+  console.log(`Verdict: ${result.verdict}`)
+}
+
 const folders = runs.map((run) => resolve(run))
 if (step === 'rubric' && positionals.length === 4)
   await rubric(positionals[1]!, resolve(positionals[2]!), resolve(positionals[3]!))
@@ -218,9 +291,14 @@ else if (step === 'batches' && folders.length === 1)
   await batches(folders[0]!, Number(values.size ?? 27))
 else if (step === 'report' && folders.length === 1) await report(folders[0]!)
 else if (step === 'compare' && folders.length === 2) await compareRuns(folders[0]!, folders[1]!)
+else if (step === 'gate' && folders.length === 0 && values.old && values.new)
+  await gateRuns(
+    values.old.map((run) => resolve(run)),
+    values.new.map((run) => resolve(run)),
+  )
 else {
   console.error(
-    'Usage: bench rubric <course> <papers folder> <rubric.json> | batches <rubric.json> <run> [--size 27] | report <rubric.json> <run> | compare <rubric.json> <run> <run>',
+    'Usage: bench rubric <course> <papers folder> <rubric.json> | batches <rubric.json> <run> [--size 27] | report <rubric.json> <run> | compare <rubric.json> <run> <run> | gate <rubric.json> --old <run>... --new <run>...',
   )
   process.exit(2)
 }

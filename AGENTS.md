@@ -52,6 +52,8 @@ pnpm --filter @lectern/engine cli estimate <course folder>
   them to a file.
 - Tests run on the offline models (`LECTERN_FAKE=1`, the engine's fakes). Nothing in a test
   reaches a real model, a real Anki or the student's courses.
+- A change that claims better cards is measured, not argued: the `exam-bench` skill in
+  `.claude/skills/` has the procedure, and its gate gives the verdict (RFD 14).
 - Simplest code that meets the current need; no backward compatibility, no speculative
   options. Established libraries over hand-rolled code.
 - Prose and interface copy: plain words, no em-dashes.

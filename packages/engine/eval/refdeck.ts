@@ -12,7 +12,8 @@
  * `reference` reads the deck through AnkiConnect into `reference.json`; `reference-files` reads
  * a deck kept as YAML files instead (`title`, and `cards` with `front` and `back` or `text`). `run`
  * reads a built course into `cards.json`, `cards.txt`, `facts.json`, `slides.txt` and `meta.json`, which
- * names the runs, the models, the goal and the card count the figures belong to. `batches` writes
+ * names the runs, the models, the goal, the card count and what the build took (calls, tokens
+ * written, minutes, dollars). `batches` writes
  * one file per group of reference notes under `batches/` and refuses to when `labels/` already
  * holds judged batches. A judge (a person or a model) answers each into `labels/<same name>.json`.
  * `report` counts the labels and fails on a label for a note that is not in `reference.json`.
@@ -178,6 +179,14 @@ async function run(folder: string, out: string): Promise<void> {
     models: [...new Set(runs.map((r) => r.model))],
     goal: file.goal,
     cards: cards.length,
+    // What the build took, over all its runs: the gate of `bench.ts` holds a change to it.
+    effort: {
+      calls: runs.reduce((sum, r) => sum + r.calls, 0),
+      decisions: runs.reduce((sum, r) => sum + r.decisions, 0),
+      outputTokens: runs.reduce((sum, r) => sum + r.outputTokens, 0),
+      minutes: runs.reduce((sum, r) => sum + r.durationMs, 0) / 60_000,
+      costUsd: runs.reduce((sum, r) => sum + r.costUsd, 0),
+    },
   }
   await writeFile(join(out, 'meta.json'), `${JSON.stringify(meta, null, 1)}\n`)
   console.log(`${cards.length} cards, ${facts.length} facts, ${file.lectures.length} lectures`)

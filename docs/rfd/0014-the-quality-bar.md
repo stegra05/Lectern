@@ -24,6 +24,24 @@ very exams the engine also reads, a third of them are not on the slides, and the
 shaped on the same course. Past papers exist for most courses, and the held-back ones are
 unseen by construction.
 
+**A change passes one gate.** `bench.ts gate` holds the builds of the new code against the
+builds of the old and says `better` only when the mean score rose by more than builds of the
+same code differ (at 95 percent, with what so few builds ask for: about 6 points with three
+builds a side, 4 with five, and 11 with two), and no guard fails: the deck at most 5 percent bigger, the answers at most 10
+percent longer, at most 10 percent more calls and tokens written. The guards close the cheap
+ways to a higher score, more cards and cards stuffed with several facts, and hold a change to
+what a build takes. Calls and tokens written stand in for time: the clock moved by 7 percent
+between three builds of the same code, calls by 7 and tokens by 5, and only those two are the
+engine's doing. A change that fails a guard is not refused for good. It is a trade, and a trade
+is Steffen's to decide, not an agent's.
+
+**Tune on the dev papers, confirm on the test papers.** The four papers of 2022 to 2024 are
+the dev set (221 points), the four newest the test set (218 points), and a build for either
+reads only the 14 papers before 2022. Work on the engine looks at the dev score. The test score
+is read once, when a change is to be accepted. This exam repeats itself: 114 of the dev set's
+143 facts are also in the test set. So the test set guards against a slip, not against fitting
+this one course; only a second course does that.
+
 **The reference deck stays second.** Steffen's Entrepreneurship deck: 636 vetted notes for 11
 slide decks (356 slides), made with a strong model. Its atomic pass took 178 cards to 636 and
 the average answer from 59 words to 11.6. The eval exports it from Anki and a judge (Claude
@@ -44,8 +62,8 @@ by Claude Haiku:
 | Slides only                            | 631   | 31.3%      | 23.7 to 37.2 | 56 of 218   |
 | With cards from the 18 older papers    | 633   | 43.8%      | 38.0 to 51.1 | 80 of 218   |
 | v3, 18 older papers, first build       | 661   | 46.0%      | 37.8 to 55.0 | 84 of 218   |
-| v3, 18 older papers, second build      | 668   | 53.1%      | 46.8 to 59.7 | 96 of 218   |
-| v3, 18 older papers, third build       | 663   | 49.0%      | 42.6 to 55.9 | 95 of 218   |
+| v3, 18 older papers, second build      | 668   | 51.2%      | 45.5 to 57.2 | 94 of 218   |
+| v3, 18 older papers, third build       | 663   | 48.5%      | 41.9 to 55.9 | 93 of 218   |
 
 - **The measure sees a known gain.** The paired difference is 12.5 points of coverage (6.8 to
   21.7): 35 points gained, 11 lost. The lost ones are facts the slides state that one build
@@ -55,18 +73,33 @@ by Claude Haiku:
   slides state would hold 39.8%. Cards from older papers are what lifts a build above that.
 - **Where the misses are.** Of the 138 points the better build misses, 120 have a card on the
   concept that lacks the fact, and 18 have nothing.
-- **v3 holds about half the marks.** Its three builds average 49.4% (sd 3.6). Against the 43.8%
-  of the build of 2026-11-15 that is 5.6 points, less than three builds against one can show
-  (about 8).
+- **v3 holds about half the marks.** Its three builds average 48.6% (sd 2.6). Against the 43.8%
+  of the build of 2026-11-15 that is 4.8 points, less than three builds against one can show
+  (about 6).
 - **Builds of the same code differ, and the interval does not know it.** The interval of a
   build, and of a paired difference, covers which questions an exam asks, not the luck of the
-  build. Two of the three pairs of v3 builds differ by more than their paired interval allows
-  (7.5 points, 0.6 to 13.1, and 4.6 points, 0.4 to 9.2), though the code is the same. Of the
-  218 points, 65 are held by all three builds, 51 by one or two, 102 by none. So a change of
-  code counts only when it beats the old figure by **about 10 points for one build each, 7 for
-  two, 6 for three** (twice the standard error of the difference, `eval/spread.ts`); three
-  builds give a rough sd, so these are rough too. The gain of exam cards over slides only
-  (12.5 points, one build each) clears that bar.
+  build. Of the 218 points, 63 are held by all three builds of v3, 51 by one or two, 104 by
+  none; counting a point that any of the three holds gives 59.0%. So a change of code counts
+  only when it beats the old figure by more than this spread allows: with an sd of 2.6, **about
+  6 points with three builds a side, 4 with five**. Two a side show only a change above 11, and
+  one build against one shows nothing: two builds of one code that happened to land at 48.5%
+  and 47.7% made a third at 55.2% look better until the gate asked for Student's t and never
+  believed a spread under 2.6. The gain of exam cards over slides only (12.5 points) is large
+  enough to stand.
+- **The gate on real builds.** Slides only against v3: 17.4 points up, and stopped by two
+  guards (664 cards against 631, 36 percent more tokens written). Cards from past exams buy
+  their marks with a bigger deck and more writing, which was Steffen's call
+  ([RFD 8](0008-past-exams.md)). The build of 2026-11-15 with exam cards against v3: 4.9 points
+  up where 12.9 are believable from one build against three, every guard holds, so unclear. These builds read 18 papers, the
+  dev papers among them, so none of them can be scored on the dev set yet
+  ([#270](https://github.com/stegra05/lectern/issues/270)).
+- **A run's score counts its own pairs only.** Its shortlist, and what its own judges found
+  by searching the deck. Verdicts are kept under the texts of a pair, and builds share some
+  cards word for word, so counting every kept verdict let a run rise when others were judged
+  after it: the slides-only build read 33.1% instead of 31.3%, and the second and third build
+  of v3 first read 53.1% and 49.0%. That drift also made two of the three pairs of v3 builds
+  look different beyond their interval; scored on their own pairs, none does. The price: a
+  card that holds a point and is outside the shortlist is missed, about 2 points of a deck.
 - **The judge is steadier than the build.** Two judges on the same 240 pairs agree on 93%
   (kappa 0.88) and on 29 of 30 points. A rubric whose points bundled several facts scored the
   same deck at 35.2% and let the judges part on 2 of 27 points, so a point is one fact. A judge
@@ -138,3 +171,4 @@ with official solutions. Datenbanken has a deck from AnkiTUM as a reference, jud
 - Coverage at the fact level: [#108](https://github.com/stegra05/lectern/issues/108).
 - Facts only in pictures: [#106](https://github.com/stegra05/lectern/issues/106).
 - The exam rubric checked by Steffen: [#264](https://github.com/stegra05/lectern/issues/264).
+- The baseline of v3 on the dev papers: [#270](https://github.com/stegra05/lectern/issues/270).
