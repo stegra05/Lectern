@@ -94,7 +94,9 @@ panel, where the student can add a file by hand.
   exam adds it by hand as a past exam.
 - **The threshold is not measured yet** ([#219](https://github.com/stegra05/lectern/issues/219)).
   `eval/sort-files.ts` measures it on labelled files: 224 from the same folders, labelled by
-  their folder where their own name says nothing, plus 40 unrelated documents as junk.
+  their folder where their own name says nothing, plus 40 unrelated documents as junk. Each
+  file is sorted as in an add, under its path inside its label folder: the files a name keeps
+  out are counted apart, and the threshold is read on the files the model saw.
 
 ## Given up
 
