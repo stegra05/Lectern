@@ -1,11 +1,10 @@
 /**
- * A card as a student edits it: the slots of its role in plain text, without markup. `toSlots`
- * reads them back out of the stored fields, the reverse of `assemble.ts`; `toDraft` turns them
- * into the draft that the validator checks and `assemble` builds the fields from. Pure.
+ * A card's slots: its role's words in plain text, without markup, as `cards.yaml` stores them
+ * and a student edits them. `fromDraft` takes them out of what the model wrote, `tidy` out of
+ * what a student wrote, and `toDraft` turns them into the draft the validator checks. Pure.
  */
 
-import type { CardFile } from './assemble.ts'
-import { isRole, ROLE_SPECS, type Draft, type Role } from './roles.ts'
+import { ROLE_SPECS, type Draft, type Role } from './roles.ts'
 import { isYesNo, LIMITS } from './validate.ts'
 import { CLOZE, words } from './words.ts'
 
@@ -20,8 +19,8 @@ export interface Slots {
   /** Gap card: the parts of the sentence that are hidden, in the order they stand in it. */
   hidden: string[]
   /**
-   * Gap card: where each hidden part starts in `front`, as `toSlots` read it. The editor hands it
-   * back untouched, so a part that stands twice in the sentence stays at the place it had.
+   * Gap card: where each hidden part starts in `front`. The editor hands it back untouched, so a
+   * part that stands twice in the sentence stays at the place it had.
    */
   at: number[]
   extra: string
@@ -43,68 +42,6 @@ export const FORM_LIMITS = {
   extra: LIMITS.extraWords,
   gapSentence: LIMITS.clozeWords,
 } as const
-
-const unescape = (html: string) =>
-  html.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-
-/** Field HTML back to the text it was made from: `<sub>` and `<sup>` stay, nothing is marked. */
-function plain(html: string): string {
-  return unescape(html.replace(/<\/?mark>/g, ''))
-}
-
-/** One answer out of its field HTML: its text and the term the field marks in it. */
-function answerOf(html: string, markWhole: boolean): Slots['answers'][number] {
-  const marked = /<mark>(.*?)<\/mark>/.exec(html)
-  // Where an unmarked answer is the key term as a whole, the mark around all of it says nothing.
-  const whole = markWhole && marked !== null && marked[0] === html
-  return { text: plain(html), key: marked && !whole ? unescape(marked[1]!) : '' }
-}
-
-const items = (html: string) => [...html.matchAll(/<li>(.*?)<\/li>/gs)].map((m) => m[1]!)
-
-export function toSlots(card: CardFile): Slots {
-  const f = card.fields
-  const role = f.Role ?? ''
-  if (!isRole(role)) throw new Error(`Card ${card.id} has the unknown role "${role}"`)
-  const spec = ROLE_SPECS[role]
-  const slots: Slots = {
-    role,
-    front: plain(f.Front ?? ''),
-    answers: [],
-    labels: [...(f.Slots ?? '').matchAll(/<span>(.*?)<\/span>/g)]
-      .map((m) => plain(m[1]!))
-      .filter((label) => label !== ''),
-    hidden: [],
-    at: [],
-    extra: plain(f.Extra ?? ''),
-    code: unescape(f.Code ?? ''),
-  }
-  const back = f.Back ?? ''
-  const text = f.Text ?? ''
-  if (role === 'cloze') {
-    let front = ''
-    let end = 0
-    for (const m of text.matchAll(CLOZE)) {
-      front += plain(text.slice(end, m.index))
-      slots.at.push(front.length)
-      slots.hidden.push(plain(m[2]!))
-      front += plain(m[2]!)
-      end = m.index + m[0].length
-    }
-    slots.front = front + plain(text.slice(end))
-  } else if (role === 'cloze-list') {
-    slots.front = plain(text.replace(/<ul>.*$/s, ''))
-    slots.answers = items(text).map((item) => ({ text: plain(item.replace(CLOZE, '$2')), key: '' }))
-  } else if (spec.back === 'formula') {
-    const [, tex = '', condition = ''] = /^\\\[ (.*?) \\\] (.*)$/s.exec(back) ?? []
-    slots.answers = [{ text: unescape(tex), key: '' }, answerOf(condition, false)]
-  } else if (back.startsWith('<ul>')) {
-    slots.answers = items(back).map((item) => answerOf(item, spec.markWhole))
-  } else {
-    slots.answers = [answerOf(back, spec.markWhole)]
-  }
-  return slots
-}
 
 export interface Problem {
   /** The field of the form the problem is about. `card` when it is about the card as a whole. */
@@ -209,6 +146,18 @@ function standsAlone(sentence: string, part: string, at: number): boolean {
 }
 
 /**
+ * Where the key term stands in its answer: the first place it stands as whole words, or else
+ * the first place it stands at all. -1 when it is not in the answer.
+ */
+export function keyAt(text: string, key: string): number {
+  if (key === '') return -1
+  for (let k = text.indexOf(key); k >= 0; k = text.indexOf(key, k + 1)) {
+    if (standsAlone(text, key, k)) return k
+  }
+  return text.indexOf(key)
+}
+
+/**
  * Where each hidden part stands in the sentence, or what the student has to fix. A part is kept
  * where `at` says when it still stands there; otherwise it is the one place after the part
  * before it where it stands as whole words.
@@ -249,7 +198,7 @@ function placeGaps(
 }
 
 /** The sentence with each hidden part wrapped as a deletion. */
-function gapSentence(sentence: string, hidden: string[], starts: number[]): string {
+export function gapSentence(sentence: string, hidden: string[], starts: number[]): string {
   let out = ''
   let end = 0
   for (const [i, part] of hidden.entries()) {
@@ -259,25 +208,91 @@ function gapSentence(sentence: string, hidden: string[], starts: number[]): stri
   return out + sentence.slice(end)
 }
 
-/** The draft of the slots, for the validator and for `assemble`. Run `checkSlots` first. */
-export function toDraft(slots: Slots, card: { concept: string; slide: number }): Draft {
+/** A mark the stored slots have no place for: its words stay, the `==` around them go. */
+const unwrap = (text: string) => text.replace(/==(.+?)==/g, '$1')
+
+/**
+ * The slots of a checked draft from the model. The model marks the key term of an answer in
+ * the text, as `==term==`, and writes a gap sentence with its deletions, `{{c1::part}}`; here
+ * both come out of the text, so nothing in the stored slots is read as markup again. A mark
+ * anywhere else (the question or lead-in, a label, the extra, a second mark in one answer) has
+ * no place in the slots and is unwrapped.
+ */
+export function fromDraft(draft: Draft): Slots {
+  const role = draft.role as Role
+  const spec = ROLE_SPECS[role]
+  const slots: Slots = {
+    role,
+    front: unwrap(draft.front.trim()),
+    answers: draft.answers.map((answer, i) => {
+      const text = answer.trim()
+      // The TeX of a formula is not prose: nothing in it is a mark.
+      if (spec.back === 'formula' && i === 0) return { text, key: '' }
+      // A term is its answer as a whole.
+      if (spec.back === 'term') return { text: unwrap(text), key: '' }
+      const mark = /==(.+?)==/.exec(text)
+      if (!mark) return { text, key: '' }
+      const before = unwrap(text.slice(0, mark.index))
+      const plain = before + mark[1]! + unwrap(text.slice(mark.index + mark[0].length))
+      // Where an unmarked answer is the key term as a whole, a mark around all of it says nothing.
+      return { text: plain, key: spec.markWhole && plain === mark[1] ? '' : mark[1]! }
+    }),
+    labels: draft.labels.map((label) => unwrap(label.trim())),
+    hidden: [],
+    at: [],
+    extra: unwrap(draft.extra.trim()),
+    code: draft.code.replace(/\s+$/, ''),
+  }
+  if (role === 'cloze') {
+    let front = ''
+    let end = 0
+    for (const m of slots.front.matchAll(CLOZE)) {
+      front += slots.front.slice(end, m.index)
+      slots.at.push(front.length)
+      slots.hidden.push(m[2]!)
+      front += m[2]!
+      end = m.index + m[0].length
+    }
+    slots.front = front + slots.front.slice(end)
+  }
+  return slots
+}
+
+/** The slots a student wrote, trimmed, with each hidden part at its place. Run `checkSlots` first. */
+export function tidy(slots: Slots): Slots {
+  const front = slots.front.trim()
   const hidden = slots.hidden.map((part) => part.trim())
-  const placed = placeGaps(slots.front, hidden, slots.at)
-  const front = 'starts' in placed ? gapSentence(slots.front, hidden, placed.starts) : slots.front
+  const placed = placeGaps(front, hidden, slots.at)
+  return {
+    role: slots.role,
+    front,
+    answers: slots.answers.map(({ text, key }) => ({ text: text.trim(), key: key.trim() })),
+    labels: slots.labels.map((label) => label.trim()),
+    hidden,
+    at: 'starts' in placed ? placed.starts : [],
+    extra: slots.extra.trim(),
+    code: slots.code.replace(/\s+$/, ''),
+  }
+}
+
+/**
+ * The draft of tidy slots, for the validator, which reads marks in the text as the model writes
+ * them. A `==` the student wrote is left out of it, so only the key term reads as a mark.
+ */
+export function toDraft(slots: Slots, card: { concept: string; slide: number }): Draft {
+  const plain = (text: string) => text.replace(/==/g, '')
   return {
     concept: card.concept,
     role: slots.role,
     slide: card.slide,
-    front: front.trim(),
+    front: slots.role === 'cloze' ? gapSentence(slots.front, slots.hidden, slots.at) : slots.front,
     answers: slots.answers.map(({ text, key }) => {
-      const answer = text.trim()
-      const term = key.trim()
-      return term !== '' && answer.includes(term)
-        ? answer.replace(term, () => `==${term}==`)
-        : answer
+      const at = keyAt(text, key)
+      if (at < 0) return plain(text)
+      return `${plain(text.slice(0, at))}==${plain(key)}==${plain(text.slice(at + key.length))}`
     }),
-    labels: slots.labels.map((label) => label.trim()),
-    extra: slots.extra.trim(),
+    labels: slots.labels,
+    extra: slots.extra,
     code: slots.code,
   }
 }

@@ -17,9 +17,11 @@
 
 import type { BuildCommand, Emit, EstimateCommand, Event } from './commands.ts'
 import { createAsk, type AskModel, type Decide, type Meter } from './ask.ts'
-import { assemble, type CardFile } from './cards/assemble.ts'
+import { toCard, type Card } from './cards/card.ts'
+import { cardFields } from './cards/fields.ts'
 import { cardId } from './cards/id.ts'
 import { questionAndAnswer } from './cards/question-answer.ts'
+import { fromDraft } from './cards/slots.ts'
 import { GOAL_PRESETS, type Draft, type Goal, type Role } from './cards/roles.ts'
 import { leansOnSlides, saysNothing, tooLong, validateDraft } from './cards/validate.ts'
 import { htmlToText, slideRange, slug, two } from './cards/words.ts'
@@ -123,7 +125,7 @@ interface Item {
   /** A part of a split card. It is never split again. */
   part: boolean
   problems: string[]
-  card?: CardFile
+  card?: Card
 }
 
 /** Concepts the course knows, by id: the one name it uses and the lecture that introduced it. */
@@ -151,7 +153,7 @@ interface Saved {
   file: CourseFile
   decisions: Decision[]
   /** Every card of the course, for the clash check of the next lecture. */
-  cards: { id: string; card: CardFile }[]
+  cards: { id: string; card: Card }[]
 }
 
 /** A past paper not read before: its name and its pages. */
@@ -553,7 +555,7 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
 async function courseSoFar(b: Build, existing: CourseFile | null) {
   const { store } = b.ports
   const earlier: Vocabulary = new Map()
-  const existingCards: { id: string; card: CardFile }[] = []
+  const existingCards: { id: string; card: Card }[] = []
   for (const { number } of existing?.lectures ?? []) {
     const lecture = await readJson<Lecture>(store, paths.lecture(b.course, number))
     for (const concept of lecture?.topics.flatMap((t) => t.concepts) ?? []) {
@@ -879,7 +881,7 @@ async function checkCards(
 }
 
 /**
- * The gate: hard limits and the two rules on what a card says. A card that passes is assembled;
+ * The gate: hard limits and the two rules on what a card says. A card that passes is stored;
  * one that does not keeps its problems. A card within every limit can still lean on the slides
  * or say nothing. Both are asked of what the model wrote, never of a student's own card.
  */
@@ -894,12 +896,14 @@ function passesRules(item: Item): boolean {
     item.problems = [...leansOnSlides(draftOf(item)), ...saysNothing(draftOf(item))]
   }
   if (item.problems.length > 0) return false
-  item.card = assemble(draftOf(item), {
+  const { exam } = item.fact
+  item.card = toCard(fromDraft(draftOf(item)), {
     id: item.id,
-    lecture: item.lecture,
-    concept: item.concept,
+    lecture: { number: item.lecture.number, title: item.lecture.title },
+    concept: { id: item.concept.id, name: item.concept.name },
+    slide: item.fact.slide,
     slideLines: text[item.fact.slide - 1]!,
-    ...(item.fact.exam ? { exam: item.fact.exam } : {}),
+    ...(exam ? { exam: { papers: exam.papers, fromSlides: exam.fromSlides } } : {}),
   })
   return true
 }
@@ -965,9 +969,12 @@ async function rewrite(
  * included: a new card whose question is word for word one that exists is dropped. No card is
  * rewritten here.
  */
-function dropClashes(existingCards: { id: string; card: CardFile }[], checked: Checked): void {
+function dropClashes(existingCards: { id: string; card: Card }[], checked: Checked): void {
   const { accepted, dropped } = checked
-  const text = (card: CardFile) => htmlToText(card.fields.Front ?? card.fields.Text ?? '')
+  const text = (card: Card) => {
+    const f = cardFields(card)
+    return htmlToText(f.Front ?? f.Text ?? '')
+  }
   const clashes = findClashes(
     existingCards.map(({ id, card }) => ({ id, text: text(card) })),
     accepted.map((item) => ({ id: item.id, text: text(item.card!) })),

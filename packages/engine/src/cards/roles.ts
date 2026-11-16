@@ -1,6 +1,6 @@
 /**
  * The closed set of card roles. A role is a slot template: it says which slots the model
- * fills and how many, and `assemble.ts` builds every card field from those slots.
+ * fills and how many, and `fields.ts` builds every card field from those slots.
  */
 
 export const ROLES = [

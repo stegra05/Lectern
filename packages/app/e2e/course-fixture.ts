@@ -19,17 +19,20 @@ export function lecture(number: number, title: string, topics: number, concepts:
     topic.concepts.flatMap((concept) =>
       [1, 2].map((n) => ({
         id: `${concept.id}-${n}`,
-        note: 'qa',
-        concept: concept.id,
-        slide: 2,
-        fields: {
-          Front: `What is ${concept.name}?`,
-          Back: `${concept.name} is a thing worth knowing.`,
-          Role: 'definition',
-          Lecture: String(number).padStart(2, '0'),
-          Source: `Lecture ${number}, slide 2`,
-          Key: concept.name,
+        slots: {
+          role: 'definition',
+          front: `What is ${concept.name}?`,
+          answers: [{ text: `${concept.name} is a thing worth knowing.`, key: '' }],
+          labels: [],
+          hidden: [],
+          at: [],
+          extra: '',
+          code: '',
         },
+        lecture: { number, title },
+        concept: { id: concept.id, name: concept.name },
+        slide: 2,
+        excerpt: 'Slide',
       })),
     ),
   )

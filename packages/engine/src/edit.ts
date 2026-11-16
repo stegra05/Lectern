@@ -1,19 +1,20 @@
 /**
  * What a student does to single cards: change one, remove one, write one of their own. Every
- * card goes through the same validator and the same assembly as the cards Lectern writes, and
+ * card goes through the same validator as the cards Lectern writes and is stored the same way, and
  * a card that is already in Anki changes there too.
  */
 
 import type { Emit } from './commands.ts'
-import { assemble, type CardFile } from './cards/assemble.ts'
+import { toCard, type Card } from './cards/card.ts'
+import { withFields } from './cards/fields.ts'
 import { cardId } from './cards/id.ts'
 import {
   blankSlots,
   checkSlots,
   FORM_LIMITS,
   OWN_ROLES,
+  tidy,
   toDraft,
-  toSlots,
   type Problem,
   type Slots,
 } from './cards/slots.ts'
@@ -50,7 +51,7 @@ async function open({ store }: Ports, { course, lecture }: Place) {
   return { entry, tree, cards: await readCards(store, course, lecture) }
 }
 
-function find(cards: CardFile[], id: string): number {
+function find(cards: Card[], id: string): number {
   const at = cards.findIndex((card) => card.id === id)
   if (at < 0) {
     throw new EngineError('This card is no longer in the lecture.', 'Open the lecture again.')
@@ -81,7 +82,7 @@ export async function slots(
   }
   const { cards } = await open(ports, command)
   const card = cards[find(cards, command.card)]!
-  emit({ type: 'slots', card: card.id, slots: toSlots(card), limits: FORM_LIMITS })
+  emit({ type: 'slots', card: card.id, slots: card.slots, limits: FORM_LIMITS })
 }
 
 /**
@@ -96,10 +97,11 @@ async function build(
   tree: Lecture,
   concept: Concept,
   card: { id: string; slide: number; own?: true },
-  filled: Slots,
-): Promise<CardFile | Problem[]> {
-  const problems = checkSlots(filled)
+  written: Slots,
+): Promise<Card | Problem[]> {
+  const problems = checkSlots(written)
   if (problems.length > 0) return problems
+  const filled = tidy(written)
   const text = await slideText(pdf, await store.readBytes(`${paths.slides(place.course)}/${file}`))
   const draft = toDraft(filled, { concept: concept.name, slide: card.slide })
   const refused = validateDraft(draft, {
@@ -114,10 +116,11 @@ async function build(
       message: `${problem.charAt(0).toUpperCase()}${problem.slice(1)}.`,
     }))
   }
-  const built = assemble(draft, {
+  const built = toCard(filled, {
     id: card.id,
     lecture: { number: tree.number, title: tree.title },
     concept: { id: concept.id, name: concept.name },
+    slide: card.slide,
     slideLines: text[card.slide - 1] ?? [],
   })
   if (card.own) built.own = true
@@ -133,22 +136,22 @@ export async function edit(
   const { entry, tree, cards } = await open(ports, command)
   const at = find(cards, command.card)
   const old = cards[at]!
-  if (command.slots.role !== old.fields.Role) {
+  if (command.slots.role !== old.slots.role) {
     throw new EngineError('A card keeps its kind.', 'Remove the card and write a new one.')
   }
-  const concept = conceptOf(tree, old.concept)
+  const concept = conceptOf(tree, old.concept.id)
   const card = await build(ports, command, entry.file, tree, concept, old, command.slots)
   if (Array.isArray(card)) return emit({ type: 'refused', problems: card })
   // A past-exam card keeps what the exams and its slides gave it, whatever the new wording.
-  if (old.fields.Asked) {
-    for (const name of ['Asked', 'Source', 'Slide', 'Excerpt'])
-      card.fields[name] = old.fields[name]!
+  if (old.exam) {
+    card.exam = old.exam
+    card.excerpt = old.excerpt
   }
   // Anki first: when it is closed nothing changes, here or there.
   await updateSent(ports, command.course, card)
   cards[at] = card
   await writeCards(ports.store, command.course, command.lecture, cards)
-  emit({ type: 'edited', card })
+  emit({ type: 'edited', card: withFields(card) })
 }
 
 /** Removes a card from the lecture, and from Anki when it is there. */
@@ -199,5 +202,5 @@ export async function write(
   )
   if (Array.isArray(card)) return emit({ type: 'refused', problems: card })
   await writeCards(ports.store, command.course, command.lecture, [...cards, card])
-  emit({ type: 'written', card })
+  emit({ type: 'written', card: withFields(card) })
 }

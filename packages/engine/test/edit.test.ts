@@ -5,16 +5,9 @@ import { memoryAnki, type MemoryAnki } from '../src/adapters/memory-anki.ts'
 import { nodeStore } from '../src/adapters/node-store.ts'
 import { offlineDecisions, offlineModel } from '../src/adapters/offline.ts'
 import { pdfjsReader } from '../src/adapters/pdfjs.ts'
-import {
-  createEngine,
-  type CardFile,
-  type CourseState,
-  type Event,
-  type Slots,
-} from '../src/api.ts'
-import { writeCards } from '../src/course.ts'
-import { assemble } from '../src/cards/assemble.ts'
-import { toDraft, toSlots } from '../src/cards/slots.ts'
+import { createEngine, type Event, type ShownCard, type Slots } from '../src/api.ts'
+import { cardFields } from '../src/cards/fields.ts'
+import { readCards, writeCards } from '../src/course.ts'
 import { SLIDES } from './fixtures.ts'
 import { makePdf, tempRoot, templates } from './helpers.ts'
 
@@ -57,7 +50,7 @@ const record = async () =>
   ).notes
 const send = () => run({ type: 'send', course: COURSE })
 
-async function fresh(): Promise<CardFile[]> {
+async function fresh(): Promise<ShownCard[]> {
   root = join(await tempRoot(), 'library')
   anki = memoryAnki()
   await run({ type: 'create', name: 'Entrepreneurship WS26' })
@@ -82,34 +75,25 @@ const own = (changes: Partial<Slots> = {}): Slots => ({
 })
 
 describe('the slots of a card', () => {
-  let cards: CardFile[]
-  let lecture: CourseState['lectures'][number]
+  let cards: ShownCard[]
 
   beforeAll(async () => {
     cards = await fresh()
-    lecture = await lectureOf()
   })
 
-  it('give every stored card back exactly when they are assembled again', async () => {
+  it('are what cards.yaml stores, in plain text without markup', async () => {
     expect(cards.length).toBeGreaterThan(2)
-    const slides = await pdfjsReader.readSlides(
-      new Uint8Array(await readFile(join(root, COURSE, 'slides/01 Risk.pdf'))),
-    )
-    const concepts = lecture.topics.flatMap((topic) => topic.concepts)
+    expect(await cardFile()).not.toMatch(/<(?:mark|ul|li|span|img)\b|\{\{c\d/)
+    for (const card of cards) expect(await slotsOf(card.id)).toEqual(card.slots)
+  })
+
+  it('give every card back exactly when it is edited without a change', async () => {
+    const before = await cardFile()
     for (const card of cards) {
-      const concept = concepts.find((c) => c.id === card.concept)!
-      const draft = toDraft(toSlots(card), {
-        concept: concept.name,
-        slide: card.slide,
-      })
-      const again = assemble(draft, {
-        id: card.id,
-        lecture,
-        concept,
-        slideLines: slides[card.slide - 1]!,
-      })
-      expect(again).toEqual(card)
+      const edit = { type: 'edit', ...at, card: card.id, slots: card.slots }
+      expect((await only(edit, 'edited')).card).toEqual(card)
     }
+    expect(await cardFile()).toBe(before)
   })
 
   it('are plain text, with the key term apart from the answer', async () => {
@@ -144,8 +128,8 @@ describe('the slots of a card', () => {
 })
 
 describe('changing a card', () => {
-  let cards: CardFile[]
-  let card: CardFile
+  let cards: ShownCard[]
+  let card: ShownCard
 
   beforeAll(async () => {
     cards = await fresh()
@@ -185,6 +169,22 @@ describe('changing a card', () => {
     expect(after.map((c) => c.id)).toEqual(cards.map((c) => c.id))
     expect(after.filter((c) => c.id !== card.id)).toEqual(cards.filter((c) => c.id !== card.id))
     expect(after.find((c) => c.id === card.id)).toEqual(edited.card)
+  })
+
+  it('keeps a == the student writes as it is, apart from the key term', async () => {
+    const slots = {
+      ...(await slotsOf(card.id)),
+      front: 'When does a == b hold for risks?',
+      answers: [{ text: 'When a == b and both odds are known.', key: 'both odds are known' }],
+      extra: 'C writes it a ==b== c.',
+    }
+    const edited = await only({ type: 'edit', ...at, card: card.id, slots }, 'edited')
+    expect(await slotsOf(card.id)).toEqual(slots)
+    expect(edited.card.fields).toMatchObject({
+      Front: 'When does a == b hold for risks?',
+      Back: 'When a == b and <mark>both odds are known</mark>.',
+      Extra: 'C writes it a ==b== c.',
+    })
   })
 
   it('refuses a card over a limit and says which field, in words for a student', async () => {
@@ -249,22 +249,22 @@ describe('a card that answers a past exam question', () => {
   it.each([true, false])(
     'keeps what the exams gave it when it is edited, in the file and in Anki (on the slides: %s)',
     async (fromSlides) => {
-      const [first] = await fresh()
+      await fresh()
+      const store = nodeStore(root)
+      const [first, ...rest] = await readCards(store, COURSE, 1)
       const slots = await slotsOf(first!.id)
-      const exam = assemble(toDraft(slots, { concept: first!.fields.Key!, slide: first!.slide }), {
-        id: first!.id,
-        lecture: { number: 1, title: first!.fields.Topic! },
-        concept: { id: first!.concept, name: first!.fields.Key! },
-        slideLines: ['Risk is an outcome whose probability is known.'],
+      const exam = {
+        ...first!,
+        excerpt: fromSlides ? 'Risk is an outcome whose probability is known.' : '',
         exam: { papers: 3, fromSlides },
-      })
-      await writeCards(nodeStore(root), COURSE, 1, [exam, ...(await cardsOf()).slice(1)])
+      }
+      await writeCards(store, COURSE, 1, [exam, ...rest])
       expect((await send()).at(-1)!.type).toBe('sent')
       const edited = await only(
         { type: 'edit', ...at, card: exam.id, slots: { ...slots, front: 'Knight: what is risk?' } },
         'edited',
       )
-      const kept = ['Asked', 'Source', 'Slide', 'Excerpt'].map((name) => exam.fields[name])
+      const kept = ['Asked', 'Source', 'Slide', 'Excerpt'].map((name) => cardFields(exam)[name])
       const of = (fields: Record<string, string>) =>
         ['Asked', 'Source', 'Slide', 'Excerpt'].map((name) => fields[name])
       expect(edited.card.fields.Front).toBe('Knight: what is risk?')
@@ -274,13 +274,13 @@ describe('a card that answers a past exam question', () => {
       const inAnki = anki.notes.find((n) => n.id === note)!
       expect(inAnki.fields.Front).toBe('Knight: what is risk?')
       expect(inAnki.fields.Asked).toBe('3x')
-      expect(inAnki.fields.Source).toBe(exam.fields.Source)
+      expect(inAnki.fields.Source).toBe(cardFields(exam).Source)
     },
   )
 })
 
 describe('a card that is already in Anki', () => {
-  let card: CardFile
+  let card: ShownCard
   let note: number
 
   beforeAll(async () => {
@@ -357,7 +357,7 @@ describe('a card that is already in Anki', () => {
 })
 
 describe('a card of the student’s own', () => {
-  let cards: CardFile[]
+  let cards: ShownCard[]
   let concept: { id: string; name: string; slides: number[] }
 
   beforeAll(async () => {
@@ -373,8 +373,7 @@ describe('a card of the student’s own', () => {
     const taken = cards.filter((c) => c.id.startsWith(`01-${concept.id}-definition-`)).length
     expect(written.card).toMatchObject({
       id: `01-${concept.id}-definition-${taken + 1}`,
-      note: 'qa',
-      concept: concept.id,
+      concept: { id: concept.id, name: concept.name },
       slide: concept.slides[0],
       own: true,
     })
@@ -404,7 +403,7 @@ describe('a card of the student’s own', () => {
       },
       'written',
     )
-    expect(written.card).toMatchObject({ note: 'cloze', own: true })
+    expect(written.card).toMatchObject({ own: true })
     expect(written.card.fields.Text).toBe(
       'Risk has a {{c1::known probability}}, uncertainty has {{c2::none}}.',
     )

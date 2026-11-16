@@ -6,7 +6,7 @@
 import { z } from 'zod'
 import { GOALS, ROLES } from './cards/roles.ts'
 import { OWN_ROLES, type Problem, type Slots } from './cards/slots.ts'
-import type { CardFile } from './cards/assemble.ts'
+import type { ShownCard } from './cards/fields.ts'
 import type { ProviderError, Unreadable } from './errors.ts'
 import type { Added, CourseState, CourseSummary, Shelf } from './library.ts'
 
@@ -42,7 +42,7 @@ export const CommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('courses') }),
   /** One course as the interface shows it: its lectures, what was decided, what it cost. */
   z.object({ type: z.literal('course'), course }),
-  /** The cards of one lecture, with all their fields. */
+  /** The cards of one lecture, each with its slots and its fields. */
   z.object({ type: z.literal('cards'), course, lecture: z.number().int().positive() }),
   /** A new, empty course. The reply names its folder. */
   z.object({ type: z.literal('create'), name: z.string().trim().min(1), goal }),
@@ -125,7 +125,7 @@ export type Event =
   | { type: 'courses'; courses: CourseSummary[] }
   | { type: 'course'; course: CourseState }
   /** `sent` are the ids of the cards that are in Anki. */
-  | { type: 'cards'; lecture: number; cards: CardFile[]; sent: string[] }
+  | { type: 'cards'; lecture: number; cards: ShownCard[]; sent: string[] }
   /** A PNG in base64. */
   | { type: 'slide'; lecture: number; slide: number; png: string }
   | { type: 'created'; course: string }
@@ -143,9 +143,9 @@ export type Event =
       slots: Slots
       limits: { front: number; answer: number; extra: number; gapSentence: number }
     }
-  | { type: 'edited'; card: CardFile }
+  | { type: 'edited'; card: ShownCard }
   | { type: 'removed'; card: string }
-  | { type: 'written'; card: CardFile }
+  | { type: 'written'; card: ShownCard }
   /** The card was not taken. Each problem names the field of the form it is about. */
   | { type: 'refused'; problems: Problem[] }
   /** `reason` is set when a model provider failed, so an interface can word the fix its own way. */

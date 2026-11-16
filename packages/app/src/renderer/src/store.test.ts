@@ -102,8 +102,8 @@ describe('a build that ends while the student is elsewhere', () => {
 
 describe('a save that answers late', () => {
   const cards = [
-    { id: 'c1', concept: 'k1' },
-    { id: 'c2', concept: 'k2' },
+    { id: 'c1', concept: { id: 'k1' } },
+    { id: 'c2', concept: { id: 'k2' } },
   ]
 
   /** Press Save on card c1, then open the form on c2 before c1's answer comes. */
@@ -144,8 +144,8 @@ describe('a save that answers late', () => {
 
 describe('a form with unsaved text', () => {
   const cards = [
-    { id: 'c1', concept: 'k1' },
-    { id: 'c2', concept: 'k2' },
+    { id: 'c1', concept: { id: 'k1' } },
+    { id: 'c2', concept: { id: 'k2' } },
   ]
 
   async function open1() {

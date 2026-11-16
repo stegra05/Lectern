@@ -222,42 +222,49 @@ describe('building a course of two lectures, offline', () => {
       'cards.yaml',
       'lecture.json',
     ])
-    expect((await text('lectures/01/cards.yaml')).split('\n').slice(0, 8)).toEqual([
+    expect((await text('lectures/01/cards.yaml')).split('\n').slice(0, 15)).toEqual([
       '- id: 01-risk-definition-1',
-      '  note: qa',
-      '  concept: risk',
+      '  slots:',
+      '    role: definition',
+      '    front: "Knight (1921): what is risk?"',
+      '    answers:',
+      '      - text: An outcome with a probability that is known or can be worked out.',
+      '        key: probability that is known',
+      '  lecture:',
+      '    number: 1',
+      '    title: Risk and uncertainty',
+      '  concept:',
+      '    id: risk',
+      '    name: risk',
       '  slide: 2',
-      '  fields:',
-      '    Front: "Knight (1921): what is risk?"',
-      '    Back: An outcome with a <mark>probability that is known</mark> or can be worked out.',
-      '    Role: definition',
+      '  excerpt: An outcome whose probability can be calculated or known',
     ])
   })
 
   it('fills every field of a Q&A card, with slots, typing and provenance from code', async () => {
-    expect(await card('01', '01-uncertainty-contrast-1')).toEqual({
+    const contrast = await card('01', '01-uncertainty-contrast-1')
+    expect(contrast).toMatchObject({
       id: '01-uncertainty-contrast-1',
-      note: 'qa',
-      concept: 'uncertainty',
+      concept: { id: 'uncertainty', name: 'uncertainty' },
       slide: 5,
-      fields: {
-        Front: 'Risk versus uncertainty: how insurable is each?',
-        Back: '<ul><li><mark>can be insured</mark></li><li><mark>cannot be insured</mark></li></ul>',
-        Role: 'contrast',
-        Slots: '<span>Risk</span><span>Uncertainty</span>',
-        Code: '',
-        Typed: '',
-        Lecture: '01',
-        Topic: 'Risk and uncertainty',
-        Source: 'Lecture 1, slide 5',
-        Asked: '',
-        Part: '',
-        Extra: '',
-        Excerpt: 'Uncertainty cannot be insured because nobody can price it',
-        Slide: '<img src="l01-s05.png">',
-        Diagram: '',
-        Key: 'uncertainty',
-      },
+    })
+    expect(contrast.fields).toEqual({
+      Front: 'Risk versus uncertainty: how insurable is each?',
+      Back: '<ul><li><mark>can be insured</mark></li><li><mark>cannot be insured</mark></li></ul>',
+      Role: 'contrast',
+      Slots: '<span>Risk</span><span>Uncertainty</span>',
+      Code: '',
+      Typed: '',
+      Lecture: '01',
+      Topic: 'Risk and uncertainty',
+      Source: 'Lecture 1, slide 5',
+      Asked: '',
+      Part: '',
+      Extra: '',
+      Excerpt: 'Uncertainty cannot be insured because nobody can price it',
+      Slide: '<img src="l01-s05.png">',
+      Diagram: '',
+      Key: 'uncertainty',
     })
     expect((await card('01', '01-risk-reverse-1')).fields).toMatchObject({
       Back: '<mark>Risk</mark>',
@@ -267,7 +274,7 @@ describe('building a course of two lectures, offline', () => {
 
   it('fills every field of a cloze card', async () => {
     const cloze = await card('02', '02-effectual-principles-cloze-list-1')
-    expect(cloze.note).toBe('cloze')
+    expect(cloze.slots.role).toBe('cloze-list')
     expect(cloze.fields).toEqual({
       Text:
         "Sarasvathy's effectual principles:<ul><li>{{c1::bird in hand}}</li><li>{{c2::affordable loss}}</li>" +
@@ -357,7 +364,7 @@ describe('building a course of two lectures, offline', () => {
     expect(split!.prompt).toContain('- the answer has 33 words; the limit is 25')
     expect(
       (await cards('02'))
-        .filter((c) => c.concept === 'bird-in-hand')
+        .filter((c) => c.concept.id === 'bird-in-hand')
         .map((c) => [c.id, c.fields.Front]),
     ).toEqual([
       ['02-bird-in-hand-definition-1', 'Bird in hand: what does a founder start from?'],

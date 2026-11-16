@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { assemble, excerpt, type Placement } from '../src/cards/assemble.ts'
+import { excerpt, toCard, type Placement } from '../src/cards/card.ts'
+import { withFields } from '../src/cards/fields.ts'
 import { cardId } from '../src/cards/id.ts'
 import type { Draft } from '../src/cards/roles.ts'
+import { fromDraft } from '../src/cards/slots.ts'
 import { conceptId, slideRange, slug, words } from '../src/cards/words.ts'
 
 const QA_FIELDS = [
@@ -38,7 +40,7 @@ const CLOZE_FIELDS = [
   'Key',
 ]
 
-const place: Placement = {
+const place: Omit<Placement, 'slide'> = {
   id: '02-bird-in-hand-reverse-1',
   lecture: { number: 2, title: 'Effectuation' },
   concept: { id: 'bird-in-hand', name: 'bird in hand' },
@@ -55,16 +57,18 @@ const draft = (over: Partial<Draft>): Draft => ({
   code: '',
   ...over,
 })
-const fields = (over: Partial<Draft>) => assemble(draft(over), place).fields
+/** The card of a draft from the model, with the fields it is sent and shown with. */
+const built = (d: Draft, at: Omit<Placement, 'slide'>) =>
+  withFields(toCard(fromDraft(d), { ...at, slide: d.slide }))
+const fields = (over: Partial<Draft>) => built(draft(over), place).fields
 
-describe('assemble', () => {
+describe('the fields of a stored card', () => {
   it('writes every Q&A field of the contract, in its order', () => {
-    const card = assemble(draft({}), place)
+    const card = built(draft({}), place)
     expect(Object.keys(card.fields)).toEqual(QA_FIELDS)
     expect(card).toMatchObject({
       id: place.id,
-      note: 'qa',
-      concept: 'bird-in-hand',
+      concept: { id: 'bird-in-hand', name: 'bird in hand' },
       slide: 21,
     })
     expect(card.fields).toMatchObject({
@@ -82,12 +86,11 @@ describe('assemble', () => {
   })
 
   it('writes every cloze field of the contract, in its order', () => {
-    const card = assemble(
+    const card = built(
       draft({ role: 'cloze', front: 'Start from {{c1::who you are}}.', answers: [] }),
       place,
     )
     expect(Object.keys(card.fields)).toEqual(CLOZE_FIELDS)
-    expect(card.note).toBe('cloze')
     expect(card.fields.Text).toBe('Start from {{c1::who you are}}.')
   })
 
@@ -137,7 +140,7 @@ describe('assemble', () => {
   })
 
   it('escapes the lecture title and the concept name like every other field', () => {
-    const f = assemble(draft({}), {
+    const f = built(draft({}), {
       ...place,
       lecture: { number: 2, title: 'T & <U>' },
       concept: { id: 'x', name: 'a < b & c' },
@@ -180,6 +183,32 @@ describe('assemble', () => {
     expect(fields({}).Diagram).toBe('')
   })
 
+  it('writes the two items of a name-two card as a list, the key term marked', () => {
+    const f = fields({ role: 'name-two', answers: ['==Bird== in hand', 'Affordable loss'] })
+    expect(f.Back).toBe('<ul><li><mark>Bird</mark> in hand</li><li>Affordable loss</li></ul>')
+  })
+
+  it('writes a term without its final full stop or the space before it', () => {
+    expect(fields({ answers: ['Bird in hand .'] }).Back).toBe('<mark>Bird in hand</mark>')
+  })
+
+  it('numbers the gaps of a sentence in the order they stand', () => {
+    const f = fields({
+      role: 'cloze',
+      front: 'Start from {{c2::who you are}} and {{c1::what you know}}.',
+      answers: [],
+    })
+    expect(f.Text).toBe('Start from {{c1::who you are}} and {{c2::what you know}}.')
+  })
+
+  it('marks the key term where it first stands as whole words', () => {
+    const f = fields({
+      role: 'definition',
+      answers: ['It separates costs by the ==rate== of change.'],
+    })
+    expect(f.Back).toBe('It separates costs by the <mark>rate</mark> of change.')
+  })
+
   it('writes a "why" answer as one sentence, and as two bullets when it has two steps', () => {
     const why = { role: 'why', front: 'Software: why does copyright protect it only weakly?' }
     expect(fields({ ...why, answers: ['It protects ==the code, not the idea==.'] }).Back).toBe(
@@ -205,6 +234,70 @@ describe('assemble', () => {
   })
 })
 
+describe('a stored card', () => {
+  it('holds the slots in plain text: the key term apart from the answer, the gaps apart from the sentence', () => {
+    expect(
+      built(draft({ role: 'definition', answers: ['A ==known== risk.'] }), place).slots,
+    ).toEqual({
+      role: 'definition',
+      front: 'Which effectual principle says to start from who you are?',
+      answers: [{ text: 'A known risk.', key: 'known' }],
+      labels: [],
+      hidden: [],
+      at: [],
+      extra: '',
+      code: '',
+    })
+    const gaps = draft({ role: 'cloze', front: 'Start {{c1::here}} & {{c2::now}}.', answers: [] })
+    expect(built(gaps, place).slots).toMatchObject({
+      front: 'Start here & now.',
+      hidden: ['here', 'now'],
+      at: [6, 13],
+    })
+  })
+
+  it('keeps a lone == as it was written, and unwraps a mark the slots have no place for', () => {
+    const card = built(
+      draft({
+        role: 'formula',
+        front: 'When is a == b?',
+        answers: ['x == y', 'When ==both== agree.'],
+        extra: 'In C, ==a== compares.',
+      }),
+      place,
+    )
+    expect(card.slots).toMatchObject({
+      front: 'When is a == b?',
+      answers: [
+        { text: 'x == y', key: '' },
+        { text: 'When both agree.', key: 'both' },
+      ],
+      extra: 'In C, a compares.',
+    })
+    expect(card.fields).toMatchObject({
+      Front: 'When is a == b?',
+      Back: '\\[ x == y \\] When <mark>both</mark> agree.',
+      Extra: 'In C, a compares.',
+    })
+  })
+
+  it('unwraps the mark of a lead-in, and a second mark in one item', () => {
+    const list = built(
+      draft({
+        role: 'cloze-list',
+        front: '==Six Thinking Hats== method, first three hats:',
+        answers: ['white', '==red== and ==black=='],
+      }),
+      place,
+    )
+    expect(list.slots.front).toBe('Six Thinking Hats method, first three hats:')
+    expect(list.slots.answers[1]).toEqual({ text: 'red and black', key: 'red' })
+    expect(list.fields.Text).toBe(
+      'Six Thinking Hats method, first three hats:<ul><li>{{c1::white}}</li><li>{{c2::<mark>red</mark> and black}}</li></ul>',
+    )
+  })
+})
+
 describe('card ids', () => {
   it('are built from lecture, concept, role and a counter', () => {
     expect(cardId(2, 'bird-in-hand', 'reverse', 1)).toBe('02-bird-in-hand-reverse-1')
@@ -217,8 +310,8 @@ describe('card ids', () => {
   })
 
   it('survive rewording: the same placement gives the same id for any wording', () => {
-    const before = assemble(draft({}), place)
-    const after = assemble(
+    const before = built(draft({}), place)
+    const after = built(
       draft({ front: 'Start with your means: which principle?', extra: 'Sarasvathy.' }),
       place,
     )

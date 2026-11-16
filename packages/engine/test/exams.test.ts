@@ -52,6 +52,10 @@ describe('past exams', () => {
       ],
     ])
     expect(exam[1]!.fields.Slide).toBe('')
+    expect(exam.map((c) => [c.exam, c.excerpt === ''])).toEqual([
+      [{ papers: 1, fromSlides: true }, false],
+      [{ papers: 1, fromSlides: false }, true],
+    ])
     expect(all).toHaveLength(3)
   })
 

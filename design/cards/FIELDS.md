@@ -31,7 +31,7 @@ Sort field in both: `Key`. Field order is the order of the tables.
 | Part | The exam part that asked it | Code | Always empty: the exam part is not inferred |
 | Extra | Context after the answer | Model | At most 40 words. Inline maths at most 30 TeX characters; anything longer is written as display maths `\[ \]` |
 | Excerpt | A short quote from the source slide | Code, from the slide text | At most 30 words, plain text. The design shows two lines until the slide is opened |
-| Slide | The rendered source slide | Code | `<img src="l02-s14.png">` in the card file. Anki receives the file as `lectern-<course>-l02-s14.png`, lowercase, in `collection.media` |
+| Slide | The rendered source slide | Code | `<img src="l02-s14.png">`, built from the card's lecture and slide. Anki receives the file as `lectern-<course>-l02-s14.png`, lowercase, in `collection.media` |
 | Diagram | The slide image | Code | The same `<img>` as Slide. Only in the diagram role, where it is the figure |
 | Key | The concept as plain text | Code | Never rendered. Sort field, search handle and the stable identity of the concept |
 

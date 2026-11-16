@@ -86,5 +86,4 @@ card arrived tagged `::own`.
 ## Not built
 
 Each is an issue on the roadmap board: more card designs (#193), presets for other kinds of
-course (#194), Copy for chat (#195), card slots stored in `cards.yaml` (#196), calibrating
-further checks (#105), typed answers (#128).
+course (#194), Copy for chat (#195), calibrating further checks (#105), typed answers (#128).
