@@ -89,6 +89,18 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     )
   })
 
+  await test.step('a file left out is added by hand, and a lecture moved to past exams', async () => {
+    const panel = page.getByRole('complementary')
+    await panel.getByRole('button', { name: 'Add Blatt 1 as a lecture' }).click()
+    await expect(page.getByRole('img', { name: /Lecture 03 Blatt 1, 1 slide/ })).toBeVisible()
+    await expect(panel.locator('.setup-left li')).toHaveCount(2)
+    await panel.getByText('Lecture files').click()
+    await panel.getByRole('button', { name: 'Move Blatt 1 to past exams' }).click()
+    await expect(page.getByRole('img', { name: /Lecture 03/ })).toHaveCount(0)
+    await expect(panel.locator('.setup-exams')).toContainText('Blatt 1')
+    await expect(panel.getByRole('button', { name: 'Move Blatt 1 to lectures' })).toBeVisible()
+  })
+
   await test.step('past exams: a paper is added in the setup and waits for the cards', async () => {
     const paper = await makePdf([['Exam Winter 2025/26', '1) What is a minimum viable product?']])
     await page

@@ -13,10 +13,8 @@ const CONSEQUENCE: Record<Goal, string> = {
   top: 'Everything worth learning: nearly two cards per slide.',
 }
 
-/** Why a file of the last add stayed out of the course, in one line. */
-const KIND_REASON: Record<FileKind, string> = {
-  slides: 'Lecture slides.',
-  exam: 'A past exam.',
+/** Why a file stayed out of the course for its kind, in one line. Slides and exams come in. */
+const KIND_REASON: Partial<Record<FileKind, string>> = {
   notes: 'Lecture notes or a summary. Cards are made from the slides.',
   'exam-solution': 'An exam solution. The questions are read from the exam itself.',
   exercise: 'An exercise sheet. Lectern does not use those yet.',
@@ -26,7 +24,8 @@ const KIND_REASON: Record<FileKind, string> = {
 }
 
 function reason(left: LeftFile): string {
-  if (left.why === 'kind' && left.kind) return KIND_REASON[left.kind]
+  const kind = left.why === 'kind' && left.kind ? KIND_REASON[left.kind] : undefined
+  if (kind) return kind
   if (left.why === 'unsure') return 'I could not tell what this is.'
   if (left.why === 'format') return 'Not a PDF. Export it as PDF and add that.'
   return 'This PDF could not be read.'
@@ -45,7 +44,8 @@ export function SetupPanel({ close }: { close: ReactNode }) {
   const setGoal = useStore((s) => s.setGoal)
   const estimate = useStore((s) => s.estimate)
   const addExams = useStore((s) => s.addExams)
-  const leftOut = useStore((s) => s.leftOut)
+  const leftOut = useStore((s) => (s.course ? s.leftOut[s.course.id] : undefined)) ?? []
+  const sorting = useStore((s) => s.adding !== null)
   const addLeftOut = useStore((s) => s.addLeftOut)
   const moveFile = useStore((s) => s.moveFile)
   const picker = useRef<HTMLInputElement>(null)
@@ -67,6 +67,11 @@ export function SetupPanel({ close }: { close: ReactNode }) {
         {close}
       </div>
       <div className="panel-body">
+        {sorting && (
+          <p className="panel-section panel-note" role="status">
+            Looking at the files you added: which are lectures, which are past exams.
+          </p>
+        )}
         {lectures > 0 && (
           <section className="panel-section">
             <p>
@@ -91,11 +96,12 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                     <span className="setup-paper-name">{nameOf(p.file)}</span>
                     <button
                       type="button"
-                      className="btn btn-quiet"
+                      className="btn btn-quiet btn-accent"
+                      disabled={sorting}
                       aria-label={`Move ${nameOf(p.file)} to past exams`}
                       onClick={() => void moveFile(p.file, 'exams')}
                     >
-                      It is a past exam
+                      Move to past exams
                     </button>
                   </li>
                 ))}
@@ -120,7 +126,8 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                     <span className="setup-row-actions">
                       <button
                         type="button"
-                        className="btn btn-quiet"
+                        className="btn btn-quiet btn-accent"
+                        disabled={sorting}
                         aria-label={`Add ${nameOf(left.path)} as a lecture`}
                         onClick={() => void addLeftOut(left.path, 'slides')}
                       >
@@ -128,7 +135,8 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                       </button>
                       <button
                         type="button"
-                        className="btn btn-quiet"
+                        className="btn btn-quiet btn-accent"
+                        disabled={sorting}
                         aria-label={`Add ${nameOf(left.path)} as a past exam`}
                         onClick={() => void addLeftOut(left.path, 'exams')}
                       >
@@ -164,11 +172,12 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                     <span className="setup-row-actions">
                       <button
                         type="button"
-                        className="btn btn-quiet"
+                        className="btn btn-quiet btn-accent"
+                        disabled={sorting}
                         aria-label={`Move ${nameOf(paper.file)} to lectures`}
                         onClick={() => void moveFile(paper.file, 'slides')}
                       >
-                        It is a lecture
+                        Move to lectures
                       </button>
                     </span>
                   </li>
@@ -181,7 +190,12 @@ export function SetupPanel({ close }: { close: ReactNode }) {
               )}
             </ul>
           )}
-          <button type="button" className="btn" onClick={() => picker.current?.click()}>
+          <button
+            type="button"
+            className="btn"
+            disabled={sorting}
+            onClick={() => picker.current?.click()}
+          >
             {course.exams.length > 0 ? 'Add more past exams' : 'Add past exams'}
           </button>
           <input

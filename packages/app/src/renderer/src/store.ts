@@ -91,6 +91,9 @@ export interface Failure {
   fix: string
 }
 
+/** A file an add kept out, with the file itself so it can be added by hand. */
+export type LeftEntry = LeftFile & { picked: Picked }
+
 interface State {
   screen: Screen
   /** The screen settings returns to. */
@@ -106,8 +109,13 @@ interface State {
   failure: Failure | null
   /** Why files could not be added. Apart from `failure`, which labels the build button. */
   addProblem: Failure | null
-  /** What the last add of the open course kept out, so a file left out wrongly can be added. */
-  leftOut: (LeftFile & { picked: Picked })[]
+  /** The course whose added files are being sorted now. Nothing else is added meanwhile. */
+  adding: string | null
+  /**
+   * What the adds of this session kept out, by course, so a file left out wrongly can still be
+   * added after more files came in or another course was open.
+   */
+  leftOut: Record<string, LeftEntry[]>
   view: View
   panel: Panel
   detailsTab: 'decisions' | 'statistics'
@@ -229,11 +237,11 @@ export const useStore = create<State>((set, get) => {
    * hidden ones among them, are dropped without a word: a course folder holds all sorts.
    */
   async function addPdfs(files: Picked[], to?: 'slides' | 'exams'): Promise<void> {
-    const { course, sending } = get()
-    if (!course || sending) return
+    const { course, sending, adding } = get()
+    if (!course || sending || adding) return
     const visible = files.filter(({ file }) => !file.name.startsWith('.'))
     const pdfs = visible.filter(({ file }) => /\.pdf$/i.test(file.name))
-    const formats: State['leftOut'] = visible
+    const formats: LeftEntry[] = visible
       .filter(({ file }) => NOT_PDF.test(file.name))
       .map((picked) => ({ path: picked.path, why: 'format', kind: null, picked }))
     if (pdfs.length === 0 && formats.length === 0) {
@@ -248,29 +256,35 @@ export const useStore = create<State>((set, get) => {
       })
       return
     }
-    let left = formats
-    let problem: Failure | null = null
-    if (pdfs.length > 0) {
-      const data = await Promise.all(
-        pdfs.map(async ({ path, file }) => ({
-          name: path,
-          data: new Uint8Array(await file.arrayBuffer()),
-        })),
-      )
-      const events = await ask({ type: 'add', course: course.id, files: data, to })
-      problem = failureOf(events)
-      const added = events.find((e) => e.type === 'added')
-      const picked = new Map(pdfs.map((p) => [p.path, p]))
-      left = [...(added?.left ?? []).map((l) => ({ ...l, picked: picked.get(l.path)! })), ...left]
-    }
-    // A file added by hand from the list leaves it; a new add replaces the list.
-    const leftOut = to
-      ? get().leftOut.filter((l) => problem || !pdfs.some((p) => p.path === l.path))
-      : left
-    set({ addProblem: problem, leftOut })
-    const view = await refresh(course.id)
-    if (view && (view.pending.length > 0 || leftOut.length > 0)) {
-      set({ panel: 'setup', view: { level: 'course' } })
+    set({ adding: course.id })
+    try {
+      let left = formats
+      let problem: Failure | null = null
+      if (pdfs.length > 0) {
+        const data = await Promise.all(
+          pdfs.map(async ({ path, file }) => ({
+            name: path,
+            data: new Uint8Array(await file.arrayBuffer()),
+          })),
+        )
+        const events = await ask({ type: 'add', course: course.id, files: data, to })
+        problem = failureOf(events)
+        const added = events.find((e) => e.type === 'added')
+        const picked = new Map(pdfs.map((p) => [p.path, p]))
+        left = [...(added?.left ?? []).map((l) => ({ ...l, picked: picked.get(l.path)! })), ...left]
+      }
+      // An add that failed wrote nothing, so the list stays. Otherwise what this add took in
+      // leaves the list, and what it kept out joins it.
+      const before = get().leftOut[course.id] ?? []
+      const sent = new Set(visible.map((p) => p.path))
+      const list = problem ? before : [...before.filter((l) => !sent.has(l.path)), ...left]
+      set({ addProblem: problem, leftOut: { ...get().leftOut, [course.id]: list } })
+      const view = await refresh(course.id)
+      if (view && (view.pending.length > 0 || list.length > 0)) {
+        set({ panel: 'setup', view: { level: 'course' } })
+      }
+    } finally {
+      set({ adding: null })
     }
     await estimate()
   }
@@ -339,7 +353,8 @@ export const useStore = create<State>((set, get) => {
     editor: null,
     failure: null,
     addProblem: null,
-    leftOut: [],
+    adding: null,
+    leftOut: {},
     view: { level: 'course' },
     panel: null,
     detailsTab: 'decisions',
@@ -381,7 +396,6 @@ export const useStore = create<State>((set, get) => {
       set({
         failure: null,
         addProblem: null,
-        leftOut: [],
         estimate: null,
         view: { level: 'course' },
         editor: null,
@@ -392,7 +406,11 @@ export const useStore = create<State>((set, get) => {
       set({
         screen: 'course',
         goal: view.goal,
-        panel: running ? 'run' : view.pending.length > 0 ? 'setup' : null,
+        panel: running
+          ? 'run'
+          : view.pending.length > 0 || (get().leftOut[course]?.length ?? 0) > 0
+            ? 'setup'
+            : null,
       })
       if (!running) await estimate()
     },
@@ -401,13 +419,14 @@ export const useStore = create<State>((set, get) => {
     addExams: (files) => addPdfs(files, 'exams'),
 
     async addLeftOut(path, to) {
-      const left = get().leftOut.find((l) => l.path === path)
+      const { course, leftOut } = get()
+      const left = course ? leftOut[course.id]?.find((l) => l.path === path) : undefined
       if (left) await addPdfs([left.picked], to)
     },
 
     async moveFile(file, to) {
-      const { course } = get()
-      if (!course) return
+      const { course, adding } = get()
+      if (!course || adding) return
       set({ addProblem: failureOf(await ask({ type: 'move', course: course.id, file, to })) })
       await refresh(course.id)
       await estimate()

@@ -234,7 +234,8 @@ test('pictures of a course folder added whole', async () => {
   await writeFile(join(folder, 'Übungen', 'Blatt 1.pdf'), await makePdf([['Name three risks']]))
   await writeFile(join(folder, 'Week 3.pptx'), 'not a pdf')
   await writeFile(join(folder, 'Scan.pdf'), await makePdf([[]]))
-  const { app, page } = await launch()
+  // Each decision takes a while, so the sort stays on screen long enough for its picture.
+  const { app, page } = await launch({ delayMs: 4000 })
 
   try {
     await page.getByPlaceholder('sk-...').fill('sk-offline')
@@ -243,16 +244,20 @@ test('pictures of a course folder added whole', async () => {
     await page.getByLabel('Name of the new course').fill('Entrepreneurship')
     await page.keyboard.press('Enter')
     await page.getByLabel('Folder of lecture PDFs').setInputFiles(folder)
+    await expect(page.getByRole('region', { name: 'Status' })).toContainText(
+      'Looking at your files',
+    )
+    await shoot(page, '12-folder-adding')
     const panel = page.getByRole('complementary')
-    await expect(panel.getByRole('heading', { name: 'Left out' })).toBeVisible()
+    await expect(panel.getByRole('heading', { name: 'Left out' })).toBeVisible({ timeout: 30_000 })
     await page.waitForTimeout(1500)
-    await shoot(page, '12-folder-left-out')
+    await shoot(page, '13-folder-left-out')
 
     await panel.getByRole('button', { name: 'Add Blatt 1 as a lecture' }).click()
     await expect(page.getByRole('img', { name: /Lecture 03 Blatt 1/ })).toBeVisible()
     await panel.getByText('Lecture files').click()
     await page.waitForTimeout(1500)
-    await shoot(page, '13-left-out-added')
+    await shoot(page, '14-lecture-files-moves')
   } finally {
     await app.close()
   }

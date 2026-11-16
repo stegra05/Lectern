@@ -31,6 +31,7 @@ export function BottomBar() {
   const panel = useStore((s) => s.panel)
   const build = useStore((s) => s.build)
   const sending = useStore((s) => s.sending)
+  const adding = useStore((s) => s.adding)
   const send = useStore((s) => s.send)
   const openPanel = useStore((s) => s.openPanel)
   const openDetails = useStore((s) => s.openDetails)
@@ -50,12 +51,16 @@ export function BottomBar() {
   let action: ReactNode = null
   let aside: string | null = null
 
-  if (stage === 'empty') {
+  if (adding === course.id) {
     status = (
       <Lines
-        first="No lectures yet"
-        second="Drop your lecture PDFs or their folder here, one PDF per lecture."
+        first="Looking at your files"
+        second="I read the first pages of each to find the lectures and past exams."
       />
+    )
+  } else if (stage === 'empty') {
+    status = (
+      <Lines first="No lectures yet" second="Drop your lecture PDFs or the course folder here." />
     )
   } else if (stage === 'setup') {
     const lectures = course.pending.length
