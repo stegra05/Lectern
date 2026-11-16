@@ -142,7 +142,7 @@ describe('sending a course to Anki', () => {
       expect(note.tags).toEqual([
         'entrepreneurship-ws26::lecture::02',
         `entrepreneurship-ws26::role::${card.fields.Role}`,
-        `lectern-id::${card.id}`,
+        `lectern-id::entrepreneurship-ws26::${card.id}`,
       ])
       const { Slide, Diagram, ...rest } = card.fields
       expect(note.fields).toMatchObject(rest)
@@ -382,6 +382,50 @@ describe('an Anki that hands back a note and does not keep it', () => {
       cards: 1,
     })
     expect(anki.notes).toHaveLength(cards)
+  })
+})
+
+describe('two courses with the same lectures and concepts', () => {
+  const OTHER = 'entrepreneurship-ws27'
+  const notesOf = async (course: string) =>
+    JSON.parse(await readFile(join(root, course, 'anki.json'), 'utf8')) as {
+      deck: string
+      notes: Record<string, number>
+    }
+
+  it('each get their own notes, and a change in one never reaches the other', async () => {
+    root = join(await tempRoot(), 'library')
+    anki = memoryAnki()
+    const data = await makePdf(SLIDES['01 Risk.pdf']!)
+    for (const name of ['Entrepreneurship WS26', 'Entrepreneurship WS27']) {
+      const course = name.toLowerCase().replace(' ', '-')
+      await run({ type: 'create', name })
+      await run({ type: 'add', course, files: [{ name: '01 Risk.pdf', data }] })
+      expect((await last({ type: 'build', course })).type).toBe('built')
+      expect(await last({ type: 'send', course })).toMatchObject({ type: 'sent' })
+    }
+    const [one, two] = [await notesOf(COURSE), await notesOf(OTHER)]
+    const ids = Object.keys(one.notes)
+    expect(ids.length).toBeGreaterThan(0)
+    expect(Object.keys(two.notes)).toEqual(ids)
+    expect(anki.notes).toHaveLength(2 * ids.length)
+    expect(new Set([...Object.values(one.notes), ...Object.values(two.notes)]).size).toBe(
+      2 * ids.length,
+    )
+    expect(one.deck).not.toBe(two.deck)
+    for (const note of anki.notes) {
+      const mine = Object.values(one.notes).includes(note.id)
+      expect(note.deck.startsWith(mine ? one.deck : two.deck)).toBe(true)
+    }
+
+    const [card] = await last({ type: 'cards', course: OTHER, lecture: 1 }).then((e) =>
+      e.type === 'cards' ? e.cards : [],
+    )
+    expect((await last({ type: 'remove', course: OTHER, lecture: 1, card: card!.id })).type).toBe(
+      'removed',
+    )
+    expect(anki.notes).toHaveLength(2 * ids.length - 1)
+    expect(anki.notes.some((n) => n.id === one.notes[card!.id])).toBe(true)
   })
 })
 
