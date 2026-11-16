@@ -542,6 +542,12 @@ discriminated union (`CommandSchema` in `commands.ts`); a bad command, or any th
 PDFs cross the boundary as `Uint8Array`: the `add` command carries each file as its name, or its
 path inside the folder it came in, and its bytes. A slide picture leaves it as a base64 PNG in the `slide` event.
 
+The commands that write to a course (`build`, `add`, `move`, `send`, `edit`, `remove`, `write`)
+run one after the other, in one `p-queue` per course that every engine in the process shares,
+since the app makes an engine per command. A build takes minutes, so while one runs every other
+writing command of its course, a second build too, fails at once with a message to wait. The
+commands that only read never wait, and other courses do not wait for this one.
+
 | Commands | Model or network? | Answered by events |
 | --- | --- | --- |
 | `build`, `estimate` | `build` calls both models, `estimate` neither | `phase`, `progress`, `estimate`, `built` |
@@ -576,7 +582,8 @@ The app side (`packages/app`):
 - `src/main/index.ts`: handler `engine:run` builds an engine per command through `engineFor`
   (`src/main/engine.ts`), runs it and sends each event to the window as `engine:event`, then returns
   how many events it sent. The preload script waits for that many before the call resolves, because
-  the "finished" answer can overtake the last events (`preload/index.ts`).
+  the "finished" answer can overtake the last events (`preload/index.ts`). On macOS a window closed
+  while a command runs is only hidden, and the Dock icon shows it again with the run still on screen.
 - `engine.ts` wires the ports: `nodeStore`, `ankiConnect`, `nodeTemplates` (reading
   `packages/engine/anki` in the repository, or, in a packaged app, the `anki` folder that
   `electron-builder.yml` copies into the app's resources, `process.resourcesPath`), `pdfjsReader`,

@@ -35,6 +35,10 @@ const templates = app.isPackaged
 const settings = settingsStore(app.getPath('userData'), fake)
 // Rendered from design/icon/master.py by design/icon/export.sh.
 const icon = join(app.getAppPath(), 'resources/icon.png')
+/** Engine commands that have not finished yet. */
+let running = 0
+/** Set once the app quits, when a closed window really closes. */
+let quitting = false
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -64,6 +68,15 @@ function createWindow(): void {
   window.webContents.on('will-navigate', (navigation, url) => {
     if (!devServer || new URL(url).origin !== new URL(devServer).origin) navigation.preventDefault()
   })
+  // On macOS the app outlives its window. Closed while a command runs, such as a build or a
+  // send, the window is only hidden: the Dock icon brings it back with the run still on screen,
+  // and no second run of the course starts beside it.
+  window.on('close', (closing) => {
+    if (process.platform === 'darwin' && running > 0 && !quitting) {
+      closing.preventDefault()
+      window.hide()
+    }
+  })
   if (devServer) void window.loadURL(devServer)
   else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 }
@@ -78,11 +91,16 @@ ipcMain.handle('engine:run', async (event, id: number, command: unknown) => {
     notesFile: join(app.getPath('userData'), 'anki-notes.json'),
   })
   let sent = 0
-  await engine.run(command, (engineEvent) => {
-    if (event.sender.isDestroyed()) return
-    event.sender.send('engine:event', id, inAppWords(engineEvent))
-    sent++
-  })
+  running++
+  try {
+    await engine.run(command, (engineEvent) => {
+      if (event.sender.isDestroyed()) return
+      event.sender.send('engine:event', id, inAppWords(engineEvent))
+      sent++
+    })
+  } finally {
+    running--
+  }
   // How many events went out: the interface waits for all of them, see the preload script.
   return sent
 })
@@ -94,8 +112,14 @@ void app.whenReady().then(() => {
   if (!app.isPackaged) app.dock?.setIcon(icon)
   createWindow()
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    const [window] = BrowserWindow.getAllWindows()
+    if (window) window.show()
+    else createWindow()
   })
+})
+
+app.on('before-quit', () => {
+  quitting = true
 })
 
 app.on('window-all-closed', () => {
