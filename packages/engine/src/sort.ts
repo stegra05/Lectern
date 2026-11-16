@@ -51,7 +51,8 @@ export const KIND_QUESTION: Question = {
 /**
  * The lowest probability at which the decision model's kind is taken. Below it, the kind is
  * unknown and the file stays out, so a stray PDF never becomes a lecture; the student sees it
- * listed and can add it by hand. Not measured yet (#219).
+ * listed and can add it by hand. Measured on one course folder on 2026-11-16: from 0.3 to 0.9
+ * nothing changed ([RFD 5](../../../docs/rfd/0005-decision-models.md)).
  */
 export const SORT_THRESHOLD = 0.5
 
