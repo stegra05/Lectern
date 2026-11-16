@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { mkdir, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { CourseFile, Decision, Event, Lecture, Run } from '../src/api.ts'
@@ -738,6 +738,20 @@ describe('a build stopped at its cap, then built again', () => {
       front: 'Knight (1921): what is risk?',
       problems: ['asks the same question as 01-risk-definition-1'],
     })
+  })
+})
+
+describe('a build that fails on a store write while lecture 2 is still working', () => {
+  it('stops asking the model at once, and records the calls that were under way', async () => {
+    await courseOf('01 Risk.pdf', '02 Effectuation.pdf')
+    // The cards of lecture 1 cannot be written: a folder sits where the file goes.
+    await mkdir(join(h.root, 'course/lectures/01/cards.yaml'), { recursive: true })
+    const events = await run({ type: 'build', course: 'course' }, onlyLecture2Costs(0))
+    expect(events.at(-1)).toMatchObject({ type: 'failed' })
+    const asked = h.model.requests.length
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(h.model.requests.length).toBe(asked)
+    expect(await json<Run>('runs/001.json')).toMatchObject({ failed: true, calls: asked })
   })
 })
 

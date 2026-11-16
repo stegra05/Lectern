@@ -45,7 +45,12 @@ export function createAsk(
   ports: Ports,
   meter: Meter,
   capUsd: number,
-): { model: AskModel; decide: Decide } {
+): {
+  model: AskModel
+  decide: Decide
+  /** Stops new calls after a failure outside a call, and waits for the calls still running. */
+  stop: (error: unknown) => Promise<void>
+} {
   const spend = (usage: Usage) => {
     meter.inputTokens += usage.inputTokens
     meter.cachedInputTokens += usage.cachedInputTokens
@@ -77,6 +82,10 @@ export function createAsk(
     }
   }
   return {
+    async stop(error) {
+      stopped ??= { error }
+      await queue.onIdle()
+    },
     async model(request, schema, priority) {
       const jsonSchema = replySchema(schema)
       for (let attempt = 0; attempt < 2; attempt++) {

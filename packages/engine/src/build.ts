@@ -344,7 +344,7 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   }
   const capUsd = command.capUsd ?? estimated.capUsd
   emit({ type: 'estimate', ...estimated, capUsd })
-  const { model, decide } = createAsk(ports, meter, capUsd)
+  const { model, decide, stop } = createAsk(ports, meter, capUsd)
   const b: Build = {
     ports,
     emit,
@@ -522,7 +522,9 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       durationMs: ports.now() - startedAt,
     })
   } catch (error) {
-    // A stopped run keeps the lectures it saved, and its record says what it cost.
+    // A stopped run keeps the lectures it saved, and its record says what it cost, the calls
+    // still running when it failed included.
+    await stop(error)
     await record(true).catch(() => undefined)
     throw error
   }
@@ -1097,6 +1099,8 @@ function examFact(lecture: OpenLecture, family: Family, answer: Answer): Fact {
     let id = slug(name) || 'exam-question'
     while (concepts.some((c) => c.id === id)) id = `${id}-2`
     concept = { id, name, slides: [], facts: [] }
+    // A lecture without facts has no topic yet: the exam question opens one.
+    if (lecture.topics.length === 0) lecture.topics.push({ name: lecture.title, concepts: [] })
     lecture.topics.at(-1)!.concepts.push(concept)
   }
   const onSlide = answer.fromSlides && answer.slide >= 1 && answer.slide <= lecture.slides
