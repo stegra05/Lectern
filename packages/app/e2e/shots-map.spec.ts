@@ -112,6 +112,16 @@ test('the rings in awkward cases', async () => {
     await page.waitForTimeout(1500)
     await page.mouse.move(5, 300)
     await shoot(page, 'map-long-title')
+
+    // The smallest window the app allows, the panel open, four topics of four concepts.
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setContentSize(900, 600),
+    )
+    await page.getByRole('button', { name: /Go to lecture 02/ }).click()
+    await expect(page.getByRole('button', { name: /^All cards of lecture 02/ })).toBeVisible()
+    await page.mouse.move(5, 300)
+    await page.waitForTimeout(1500)
+    await shoot(page, 'map-small-window')
   } finally {
     await app.close()
   }

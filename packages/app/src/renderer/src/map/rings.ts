@@ -484,6 +484,12 @@ function relax(rings: Rings, base: number[], radius: number, widths: number[]): 
 }
 
 /**
+ * Zooming out further would put pills, which keep their size, over the dots of the outer ring.
+ * Below this the labels give way, not the dots.
+ */
+const MIN_K = 0.65
+
+/**
  * The fitted zoom: as large as the area allows for the dots and a label above and below the
  * ring, and with room beside the ring for labels of a useful width.
  */
@@ -493,5 +499,5 @@ export function fitRings(rings: Rings, centre: Point, bounds: Box, maxK: number)
   const halfW = Math.min(centre.x - bounds.left, bounds.right - centre.x)
   const halfH = Math.min(centre.y - bounds.top, bounds.bottom - centre.y)
   const k = Math.min(maxK, (halfW - beside) / OUTER, (halfH - 34) / OUTER)
-  return Math.max(0.45, k)
+  return Math.max(MIN_K, k)
 }

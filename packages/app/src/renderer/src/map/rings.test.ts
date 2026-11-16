@@ -489,6 +489,32 @@ describe('placePills', () => {
   })
 })
 
+describe('the smallest window with the panel open', () => {
+  for (const per of [1, 4, 6, 0]) {
+    for (let count = 2; count <= 8; count++) {
+      it(`${count} topics of ${per || 'mixed'} concepts: no dot centre lies under a pill`, () => {
+        const topics = Array.from({ length: count }, (_, t): [string, [string, number][]] => [
+          `Topic number ${t + 1} of the lecture`,
+          Array.from({ length: per || (t % 6) + 1 }, (_, c): [string, number] => [
+            `Concept ${t + 1}.${c + 1} with a name`,
+            1 + ((t + c) % 5),
+          ]),
+        ])
+        const rings = layoutRings(lecture('Small window', topics), measure)
+        const f = frame(rings, true, 900, 600)
+        const { pills, dots } = drawn(rings, f, placeRings(rings, f))
+        for (const d of dots) {
+          const x = (d.left + d.right) / 2
+          const y = (d.top + d.bottom) / 2
+          pills.forEach((p) =>
+            expect(x >= p.left && x <= p.right && y >= p.top && y <= p.bottom).toBe(false),
+          )
+        }
+      })
+    }
+  }
+})
+
 describe('layoutRings edge cases', () => {
   it('lays out a lecture without topics as empty rings', () => {
     const rings = layoutRings({ title: 'Empty', topics: [], cards: [] }, measure)
