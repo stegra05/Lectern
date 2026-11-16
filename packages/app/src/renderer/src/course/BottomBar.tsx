@@ -103,6 +103,13 @@ export function BottomBar() {
         second={left ? `${left} left. Nothing to decide here.` : 'Nothing to decide here.'}
       />
     )
+    // The primary action keeps its place, so the second click of a double click lands on it
+    // and not on Details, which would close the run panel.
+    action = (
+      <button type="button" className="btn btn-primary" disabled>
+        Working
+      </button>
+    )
   } else if (sending?.course === course.id) {
     const on = course.lectures.find((l) => l.number === sending.lecture)
     status = (
