@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import type { Goal } from '../../../../shared/contract.ts'
 import { cardCount, useStore } from '../../store.ts'
 import { plural } from '../../lecture.ts'
@@ -18,6 +18,8 @@ export function SetupPanel({ close }: { close: ReactNode }) {
   const goal = useStore((s) => s.goal)
   const setGoal = useStore((s) => s.setGoal)
   const estimate = useStore((s) => s.estimate)
+  const addExams = useStore((s) => s.addExams)
+  const picker = useRef<HTMLInputElement>(null)
   if (!course) return null
 
   const lectures = course.pending.length
@@ -49,6 +51,43 @@ export function SetupPanel({ close }: { close: ReactNode }) {
               </span>
             </li>
           </ul>
+        </section>
+        <section className="panel-section panel-section-rule setup-exams">
+          <h2 className="panel-h2">Past exams</h2>
+          <p className="panel-note">
+            Questions that come back get a card first. Where your slides do not answer one, I answer
+            it from what I know, and the card says so.
+          </p>
+          {course.exams.length > 0 && (
+            <ul className="panel-group">
+              {course.exams.map((paper) => (
+                <li key={paper.file} className="setup-paper">
+                  <span className="setup-paper-name">{paper.file.replace(/\.pdf$/i, '')}</span>
+                  <span className="t-secondary">
+                    {paper.questions === null
+                      ? 'read with these cards'
+                      : plural(paper.questions, 'question')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button type="button" className="btn" onClick={() => picker.current?.click()}>
+            {course.exams.length > 0 ? 'Add more past exams' : 'Add past exams'}
+          </button>
+          <input
+            ref={picker}
+            type="file"
+            accept=".pdf"
+            multiple
+            hidden
+            aria-label="Past exam papers"
+            onChange={(event) => {
+              const files = [...(event.target.files ?? [])]
+              event.target.value = ''
+              if (files.length > 0) void addExams(files)
+            }}
+          />
         </section>
         <section className="panel-section panel-section-rule setup-goal">
           <h2 id="goal-question" className="panel-h2 panel-h2-large">

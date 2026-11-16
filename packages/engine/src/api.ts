@@ -10,7 +10,7 @@ import { send, sentCards } from './deliver.ts'
 import { edit, remove, slots, write } from './edit.ts'
 import { EngineError } from './errors.ts'
 import {
-  addSlides,
+  addFiles,
   createCourse,
   listCourses,
   readCourse,
@@ -69,7 +69,7 @@ export function createEngine(ports: Ports): Engine {
             return emit({
               type: 'added',
               course: known.course,
-              files: await addSlides(store, known.course, known.files),
+              files: await addFiles(store, known.course, known.files, known.to),
             })
           case 'send':
             return await send(ports, known, emit)
@@ -97,4 +97,10 @@ export type * from './ports.ts'
 export type { CardFile } from './cards/assemble.ts'
 export type { Problem, Slots } from './cards/slots.ts'
 export type { CourseFile, Decision, Lecture, Run } from './course.ts'
-export type { CourseState, CourseSummary, LectureState, PendingLecture } from './library.ts'
+export type {
+  CourseState,
+  CourseSummary,
+  LectureState,
+  PaperState,
+  PendingLecture,
+} from './library.ts'

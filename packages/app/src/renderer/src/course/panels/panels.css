@@ -319,3 +319,19 @@
 .cards-body > * {
   flex: none;
 }
+
+.setup-exams .btn {
+  margin-top: 10px;
+}
+.setup-paper {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+}
+.setup-paper-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

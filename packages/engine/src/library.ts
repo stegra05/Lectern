@@ -24,6 +24,7 @@ import {
 } from './course.ts'
 import { sentCards } from './deliver.ts'
 import { EngineError } from './errors.ts'
+import type { ExamsFile } from './exams.ts'
 import type { Ports, SlideImage, Store } from './ports.ts'
 
 export interface CourseSummary {
@@ -60,8 +61,16 @@ export interface CourseState extends Omit<CourseFile, 'format' | 'lectures'> {
   lectures: LectureState[]
   /** In course order. */
   pending: PendingLecture[]
+  /** The past papers in the course, in file order. */
+  exams: PaperState[]
   decisions: Decision[]
   runs: Run[]
+}
+
+/** One past paper: its file, and how many questions a build read from it, or null before. */
+export interface PaperState {
+  file: string
+  questions: number | null
 }
 
 async function courseFile(store: Store, course: string): Promise<CourseFile> {
@@ -133,6 +142,7 @@ export async function readCourse({ store, pdf }: Ports, course: string): Promise
     goal: file.goal,
     lectures,
     pending,
+    exams: await papers(store, course),
     decisions: (await readJson<Decision[]>(store, paths.decisions(course))) ?? [],
     runs,
   }
@@ -192,19 +202,40 @@ export async function createCourse(store: Store, name: string, goal: Goal): Prom
  * Adds PDFs to the course. Nothing is added unless every file can be: a lecture is known by
  * its file name, so a name is never taken twice.
  */
-export async function addSlides(
+/** The past papers of a course: those a build read, with their questions, and those it has not. */
+async function papers(store: Store, course: string): Promise<PaperState[]> {
+  const read = (await readJson<ExamsFile>(store, paths.examsFile(course)))?.papers ?? []
+  const files = (await store.list(paths.exams(course))).filter((f) => /\.pdf$/i.test(f)).sort()
+  return files.map((file) => ({
+    file,
+    questions: read.find((paper) => paper.file === file)?.questions.length ?? null,
+  }))
+}
+
+/**
+ * Adds PDFs to the course: lecture slides, which the next build turns into lectures, or past
+ * exam papers, whose questions the next build turns into cards for the lectures it builds.
+ */
+export async function addFiles(
   store: Store,
   course: string,
   files: { name: string; data: Uint8Array }[],
+  to: 'slides' | 'exams' = 'slides',
 ): Promise<string[]> {
   await courseFile(store, course)
-  const present = new Set(await store.list(paths.slides(course)))
+  const folder = to === 'exams' ? paths.exams(course) : paths.slides(course)
+  const present = new Set([
+    ...(await store.list(paths.slides(course))),
+    ...(await store.list(paths.exams(course))),
+  ])
   const pdfs = files.map(({ name, data }) => ({ name: name.split(/[\\/]/).at(-1)!, bytes: data }))
   for (const [i, { name, bytes }] of pdfs.entries()) {
     const isPdf =
       name.toLowerCase().endsWith('.pdf') && String.fromCharCode(...bytes.slice(0, 4)) === '%PDF'
-    if (!isPdf)
-      throw new EngineError(`${name} is not a PDF.`, 'Export the slides as PDF and add that file.')
+    if (!isPdf) {
+      const what = to === 'exams' ? 'the exam paper' : 'the slides'
+      throw new EngineError(`${name} is not a PDF.`, `Export ${what} as PDF and add that file.`)
+    }
     if (present.has(name) || pdfs.findIndex((other) => other.name === name) !== i) {
       throw new EngineError(
         `The course already has a file named ${name}.`,
@@ -212,7 +243,6 @@ export async function addSlides(
       )
     }
   }
-  for (const { name, bytes } of pdfs)
-    await store.writeBytes(`${paths.slides(course)}/${name}`, bytes)
+  for (const { name, bytes } of pdfs) await store.writeBytes(`${folder}/${name}`, bytes)
   return pdfs.map((pdf) => pdf.name)
 }
