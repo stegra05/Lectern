@@ -51,7 +51,10 @@ export function BottomBar() {
 
   if (stage === 'empty') {
     status = (
-      <Lines first="No lectures yet" second="Drop your lecture PDFs here, one PDF per lecture." />
+      <Lines
+        first="No lectures yet"
+        second="Drop your lecture PDFs or their folder here, one PDF per lecture."
+      />
     )
   } else if (stage === 'setup') {
     const lectures = course.pending.length

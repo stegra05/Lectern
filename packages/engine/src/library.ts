@@ -228,7 +228,8 @@ export async function addFiles(
     ...(await store.list(paths.slides(course))),
     ...(await store.list(paths.exams(course))),
   ])
-  const pdfs = files.map(({ name, data }) => ({ name: name.split(/[\\/]/).at(-1)!, bytes: data }))
+  const names = fileNames(files.map((file) => file.name))
+  const pdfs = files.map(({ data }, i) => ({ name: names[i]!, bytes: data }))
   for (const [i, { name, bytes }] of pdfs.entries()) {
     const isPdf =
       name.toLowerCase().endsWith('.pdf') && String.fromCharCode(...bytes.slice(0, 4)) === '%PDF'
@@ -245,4 +246,20 @@ export async function addFiles(
   }
   for (const { name, bytes } of pdfs) await store.writeBytes(`${folder}/${name}`, bytes)
   return pdfs.map((pdf) => pdf.name)
+}
+
+/**
+ * The course's names for files added together, given as names or as paths inside a folder: a
+ * file keeps its own name, unless another file has the same one, as `Week 1/slides.pdf` and
+ * `Week 2/slides.pdf` do. Those take their path below the folders all files share, joined with
+ * spaces: `Week 1 slides.pdf`.
+ */
+function fileNames(paths: string[]): string[] {
+  const parts = paths.map((path) => path.split(/[\\/]/).filter(Boolean))
+  const own = parts.map((p) => p.at(-1)!)
+  let shared = 0
+  while (parts.every((p) => p.length - 1 > shared && p[shared] === parts[0]![shared])) shared += 1
+  return parts.map((p, i) =>
+    own.filter((name) => name === own[i]).length > 1 ? p.slice(shared).join(' ') : own[i]!,
+  )
 }

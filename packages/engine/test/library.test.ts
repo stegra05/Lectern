@@ -133,6 +133,18 @@ describe('a course from creation to its cards, through the boundary only, with t
     expect(await readdir(join(root, 'entrepreneurship-ws26/slides'))).toHaveLength(2)
   })
 
+  it('adds the PDFs of a folder by their own names, and by their folders where names repeat', async () => {
+    const risk = pdfs.get('01 Risk.pdf')!
+    const files = [
+      { name: 'Course/Week 1/slides.pdf', data: risk },
+      { name: 'Course/Week 2/slides.pdf', data: risk },
+      { name: 'Course/Week 2/Pivots.pdf', data: risk },
+    ]
+    expect(
+      (await only({ type: 'add', course: 'entrepreneurship-ws26-2', files }, 'added')).files,
+    ).toEqual(['Week 1 slides.pdf', 'Week 2 slides.pdf', 'Pivots.pdf'])
+  })
+
   it('adds past exam papers to their own folder and lists them as not read yet', async () => {
     const paper = await makePdf([
       ['Exam Winter 2025/26', '1) What is risk according to Knight (1921)?'],

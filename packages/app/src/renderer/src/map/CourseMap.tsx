@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { Lecture, Pending, Phase } from '../../../shared/contract.ts'
 import { lectureColour, plural, two } from '../lecture.ts'
+import { fromInput, type Picked } from '../picked.ts'
 import { currentPhase, useStore } from '../store.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { MapTools } from './MapTools.tsx'
@@ -699,9 +700,15 @@ function Neighbour({
   )
 }
 
-/** A course without lectures: one calm invitation to bring the slides. */
-function EmptyPrompt({ area, onFiles }: { area: Area; onFiles: (files: File[]) => void }) {
-  const input = useRef<HTMLInputElement>(null)
+/** A course without lectures: one calm invitation to bring the slides, as PDFs or a folder. */
+function EmptyPrompt({ area, onFiles }: { area: Area; onFiles: (files: Picked[]) => void }) {
+  const pdfs = useRef<HTMLInputElement>(null)
+  const folder = useRef<HTMLInputElement>(null)
+  const pick = (input: HTMLInputElement) => {
+    const files = fromInput(input.files)
+    input.value = ''
+    if (files.length > 0) onFiles(files)
+  }
   return (
     <div
       className="map-empty"
@@ -724,23 +731,36 @@ function EmptyPrompt({ area, onFiles }: { area: Area; onFiles: (files: File[]) =
       </div>
       <h2 className="t-heading">Bring your lecture slides</h2>
       <p className="map-empty-text">
-        Drop the PDFs anywhere on this window, one file per lecture. Each one becomes a stop on your
-        course track.
+        Drop the PDFs or their folder anywhere on this window, one file per lecture. Each one
+        becomes a stop on your course track.
       </p>
-      <button type="button" className="btn" onClick={() => input.current?.click()}>
-        Choose PDFs
-      </button>
+      <div className="map-empty-actions">
+        <button type="button" className="btn" onClick={() => pdfs.current?.click()}>
+          Choose PDFs
+        </button>
+        <button type="button" className="btn" onClick={() => folder.current?.click()}>
+          Choose a folder
+        </button>
+      </div>
       <input
-        ref={input}
+        ref={pdfs}
         type="file"
         accept=".pdf"
         multiple
         hidden
-        onChange={(event) => {
-          const files = [...(event.target.files ?? [])]
-          event.target.value = ''
-          if (files.length > 0) onFiles(files)
+        aria-label="Lecture PDFs"
+        onChange={(event) => pick(event.target)}
+      />
+      <input
+        ref={(input) => {
+          folder.current = input
+          // React has no prop for a folder picker; the attribute makes the input choose folders.
+          input?.setAttribute('webkitdirectory', '')
         }}
+        type="file"
+        hidden
+        aria-label="Folder of lecture PDFs"
+        onChange={(event) => pick(event.target)}
       />
     </div>
   )

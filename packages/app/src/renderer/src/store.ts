@@ -22,6 +22,7 @@ import type {
   Slots,
 } from '../../shared/contract.ts'
 import { PHASES } from '../../shared/contract.ts'
+import type { Picked } from './picked.ts'
 
 declare global {
   interface Window {
@@ -110,9 +111,9 @@ interface State {
   openCourses: () => Promise<void>
   createCourse: (name: string) => Promise<void>
   openCourse: (course: string) => Promise<void>
-  addFiles: (files: File[]) => Promise<void>
+  addFiles: (files: Picked[]) => Promise<void>
   /** Adds past exam papers. The next build turns their recurring questions into cards first. */
-  addExams: (files: File[]) => Promise<void>
+  addExams: (files: Picked[]) => Promise<void>
   setGoal: (goal: Goal) => Promise<void>
   build: () => Promise<void>
   /** Sends the cards that are not in Anki yet. */
@@ -212,21 +213,30 @@ export const useStore = create<State>((set, get) => {
   }
 
   /** Adds PDFs as lecture slides or as past exam papers. */
-  async function addPdfs(files: File[], to: 'slides' | 'exams'): Promise<void> {
+  async function addPdfs(files: Picked[], to: 'slides' | 'exams'): Promise<void> {
     const { course, sending } = get()
     if (!course || sending) return
-    const pdfs = files.filter((f) => f.name.toLowerCase().endsWith('.pdf'))
+    // Hidden files are skipped: a folder from another disk can hold `._slides.pdf` copies.
+    const pdfs = files.filter(
+      ({ file }) => file.name.toLowerCase().endsWith('.pdf') && !file.name.startsWith('.'),
+    )
     if (pdfs.length === 0) {
       set({
         addProblem: {
-          message: 'Only PDF files can be added.',
-          fix: `Drop the ${to === 'exams' ? 'exam paper' : 'lecture'} as a PDF.`,
+          message: 'There is no PDF in what you added.',
+          fix:
+            to === 'exams'
+              ? 'Add the exam paper as a PDF.'
+              : 'Add the lectures as PDFs, or a folder that holds them.',
         },
       })
       return
     }
     const data = await Promise.all(
-      pdfs.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })),
+      pdfs.map(async ({ path, file }) => ({
+        name: path,
+        data: new Uint8Array(await file.arrayBuffer()),
+      })),
     )
     const events = await ask({ type: 'add', course: course.id, files: data, to })
     set({ addProblem: failureOf(events) })

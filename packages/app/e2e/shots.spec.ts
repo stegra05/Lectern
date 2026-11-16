@@ -93,13 +93,15 @@ test('pictures of every base screen', async () => {
       .getByLabel('Name of the new course')
       .fill(real ? 'Entrepreneurship, new' : 'Entrepreneurship')
     await page.keyboard.press('Enter')
-    await expect(page.locator('input[type=file]')).toBeAttached()
+    await expect(page.getByLabel('Lecture PDFs', { exact: true })).toBeAttached()
     await shoot(page, '03-course-empty')
 
     if (real) {
       const slides = join(real, 'slides')
       const names = (await readdir(slides)).filter((name) => name.endsWith('.pdf')).sort()
-      await page.locator('input[type=file]').setInputFiles(names.map((name) => join(slides, name)))
+      await page
+        .getByLabel('Lecture PDFs', { exact: true })
+        .setInputFiles(names.map((name) => join(slides, name)))
     } else {
       const files = await Promise.all(
         Object.entries(LECTURES).map(async ([name, lecture]) => ({
@@ -108,7 +110,7 @@ test('pictures of every base screen', async () => {
           buffer: await makePdf(lecture),
         })),
       )
-      await page.locator('input[type=file]').setInputFiles(files)
+      await page.getByLabel('Lecture PDFs', { exact: true }).setInputFiles(files)
     }
     await expect(page.getByRole('heading', { name: 'I am aiming for' })).toBeVisible({
       timeout: 120_000,
