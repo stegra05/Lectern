@@ -107,6 +107,8 @@ interface State {
   sending: SendState | null
   editor: Editor | null
   failure: Failure | null
+  /** What ended a build or send while the student was elsewhere, by course, until it is opened. */
+  kept: Record<string, Failure>
   /** Why files could not be added. Apart from `failure`, which labels the build button. */
   addProblem: Failure | null
   /** The course whose added files are being sorted now. Nothing else is added meanwhile. */
@@ -192,6 +194,16 @@ function failureOf(events: Event[]): Failure | null {
 export const useStore = create<State>((set, get) => {
   /** The course the student has open, or is opening. Answers about any other are dropped. */
   let open: string | null = null
+
+  /**
+   * A build or send ended while its course was not on show: the Courses list says how it
+   * stands now, and a failure waits for the student to open the course.
+   */
+  async function endedElsewhere(course: string, failure: Failure | null): Promise<void> {
+    if (failure) set({ kept: { ...get().kept, [course]: failure } })
+    const found = (await ask({ type: 'courses' })).find((e) => e.type === 'courses')
+    if (found) set({ courses: found.courses })
+  }
 
   /** Reads the open course again, with the cards of every lecture. */
   async function refresh(course: string): Promise<CourseView | null> {
@@ -302,7 +314,10 @@ export const useStore = create<State>((set, get) => {
       set({ sending: { course: course.id, done, total, lecture } })
     })
     set({ sending: null })
-    if (get().course?.id !== course.id || get().screen === 'courses') return
+    if (get().course?.id !== course.id || get().screen === 'courses') {
+      await endedElsewhere(course.id, failureOf(events))
+      return
+    }
     // Also after a failure: the cards that went before it are in Anki.
     await refresh(course.id)
     set({ failure: failureOf(events) })
@@ -352,6 +367,7 @@ export const useStore = create<State>((set, get) => {
     sending: null,
     editor: null,
     failure: null,
+    kept: {},
     addProblem: null,
     adding: null,
     leftOut: {},
@@ -393,8 +409,10 @@ export const useStore = create<State>((set, get) => {
 
     async openCourse(course) {
       open = course
+      const { [course]: kept, ...rest } = get().kept
       set({
-        failure: null,
+        failure: kept ?? null,
+        kept: rest,
         addProblem: null,
         estimate: null,
         view: { level: 'course' },
@@ -488,7 +506,10 @@ export const useStore = create<State>((set, get) => {
       const failure = failureOf(events)
       set({ run: null })
       // The student may have left for another course while the cards were made.
-      if (get().course?.id !== course.id || get().screen === 'courses') return
+      if (get().course?.id !== course.id || get().screen === 'courses') {
+        await endedElsewhere(course.id, failure)
+        return
+      }
       await refresh(course.id)
       // A failed run keeps its panel open, so the student reads what went wrong and the fix.
       set({ failure, estimate: null, panel: failure ? 'run' : null })
