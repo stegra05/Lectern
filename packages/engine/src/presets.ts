@@ -4,7 +4,7 @@
  * for the cards.
  *
  * Written from Steffen's Entrepreneurship study kit and accepted by him on 2026-11-15 after a
- * comparison run (`docs/engine-profile-concept.md`). Every course uses it.
+ * comparison run. Every course uses it ([RFD 7](docs/rfd/0007-presets.md)).
  */
 
 import type { Role } from './cards/roles.ts'

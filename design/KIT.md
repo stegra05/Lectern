@@ -2,10 +2,8 @@
 
 Binding for every "V2" screen. It merges what Steffen picked on 2026-11-14: the Native Mac
 language (Language C) with the lecture colours and the winding track of the playful one
-(Language E), a full-width map, and mind maps. Background and reasons: `DIRECTION.md`.
-
-Reference frames for the look: `AltLangC1.dc.html` and `AltLangC2.dc.html` (controls, type,
-materials) and `AltLangE1.dc.html` (lecture colours, the track) in the canvas project folder.
+(Language E), a full-width map, and mind maps. Background and reasons:
+[RFD 11](../docs/rfd/0011-app-shape.md).
 
 ## Principles
 
@@ -27,11 +25,14 @@ materials) and `AltLangE1.dc.html` (lecture colours, the track) in the canvas pr
 | Separator | `rgba(0,0,0,0.10)` | `rgba(255,255,255,0.12)` |
 | Neutral mark (unselected dots) | `#7C7C80` | `#98989D` |
 | Accent fill (primary button, selected stop ring) | `#0064D2`, white text | `#0064D2`, white text |
+| Text on accent fill (`--on-accent`) | `#FFFFFF` | `#FFFFFF` |
 | Accent text and icons | `#0064D2` | `#6CB0FF` |
 | Selection fill | `#E3EEFB` | `#1F3A5C` |
 | Key term mark | `#CFE2FB` | `#27456B` |
 | Positive status | `#1A7F37` | `#5FD07A` |
 | Problem | `#B3261E` | `#FF8A80` |
+| Selected segment (`--segment-on`) | `#FFFFFF` | `#636366` |
+| Sidebar ground (`--sidebar`) | `#E6E6EA` | `#252527` |
 | Focus ring | `#4A8BDF`, 3px, 2px offset | `#6CB0FF` |
 
 Type: `-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif`.
@@ -39,7 +40,8 @@ Mono for apparatus: `ui-monospace, 'SF Mono', Menlo, Consolas, monospace`.
 Sizes: title 22px weight 700 with `letter-spacing: -0.01em`, heading 15px weight 600, body 13px,
 label 12px weight 500, caption 11px. Big numerals (a count such as 412) may go to 34px weight 700.
 Radii: 8px controls, 12px groups and lecture stops, 14px floating panels. Shadows: one soft
-layered shadow on floating panels only.
+layered shadow on floating panels (`--shadow-panel`). Controls carry the control shadow
+(`--shadow-control`): a hairline ring and a 1px drop, in white at low strength in dark.
 
 ## Lecture colours
 
@@ -137,12 +139,9 @@ how topics relate, not for studying from.
 
 ## Card designs
 
-Six designs ship as choices, all over the same fields and templates: **Native** (the default
-for a new student), Structure, Lamp, Lecture colours, Afterglow and Vitrine. Placard was
-dropped. The choice is made in settings and offered once before the first send, in a carousel.
-
-On the Lecture colours card the colours are softer than on the app's track: the same twelve
-hues, toned down for daily review. The app's track keeps the full colours.
+One design ships, **Native**, over the same fields and templates as every later design. There is
+no choice to make. The other five are [#193](https://github.com/stegra05/lectern/issues/193)
+([RFD 10](../docs/rfd/0010-card-designs.md)).
 
 ## App icon
 
@@ -153,13 +152,7 @@ output in `design/icon/master/` (masked SVGs plus unmasked layers for Icon Compo
 Picked by Steffen on 2026-11-14 over five rounds; rejected: dots on stalks (reads as a virus),
 the flat lamp (reads as a figure in a hat when small), the track, rings and a plain deck.
 
-## Copy for chat
-
-The copied text is a tutoring prompt followed by the course as a Markdown outline: lectures,
-topics, concepts, and under each concept its cards as question and answer. The cards already
-exist and were checked against the slides, so the engine writes nothing extra for this.
-
 ## Base product state
 
-One question (the goal). No study plan, no quiz, no exam marks, no feedback loop. Past exams
-are not used.
+One question (the goal). Past exam papers can be added in the course setup. No study plan, no
+quiz, no feedback loop, no card design choice.
