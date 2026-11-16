@@ -11,9 +11,14 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/v3' }}
 
 jobs:
+  # Each check in a job of its own, side by side, so none waits for another.
   check:
-    name: Lint, format, typecheck, unit tests
+    name: Check (${{ matrix.task }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, format:check, typecheck, test]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -22,10 +27,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm format:check
-      - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm ${{ matrix.task }}
 
   e2e:
     name: App end to end (offline models)

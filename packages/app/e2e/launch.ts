@@ -27,6 +27,9 @@ export async function launch(
 ): Promise<Launched> {
   const data = await mkdtemp(join(tmpdir(), 'lectern-app-'))
   const courses = options.courses ?? join(data, 'courses')
+  // In CI the window is on the virtual display, where it disturbs nobody. A window not shown
+  // draws no frames there, and Playwright waits 2 s for them before every action.
+  const show = Boolean(process.env.CI)
   const app = await electron.launch({
     args: [join(import.meta.dirname, '..')],
     env: {
@@ -35,16 +38,18 @@ export async function launch(
       LECTERN_FAKE_DELAY: String(options.delayMs ?? 0),
       LECTERN_DATA: data,
       LECTERN_COURSES: courses,
-      // In CI the window is on the virtual display, where it disturbs nobody. A window never
-      // shown draws no frames there, and Playwright waits 2 s for them before every action.
-      LECTERN_SHOW: process.env.CI ? '1' : '0',
+      LECTERN_SHOW: show ? '1' : '0',
     },
   })
   const page = await app.firstWindow()
   // The reference size of the design kit, whatever the last window size on this computer was.
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.setContentSize(1100, 720)
-  })
+  // A window to be shown appears only after its first paint, so the test waits for it.
+  await app.evaluate(async ({ BrowserWindow }, show) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    window?.setContentSize(1100, 720)
+    if (window && show && !window.isVisible())
+      await new Promise<void>((resolve) => window.once('show', () => resolve()))
+  }, show)
   const notes = async (): Promise<AnkiNote[]> =>
     JSON.parse(
       await readFile(join(data, 'anki-notes.json'), 'utf8').catch(() => '[]'),
