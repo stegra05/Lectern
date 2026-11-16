@@ -377,7 +377,8 @@ export function script(request: ModelRequest): unknown {
     const cards = request.prompt
       .split(/^Fact to test: /m)
       .slice(1)
-      .map((block) => ({
+      .map((block, i) => ({
+        card: String(i + 1),
         cardType: /^Card type: ([^.]+)\./m.exec(block)![1]!,
         ...(FILLS[/^(.+) \(slide \d+\)$/m.exec(block)![1]!] as object),
       }))

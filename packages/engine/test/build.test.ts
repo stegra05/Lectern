@@ -323,6 +323,7 @@ describe('building a course of two lectures, offline', () => {
     const forms = (fill.schema as Forms).properties.cards.items.anyOf
     const contrast = forms.find((f) => JSON.stringify(f).includes('"enum":["contrast"]'))!
     expect(Object.keys(contrast.properties)).toEqual([
+      'card',
       'cardType',
       'question',
       'sideA',

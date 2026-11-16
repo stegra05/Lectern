@@ -267,11 +267,19 @@ const FORMS: Record<Role, Form> = {
  * types it holds, so the provider's cache of the lecture holds for all of them.
  */
 const ROLES = Object.keys(FORMS) as Role[]
+const LABELS = Array.from({ length: CARDS_PER_CALL }, (_, i) => String(i + 1)) as [
+  string,
+  ...string[],
+]
 const Batch = z.object({
   cards: z.array(
     z.union(
       ROLES.map((role) =>
-        z.object({ cardType: z.enum([role]), ...FORMS[role].schema.shape }),
+        z.object({
+          card: z.enum(LABELS).describe('The number of the card, as in "Card 2".'),
+          cardType: z.enum([role]),
+          ...FORMS[role].schema.shape,
+        }),
       ) as unknown as [z.ZodObject, z.ZodObject, ...z.ZodObject[]],
     ),
   ),
@@ -330,21 +338,19 @@ export function createWriter(ask: AskModel, preset: Preset): Writer {
           : `Fill one form for each of these ${jobs.length} flashcards, in this order. Give each card its card type. Each card tests its own fact only.`,
         '',
         `Concept: ${jobs[0]!.concept.name}`,
-        ...jobs.flatMap((job, i) => [
-          '',
-          ...(jobs.length > 1 ? [`Card ${i + 1}`] : []),
-          ...card(job),
-        ]),
+        ...jobs.flatMap((job, i) => ['', `Card ${i + 1}`, ...card(job)]),
         '',
         ...rules,
       ].join('\n')
       const reply = await ask(request(jobs, 'fill', prompt), Batch)
       return Promise.all(
         jobs.map(async (job, i) => {
-          const values = reply.cards[i]
+          // The card the reply numbered for this job, when exactly one did.
+          const named = reply.cards.filter((c) => c.card === String(i + 1))
+          const values = named.length === 1 ? named[0] : undefined
           if (values?.cardType === job.role) return FORMS[job.role].toSlots(values)
-          // A card the reply left out or wrote in another form is asked again on its own; alone
-          // and still wrong, it goes to the gate empty, and the gate has it filled again.
+          // A card the reply left out, numbered twice or wrote in another form is asked again on
+          // its own; alone and still wrong, it goes to the gate empty, and the gate has it filled again.
           return jobs.length > 1 ? (await this.fill([job]))[0]! : empty
         }),
       )
