@@ -38,11 +38,14 @@ note type files inside it; the macOS one, opened from its dmg on this Mac, reach
 first-run screen and found its templates. A `v3.*` tag builds macOS, Windows and Linux installers into a
 draft prerelease ([`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
+On 2026-11-15 the app ran once for real: a build of one lecture (Session 8, 19 slides, goal
+"a good grade") on `gpt-6-luna` made 19 cards in 73 seconds for 1.9 cents (estimate 1.9). Sent
+from the app to a real Anki (a throwaway Anki data folder), all 19 arrived in one subdeck; a
+changed card changed the same note in Anki, a removed card left Anki and the record, and an own
+card arrived tagged `::own`.
+
 ## Unverified
 
-- The app's own send, edit and remove against a real Anki (the engine's ran against one; the
-  app's only against the in-memory Anki).
-- A real build started from inside the app (only from the engine's command line so far).
 - Past papers added after a course's lectures are built change no card already made; they count
   only for lectures built later. Answers the model wrote are not checked against the readings.
 - The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.

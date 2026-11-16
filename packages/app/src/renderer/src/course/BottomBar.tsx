@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Panel } from '../store.ts'
 import { cardCount, conceptCount, currentPhase, stageOf, unsentCount, useStore } from '../store.ts'
-import { euros, plural, two } from '../lecture.ts'
+import { euros, noun, plural, two } from '../lecture.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { PHASE_NOW, timeLeft, useTick } from './panels/RunPanel.tsx'
 import './bar.css'
@@ -113,10 +113,12 @@ export function BottomBar() {
   } else {
     const made = cardCount(course)
     const unsent = unsentCount(course)
+    const concepts = conceptCount(course)
+    const lectures = course.lectures.length
     const counts = (
       <>
-        <b>{made}</b> cards · <b>{conceptCount(course)}</b> concepts ·{' '}
-        <b>{course.lectures.length}</b> lectures
+        <b>{made}</b> {noun(made, 'card')} · <b>{concepts}</b> {noun(concepts, 'concept')} ·{' '}
+        <b>{lectures}</b> {noun(lectures, 'lecture')}
       </>
     )
     if (unsent === 0) {
@@ -124,7 +126,8 @@ export function BottomBar() {
         <Lines
           first={
             <>
-              <b>{made}</b> cards are in Anki, in <b>{course.lectures.length}</b> subdecks
+              <b>{made}</b> {made === 1 ? 'card is' : 'cards are'} in Anki, in <b>{lectures}</b>{' '}
+              {noun(lectures, 'subdeck')}
             </>
           }
           second="Open Anki and study. Add the next lecture here when it arrives."

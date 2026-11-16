@@ -47,8 +47,9 @@ pnpm --filter @lectern/engine cli estimate <course folder>
   scopes `engine app design`.
 - Never push, open or merge a pull request, or spend money without Steffen's yes in his words.
 - Paid model runs only through the engine (`cli build`), on OpenAI, each preceded by its
-  estimate. Keys live in the macOS keychain (service `Lectern`); pass them by environment
-  variable, never write them to a file.
+  estimate. Keys live in the macOS keychain (service `Lectern`, account `openai_api_key`; the
+  service alone finds another provider's key); pass them by environment variable, never write
+  them to a file.
 - Tests run on the offline models (`LECTERN_FAKE=1`, the engine's fakes). Nothing in a test
   reaches a real model, a real Anki or the student's courses.
 - Simplest code that meets the current need; no backward compatibility, no speculative
