@@ -6,7 +6,7 @@
  */
 
 import PQueue from 'p-queue'
-import { EngineError, ProviderError } from './errors.ts'
+import { ProviderError } from './errors.ts'
 import type { Answer, DecisionsPort, PdfPort, Question, SlideImage, Usage } from './ports.ts'
 
 export const FILE_KINDS = [
@@ -203,7 +203,7 @@ export async function sortFiles(
       const answer = await askKind(ports, file).catch((error: unknown) => {
         if (!(error instanceof ProviderError)) throw error
         if (error.reason === 'rejected') return undefined
-        throw new EngineError(error.message, ADD_AGAIN[error.reason])
+        throw new ProviderError(error.message, ADD_AGAIN[error.reason], error.reason)
       })
       return kindFromAnswer(answer)
     }),

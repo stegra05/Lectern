@@ -16,6 +16,7 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
 import { engineFor } from './engine.ts'
+import { inAppWords } from './words.ts'
 import { settingsStore } from './settings.ts'
 
 // A shipped app ignores the test variables, so a stray one cannot send cards to nowhere.
@@ -79,7 +80,7 @@ ipcMain.handle('engine:run', async (event, id: number, command: unknown) => {
   let sent = 0
   await engine.run(command, (engineEvent) => {
     if (event.sender.isDestroyed()) return
-    event.sender.send('engine:event', id, engineEvent)
+    event.sender.send('engine:event', id, inAppWords(engineEvent))
     sent++
   })
   // How many events went out: the interface waits for all of them, see the preload script.

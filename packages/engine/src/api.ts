@@ -8,7 +8,7 @@ import { build, estimateCourse } from './build.ts'
 import { CommandSchema, type Emit } from './commands.ts'
 import { send, sentCards } from './deliver.ts'
 import { edit, remove, slots, write } from './edit.ts'
-import { EngineError } from './errors.ts'
+import { EngineError, ProviderError } from './errors.ts'
 import {
   addFiles,
   moveFile,
@@ -89,7 +89,8 @@ export function createEngine(ports: Ports): Engine {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         const fix = error instanceof EngineError ? error.fix : 'Run the command again.'
-        emit({ type: 'failed', message, fix })
+        const reason = error instanceof ProviderError ? error.reason : undefined
+        emit({ type: 'failed', message, fix, ...(reason && { reason }) })
       }
     },
   }

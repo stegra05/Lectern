@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { GOALS, ROLES } from './cards/roles.ts'
 import { OWN_ROLES, type Problem, type Slots } from './cards/slots.ts'
 import type { CardFile } from './cards/assemble.ts'
-import type { Unreadable } from './errors.ts'
+import type { ProviderError, Unreadable } from './errors.ts'
 import type { Added, CourseState, CourseSummary, Shelf } from './library.ts'
 
 /** The course folder inside the store. */
@@ -148,6 +148,7 @@ export type Event =
   | { type: 'written'; card: CardFile }
   /** The card was not taken. Each problem names the field of the form it is about. */
   | { type: 'refused'; problems: Problem[] }
-  | { type: 'failed'; message: string; fix: string }
+  /** `reason` is set when a model provider failed, so an interface can word the fix its own way. */
+  | { type: 'failed'; message: string; fix: string; reason?: ProviderError['reason'] }
 
 export type Emit = (event: Event) => void
