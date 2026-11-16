@@ -13,9 +13,22 @@ export interface Clashes {
   same: [string, string][]
 }
 
-/** The words of a question without their order or repeats, so that two wordings compare. */
-const key = (text: string) =>
-  [...new Set(wordingKey(text).split(' ').filter(Boolean))].sort().join(' ')
+const QUESTION_WORD = /^(?:what|which|who|whom|whose|how|why|when|where)$/
+const FRAME_WORD =
+  /^(?:a|an|the|is|are|was|were|be|do|does|did|it|its|this|that|of|to|in|on|or|and|for|with)$/
+
+/**
+ * A question for comparing wordings: its question words as a set, and its other words in
+ * order once the frame words go. A rewording moves the frame ("What is X?", "X: what is it?")
+ * and keeps the order of the terms; a reversal ("price affect demand", "demand affect price")
+ * changes it, and has another answer.
+ */
+const key = (text: string) => {
+  const found = wordingKey(text).split(' ').filter(Boolean)
+  const asked = [...new Set(found.filter((w) => QUESTION_WORD.test(w)))].sort()
+  const terms = found.filter((w) => !QUESTION_WORD.test(w) && !FRAME_WORD.test(w))
+  return `${asked.join(' ')}|${terms.join(' ')}`
+}
 
 /**
  * Compares every new card with the cards before it: all existing ones, and the new ones
