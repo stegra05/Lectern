@@ -48,7 +48,7 @@ src/edit.ts           slots, edit, remove, write (single cards)
 src/deliver.ts        send (Anki)
 src/cards/            roles, validate, assemble, slots, id, words, question-answer
 src/adapters/         openai, pdfjs, node-store, node-templates, ankiconnect, memory-anki, offline, fake
-src/cli.ts            command line: estimate, build, send
+src/cli.ts            command line: estimate, build, send (LECTERN_FAKE=1: offline models, Anki in memory)
 eval/                 bench.ts, refdeck.ts, read-slides.ts and the judge instructions (section 14)
 anki/                 four card templates and style-native.css
 ```

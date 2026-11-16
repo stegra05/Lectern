@@ -10,9 +10,13 @@ const cli = join(import.meta.dirname, '../src/cli.ts')
 
 /** The command line on a course folder: its events as JSON lines, and the exit code. */
 async function cliRun(...args: string[]) {
+  return run({ OPENAI_API_KEY: 'test' }, args)
+}
+
+async function run(env: Record<string, string>, args: string[]) {
   const result = await promisify(execFile)('node', [cli, ...args], {
     // Nothing is called that costs money or needs a key: these commands stop before.
-    env: { ...process.env, OPENAI_API_KEY: 'test' },
+    env: { ...process.env, ...env },
   }).catch((error: { code: number; stdout: string }) => error)
   const events = result.stdout
     .trim()
@@ -48,5 +52,24 @@ describe('the command line', () => {
       fix: 'Put one PDF per lecture into the slides folder of the course.',
     })
     expect(code).toBe(1)
+  })
+
+  it('builds and sends a course on the offline models and an Anki in memory', async () => {
+    await h.courseOf('01 Risk.pdf')
+    // With the switch set no model and no Anki is constructed that could reach a network, so
+    // neither a key nor a running Anki is needed: the key is removed to show it.
+    const env = { LECTERN_FAKE: '1', OPENAI_API_KEY: '' }
+    const built = await run(env, ['build', join(h.root, 'course')])
+    expect(built.events.at(-1)).toMatchObject({ type: 'built' })
+    expect(built.code).toBe(0)
+    const sent = await run(env, ['send', join(h.root, 'course')])
+    expect(sent.events.at(-1)).toEqual({
+      type: 'sent',
+      deck: expect.any(String) as string,
+      cards: expect.any(Number) as number,
+      lectures: [1],
+    })
+    expect((sent.events.at(-1) as { cards: number }).cards).toBeGreaterThan(0)
+    expect(sent.code).toBe(0)
   })
 })

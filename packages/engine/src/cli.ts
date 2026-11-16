@@ -9,13 +9,17 @@
  * Every command prints its events as one JSON line each.
  * `build` spends money on the OpenAI account of `OPENAI_API_KEY`; the others do not.
  * `send` writes into the Anki that is open on this computer, through its AnkiConnect add-on.
+ * With `LECTERN_FAKE=1` the offline models and an Anki in memory take their place: no key, no
+ * network, no cost, and nothing reaches the real Anki.
  */
 
 import { basename, dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { ankiConnect } from './adapters/ankiconnect.ts'
+import { memoryAnki } from './adapters/memory-anki.ts'
 import { nodeStore } from './adapters/node-store.ts'
 import { nodeTemplates } from './adapters/node-templates.ts'
+import { offlineDecisions, offlineModel } from './adapters/offline.ts'
 import { openaiDecisions, openaiModel } from './adapters/openai.ts'
 import { pdfjsReader } from './adapters/pdfjs.ts'
 import { createEngine, EngineError } from './api.ts'
@@ -34,6 +38,7 @@ if (!type || !['estimate', 'build', 'send'].includes(type) || !folder) {
   process.exit(2)
 }
 
+const fake = process.env.LECTERN_FAKE === '1'
 const path = resolve(folder)
 const command = {
   type,
@@ -45,9 +50,9 @@ try {
   const engine = createEngine({
     store: nodeStore(dirname(path)),
     pdf: pdfjsReader,
-    model: openaiModel(values.model),
-    decisions: openaiDecisions(),
-    anki: ankiConnect(),
+    model: fake ? offlineModel() : openaiModel(values.model),
+    decisions: fake ? offlineDecisions() : openaiDecisions(),
+    anki: fake ? memoryAnki() : ankiConnect(),
     templates: nodeTemplates(join(import.meta.dirname, '../anki')),
     now: Date.now,
   })
