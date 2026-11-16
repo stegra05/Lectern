@@ -4,7 +4,7 @@
 | --------- | --------------------------------------------------------------------------------- |
 | **State** | decided, measurement ongoing                                                      |
 | **Date**  | 2026-11-13, measured 2026-11-14 to 2026-11-16, exam measure decided 2026-11-16    |
-| **Code**  | `packages/engine/eval/bench.ts` (exam marks), `eval/refdeck.ts` (reference deck) |
+| **Code**  | `packages/engine/eval/bench.ts` (exam marks), `eval/refdeck.ts` (reference deck), `eval/blind.ts` (blind sample) |
 
 > **In one breath.** A deck is scored on the marks of past papers its build never saw. Steffen's
 > own 636 notes for Entrepreneurship stay as the second measure and as the deck of the blind
@@ -162,6 +162,31 @@ gains need several runs per variant, or a paired comparison on the notes both ru
 
 **Steffen's own verdicts** on 62 cards: 41 keep, 9 right fact but bad card, 5 not worth a card,
 7 junk.
+
+## The blind sample
+
+`blind.ts draw` takes the eval folder of a run (its `cards.json`, the exported `reference.json`
+and the judged `labels/`) and writes the sample for Steffen and a key kept apart. `blind.ts score`
+reads his filled sample and the key.
+
+- **60 pairs by default**, fewer when fewer concepts are matched in both decks; the command says
+  how many it drew. At 60 pairs a share near one half is known to about plus or minus 13 points
+  at 95%, and 60 pairs is about half an hour of judging.
+- **Concepts are drawn from those both decks have.** A concept counts when the judge matched a
+  reference note to a card of the run with `same` or `partial`. Lectures are taken in random
+  order and one concept from each in turn until the sample is full; a lecture that runs out is
+  skipped. Concepts are not weighted by how often past exams asked them: this comparison asks
+  whether a card reads as well as the reference card, and what the deck covers is measured by the
+  exam marks above.
+- **One card from each side.** When a concept has several cards or notes on a side, one is drawn
+  at random, so the two cards of a pair need not test the same fact. Which side is A or B is
+  random per pair. One seed makes a draw repeatable, and it is written into the key.
+- **Only what both decks have is shown**: front and back, or the gap sentence with its hidden
+  words. Note types, tags, ids, source lines and slide marks never reach the sample.
+- **Two answers per pair**, typed into the sample file: which card is Lectern's (A, B or ? for
+  cannot tell) and which he prefers (A, B or = for no preference). The score is the share told
+  apart (right guesses among the pairs answered, a ? counting as not told apart), the share where
+  Lectern's card is preferred, and the share with no preference.
 
 ## Test courses
 
