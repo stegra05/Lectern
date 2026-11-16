@@ -470,6 +470,7 @@ describe('a sort that the decision model cannot finish', () => {
       type: 'failed',
       message: 'OpenAI rejected the API key.',
       fix: 'Check the key in OPENAI_API_KEY, then add the files again.',
+      reason: 'key',
     })
     expect(await readdir(join(root, course, 'slides'))).toEqual(['Introduction.pdf'])
   })
