@@ -370,3 +370,29 @@
 .setup-files .panel-group {
   margin-top: 6px;
 }
+
+/* Deleting a course: quiet until pressed, then a question in place. */
+.course-delete-action {
+  color: var(--problem);
+}
+.course-delete > .btn-quiet {
+  align-self: flex-start;
+  margin-left: -8px;
+}
+.course-delete-text {
+  font-size: 12px;
+  line-height: 1.38;
+}
+.course-delete-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.course-delete-buttons .course-delete-action {
+  min-width: 0;
+}
+.course-delete-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -139,7 +139,10 @@ interface State {
   addLeftOut: (path: string, to: 'slides' | 'exams') => Promise<void>
   /** Moves a file without cards between lecture slides and past exams, or out of the course. */
   moveFile: (file: string, to: 'slides' | 'exams' | 'out') => Promise<void>
+  /** Changes the goal of the open course. Lectures built from now on follow it. */
   setGoal: (goal: Goal) => Promise<void>
+  /** Deletes the open course from the library, and goes to the Courses list. Anki keeps its deck. */
+  deleteCourse: () => Promise<void>
   build: () => Promise<void>
   /** Sends the cards that are not in Anki yet. */
   send: () => Promise<void>
@@ -515,8 +518,31 @@ export const useStore = create<State>((set, get) => {
     },
 
     async setGoal(goal) {
+      const { course } = get()
+      if (!course) return
       set({ goal })
+      const failure = failureOf(await ask({ type: 'goal', course: course.id, goal }))
+      const now = get().course
+      if (open !== course.id || !now) return
+      // A goal that was not saved goes back to the one the course has.
+      set(failure ? { failure, goal: now.goal } : { course: { ...now, goal } })
       await estimate()
+    },
+
+    async deleteCourse() {
+      const { course } = get()
+      if (!course) return
+      const failure = failureOf(await ask({ type: 'delete', course: course.id }))
+      if (failure) {
+        if (open === course.id) set({ failure })
+        return
+      }
+      const kept = { ...get().kept }
+      const leftOut = { ...get().leftOut }
+      delete kept[course.id]
+      delete leftOut[course.id]
+      set({ kept, leftOut, panel: null })
+      await get().openCourses()
     },
 
     async build() {

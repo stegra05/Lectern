@@ -276,3 +276,32 @@ test('pictures of a course folder added whole', async () => {
     await app.close()
   }
 })
+
+test('pictures of the details with the goal and deleting the course', async () => {
+  await mkdir(out!, { recursive: true })
+  const { app, page } = await launch()
+  try {
+    await page.getByPlaceholder('sk-...').fill('sk-offline')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'New course' }).click()
+    await page.getByLabel('Name of the new course').fill('Entrepreneurship')
+    await page.keyboard.press('Enter')
+    const folder = await mkdtemp(join(tmpdir(), 'lectern-shots-'))
+    for (const [name, slides] of Object.entries(LECTURES))
+      await writeFile(join(folder, name), await makePdf(slides))
+    await page.getByLabel('Folder of lecture PDFs').setInputFiles(folder)
+    await page.getByRole('button', { name: 'Make my cards' }).click()
+    const status = page.getByRole('region', { name: 'Status' })
+    await expect(status).toContainText(/\d+ cards/, { timeout: 60_000 })
+    await status.getByRole('button', { name: 'Details' }).click()
+    const panel = page.getByRole('complementary')
+    await expect(panel.getByRole('heading', { name: 'I am aiming for' })).toBeVisible()
+    await page.waitForTimeout(500)
+    await shoot(page, '15-details-goal-delete')
+    await panel.getByRole('button', { name: 'Delete course' }).click()
+    await panel.getByRole('button', { name: 'Delete Entrepreneurship' }).scrollIntoViewIfNeeded()
+    await shoot(page, '16-details-delete-ask')
+  } finally {
+    await app.close()
+  }
+})
