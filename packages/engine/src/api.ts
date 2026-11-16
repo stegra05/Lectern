@@ -3,9 +3,10 @@
  * JSON. Today the caller is the command line or a test; later the app's channel or HTTP.
  */
 
+import PQueue from 'p-queue'
 import { z } from 'zod'
 import { build, estimateCourse } from './build.ts'
-import { CommandSchema, type Emit } from './commands.ts'
+import { CommandSchema, type Command, type Emit } from './commands.ts'
 import { send, sentCards } from './deliver.ts'
 import { withFields } from './cards/fields.ts'
 import { edit, remove, slots, write } from './edit.ts'
@@ -26,7 +27,60 @@ export interface Engine {
   run(command: unknown, emit: Emit): Promise<void>
 }
 
+/** The commands that write to a course. Every other command only reads, and never waits. */
+const WRITES: ReadonlySet<string> = new Set([
+  'build',
+  'add',
+  'move',
+  'send',
+  'edit',
+  'remove',
+  'write',
+] satisfies Command['type'][])
+
+/**
+ * One queue per course, so the commands that write to it run one after the other: each reads a
+ * file, waits on PDFs, Anki or the models, and writes the whole file back. The queues belong to
+ * no one engine, since the app and the tests make a new engine for every command.
+ */
+const queues = new Map<string, PQueue>()
+/** The courses whose cards are being made. A build takes minutes, so nothing waits behind it. */
+const building = new Set<string>()
+
+/** The course a command writes to, or null when it only reads. Its shape is checked as it runs. */
+function writesTo(command: unknown): string | null {
+  const { type, course } = (command ?? {}) as { type?: unknown; course?: unknown }
+  return typeof type === 'string' && WRITES.has(type) && typeof course === 'string' ? course : null
+}
+
 export function createEngine(ports: Ports): Engine {
+  const engine = direct(ports)
+  return {
+    async run(command, emit) {
+      const course = writesTo(command)
+      if (course === null) return engine.run(command, emit)
+      if (building.has(course)) {
+        return emit({
+          type: 'failed',
+          message: 'Lectern is making the cards of this course.',
+          fix: 'Wait until they are made, then try again.',
+        })
+      }
+      const isBuild = (command as { type: string }).type === 'build'
+      if (isBuild) building.add(course)
+      let queue = queues.get(course)
+      if (!queue) queues.set(course, (queue = new PQueue({ concurrency: 1 })))
+      try {
+        await queue.add(() => engine.run(command, emit))
+      } finally {
+        if (isBuild) building.delete(course)
+      }
+    },
+  }
+}
+
+/** Runs a command at once, whatever else runs on its course. */
+function direct(ports: Ports): Engine {
   return {
     async run(command, emit) {
       try {
