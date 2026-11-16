@@ -7,17 +7,23 @@
 | **Code**  | `packages/engine/src/cost.ts`, `ask.ts`, `adapters/openai.ts` |
 | **Detail**| [architecture, section 5](../architecture.md#5-where-money-is-spent-the-estimate-and-the-cap) |
 
-> **In one breath.** An estimate before the first paid call, a hard cap at three times that,
+> **In one breath.** An estimate before the first paid call, a cap at three times that,
 > OpenAI only, and 50 dollars for evals.
 
 ## Decision
 
 - **Estimate first.** `estimate` is a pure function of characters, slides, pictures, the goal
   and the price lists. It calls no model; the app shows it in euros, rounded up to a coarse step.
-- **Cap.** `max(3 × estimate, 0.25 dollars)`, or the command's own `--cap`. After every paid
-  call the meter is checked, and the build fails once the real cost is above the cap. The call
-  that passes it and the calls in flight, at most 31, are paid. The lectures finished by then
-  stay saved, so building again pays only for the rest.
+- **Cap.** `max(3 × estimate, 0.25 dollars)`, or the command's own `--cap`. The cap counts
+  calls in flight at their estimate: each call reserves its expected cost before it starts (its
+  input by the estimate's measures, its reply at the estimate's figure for that kind of call),
+  and the reservation is settled with the real cost when the call ends. A call that would take
+  what is spent plus what is reserved above the cap does not start, and the build fails. A run
+  can pass the cap only by how far the replies in flight run past their estimate, and a decision
+  request with more than 200 questions, whose input the provider is sent once per 200, by that
+  repeated input. A hard limit needs an output limit per call, which is open
+  ([#303](https://github.com/stegra05/Lectern/issues/303)). The lectures finished by then stay
+  saved, so building again pays only for the rest.
 - **A stopped run records its cost** in `runs/NNN.json` like any other run, marked `failed`.
 - **OpenAI only, for now.** Steffen has credits there. The Anthropic adapter was removed.
   The provider layer stays easy to swap for hosted keys later

@@ -1,10 +1,12 @@
 /**
  * The engine's two ways to spend money, wrapped once: every model call and every decision
- * request is metered and limited here, and the run stops when the real cost passes the cap.
+ * request is metered and limited here. A call starts only when what was spent, what the calls
+ * under way are expected to cost and its own expected cost stay within the cap.
  */
 
 import PQueue from 'p-queue'
 import { z } from 'zod'
+import { decisionReservation, modelReservation } from './cost.ts'
 import { EngineError } from './errors.ts'
 import type { Answer, DecisionRequest, ModelRequest, Ports, Usage } from './ports.ts'
 
@@ -51,28 +53,44 @@ export function createAsk(
   /** Stops new calls after a failure outside a call, and waits for the calls still running. */
   stop: (error: unknown) => Promise<void>
 } {
+  const capped = (why: string) =>
+    new EngineError(
+      `The run was stopped at ${meter.costUsd.toFixed(2)} dollars, ${why} its cap of ${capUsd.toFixed(2)} dollars.`,
+      'The lectures finished before the stop are saved. Build again to make the rest.',
+    )
   const spend = (usage: Usage) => {
     meter.inputTokens += usage.inputTokens
     meter.cachedInputTokens += usage.cachedInputTokens
     meter.outputTokens += usage.outputTokens
     meter.costUsd += usage.costUsd
-    if (meter.costUsd > capUsd) {
-      throw new EngineError(
-        `The run was stopped at ${meter.costUsd.toFixed(2)} dollars, above its cap of ${capUsd.toFixed(2)} dollars.`,
-        'The lectures finished before the stop are saved. Build again to make the rest.',
-      )
-    }
+    // Reached only when calls cost more than they reserved.
+    if (meter.costUsd > capUsd) throw capped('above')
   }
   // One queue for the whole build. After the first failure, a cap passed included, no call
   // starts, so a stopped run stops spending; calls already waiting fail with the same error.
   const queue = new PQueue({ concurrency: PARALLEL })
   let stopped: { error: unknown } | undefined
-  const limited = async <R>(call: () => Promise<R>, priority = 0): Promise<R> => {
+  // What the calls under way are expected to cost, held against the cap until each one ends.
+  let reserved = 0
+  const limited = async <R>(
+    call: () => Promise<R>,
+    reservation: number,
+    priority = 0,
+  ): Promise<R> => {
     try {
       return await queue.add(
-        () => {
+        async () => {
           if (stopped) throw stopped.error
-          return call()
+          if (meter.costUsd + reserved + reservation > capUsd) {
+            throw capped('as the next call could take it past')
+          }
+          reserved += reservation
+          try {
+            return await call()
+          } finally {
+            // Settled: the real cost is in the meter by now, failed calls included.
+            reserved -= reservation
+          }
         },
         { priority },
       )
@@ -88,6 +106,7 @@ export function createAsk(
     },
     async model(request, schema, priority) {
       const jsonSchema = replySchema(schema)
+      const reservation = modelReservation(request, ports.model.price)
       for (let attempt = 0; attempt < 2; attempt++) {
         const reply = await limited(
           () =>
@@ -99,6 +118,7 @@ export function createAsk(
                 spend(usage)
               },
             }),
+          reservation,
           priority,
         )
         const parsed = schema.safeParse(reply)
@@ -113,6 +133,7 @@ export function createAsk(
       if (request.questions.length === 0) return []
       const answers = await limited(
         () => ports.decisions.decide({ ...request, onUsage: spend }),
+        decisionReservation(request, ports.decisions.price),
         priority,
       )
       meter.decisions += request.questions.length
