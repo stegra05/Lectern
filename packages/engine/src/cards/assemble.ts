@@ -103,7 +103,7 @@ export function assemble(draft: Draft, place: Placement): CardFile {
   const slideImage = `<img src="l${two(lecture)}-s${two(draft.slide)}.png">`
   const provenance = {
     Lecture: two(lecture),
-    Topic: place.lecture.title,
+    Topic: escapeHtml(place.lecture.title),
     Source: !place.exam
       ? `Lecture ${lecture}, slide ${draft.slide}`
       : place.exam.fromSlides
@@ -119,7 +119,7 @@ export function assemble(draft: Draft, place: Placement): CardFile {
     Slide: place.exam?.fromSlides === false ? '' : slideImage,
     // No renderer yet: a diagram card shows its slide, the fallback of the field contract.
     Diagram: role === 'diagram' ? slideImage : '',
-    Key: place.concept.name,
+    Key: escapeHtml(place.concept.name),
   }
   const fields =
     spec.note === 'cloze'

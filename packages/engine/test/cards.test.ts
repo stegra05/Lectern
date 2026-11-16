@@ -136,6 +136,16 @@ describe('assemble', () => {
     expect(f.Back).toBe('An outcome with <mark>p &lt; 1</mark> &amp; H<sub>2</sub>O.')
   })
 
+  it('escapes the lecture title and the concept name like every other field', () => {
+    const f = assemble(draft({}), {
+      ...place,
+      lecture: { number: 2, title: 'T & <U>' },
+      concept: { id: 'x', name: 'a < b & c' },
+    }).fields
+    expect(f.Topic).toBe('T &amp; &lt;U&gt;')
+    expect(f.Key).toBe('a &lt; b &amp; c')
+  })
+
   it('sets a formula as display maths followed by its condition', () => {
     const f = fields({
       role: 'formula',
