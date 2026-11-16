@@ -205,6 +205,12 @@ describe('lecture files', () => {
       1, 2, 4,
     ])
     expect(assignNumbers([1, 2, 4], ['03 Opportunity.pdf'])).toEqual([3])
+    expect(assignNumbers([], ['3_Markets.pdf', 'Session 8.pdf'])).toEqual([3, 4])
+  })
+
+  it('do not read a year or a date at the start as a lecture number', () => {
+    expect(assignNumbers([1], ['2026 Entrepreneurship.pdf'])).toEqual([2])
+    expect(assignNumbers([], ['2026-03-01 Markets.pdf', '03.11.2025 Risk.pdf'])).toEqual([1, 2])
   })
 
   it('take the next number otherwise, and never one that is taken', () => {
