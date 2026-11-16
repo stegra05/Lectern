@@ -43,7 +43,7 @@ better only above that bar and with the deck no bigger, the answers no longer an
 no costlier. The papers of 2022 to 2024 are a dev set to tune on, the four newest the test set
 ([RFD 14](rfd/0014-the-quality-bar.md)).
 
-Engine tests: 274 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+Engine tests: 270 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 
