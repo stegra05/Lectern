@@ -88,6 +88,7 @@ Write one JSON file and nothing else, at the path you were told:
 }
 ```
 
-`paper` is the file name of the paper without its extension. `choices` is empty when the
+The example shows the first question only; a real file holds every question, also the six
+that its choice names. `paper` is the file name of the paper without its extension. `choices` is empty when the
 student answers everything. The marks of all questions must add up to `total`, counting of
 each choice only as many questions as the student answers. Do not edit any other file.

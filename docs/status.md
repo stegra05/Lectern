@@ -38,7 +38,7 @@ never saw (`bench.ts`), and against Steffen's reference deck (`refdeck.ts`). On 
 Entrepreneurship papers a build of 2026-11-15 with cards from the older papers holds 43.8% of
 the marks, a build from slides only 31.3% ([RFD 14](rfd/0014-the-quality-bar.md)).
 
-Engine tests: 249 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+Engine tests: 258 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 

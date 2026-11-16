@@ -38,6 +38,7 @@ import {
   type Card,
   type Rubric,
   type Standing,
+  VERDICTS,
   type Verdicts,
 } from './bench/score.ts'
 
@@ -68,8 +69,14 @@ async function json(path: string): Promise<unknown> {
   return JSON.parse(await readFile(path, 'utf8'))
 }
 
+const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
+
+/** The JSON files of a folder in order. A folder that does not exist yet has none. */
 async function files(folder: string): Promise<string[]> {
-  const names = await readdir(folder).catch(() => [])
+  const names = await readdir(folder).catch((error: unknown) => {
+    if (missing(error)) return [] as string[]
+    throw error
+  })
   return names.filter((name) => name.endsWith('.json')).sort()
 }
 
@@ -79,8 +86,18 @@ async function load(run: string): Promise<{ rubric: Rubric; cards: Card[]; verdi
   const cards = z
     .array(z.object({ id: z.string(), question: z.string(), answer: z.string() }))
     .parse(await json(join(run, 'cards.json')))
+  if (new Set(cards.map((card) => card.id)).size !== cards.length) {
+    throw new Error(`${run}: two cards of cards.json carry the same id.`)
+  }
   const kept = join(dirname(resolve(rubricPath!)), 'verdicts.json')
-  const verdicts = (await json(kept).catch(() => ({}))) as Verdicts
+  // Only a file that is not there yet is empty. A broken one stops the step: writing new
+  // verdicts over it would lose every verdict it held.
+  const verdicts: Verdicts = z.record(z.string(), z.enum(VERDICTS)).parse(
+    await json(kept).catch((error: unknown) => {
+      if (missing(error)) return {}
+      throw new Error(`${kept} cannot be read: ${(error as Error).message}`)
+    }),
+  )
   let added = 0
   for (const name of await files(join(run, 'verdicts'))) {
     const labels = z.array(LabelSchema).parse(await json(join(run, 'verdicts', name)))
@@ -94,8 +111,10 @@ async function load(run: string): Promise<{ rubric: Rubric; cards: Card[]; verdi
 }
 
 async function batches(run: string, size: number): Promise<void> {
+  if (!Number.isInteger(size) || size < 1) throw new Error('--size is a whole number above zero.')
   const { rubric, cards, verdicts } = await load(run)
-  const pairs = open(rubric.points, shortlist(rubric.points, cards, SHORTLIST), verdicts)
+  const short = shortlist(rubric.points, cards, SHORTLIST)
+  const pairs = open(rubric.points, short, verdicts)
   await rm(join(run, 'pairs'), { recursive: true, force: true })
   await mkdir(join(run, 'pairs'), { recursive: true })
   await mkdir(join(run, 'verdicts'), { recursive: true })
@@ -115,6 +134,10 @@ async function batches(run: string, size: number): Promise<void> {
   console.log(
     `${count} open pairs on ${pairs.length} of ${rubric.points.length} points, in ${Math.ceil(pairs.length / size)} batches`,
   )
+  const alone = rubric.points.filter((point) => short.get(point.id)!.length === 0)
+  if (alone.length > 0) {
+    console.log(`${alone.length} points share no word with any card and go unjudged as not held.`)
+  }
 }
 
 /** Where every point stands in a run. Fails while the shortlist has undecided pairs. */
@@ -129,16 +152,12 @@ async function judged(run: string): Promise<Standing[]> {
 
 const percent = (share: number) => `${(100 * share).toFixed(1)}%`
 
+/** A figure with its interval, or alone where the points span too few questions for one. */
 function line(name: string, list: Standing[]): string {
-  const { coverage, low, high } = score(list)
+  const { coverage, interval } = score(list)
   const held = list.filter((s) => s.verdict === 'same').length
-  return `${name}: ${percent(coverage)} of the marks (${percent(low)} to ${percent(high)}), ${held} of ${list.length} points`
-}
-
-/** One paper has too few questions for an interval: half its marks sit in one essay. */
-function plain(name: string, list: Standing[]): string {
-  const held = list.filter((s) => s.verdict === 'same').length
-  return `${name}: ${percent(score(list).coverage)} of the marks, ${held} of ${list.length} points`
+  const range = interval ? ` (${percent(interval[0])} to ${percent(interval[1])})` : ''
+  return `${name}: ${percent(coverage)} of the marks${range}, ${held} of ${list.length} points`
 }
 
 async function report(run: string): Promise<void> {
@@ -153,7 +172,7 @@ async function report(run: string): Promise<void> {
   }
   for (const paper of new Set(list.map((s) => s.point.paper))) {
     console.log(
-      plain(
+      line(
         `  ${paper}`,
         list.filter((s) => s.point.paper === paper),
       ),
@@ -168,14 +187,22 @@ async function compareRuns(first: string, second: string): Promise<void> {
   const b = await judged(second)
   console.log(line(first, a))
   console.log(line(second, b))
-  const { difference, low, high, gained, lost } = compare(a, b)
+  const { difference, interval, gained, lost } = compare(a, b)
   const sign = (share: number) => `${share >= 0 ? '+' : ''}${(100 * share).toFixed(1)}`
-  console.log(`Difference: ${sign(difference)} points of coverage (${sign(low)} to ${sign(high)})`)
-  console.log(
-    low > 0 || high < 0
-      ? 'The interval excludes zero.'
-      : 'The interval holds zero: no difference shown.',
-  )
+  if (interval) {
+    const [low, high] = interval
+    console.log(
+      `Difference: ${sign(difference)} points of coverage (${sign(low)} to ${sign(high)})`,
+    )
+    console.log(
+      low > 0 || high < 0
+        ? 'The interval excludes zero.'
+        : 'The interval holds zero: no difference shown.',
+    )
+  } else {
+    console.log(`Difference: ${sign(difference)} points of coverage`)
+    console.log('Too few questions for an interval: no difference shown.')
+  }
   for (const point of gained) console.log(`  gained ${point.id}: ${point.knows}`)
   for (const point of lost) console.log(`  lost   ${point.id}: ${point.knows}`)
 }
