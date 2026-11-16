@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { CourseFile, Decision, Event, Lecture, Run } from '../src/api.ts'
 import { SLIDES } from './fixtures.ts'
-import { pipeline } from './harness.ts'
+import { onlyLecture2Costs, pipeline } from './harness.ts'
 import { addSlides, snapshot } from './helpers.ts'
 
 const h = pipeline()
@@ -60,7 +60,7 @@ describe('building a course of two lectures, offline', () => {
     const checks = events.filter((e) => e.type === 'progress' && e.phase === 'check')
     expect(checks.map((e) => (e.type === 'progress' ? [e.done, e.total] : []))).toEqual([
       [4, 9],
-      [5, 9],
+      [6, 9],
       [7, 9],
       [9, 10],
       [9, 10],
@@ -187,7 +187,10 @@ describe('building a course of two lectures, offline', () => {
   it('reads every slide on its own with its picture, then sorts what it found in one call per lecture', () => {
     // Five slides in lecture 1, four in lecture 2.
     expect(calls('read')).toHaveLength(9)
-    const second = calls('read')[1]!
+    // Both lectures are read at once, so the calls interleave.
+    const second = calls('read').find(
+      (r) => r.context.startsWith('Lecture file: 01') && r.prompt.startsWith('Read slide 2 '),
+    )!
     expect(second.shown!.map((image) => image.slide)).toEqual([2])
     expect(second.images).toEqual([])
     expect(second.prompt).toMatch(/^Read slide 2 of this lecture\./)
@@ -429,9 +432,30 @@ describe('building a course of two lectures, offline', () => {
       costUsd: 0,
       costEur: 0,
       durationMs: expect.any(Number) as number,
-      // Writing and checking count once per lecture.
-      phaseMs: { read: 1000, map: 1000, write: 2000, check: 2000 },
+      phaseMs: expect.any(Object) as object,
+      steps: expect.any(Object) as object,
     })
+    // Every step is timed, and each call it made is counted with its time.
+    expect(Object.keys(run.steps).sort()).toEqual(
+      [
+        'slides',
+        'groups',
+        'kinds',
+        'worth',
+        'exams',
+        'fill',
+        'organisation',
+        'rewrite',
+        'save',
+      ].sort(),
+    )
+    const slides = run.steps.slides!
+    expect(slides.calls).toBeGreaterThan(0)
+    expect(slides.callMs).toBeGreaterThanOrEqual(slides.calls * 1000)
+    expect(slides.slowestMs).toBeLessThanOrEqual(slides.callMs)
+    expect(run.steps.save!.calls).toBe(0)
+    for (const phase of ['read', 'map', 'write', 'check'] as const)
+      expect(run.phaseMs[phase]).toBeGreaterThan(0)
     expect(run.inputTokens).toBeGreaterThan(0)
     expect(run.durationMs).toBeGreaterThan(0)
   })
@@ -655,8 +679,8 @@ describe('a build stopped at its cap, then built again', () => {
 
   beforeAll(async () => {
     await courseOf('01 Risk.pdf', '02 Effectuation.pdf')
-    // Lecture 1 is finished after 17 calls, 0.34 dollars. The first card of lecture 2 passes the cap.
-    stopped = await run({ type: 'build', course: 'course', capUsd: 0.35 }, { costPerCall: 0.02 })
+    // Lecture 1 is finished and saved, then the second card of lecture 2 passes the cap.
+    stopped = await run({ type: 'build', course: 'course', capUsd: 0.35 }, onlyLecture2Costs(0.2))
     lectures = await snapshot(join(h.root, 'course/lectures'))
     listed = await json<CourseFile>('course.json')
     again = await run({ type: 'build', course: 'course' })
@@ -665,7 +689,7 @@ describe('a build stopped at its cap, then built again', () => {
   it('keeps every lecture finished before the stop, and lists only those', async () => {
     expect(stopped.at(-1)).toEqual({
       type: 'failed',
-      message: 'The run was stopped at 0.36 dollars, above its cap of 0.35 dollars.',
+      message: 'The run was stopped at 0.40 dollars, above its cap of 0.35 dollars.',
       fix: 'The lectures finished before the stop are saved. Build again to make the rest.',
     })
     expect([...lectures.keys()].sort()).toEqual(['01/cards.yaml', '01/lecture.json'])

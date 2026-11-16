@@ -122,6 +122,22 @@ export interface Run {
   costEur: number
   durationMs: number
   phaseMs: Record<'read' | 'map' | 'write' | 'check', number>
+  /** Where the time went, step by step: see `StepTime`. */
+  steps: Record<string, StepTime>
+}
+
+/**
+ * The time of one step of a build, summed over every lecture it ran for; steps of different
+ * lectures overlap. A call's time includes its wait for a free place among the build's calls,
+ * so `callMs` over `ms` is how many calls were under way or waiting at once.
+ */
+export interface StepTime {
+  ms: number
+  /** Model calls and decision requests made in the step. */
+  calls: number
+  /** Their durations added up, waits included. */
+  callMs: number
+  slowestMs: number
 }
 
 export const paths = {

@@ -1,16 +1,33 @@
-import OpenAI from 'openai'
+import { createHash } from 'node:crypto'
+import OpenAI, { toFile } from 'openai'
 import { EngineError } from '../errors.ts'
 import { MAX_DECISION_IMAGES } from '../ports.ts'
+import { pace } from './pace.ts'
 import type { Answer, DecisionsPort, ModelPort, Question, SlideImage } from '../ports.ts'
 
 /** Dollars per million tokens. Above `longFrom` prompt tokens the long card prices the whole request. */
 const LUNA = 'gpt-6-luna'
 const PRICES: Record<
   string,
-  { input: number; cachedInput: number; output: number; longInput: number; longOutput: number }
+  {
+    input: number
+    cachedInput: number
+    output: number
+    longInput: number
+    longOutput: number
+    /** Fast mode, checked for gpt-6-luna on 2026-11-16: twice every rate. */
+    fast: number
+  }
 > = {
-  [LUNA]: { input: 0.1, cachedInput: 0.01, output: 0.5, longInput: 0.2, longOutput: 0.75 },
-  'gpt-6.1-terra': { input: 1, cachedInput: 0.05, output: 5, longInput: 2, longOutput: 7.5 },
+  [LUNA]: { input: 0.1, cachedInput: 0.01, output: 0.5, longInput: 0.2, longOutput: 0.75, fast: 2 },
+  'gpt-6.1-terra': {
+    input: 1,
+    cachedInput: 0.05,
+    output: 5,
+    longInput: 2,
+    longOutput: 7.5,
+    fast: 2,
+  },
 }
 const LONG_FROM = 272_000
 
@@ -21,6 +38,20 @@ const QUESTIONS_PER_REQUEST = 200
  * not end it. The SDK waits longer between each of these tries.
  */
 const RETRIES = 6
+/**
+ * The pictures of a lecture go with every call about it, megabytes a call: sent inline they made
+ * the upload the limit of a build (measured 2026-11-16, lecture 4 of Entrepreneurship: 14 MB a
+ * call). So the writing model gets each picture once, as a file that expires after a day, and a
+ * file is used for half of that at most.
+ */
+const FILE_SECONDS = 86_400
+/**
+ * What a call is counted at before it is answered: a slide picture at detail `auto` (measured
+ * 709 input tokens for one picture with a line of text), four characters a text token, and a
+ * margin for the reply.
+ */
+const PICTURE_TOKENS = 750
+const REPLY_TOKENS = 1000
 
 export interface OpenAIOptions {
   /** Defaults to the environment (`OPENAI_API_KEY`). */
@@ -36,6 +67,12 @@ const picture = (image: SlideImage) => ({
   image_url: `data:image/png;base64,${image.png}`,
   detail: 'auto' as const,
 })
+const uploaded = (fileId: string) => ({
+  type: 'input_image' as const,
+  file_id: fileId,
+  detail: 'auto' as const,
+})
+type Part = ReturnType<typeof picture> | ReturnType<typeof uploaded>
 const text = (value: string) => ({ type: 'input_text' as const, text: value })
 
 /**
@@ -43,11 +80,15 @@ const text = (value: string) => ({ type: 'input_text' as const, text: value })
  * prefix up to an explicit breakpoint, and only between calls with the same reply format and
  * reasoning effort (measured 2026-11-14 on gpt-6-luna).
  */
-function shared(context: string, images: SlideImage[], labelled: boolean) {
+function shared<P extends Part>(
+  context: string,
+  pictures: { slide: number; part: P }[],
+  labelled: boolean,
+) {
   const blocks = [
     text(context),
-    ...images.flatMap((image) =>
-      labelled ? [text(`Picture of slide ${image.slide}:`), picture(image)] : [picture(image)],
+    ...pictures.flatMap(({ slide, part }) =>
+      labelled ? [text(`Picture of slide ${slide}:`), part] : [part],
     ),
   ]
   const last = blocks.at(-1)!
@@ -70,47 +111,94 @@ export function openaiModel(model = LUNA, options: OpenAIOptions = {}): ModelPor
       `Use one of: ${Object.keys(PRICES).join(', ')}.`,
     )
   let client: OpenAI | undefined
+  const paced = pace()
+  const files = new Map<string, { id: Promise<string>; at: number }>()
+  /** The id of the picture as a file, uploaded on its first use. */
+  const fileOf = (openai: OpenAI, image: SlideImage): Promise<string> => {
+    const key = createHash('sha256').update(image.png).digest('hex')
+    const known = files.get(key)
+    if (known && Date.now() - known.at < (FILE_SECONDS * 1000) / 2) return known.id
+    const id = toFile(Buffer.from(image.png, 'base64'), `slide-${image.slide}.png`, {
+      type: 'image/png',
+    })
+      .then((file) =>
+        openai.files.create({
+          file,
+          purpose: 'user_data',
+          expires_after: { anchor: 'created_at', seconds: FILE_SECONDS },
+        }),
+      )
+      .then((file) => file.id)
+    files.set(key, { id, at: Date.now() })
+    // A failed upload is tried again by the next call that needs it.
+    id.catch(() => files.delete(key))
+    return id
+  }
   return {
     model,
     price,
     async complete(request) {
-      client ??= new OpenAI({ maxRetries: RETRIES, ...options })
-      const response = await client.responses
-        .create({
-          model,
-          instructions: request.system,
-          input: [
-            {
-              role: 'user',
-              content: [
-                ...shared(request.context, request.images, true),
-                ...(request.shown ?? []).flatMap((image) => [
-                  text(`Picture of slide ${image.slide}:`),
-                  picture(image),
-                ]),
-                text(request.prompt),
-              ],
+      const openai = (client ??= new OpenAI({ maxRetries: RETRIES, ...options }))
+      const pictures = await Promise.all(
+        request.images.map(async (image) => ({
+          slide: image.slide,
+          part: uploaded(await fileOf(openai, image)),
+        })),
+      ).catch((error: unknown) => {
+        throw explain(error)
+      })
+      const pictureCount = request.images.length + (request.shown?.length ?? 0)
+      const estimate =
+        Math.ceil((request.system.length + request.context.length + request.prompt.length) / 4) +
+        pictureCount * PICTURE_TOKENS +
+        REPLY_TOKENS
+      const response = await paced.run(estimate, async () => {
+        const { data, response } = await openai.responses
+          .create({
+            model,
+            instructions: request.system,
+            input: [
+              {
+                role: 'user',
+                content: [
+                  ...shared(request.context, pictures, true),
+                  ...(request.shown ?? []).flatMap((image) => [
+                    text(`Picture of slide ${image.slide}:`),
+                    picture(image),
+                  ]),
+                  text(request.prompt),
+                ],
+              },
+            ],
+            reasoning: { effort: request.effort },
+            text: {
+              format: { type: 'json_schema', name: 'reply', schema: request.schema, strict: true },
             },
-          ],
-          reasoning: { effort: request.effort },
-          text: {
-            format: { type: 'json_schema', name: 'reply', schema: request.schema, strict: true },
-          },
-          store: false,
-        })
-        .catch((error: unknown) => {
-          throw explain(error)
-        })
+            store: false,
+            ...(request.fast ? { service_tier: 'fast' as const } : {}),
+          })
+          .withResponse()
+          .catch((error: unknown) => {
+            throw explain(error)
+          })
+        // A key without the header is not limited by tokens.
+        const limit = Number(response.headers.get('x-ratelimit-limit-tokens') ?? Infinity)
+        const used = (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
+        return { reply: data, limit: Number.isFinite(limit) ? limit : Infinity, tokens: used }
+      })
       // The call is billed whatever it returned, so it is reported before anything can throw.
       const usage = response.usage
       const inputTokens = usage?.input_tokens ?? 0
       const cached = usage?.input_tokens_details.cached_tokens ?? 0
       const outputTokens = usage?.output_tokens ?? 0
       const long = inputTokens > LONG_FROM
+      // A call moved down to standard speed comes back as `default` and is billed as one.
+      const fast = response.service_tier === 'priority' || response.service_tier === 'fast'
       const dollars =
-        (inputTokens - cached) * (long ? price.longInput : price.input) +
-        cached * price.cachedInput +
-        outputTokens * (long ? price.longOutput : price.output)
+        ((inputTokens - cached) * (long ? price.longInput : price.input) +
+          cached * price.cachedInput +
+          outputTokens * (long ? price.longOutput : price.output)) *
+        (fast ? price.fast : 1)
       request.onUsage({
         inputTokens,
         cachedInputTokens: cached,
@@ -149,7 +237,8 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
         )
       }
       client ??= new OpenAI({ maxRetries: RETRIES, ...options })
-      const content = shared(request.context, request.images, true)
+      const pictures = request.images.map((image) => ({ slide: image.slide, part: picture(image) }))
+      const content = shared(request.context, pictures, true)
       const answers: Answer[] = []
       for (let start = 0; start < request.questions.length; start += QUESTIONS_PER_REQUEST) {
         const decision = await client.decisions

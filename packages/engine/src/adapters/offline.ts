@@ -107,7 +107,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 export function offlineModel(delayMs = 0): ModelPort {
   return {
     model: 'offline',
-    price: { input: 0, cachedInput: 0, output: 0 },
+    price: { input: 0, cachedInput: 0, output: 0, fast: 1 },
     async complete(request) {
       await wait(delayMs)
       const data = request.context.startsWith('Exam paper:')

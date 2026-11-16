@@ -60,7 +60,7 @@ const TOKENS = {
 
 export interface Prices {
   /** Dollars per million tokens of the writing model. */
-  model: { input: number; cachedInput: number; output: number }
+  model: { input: number; cachedInput: number; output: number; fast: number }
   /** Dollars per million input tokens of the decision model. Its answers cost nothing. */
   decisions: { input: number }
 }
@@ -114,8 +114,9 @@ export function estimate(
       ? 0
       : exams.chars * TOKENS.perChar * prices.model.input +
         questions * TOKENS.questionReply * prices.model.output +
-        questions * TOKENS.familyPerQuestion * prices.model.input +
-        questions * TOKENS.familyReplyPerQuestion * prices.model.output +
+        (questions * TOKENS.familyPerQuestion * prices.model.input +
+          questions * TOKENS.familyReplyPerQuestion * prices.model.output) *
+          prices.model.fast +
         families *
           (lectureSource * prices.model.cachedInput +
             TOKENS.answerPrompt * prices.model.input +
@@ -133,9 +134,10 @@ export function estimate(
       source * (prices.model.input + (lecture.slides - 1) * prices.model.cachedInput) +
       lecture.slides *
         (TOKENS.readPerSlide * prices.model.input + TOKENS.readReply * prices.model.output) +
-      // The facts sorted into topics and concepts, in one call over the lecture.
-      (source + TOKENS.groupPrompt + facts * TOKENS.groupPerFact) * prices.model.input +
-      facts * TOKENS.groupReplyPerFact * prices.model.output +
+      // The facts sorted into topics and concepts, in one call over the lecture, on the faster tier.
+      ((source + TOKENS.groupPrompt + facts * TOKENS.groupPerFact) * prices.model.input +
+        facts * TOKENS.groupReplyPerFact * prices.model.output) *
+        prices.model.fast +
       // Every card sees the whole lecture again, mostly from the provider's cache.
       source * (uncached * prices.model.input + (calls - uncached) * prices.model.cachedInput) +
       calls * (TOKENS.fillPrompt * prices.model.input + TOKENS.fillReply * prices.model.output) +

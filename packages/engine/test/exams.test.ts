@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { Decision, Event, Lecture } from '../src/api.ts'
 import type { ModelRequest } from '../src/ports.ts'
 import { EXAM, script, SLIDES } from './fixtures.ts'
-import { pipeline } from './harness.ts'
+import { onlyLecture2Costs, pipeline } from './harness.ts'
 import { addSlides, makePdf } from './helpers.ts'
 
 const h = pipeline()
@@ -108,7 +108,7 @@ describe('building again with a new past paper', () => {
     }
     return script(request)
   }
-  const price = { input: 1, cachedInput: 0.1, output: 4 }
+  const price = { input: 1, cachedInput: 0.1, output: 4, fast: 2 }
   const estimateOf = async () => {
     const [event] = await run({ type: 'estimate', course: 'course' }, { price })
     if (event?.type !== 'estimate') throw new Error('No estimate')
@@ -177,7 +177,7 @@ describe('past exams in a build that was stopped', () => {
     await mkdir(join(h.root, 'course', 'exams'), { recursive: true })
     await writeFile(join(h.root, 'course', 'exams', 'Winter 2025-26.pdf'), await makePdf([EXAM]))
     // Lecture 1 is finished when the cap is passed in lecture 2.
-    await run({ type: 'build', course: 'course', capUsd: 0.5 }, { costPerCall: 0.02 })
+    await run({ type: 'build', course: 'course', capUsd: 0.35 }, onlyLecture2Costs(0.2))
   })
 
   it('does not count the papers as read, since lecture 2 still waits for its questions', async () => {

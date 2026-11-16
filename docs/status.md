@@ -24,6 +24,12 @@ sending to a real Anki. One preset, `CONCEPT`, serves every course. How the code
 Each lecture is saved as soon as its cards are checked, so a stopped run keeps the lectures it
 finished and building again pays only for the rest.
 
+On the 11 Entrepreneurship decks with 18 past papers a build took 35 minutes four calls at a
+time and lecture after lecture; with the calls of all lectures in one queue, the pictures sent
+once as files, pacing to the key's tokens a minute and the faster tier for the maps, about 11
+minutes on the code before v3's cuts ([#199](https://github.com/stegra05/lectern/issues/199)).
+On a key of 2 million tokens a minute, writing the cards is held by that limit.
+
 Engine tests: 223 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App

@@ -181,7 +181,7 @@ describe('clashes', () => {
 
 describe('the estimate', () => {
   const prices = {
-    model: { input: 0.1, cachedInput: 0.01, output: 0.5 },
+    model: { input: 0.1, cachedInput: 0.01, output: 0.5, fast: 2 },
     decisions: { input: 0.1 },
   }
   const decks = Array.from({ length: 11 }, () => ({ chars: 12_800, slides: 32, images: 2 }))
@@ -202,7 +202,7 @@ describe('the estimate', () => {
   it('sets the cap at three times the estimate, and never under 25 cents', () => {
     const big = estimate(decks, 'top', {
       ...prices,
-      model: { input: 2, cachedInput: 0.2, output: 10 },
+      model: { input: 2, cachedInput: 0.2, output: 10, fast: 2 },
     })
     expect(big.capUsd).toBeCloseTo(CAP_MULTIPLE * big.costUsd)
     expect(estimate(decks.slice(0, 1), 'pass', prices).capUsd).toBe(CAP_FLOOR_USD)
@@ -226,7 +226,7 @@ describe('the estimate as the student sees it', () => {
   it('travels with every estimate', () => {
     const decks = [{ chars: 12_800, slides: 32, images: 2 }]
     const prices = {
-      model: { input: 0.1, cachedInput: 0.01, output: 0.5 },
+      model: { input: 0.1, cachedInput: 0.01, output: 0.5, fast: 2 },
       decisions: { input: 0.1 },
     }
     const one = estimate(decks, 'top', prices)

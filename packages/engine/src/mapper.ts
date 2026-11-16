@@ -121,5 +121,9 @@ export function askGroups(
   vocabulary: string[],
 ): Promise<Grouping> {
   const prompt = groupPrompt(facts, rules, vocabulary)
-  return ask({ task: 'map', system: SYSTEM, ...lecture, prompt, effort: 'medium' }, GroupSchema)
+  // The maps of a course go one after the other, so each one is asked on the faster tier.
+  return ask(
+    { task: 'map', system: SYSTEM, ...lecture, prompt, effort: 'medium', fast: true },
+    GroupSchema,
+  )
 }

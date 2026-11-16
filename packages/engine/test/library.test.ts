@@ -317,7 +317,7 @@ describe('a build that fails after the provider billed it', () => {
     const library = join(await tempRoot(), 'failing')
     const billed: ModelPort = {
       model: 'billed',
-      price: { input: 0, cachedInput: 0, output: 0 },
+      price: { input: 0, cachedInput: 0, output: 0, fast: 1 },
       complete(request) {
         request.onUsage({ inputTokens: 10, cachedInputTokens: 0, outputTokens: 5, costUsd: 0.01 })
         return Promise.reject(new EngineError('The model ran out of room.', 'Split the lecture.'))

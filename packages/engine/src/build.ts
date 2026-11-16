@@ -41,6 +41,7 @@ import {
   type Fact,
   type Lecture,
   type Run,
+  type StepTime,
 } from './course.ts'
 import {
   ask,
@@ -73,12 +74,15 @@ import { createWriter, type CardJob, type Slots, type Writer } from './writer.ts
 const REPAIRS = 2
 /** A card that is too long becomes at most this many atomic cards. */
 const SPLIT_INTO = 3
-/** Model calls that run at the same time in the write and check phases. */
-const PARALLEL = 4
+/** The priority of the calls on the one path every other step waits for: the maps in order. */
+const CHAIN = 1
 /** Why a card about the lecturer, dates or grading is dropped. No wording repairs such a fact. */
 const ORGANISATION = 'is about the organisation of the course, not its subject'
 
 type Phase = 'read' | 'map' | 'write' | 'check'
+/** The steps a run is timed by, in the order they first run. */
+type Step =
+  'slides' | 'groups' | 'kinds' | 'worth' | 'exams' | 'fill' | 'organisation' | 'rewrite' | 'save'
 
 /** A new lecture after reading: its text and its pictures, nothing judged yet. */
 interface ReadLecture {
@@ -165,6 +169,50 @@ interface Build {
   model: AskModel
   decide: Decide
   writer: Writer
+  steps: Partial<Record<Step, StepTime>>
+}
+
+/**
+ * The build with every model call it makes at this priority, unless a call names its own. The
+ * earlier lecture goes first, so lectures finish, and are saved, in course order while the
+ * later ones fill every free place.
+ */
+function ranked(b: Build, priority: number): Build {
+  const model: AskModel = (request, schema, own) => b.model(request, schema, own ?? priority)
+  const decide: Decide = (request, own) => b.decide(request, own ?? priority)
+  return { ...b, model, decide, writer: createWriter(model, preset) }
+}
+
+/**
+ * Runs `work` as the step `name`: its wall time and each model call it makes, through the
+ * `Build` it is handed, are added to the step's record.
+ */
+async function step<T>(b: Build, name: Step, work: (b: Build) => Promise<T>): Promise<T> {
+  const time = (b.steps[name] ??= { ms: 0, calls: 0, callMs: 0, slowestMs: 0 })
+  const { now } = b.ports
+  const clock = async <R>(call: () => Promise<R>): Promise<R> => {
+    const start = now()
+    try {
+      return await call()
+    } finally {
+      const ms = now() - start
+      time.calls++
+      time.callMs += ms
+      time.slowestMs = Math.max(time.slowestMs, ms)
+    }
+  }
+  const model: AskModel = (request, schema, priority) =>
+    clock(() => b.model(request, schema, priority))
+  const decide: Decide = (request, priority) =>
+    request.questions.length === 0
+      ? b.decide(request, priority)
+      : clock(() => b.decide(request, priority))
+  const start = now()
+  try {
+    return await work({ ...b, model, decide, writer: createWriter(model, preset) })
+  } finally {
+    time.ms += now() - start
+  }
 }
 
 /** What both `estimate` and `build` need first: the course, its new lectures, the estimate. */
@@ -291,7 +339,15 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   const capUsd = command.capUsd ?? estimated.capUsd
   emit({ type: 'estimate', ...estimated, capUsd })
   const { model, decide } = createAsk(ports, meter, capUsd)
-  const b: Build = { ports, emit, course, model, decide, writer: createWriter(model, preset) }
+  const b: Build = {
+    ports,
+    emit,
+    course,
+    model,
+    decide,
+    writer: createWriter(model, preset),
+    steps: {},
+  }
   phaseMs.read = ports.now() - readStart
   emit({ type: 'phase', phase: 'read', status: 'done', total: read.length })
 
@@ -321,6 +377,7 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       estimateUsd: estimated.costUsd,
       durationMs: ports.now() - startedAt,
       phaseMs,
+      steps: b.steps,
     }
     await writeJson(store, `${paths.runs(course)}/${String(run.run).padStart(3, '0')}.json`, run)
   }
@@ -328,11 +385,23 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   try {
     const before = await courseSoFar(b, existing)
 
-    // Map each lecture, label its facts, add the exam questions, plan the cards of all.
+    // Map each lecture, label its facts, add the exam questions, plan the cards of all. Slides
+    // and past papers are read all at once; only the map of a lecture waits for the lecture
+    // before it, since it names the concepts of the course as the earlier lectures did.
     const { lectures, exams, planned } = await phase('map', read.length, async () => {
+      const found = read.map((lecture, i) =>
+        begin(step(ranked(b, -i), 'slides', (b) => readSlides(b, lecture))),
+      )
+      // Past papers are needed only once every lecture is mapped, so they go last.
+      const papers = begin(
+        step(ranked(b, -read.length), 'exams', (b) => readPapers(b, freshPapers)),
+      )
       const lectures: OpenLecture[] = []
+      const labelled: Promise<void>[] = []
       for (const [i, lecture] of read.entries()) {
-        lectures.push(await mapLecture(b, lecture, before.earlier))
+        const open = await mapLecture(b, lecture, await found[i]!, before.earlier)
+        labelled.push(begin(labelFacts(ranked(b, -i), open)))
+        lectures.push(open)
         emit({
           type: 'progress',
           phase: 'map',
@@ -341,7 +410,9 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
           lecture: lecture.number,
         })
       }
-      const exams = await addExamAnswers(b, freshPapers, lectures)
+      // Exam families need every map, not the labels of its facts, so they start at once.
+      const exams = await step(b, 'exams', async (b) => addExamAnswers(b, await papers, lectures))
+      await Promise.all(labelled)
       return { lectures, exams, planned: planCards(lectures, goal) }
     })
 
@@ -360,35 +431,69 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       lectures.reduce((sum, lecture) => sum + lecture.slides, 0),
     )
 
-    // Write and check one lecture after the other, so the two phases overlap. A lecture is saved
-    // as soon as it is through. Identity is fixed by the plan, before a single word is written.
+    // Cards of all lectures are written and checked at once; clashes and saving go lecture by
+    // lecture, in course order, so the clash check sees every card before it and a stopped run
+    // keeps the lectures it finished. Identity is fixed by the plan, before a word is written.
     const nextId = createIds()
     const written = { done: 0, total: planned.length }
-    emit({ type: 'phase', phase: 'write', status: 'started', total: planned.length })
-    for (const [i, lecture] of lectures.entries()) {
-      const slots = planned.filter((slot) => slot.lecture === lecture)
-      const later = planned.filter((slot) => lectures.indexOf(slot.lecture) > i).length
-      const items = await timed('write', () => fillCards(b, slots, nextId, written))
-      if (i === lectures.length - 1)
-        emit({ type: 'phase', phase: 'write', status: 'done', total: planned.length })
-      if (i === 0) emit({ type: 'phase', phase: 'check', status: 'started', total: planned.length })
-
-      const settled = cardsDone() + done.dropped
-      const checked = await timed('check', async () => {
-        const checked = await checkCards(b, items, nextId, (passed, total) =>
-          emit({
-            type: 'progress',
-            phase: 'check',
-            done: cardsDone() + passed,
-            total: settled + total + later,
-          }),
-        )
-        dropClashes(saved.cards, checked)
-        return checked
+    // Cards in play per lecture, for one count of the check over the whole build.
+    const inPlay = new Map(
+      lectures.map((lecture) => [
+        lecture,
+        { passed: 0, total: planned.filter((slot) => slot.lecture === lecture).length },
+      ]),
+    )
+    const checkProgress = (lecture: OpenLecture, passed: number, total: number) => {
+      inPlay.set(lecture, { passed, total })
+      const counts = [...inPlay.values()]
+      emit({
+        type: 'progress',
+        phase: 'check',
+        done: counts.reduce((sum, c) => sum + c.passed, 0),
+        total: counts.reduce((sum, c) => sum + c.total, 0),
       })
-
-      done.lectures.push(await saveLecture(b, saved, lecture, checked, allowed))
-      done.dropped += checked.dropped.length
+    }
+    emit({ type: 'phase', phase: 'write', status: 'started', total: planned.length })
+    const writeStart = ports.now()
+    let checkStart: number | undefined
+    const filled = lectures.map((lecture, i) =>
+      begin(
+        step(ranked(b, -i), 'fill', (b) =>
+          fillCards(
+            b,
+            planned.filter((slot) => slot.lecture === lecture),
+            nextId,
+            written,
+          ),
+        ),
+      ),
+    )
+    const allWritten = begin(
+      Promise.all(filled).then(() => {
+        phaseMs.write = ports.now() - writeStart
+        emit({ type: 'phase', phase: 'write', status: 'done', total: planned.length })
+      }),
+    )
+    const checked = lectures.map((lecture, i) =>
+      begin(
+        filled[i]!.then((items) => {
+          if (checkStart === undefined) {
+            checkStart = ports.now()
+            emit({ type: 'phase', phase: 'check', status: 'started', total: planned.length })
+          }
+          return checkCards(ranked(b, -i), items, nextId, (passed, total) =>
+            checkProgress(lecture, passed, total),
+          )
+        }),
+      ),
+    )
+    for (const [i, lecture] of lectures.entries()) {
+      const lectureChecked = await checked[i]!
+      dropClashes(saved.cards, lectureChecked)
+      done.lectures.push(
+        await step(b, 'save', (b) => saveLecture(b, saved, lecture, lectureChecked, allowed)),
+      )
+      done.dropped += lectureChecked.dropped.length
       // The papers count as read once the last lecture is saved: a stopped run asks them again.
       if (i === lectures.length - 1) await saveExams(b, saved, exams)
       // `course.json` goes last: a lecture counts as built once it is listed there.
@@ -396,7 +501,9 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
         (x, y) => x.number - y.number,
       )
       await writeJson(store, paths.course(course), saved.file)
+      phaseMs.check = ports.now() - checkStart!
     }
+    await allWritten
     emit({ type: 'phase', phase: 'check', status: 'done', total: planned.length })
 
     await record(false)
@@ -432,37 +539,27 @@ async function courseSoFar(b: Build, existing: CourseFile | null) {
 }
 
 /**
- * One lecture mapped: read slide by slide, its facts sorted and settled into topics and
- * concepts, every fact given its kind and its worth. New concepts join `earlier`.
+ * One lecture mapped: the facts read from its slides sorted and settled into topics and
+ * concepts. New concepts join `earlier` at once, so the next lecture names them as this one does.
  */
 async function mapLecture(
   b: Build,
   lecture: ReadLecture,
+  found: Awaited<ReturnType<typeof readSlides>>,
   earlier: Vocabulary,
 ): Promise<OpenLecture> {
-  const source = {
-    context: slidesBlock(`Lecture file: ${lecture.file}`, lecture.text, lecture.images),
-    images: lecture.images,
-  }
+  const source = lectureSource(lecture)
   const ctx = {
     slides: lecture.text.length,
     earlier,
     fallbackTitle: titleFromFile(lecture.file, lecture.number),
   }
   const vocabulary = [...earlier.values()].map((concept) => concept.name)
-  const found = await readSlides(b, lecture)
-  const grouping = await askGroups(b.model, source, found, preset.mapRules, vocabulary)
+  const grouping = await step(ranked(b, CHAIN), 'groups', (b) =>
+    askGroups(b.model, source, found, preset.mapRules, vocabulary),
+  )
   const settled = settleMap(fromGroups(found, grouping, factId), ctx)
-
-  // The kind of each fact, closed questions over the lecture.
-  const concepts = settled.topics.flatMap((t) => t.concepts)
-  const facts = concepts.flatMap((concept) => concept.facts)
-  const kinds = await kindsOf(b, source, facts)
-  facts.forEach((fact, f) => {
-    fact.kind = chosen(kinds[f], FACT_KINDS, 'definition')
-  })
-  await askWorth(b, concepts)
-  for (const concept of concepts) {
+  for (const concept of settled.topics.flatMap((t) => t.concepts)) {
     if (!earlier.has(concept.id))
       earlier.set(concept.id, { name: concept.name, lecture: lecture.number })
   }
@@ -483,6 +580,30 @@ async function mapLecture(
   }
 }
 
+/** The lecture with its pictures, as the map and the questions about its facts see it. */
+const lectureSource = (lecture: ReadLecture) => ({
+  context: slidesBlock(`Lecture file: ${lecture.file}`, lecture.text, lecture.images),
+  images: lecture.images,
+})
+
+/**
+ * The kind and the worth of every fact of a mapped lecture. Nothing later in the map needs
+ * them, so they run while the next lecture is mapped.
+ */
+async function labelFacts(b: Build, lecture: OpenLecture): Promise<void> {
+  const concepts = lecture.topics.flatMap((t) => t.concepts)
+  const facts = concepts.flatMap((concept) => concept.facts)
+  await Promise.all([
+    step(b, 'kinds', async (b) => {
+      const kinds = await kindsOf(b, lectureSource(lecture), facts)
+      facts.forEach((fact, f) => {
+        fact.kind = chosen(kinds[f], FACT_KINDS, 'definition')
+      })
+    }),
+    step(b, 'worth', (b) => askWorth(b, concepts)),
+  ])
+}
+
 /**
  * Every slide of a lecture read on its own, with its picture. The first slide goes ahead and
  * fills the provider's cache with the lecture; the rest read it there.
@@ -496,7 +617,7 @@ async function readSlides(b: Build, lecture: ReadLecture) {
     image: lecture.pictures[s]!,
   })
   const first = await askSlide(b.model, context, slide(0), preset.mapRules)
-  const rest = await pool(all.slice(1), (n) =>
+  const rest = await each(all.slice(1), (n) =>
     askSlide(b.model, context, slide(n - 1), preset.mapRules),
   )
   return [first, ...rest].flat()
@@ -529,7 +650,7 @@ async function kindsOf(b: Build, source: { context: string; images: SlideImage[]
 
 /** How much each fact is worth learning, each fact as the whole input of its own request. */
 async function askWorth(b: Build, concepts: Concept[]): Promise<void> {
-  await pool(
+  await each(
     concepts.flatMap((concept) => concept.facts.map((fact) => ({ concept, fact }))),
     async ({ concept, fact }) => {
       const [answer] = await b.decide({
@@ -543,20 +664,28 @@ async function askWorth(b: Build, concepts: Concept[]): Promise<void> {
   )
 }
 
+/** Past papers not read before, read into their questions. It needs no map, so it runs early. */
+async function readPapers(b: Build, fresh: Paper[]): Promise<ExamsFile['papers']> {
+  return each(fresh, async ({ name, pages }) => ({
+    file: name,
+    questions: await askQuestions(b.model, name.replace(/\.pdf$/i, ''), pages),
+  }))
+}
+
 /**
- * Past exams: the papers not read before, read into their questions, then the questions sorted
- * into families, each answered as a fact of the lecture it belongs to. Saved with the course.
+ * Past exams: the questions of the papers just read sorted into families, each answered as a
+ * fact of the lecture it belongs to. Saved with the course.
  */
-async function addExamAnswers(b: Build, fresh: Paper[], lectures: OpenLecture[]): Promise<Exams> {
+async function addExamAnswers(
+  b: Build,
+  papers: ExamsFile['papers'],
+  lectures: OpenLecture[],
+): Promise<Exams> {
   const { store } = b.ports
   const saved: ExamsFile = (await readJson<ExamsFile>(store, paths.examsFile(b.course))) ?? {
     papers: [],
   }
   const tally = { questions: 0, papers: 0, families: 0, fromSlides: 0 }
-  const papers = await pool(fresh, async ({ name, pages }) => ({
-    file: name,
-    questions: await askQuestions(b.model, name.replace(/\.pdf$/i, ''), pages),
-  }))
   const file: ExamsFile = { papers: [...saved.papers, ...papers] }
   const questions = papers.flatMap((paper) => paper.questions)
   if (questions.length === 0) return { file, tally }
@@ -567,7 +696,7 @@ async function addExamAnswers(b: Build, fresh: Paper[], lectures: OpenLecture[])
     concepts: l.topics.flatMap((t) => t.concepts).map((c) => c.name),
   }))
   const families = await askFamilies(b.model, questions, places)
-  const answered = await pool(families, async (family) => {
+  const answered = await each(families, async (family) => {
     const lecture = lectures.find((l) => l.number === family.lecture)!
     const answer = await askAnswer(b.model, lecture, family)
     return { family, lecture, answer }
@@ -579,10 +708,10 @@ async function addExamAnswers(b: Build, fresh: Paper[], lectures: OpenLecture[])
     added.set(lecture, [...(added.get(lecture) ?? []), fact])
   }
   // The kind of each answer, as for every other fact.
-  for (const [lecture, facts] of added) {
+  await each([...added], async ([lecture, facts]) => {
     const kinds = await kindsOf(b, lecture, facts)
     facts.forEach((fact, f) => (fact.kind = chosen(kinds[f], FACT_KINDS, 'definition')))
-  }
+  })
   const all = [...added.values()].flat()
   Object.assign(tally, {
     questions: questions.length,
@@ -663,8 +792,8 @@ async function fillCards(
     if (!first.has(key)) first.set(key, item)
   }
   const ahead = new Set(first.values())
-  await pool([...ahead], fill)
-  await pool(
+  await each([...ahead], fill)
+  await each(
     drafted.filter((item) => !ahead.has(item)),
     fill,
   )
@@ -737,17 +866,19 @@ function passesRules(item: Item): boolean {
  * organisation of the course is marked at once: no wording repairs such a fact.
  */
 async function checkOrganisation(b: Build, passing: Item[]): Promise<void> {
-  await pool(passing, async (item) => {
-    const { question, answer } = questionAndAnswer(item.card!)
-    const [verdict] = await b.decide({
-      context: cardInput(question, answer),
-      images: [],
-      questions: [ask.organisation()],
-    })
-    const p = probability(verdict)
-    if (p === null || p < ORGANISATION_THRESHOLD) return
-    item.problems = [ORGANISATION]
-  })
+  await step(b, 'organisation', (b) =>
+    each(passing, async (item) => {
+      const { question, answer } = questionAndAnswer(item.card!)
+      const [verdict] = await b.decide({
+        context: cardInput(question, answer),
+        images: [],
+        questions: [ask.organisation()],
+      })
+      const p = probability(verdict)
+      if (p === null || p < ORGANISATION_THRESHOLD) return
+      item.problems = [ORGANISATION]
+    }),
+  )
 }
 
 /**
@@ -760,12 +891,14 @@ async function rewrite(
   nextId: NextId,
   dropped: Item[],
 ): Promise<Item[]> {
-  const parts = await pool(failing, async (item) => {
-    if (!item.part && tooLong(draftOf(item)))
-      return b.writer.split(job(item), item.slots, item.problems)
-    item.slots = await b.writer.repair(job(item), item.slots, item.problems)
-    return null
-  })
+  const parts = await step(b, 'rewrite', (b) =>
+    each(failing, async (item) => {
+      if (!item.part && tooLong(draftOf(item)))
+        return b.writer.split(job(item), item.slots, item.problems)
+      item.slots = await b.writer.repair(job(item), item.slots, item.problems)
+      return null
+    }),
+  )
   return failing.flatMap((item, i) => {
     const split = parts[i]
     if (!split) return [item]
@@ -965,25 +1098,16 @@ async function sha256(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/** `work` over every item at once, results in order. `createAsk` limits the model calls. */
+function each<T, R>(items: T[], work: (item: T) => Promise<R>): Promise<R[]> {
+  return Promise.all(items.map((item) => work(item)))
+}
+
 /**
- * Runs `work` over all items, a few at a time, and keeps the order of the results. After the
- * first failure no further item is started, so a stopped run stops spending.
+ * `work` started now, to be awaited later. Its failure is kept for whoever awaits it, and is
+ * never an unhandled rejection in between.
  */
-async function pool<T, R>(items: T[], work: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = []
-  let next = 0
-  let failed = false
-  const worker = async () => {
-    while (next < items.length && !failed) {
-      const i = next++
-      try {
-        results[i] = await work(items[i]!)
-      } catch (error) {
-        failed = true
-        throw error
-      }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(PARALLEL, items.length) }, worker))
-  return results
+function begin<T>(work: Promise<T>): Promise<T> {
+  void work.catch(() => undefined)
+  return work
 }

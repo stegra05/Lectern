@@ -16,7 +16,7 @@
   and the price lists. It calls no model; the app shows it in euros, rounded up to a coarse step.
 - **Cap.** `max(3 × estimate, 0.25 dollars)`, or the command's own `--cap`. After every paid
   call the meter is checked, and the build fails once the real cost is above the cap. The call
-  that passes it and the calls in flight, at most four, are paid. The lectures finished by then
+  that passes it and the calls in flight, at most 31, are paid. The lectures finished by then
   stay saved, so building again pays only for the rest.
 - **A stopped run records its cost** in `runs/NNN.json` like any other run, marked `failed`.
 - **OpenAI only, for now.** Steffen has credits there. The Anthropic adapter was removed.
@@ -27,6 +27,14 @@
   environment variable, never from a file.
 - **The prompt cache is set on purpose**: an explicit breakpoint, the same reply form and
   effort, and the first card of each type runs ahead to fill the cache.
+- **Calls are paced to the key's tokens a minute.** A key's limit counts cached input too, so
+  caching lowers the bill, not the ceiling. The writing model's calls wait until the last
+  minute leaves room, at 90 percent of the limit the provider reports with its first answer.
+  On the eval key (5,000 requests and 2 million tokens a minute, measured 2026-11-16) a build
+  sent without pacing was stopped by rate limits ([#199](https://github.com/stegra05/lectern/issues/199)).
+- **The calls everything waits for go on the faster tier**: sorting a lecture's facts and the
+  exam families, at twice the price (fast mode, checked for `gpt-6-luna` on 2026-11-16), for
+  about 2 cents more a build and 3 minutes less.
 
 ## Why
 
@@ -44,7 +52,8 @@ spent on it shows.
 - Prices are constants from v2, never checked against an OpenAI bill. Cached decision input is
   priced at the full rate as an upper bound.
 - Whether `gpt-6-luna` accepts an effort below `low`.
-- Rate limits beyond four parallel calls on one account.
+- Whether the Decisions API shares the writing model's tokens a minute. It is not paced; no
+  decision request has been limited so far.
 
 ## Open
 
