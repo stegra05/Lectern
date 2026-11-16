@@ -344,7 +344,7 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   }
   const capUsd = command.capUsd ?? estimated.capUsd
   emit({ type: 'estimate', ...estimated, capUsd })
-  const { model, decide } = createAsk(ports, meter, capUsd)
+  const { model, decide, stop } = createAsk(ports, meter, capUsd)
   const b: Build = {
     ports,
     emit,
@@ -522,7 +522,9 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       durationMs: ports.now() - startedAt,
     })
   } catch (error) {
-    // A stopped run keeps the lectures it saved, and its record says what it cost.
+    // A stopped run keeps the lectures it saved, and its record says what it cost, the calls
+    // still running when it failed included.
+    await stop(error)
     await record(true).catch(() => undefined)
     throw error
   }
