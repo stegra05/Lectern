@@ -139,6 +139,11 @@ export async function edit(
   const concept = conceptOf(tree, old.concept)
   const card = await build(ports, command, entry.file, tree, concept, old, command.slots)
   if (Array.isArray(card)) return emit({ type: 'refused', problems: card })
+  // A past-exam card keeps what the exams and its slides gave it, whatever the new wording.
+  if (old.fields.Asked) {
+    for (const name of ['Asked', 'Source', 'Slide', 'Excerpt'])
+      card.fields[name] = old.fields[name]!
+  }
   // Anki first: when it is closed nothing changes, here or there.
   await updateSent(ports, command.course, card)
   cards[at] = card
