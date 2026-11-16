@@ -3,7 +3,7 @@
  * usable: code closes every gap itself.
  */
 
-import { slug } from './cards/words.ts'
+import { conceptId } from './cards/words.ts'
 import type { Concept, LeftOut, Topic } from './course.ts'
 
 export const TITLE_CHARS = 32
@@ -112,7 +112,7 @@ export function settleMap(out: MapOutput, ctx: MapContext): Settled {
           ...(Number.isInteger(fact.items) && fact.items > 0 ? { items: fact.items } : {}),
         }))
       if (facts.length === 0) continue
-      const id = slug(name) || `concept-${byId.size + 1}`
+      const id = conceptId(name)
       // A concept named twice is one concept: the later facts join the first.
       const first = byId.get(id)
       if (first) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { assemble, excerpt, type Placement } from '../src/cards/assemble.ts'
 import { cardId } from '../src/cards/id.ts'
 import type { Draft } from '../src/cards/roles.ts'
-import { slideRange, slug, words } from '../src/cards/words.ts'
+import { conceptId, slideRange, slug, words } from '../src/cards/words.ts'
 
 const QA_FIELDS = [
   'Front',
@@ -222,6 +222,19 @@ describe('text helpers', () => {
     expect(slug('Bird in hand')).toBe('bird-in-hand')
     expect(slug('  Bellman-Ford (1958) ')).toBe('bellman-ford-1958')
     expect(slug('Café crème')).toBe('cafe-creme')
+    expect(slug('Риск Неопределённость')).toBe('риск-неопределённость')
+    expect(slug('α-Fehler')).toBe('α-fehler')
+  })
+
+  it('conceptId keeps symbols apart, and the same name the same id', () => {
+    const ids = ['C', 'C++', 'C#', 'p < 0.05', 'p > 0.05', 'α-Fehler', 'β-Fehler', 'Σ'].map(
+      conceptId,
+    )
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(conceptId('  c++ ')).toBe(conceptId('C++'))
+    expect(conceptId('Bird in hand')).toBe('bird-in-hand')
+    expect(conceptId('++')).toMatch(/^[0-9a-f]{6}$/)
+    for (const id of ids) expect(id).not.toMatch(/\s/)
   })
 
   it('words counts prose with a bare < or > and skips tags', () => {
