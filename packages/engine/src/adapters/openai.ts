@@ -205,18 +205,36 @@ export function openaiModel(model = LUNA, options: OpenAIOptions = {}): ModelPor
         outputTokens,
         costUsd: dollars / 1_000_000,
       })
-      if (response.status === 'incomplete') {
-        const filtered = response.incomplete_details?.reason === 'content_filter'
+      // A refusal is a completed reply whose content part is a refusal, with no text.
+      const refused = response.output.some(
+        (item) => item.type === 'message' && item.content.some((part) => part.type === 'refusal'),
+      )
+      if (refused || response.incomplete_details?.reason === 'content_filter') {
         throw new EngineError(
-          filtered
-            ? 'The model declined to work on these slides.'
-            : 'The model ran out of room before it finished.',
-          filtered
-            ? 'Leave this lecture out and build again.'
-            : 'Split the lecture into smaller PDFs.',
+          'The model declined to work on these slides.',
+          'Leave this lecture out and build again.',
         )
       }
-      return JSON.parse(response.output_text) as unknown
+      if (response.status === 'incomplete') {
+        throw new EngineError(
+          'The model ran out of room before it finished.',
+          'Split the lecture into smaller PDFs.',
+        )
+      }
+      if (response.status !== 'completed') {
+        throw new EngineError(
+          `OpenAI could not finish the answer${response.error ? `: ${response.error.message}` : '.'}`,
+          'Build again in a few minutes.',
+        )
+      }
+      try {
+        return JSON.parse(response.output_text) as unknown
+      } catch {
+        throw new EngineError(
+          'The model sent an answer that could not be read.',
+          'Build again. If it happens again, leave this lecture out.',
+        )
+      }
     },
   }
 }
@@ -311,6 +329,14 @@ function explain(error: unknown): Error {
     )
   }
   if (error instanceof OpenAI.APIError) {
+    // Waiting does not change a request that OpenAI rejected for what it contains.
+    const status = Number(error.status)
+    if (status >= 400 && status < 500 && status !== 408 && status !== 409) {
+      return new EngineError(
+        `OpenAI rejected the request: ${error.message}`,
+        'Building again will not change this. Leave this lecture out, or split it into smaller PDFs.',
+      )
+    }
     return new EngineError(
       `OpenAI answered with an error: ${error.message}`,
       'Build again in a few minutes.',
