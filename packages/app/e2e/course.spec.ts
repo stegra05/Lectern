@@ -15,7 +15,7 @@ let launched: Launched
 
 test.beforeAll(async () => {
   // A short delay per model call keeps the run on screen long enough to be seen.
-  launched = await launch({ delayMs: 80 })
+  launched = await test.step('launch the app', () => launch({ delayMs: 80 }))
 })
 
 test.afterAll(async () => {
