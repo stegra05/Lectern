@@ -33,7 +33,12 @@ its own slides' pictures, 6.4 to 7.1 minutes for about 39 cents. On v3 itself, a
 minutes for 42 cents and 661 cards. The map of the lectures, one after the other, is now most of
 the time.
 
-Engine tests: 223 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+The eval (`packages/engine/eval`) scores a deck two ways: on the marks of past papers its build
+never saw (`bench.ts`), and against Steffen's reference deck (`refdeck.ts`). On the four newest
+Entrepreneurship papers a build of 2026-11-15 with cards from the older papers holds 43.8% of
+the marks, a build from slides only 31.3% ([RFD 14](rfd/0014-the-quality-bar.md)).
+
+Engine tests: 249 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 
@@ -58,6 +63,9 @@ card arrived tagged `::own`.
 - Past papers added after a course's lectures are built change no card already made; they count
   only for lectures built later. Answers the model wrote are not checked against the readings.
 - The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
+- The exam rubric is model-made and no person has checked it
+  ([#264](https://github.com/stegra05/lectern/issues/264)). It exists for one course, and v3 as
+  it stands today has not been scored on it: both scored builds are from 2026-11-15.
 - The release workflow has not run: only a pushed `v3.*` tag tests it. The Windows and Linux
   installers have not been built. The macOS installer is arm64 only and signed ad hoc, so a
   downloaded copy is quarantined by Gatekeeper; nothing is signed or notarised

@@ -1,25 +1,69 @@
-# RFD 14 · The quality bar is Steffen's own deck
+# RFD 14 · The quality bar is the marks of unseen papers, then Steffen's own deck
 
-|           |                                                                   |
-| --------- | ----------------------------------------------------------------- |
-| **State** | decided, measurement ongoing                                      |
-| **Date**  | 2026-11-13, measured 2026-11-14 to 2026-11-16                     |
-| **Code**  | `packages/engine/eval/refdeck.ts`, judge rules in `eval/JUDGE.md` |
+|           |                                                                                   |
+| --------- | --------------------------------------------------------------------------------- |
+| **State** | decided, measurement ongoing                                                      |
+| **Date**  | 2026-11-13, measured 2026-11-14 to 2026-11-16, exam measure decided 2026-11-16    |
+| **Code**  | `packages/engine/eval/bench.ts` (exam marks), `eval/refdeck.ts` (reference deck) |
 
-> **In one breath.** Run the engine on the 11 Entrepreneurship decks and hold the result
-> against the 636 notes Steffen vetted for the same course. Form is already fine. Coverage is
-> the gap.
+> **In one breath.** A deck is scored on the marks of past papers its build never saw. Steffen's
+> own 636 notes for Entrepreneurship stay as the second measure and as the deck of the blind
+> comparison. Form is already fine. Coverage is the gap.
 
 ## Decision
 
-The reference is Steffen's Entrepreneurship deck: 636 vetted notes for 11 slide decks (356
-slides), made with a strong model. Its atomic pass took 178 cards to 636 and the average
-answer from 59 words to 11.6. The eval exports it from Anki and a judge (Claude Sonnet since 2026-11-16, Claude Haiku before, spot-checked by hand) decides
-for each reference note whether a run has the same fact, only the concept, or nothing. Every engine change that claims better cards is
-measured this way, and v3.0 is done only after a blind comparison by a person
+**The headline is exam marks.** The newest papers of a course are held back from the build and
+read once into knowledge points: one fact a student must know, with the marks it earns. A judge
+decides for one point and one card at a time whether the card holds the point, and the score is
+the share of the marks the deck holds, counted as the paper pays (a question pays at most its
+marks, and of "five of these six" only the best five count). Every engine change that claims
+better cards is measured this way, as a paired comparison on the same points.
+
+Why not the reference deck alone: there is one good deck, its 636 notes were chosen from the
+very exams the engine also reads, a third of them are not on the slides, and the preset was
+shaped on the same course. Past papers exist for most courses, and the held-back ones are
+unseen by construction.
+
+**The reference deck stays second.** Steffen's Entrepreneurship deck: 636 vetted notes for 11
+slide decks (356 slides), made with a strong model. Its atomic pass took 178 cards to 636 and
+the average answer from 59 words to 11.6. The eval exports it from Anki and a judge (Claude
+Sonnet since 2026-11-16, Claude Haiku before, spot-checked by hand) decides for each reference
+note whether a run has the same fact, only the concept, or nothing. v3.0 is done only after a
+blind comparison by a person against this deck
 ([#137](https://github.com/stegra05/lectern/issues/137)).
 
-## What the measurements say
+## Marks of unseen papers
+
+The test set is the four newest Entrepreneurship papers (Winter 24/25 to Summer 26, 60 marks
+each): 218 knowledge points, 181 to recall and 37 to apply to a case. Measured 2026-11-16 on
+two builds of 2026-11-15 (`gpt-6-luna`, goal top), judged by Claude Haiku:
+
+| Build                                  | Cards | Marks held | 95% interval | Points held |
+| -------------------------------------- | ----- | ---------- | ------------ | ----------- |
+| Slides only                            | 631   | 31.3%      | 23.7 to 37.2 | 56 of 218   |
+| With cards from the 18 older papers    | 633   | 43.8%      | 38.0 to 51.1 | 80 of 218   |
+
+- **The measure sees a known gain.** The paired difference is 12.5 points of coverage (6.8 to
+  21.7): 35 points gained, 11 lost. The lost ones are facts the slides state that one build
+  wrote a card for and the other did not.
+- **Two ceilings.** A deck that held every recall point would hold 83.8% of the marks: the
+  rest is application to a case, which no card holds. A deck that held every recall point the
+  slides state would hold 39.8%. Cards from older papers are what lifts a build above that.
+- **Where the misses are.** Of the 138 points the better build misses, 120 have a card on the
+  concept that lacks the fact, and 18 have nothing.
+- **How far to believe it.** One build is known to about 6.5 points either way, a paired
+  difference to about 7. Two judges on the same 240 pairs agree on 93% (kappa 0.88) and on 29 of
+  30 points. A rubric whose points bundled several facts scored the same deck at 35.2% and let
+  the judges part on 2 of 27 points, so a point is one fact.
+- **What is model-made.** The papers have no official solutions. One Claude Sonnet reading per
+  paper wrote the points, a second independent reading of one paper agreed on all five multiple
+  choice answers and on the substance of the open questions, and the marks inside an open
+  question are an allocation, not the examiner's. Steffen has not yet checked the rubric
+  ([#264](https://github.com/stegra05/lectern/issues/264)).
+- **What a judging costs.** About 130,000 Haiku tokens per batch of 30 points, 780,000 for a
+  whole deck.
+
+## What the reference deck says
 
 **Form is fine.** No hard-limit violation in any full run. Questions average about 10 words,
 answers about 10.5 (reference 11.6).
@@ -65,12 +109,15 @@ gains need several runs per variant, or a paired comparison on the notes both ru
 
 ## Test courses
 
-Entrepreneurship is the reference. Grundlagen Datenbanken and Operations Research test the
-formula and programming presets ([RFD 7](0007-presets.md)). Datenbanken has a deck from AnkiTUM
-as a reference, judged weak: about 140 cards, not atomic, for 9 of 21 chapters.
+Entrepreneurship is the reference, and the only course with a rubric so far. Grundlagen
+Datenbanken and Operations Research test the formula and programming presets
+([RFD 7](0007-presets.md)), and both have past papers on disk, as does Grundlagen Rechnernetze
+with official solutions. Datenbanken has a deck from AnkiTUM as a reference, judged weak: about
+140 cards, not atomic, for 9 of 21 chapters.
 
 ## Open
 
 - The blind comparison: [#137](https://github.com/stegra05/lectern/issues/137).
 - Coverage at the fact level: [#108](https://github.com/stegra05/lectern/issues/108).
 - Facts only in pictures: [#106](https://github.com/stegra05/lectern/issues/106).
+- The exam rubric checked by Steffen: [#264](https://github.com/stegra05/lectern/issues/264).
