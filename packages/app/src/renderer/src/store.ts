@@ -290,7 +290,11 @@ export const useStore = create<State>((set, get) => {
       const before = get().leftOut[course.id] ?? []
       const sent = new Set(visible.map((p) => p.path))
       const list = problem ? before : [...before.filter((l) => !sent.has(l.path)), ...left]
-      set({ addProblem: problem, leftOut: { ...get().leftOut, [course.id]: list } })
+      // The problem belongs to the course the files went to, not to the one open by now.
+      set({
+        addProblem: open === course.id ? problem : get().addProblem,
+        leftOut: { ...get().leftOut, [course.id]: list },
+      })
       const view = await refresh(course.id)
       if (view && (view.pending.length > 0 || list.length > 0)) {
         set({ panel: 'setup', view: { level: 'course' } })
@@ -298,7 +302,7 @@ export const useStore = create<State>((set, get) => {
     } finally {
       set({ adding: null })
     }
-    await estimate()
+    if (open === course.id) await estimate()
   }
 
   async function deliver(): Promise<void> {
@@ -344,17 +348,27 @@ export const useStore = create<State>((set, get) => {
     if (!editor || !course || editor.busy) return
     set({ editor: { ...editor, busy: true, problems: [] } })
     const events = await ask(command)
+    // The answer may come late, when the student has another form open or another course.
+    const mine = () => {
+      const now = get().editor
+      return open === course.id &&
+        now?.lecture === editor.lecture &&
+        now.card === editor.card &&
+        now.concept === editor.concept
+        ? now
+        : null
+    }
     const refused = events.find((e) => e.type === 'refused')?.problems
     const failure = failureOf(events)
     const problems: Problem[] =
       refused ?? (failure ? [{ field: 'card', message: `${failure.message} ${failure.fix}` }] : [])
     if (problems.length > 0) {
-      const now = get().editor
+      const now = mine()
       if (now) set({ editor: { ...now, busy: false, problems } })
       return
     }
     await refresh(course.id)
-    set({ editor: null })
+    if (mine()) set({ editor: null })
   }
 
   return {
