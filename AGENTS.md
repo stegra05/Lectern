@@ -33,6 +33,7 @@ pnpm check                                   # lint, format check, typecheck, un
 pnpm test:e2e                                # app end to end on the offline models
 LECTERN_FAKE=1 pnpm --filter @lectern/app start   # the app, offline models, Anki in memory
 pnpm --filter @lectern/engine cli estimate <course folder>
+LECTERN_FAKE=1 pnpm --filter @lectern/engine cli build <course folder>   # also send: offline, Anki in memory
 ```
 
 `pnpm check` must pass before a commit is pushed. CI runs the same plus the e2e test.
