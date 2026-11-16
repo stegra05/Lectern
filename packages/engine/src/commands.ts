@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod'
-import { GOALS, ROLES } from './cards/roles.ts'
+import { GOALS, ROLES, type Goal } from './cards/roles.ts'
 import { OWN_ROLES, type Problem, type Slots } from './cards/slots.ts'
 import type { ShownCard } from './cards/fields.ts'
 import type { ProviderError, Unreadable } from './errors.ts'
@@ -44,6 +44,10 @@ export const CommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('course'), course }),
   /** The cards of one lecture, each with its slots and its fields. */
   z.object({ type: z.literal('cards'), course, lecture: z.number().int().positive() }),
+  /** Changes the goal. Lectures built from now on follow it; cards already made stay. */
+  z.object({ type: z.literal('goal'), course, goal: z.enum(GOALS) }),
+  /** Deletes the course and its folder in the library. Its deck in Anki stays as it is. */
+  z.object({ type: z.literal('delete'), course }),
   /** A new, empty course. The reply names its folder. */
   z.object({ type: z.literal('create'), name: z.string().trim().min(1), goal }),
   /** One slide as a picture, for the thumbnail beside a card. */
@@ -132,6 +136,8 @@ export type Event =
   /** A PNG in base64. */
   | { type: 'slide'; lecture: number; slide: number; png: string }
   | { type: 'created'; course: string }
+  | { type: 'goal'; course: string; goal: Goal }
+  | { type: 'deleted'; course: string }
   /** What came in, under the names it now has in the course, and what stayed out. */
   | ({ type: 'added'; course: string } & Added)
   | { type: 'moved'; course: string; file: string; to: Shelf | 'out' }
