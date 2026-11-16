@@ -57,6 +57,10 @@ note type files inside it; the macOS one, opened from its dmg on this Mac, reach
 first-run screen and found its templates. A `v3.*` tag builds macOS, Windows and Linux installers into a
 draft prerelease ([`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
+A whole course folder, dropped or chosen in the course setup, is sorted into lectures and past
+exams; the setup panel lists the rest as left out, adds a left-out file by hand and moves a file
+without cards between lectures and past exams.
+
 On 2026-11-15 the app ran once for real: a build of one lecture (Session 8, 19 slides, goal
 "a good grade") on `gpt-6-luna` made 19 cards in 73 seconds for 1.9 cents (estimate 1.9). Sent
 from the app to a real Anki (a throwaway Anki data folder), all 19 arrived in one subdeck; a

@@ -222,3 +222,38 @@ test('picture of a formula card in the side panel', async () => {
     await app.close()
   }
 })
+
+test('pictures of a course folder added whole', async () => {
+  await mkdir(out!, { recursive: true })
+  const folder = await mkdtemp(join(tmpdir(), 'lectern-shots-folder-'))
+  const [first, second] = Object.entries(LECTURES)
+  await mkdir(join(folder, 'Week 2'), { recursive: true })
+  await mkdir(join(folder, 'Übungen'), { recursive: true })
+  await writeFile(join(folder, first![0]), await makePdf(first![1]))
+  await writeFile(join(folder, 'Week 2', second![0]), await makePdf(second![1]))
+  await writeFile(join(folder, 'Übungen', 'Blatt 1.pdf'), await makePdf([['Name three risks']]))
+  await writeFile(join(folder, 'Week 3.pptx'), 'not a pdf')
+  await writeFile(join(folder, 'Scan.pdf'), await makePdf([[]]))
+  const { app, page } = await launch()
+
+  try {
+    await page.getByPlaceholder('sk-...').fill('sk-offline')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'New course' }).first().click()
+    await page.getByLabel('Name of the new course').fill('Entrepreneurship')
+    await page.keyboard.press('Enter')
+    await page.getByLabel('Folder of lecture PDFs').setInputFiles(folder)
+    const panel = page.getByRole('complementary')
+    await expect(panel.getByRole('heading', { name: 'Left out' })).toBeVisible()
+    await page.waitForTimeout(1500)
+    await shoot(page, '12-folder-left-out')
+
+    await panel.getByRole('button', { name: 'Add Blatt 1 as a lecture' }).click()
+    await expect(page.getByRole('img', { name: /Lecture 03 Blatt 1/ })).toBeVisible()
+    await panel.getByText('Lecture files').click()
+    await page.waitForTimeout(1500)
+    await shoot(page, '13-left-out-added')
+  } finally {
+    await app.close()
+  }
+})

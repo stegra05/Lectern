@@ -335,3 +335,36 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.setup-paper .btn,
+.setup-row .btn {
+  margin-top: 0;
+  padding: 2px 8px;
+}
+
+/* A file with what became of it, and what can be done with it. */
+.setup-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 12px;
+}
+.setup-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0 -8px;
+}
+.setup-files .setup-row .btn {
+  margin-left: -8px;
+}
+.setup-files {
+  margin-top: 10px;
+}
+.setup-files summary {
+  cursor: default;
+  color: var(--label-2);
+}
+.setup-files .panel-group {
+  margin-top: 6px;
+}
