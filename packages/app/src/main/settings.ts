@@ -77,12 +77,23 @@ export function settingsStore(dir: string, fake: boolean): SettingsStore {
           fix: 'Unlock your system keychain or password store, then save the key again.',
         }
       }
-      await mkdir(dir, { recursive: true })
-      await writeFile(keyPath, safeStorage.encryptString(trimmed))
+      try {
+        await mkdir(dir, { recursive: true })
+        await writeFile(keyPath, safeStorage.encryptString(trimmed))
+      } catch {
+        return {
+          ok: false,
+          message: 'Lectern could not store the key on this computer.',
+          fix: 'Free some disk space and unlock your system keychain, then save the key again.',
+        }
+      }
       return { ok: true }
     },
   }
 }
+
+/** How long the key check waits for OpenAI. */
+const KEY_CHECK_MS = 15_000
 
 /** Asks OpenAI for its model list, which costs nothing. Null when the key works. */
 async function checkKey(key: string): Promise<KeyResult | null> {
@@ -90,6 +101,8 @@ async function checkKey(key: string): Promise<KeyResult | null> {
   try {
     response = await fetch('https://api.openai.com/v1/models', {
       headers: { Authorization: `Bearer ${key}` },
+      // A network that drops packets would otherwise leave the key check waiting for ever.
+      signal: AbortSignal.timeout(KEY_CHECK_MS),
     })
   } catch {
     return {

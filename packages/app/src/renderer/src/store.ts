@@ -47,8 +47,8 @@ export interface RunState {
   course: string
   phases: Record<Phase, PhaseState>
   startedAt: number
-  /** When the phase that is running now started, for the time left. */
-  phaseStartedAt: number
+  /** When each phase started, for the time left. Phases overlap, so each has its own. */
+  phaseStartedAt: Partial<Record<Phase, number>>
   /** The lecture the engine is working on, when it says so. */
   lecture: number | null
 }
@@ -80,6 +80,8 @@ export interface Editor {
   /** The id of the concept the card belongs to. */
   concept: string
   slots: Slots
+  /** `slots` as the form opened, as JSON, to tell whether the student changed anything. */
+  start: string
   limits: Limits
   /** What has to be fixed before the card is taken, by field of the form. */
   problems: Problem[]
@@ -106,7 +108,11 @@ interface State {
   run: RunState | null
   sending: SendState | null
   editor: Editor | null
+  /** Forms with unsaved changes that a click on the map or the panel closed, by card. */
+  drafts: Record<string, Editor>
   failure: Failure | null
+  /** What ended a build or send while the student was elsewhere, by course, until it is opened. */
+  kept: Record<string, Failure>
   /** Why files could not be added. Apart from `failure`, which labels the build button. */
   addProblem: Failure | null
   /** The course whose added files are being sorted now. Nothing else is added meanwhile. */
@@ -162,7 +168,7 @@ function freshRun(course: string, now: number): RunState {
   const phases = Object.fromEntries(
     PHASES.map((p) => [p, { status: 'waiting', done: 0, total: 0 }]),
   ) as Record<Phase, PhaseState>
-  return { course, phases, startedAt: now, phaseStartedAt: now, lecture: null }
+  return { course, phases, startedAt: now, phaseStartedAt: {}, lecture: null }
 }
 
 /** Runs a command and hands back its events once it has finished. */
@@ -192,6 +198,16 @@ function failureOf(events: Event[]): Failure | null {
 export const useStore = create<State>((set, get) => {
   /** The course the student has open, or is opening. Answers about any other are dropped. */
   let open: string | null = null
+
+  /**
+   * A build or send ended while its course was not on show: the Courses list says how it
+   * stands now, and a failure waits for the student to open the course.
+   */
+  async function endedElsewhere(course: string, failure: Failure | null): Promise<void> {
+    if (failure) set({ kept: { ...get().kept, [course]: failure } })
+    const found = (await ask({ type: 'courses' })).find((e) => e.type === 'courses')
+    if (found) set({ courses: found.courses })
+  }
 
   /** Reads the open course again, with the cards of every lecture. */
   async function refresh(course: string): Promise<CourseView | null> {
@@ -278,7 +294,11 @@ export const useStore = create<State>((set, get) => {
       const before = get().leftOut[course.id] ?? []
       const sent = new Set(visible.map((p) => p.path))
       const list = problem ? before : [...before.filter((l) => !sent.has(l.path)), ...left]
-      set({ addProblem: problem, leftOut: { ...get().leftOut, [course.id]: list } })
+      // The problem belongs to the course the files went to, not to the one open by now.
+      set({
+        addProblem: open === course.id ? problem : get().addProblem,
+        leftOut: { ...get().leftOut, [course.id]: list },
+      })
       const view = await refresh(course.id)
       if (view && (view.pending.length > 0 || list.length > 0)) {
         set({ panel: 'setup', view: { level: 'course' } })
@@ -286,7 +306,7 @@ export const useStore = create<State>((set, get) => {
     } finally {
       set({ adding: null })
     }
-    await estimate()
+    if (open === course.id) await estimate()
   }
 
   async function deliver(): Promise<void> {
@@ -295,6 +315,7 @@ export const useStore = create<State>((set, get) => {
     set({
       sending: { course: course.id, done: 0, total: unsentCount(course), lecture: null },
       failure: null,
+      addProblem: null,
     })
     const events = await ask({ type: 'send', course: course.id }, (event) => {
       if (event.type !== 'sending') return
@@ -302,10 +323,34 @@ export const useStore = create<State>((set, get) => {
       set({ sending: { course: course.id, done, total, lecture } })
     })
     set({ sending: null })
-    if (get().course?.id !== course.id || get().screen === 'courses') return
+    if (get().course?.id !== course.id || get().screen === 'courses') {
+      await endedElsewhere(course.id, failureOf(events))
+      return
+    }
     // Also after a failure: the cards that went before it are in Anki.
     await refresh(course.id)
-    set({ failure: failureOf(events) })
+    // An add that failed meanwhile is old news next to the result of the send.
+    set({ failure: failureOf(events), addProblem: null })
+  }
+
+  /** The key of a form's card: the card itself, or the concept of a card still being written. */
+  const draftKey = (e: Pick<Editor, 'lecture' | 'card' | 'concept'>) =>
+    `${e.lecture}/${e.card ?? `new:${e.concept}`}`
+
+  /**
+   * The drafts once the open form is closed by a click elsewhere: a form with changes joins
+   * them, one without is let go. The student gets a draft back by opening its card again.
+   */
+  function parked(): Pick<State, 'drafts'> {
+    const { editor, drafts } = get()
+    if (!editor || editor.busy || JSON.stringify(editor.slots) === editor.start) return { drafts }
+    return { drafts: { ...drafts, [draftKey(editor)]: { ...editor, busy: false } } }
+  }
+
+  /** Opens the form on a draft, which stops being one. */
+  function reopen(key: string): void {
+    const { [key]: editor, ...drafts } = get().drafts
+    set({ editor: editor ?? null, drafts })
   }
 
   /** Empty slots of a kind, or the slots of a card, with the limits of the form. */
@@ -327,17 +372,27 @@ export const useStore = create<State>((set, get) => {
     if (!editor || !course || editor.busy) return
     set({ editor: { ...editor, busy: true, problems: [] } })
     const events = await ask(command)
+    // The answer may come late, when the student has another form open or another course.
+    const mine = () => {
+      const now = get().editor
+      return open === course.id &&
+        now?.lecture === editor.lecture &&
+        now.card === editor.card &&
+        now.concept === editor.concept
+        ? now
+        : null
+    }
     const refused = events.find((e) => e.type === 'refused')?.problems
     const failure = failureOf(events)
     const problems: Problem[] =
       refused ?? (failure ? [{ field: 'card', message: `${failure.message} ${failure.fix}` }] : [])
     if (problems.length > 0) {
-      const now = get().editor
+      const now = mine()
       if (now) set({ editor: { ...now, busy: false, problems } })
       return
     }
     await refresh(course.id)
-    set({ editor: null })
+    if (mine()) set({ editor: null })
   }
 
   return {
@@ -351,7 +406,9 @@ export const useStore = create<State>((set, get) => {
     run: null,
     sending: null,
     editor: null,
+    drafts: {},
     failure: null,
+    kept: {},
     addProblem: null,
     adding: null,
     leftOut: {},
@@ -360,16 +417,37 @@ export const useStore = create<State>((set, get) => {
     detailsTab: 'decisions',
 
     async start() {
-      const settings = await window.lectern.settings()
+      let settings: Settings
+      try {
+        settings = await window.lectern.settings()
+      } catch {
+        // Better a screen that says so than a blank window. The list comes up without settings.
+        await get().openCourses()
+        set({
+          failure: {
+            message: 'Lectern could not read its settings.',
+            fix: 'Restart Lectern. If it keeps failing, check that its data folder can be read.',
+          },
+        })
+        return
+      }
       set({ settings })
       if (settings.hasKey) await get().openCourses()
       else set({ screen: 'first-run' })
     },
 
     async saveKey(key) {
-      const result = await window.lectern.saveKey(key)
-      if (result.ok) set({ settings: await window.lectern.settings() })
-      return result
+      try {
+        const result = await window.lectern.saveKey(key)
+        if (result.ok) set({ settings: await window.lectern.settings() })
+        return result
+      } catch {
+        return {
+          ok: false,
+          message: 'Lectern could not store the key.',
+          fix: 'Save the key again. If it keeps failing, restart Lectern.',
+        }
+      }
     },
 
     async openCourses() {
@@ -380,6 +458,7 @@ export const useStore = create<State>((set, get) => {
         screen: 'courses',
         courses: found?.courses ?? [],
         course: null,
+        drafts: {},
         failure: failureOf(events),
       })
     },
@@ -393,12 +472,15 @@ export const useStore = create<State>((set, get) => {
 
     async openCourse(course) {
       open = course
+      const { [course]: kept, ...rest } = get().kept
       set({
-        failure: null,
+        failure: kept ?? null,
+        kept: rest,
         addProblem: null,
         estimate: null,
         view: { level: 'course' },
         editor: null,
+        drafts: {},
       })
       const view = await refresh(course)
       if (!view) return
@@ -452,6 +534,7 @@ export const useStore = create<State>((set, get) => {
       set({
         run: freshRun(course.id, Date.now()),
         failure: null,
+        addProblem: null,
         panel: 'run',
         view: { level: 'course' },
       })
@@ -469,7 +552,10 @@ export const useStore = create<State>((set, get) => {
             run: {
               ...current,
               phases: { ...current.phases, [event.phase]: phase },
-              phaseStartedAt: event.status === 'started' ? Date.now() : current.phaseStartedAt,
+              phaseStartedAt:
+                event.status === 'started'
+                  ? { ...current.phaseStartedAt, [event.phase]: Date.now() }
+                  : current.phaseStartedAt,
               lecture: null,
             },
           })
@@ -488,10 +574,13 @@ export const useStore = create<State>((set, get) => {
       const failure = failureOf(events)
       set({ run: null })
       // The student may have left for another course while the cards were made.
-      if (get().course?.id !== course.id || get().screen === 'courses') return
+      if (get().course?.id !== course.id || get().screen === 'courses') {
+        await endedElsewhere(course.id, failure)
+        return
+      }
       await refresh(course.id)
       // A failed run keeps its panel open, so the student reads what went wrong and the fix.
-      set({ failure, estimate: null, panel: failure ? 'run' : null })
+      set({ failure, addProblem: null, estimate: null, panel: failure ? 'run' : null })
       if (failure) await estimate()
     },
 
@@ -503,6 +592,9 @@ export const useStore = create<State>((set, get) => {
     async editCard(card) {
       const { view } = get()
       if (view.level !== 'lecture') return
+      const key = draftKey({ lecture: view.lecture, card: card.id, concept: card.concept })
+      const draft = get().drafts[key]
+      if (draft) return reopen(key)
       const found = await slotsFor(view.lecture, { card: card.id })
       if (!found) return
       set({
@@ -511,6 +603,7 @@ export const useStore = create<State>((set, get) => {
           card: card.id,
           concept: card.concept,
           ...found,
+          start: JSON.stringify(found.slots),
           problems: [],
           busy: false,
         },
@@ -520,10 +613,20 @@ export const useStore = create<State>((set, get) => {
     async writeCard(concept) {
       const { view } = get()
       if (view.level !== 'lecture') return
+      const key = draftKey({ lecture: view.lecture, card: null, concept })
+      if (get().drafts[key]) return reopen(key)
       const found = await slotsFor(view.lecture, { role: 'definition' })
       if (!found) return
       set({
-        editor: { lecture: view.lecture, card: null, concept, ...found, problems: [], busy: false },
+        editor: {
+          lecture: view.lecture,
+          card: null,
+          concept,
+          ...found,
+          start: JSON.stringify(found.slots),
+          problems: [],
+          busy: false,
+        },
       })
     },
 
@@ -567,16 +670,22 @@ export const useStore = create<State>((set, get) => {
     },
 
     closeEditor() {
+      // Cancel: what was written is let go, with no draft left behind.
       set({ editor: null })
     },
 
     showCourse() {
       const { panel } = get()
-      set({ view: { level: 'course' }, panel: panel === 'cards' ? null : panel, editor: null })
+      set({
+        view: { level: 'course' },
+        panel: panel === 'cards' ? null : panel,
+        editor: null,
+        ...parked(),
+      })
     },
 
     openLecture(lecture) {
-      set({ view: { level: 'lecture', lecture }, panel: 'cards', editor: null })
+      set({ view: { level: 'lecture', lecture }, panel: 'cards', editor: null, ...parked() })
     },
 
     selectTopic(topic) {
@@ -586,6 +695,7 @@ export const useStore = create<State>((set, get) => {
         view: { level: 'lecture', lecture: view.lecture, topic },
         panel: 'cards',
         editor: null,
+        ...parked(),
       })
     },
 
@@ -596,11 +706,17 @@ export const useStore = create<State>((set, get) => {
         view: { level: 'lecture', lecture: view.lecture, concept },
         panel: 'cards',
         editor: null,
+        ...parked(),
       })
+      // Coming back to the concept of a draft shows the form as it was left.
+      const back = Object.entries(get().drafts).find(
+        ([, d]) => d.lecture === view.lecture && d.concept === concept,
+      )
+      if (back) reopen(back[0])
     },
 
     openDetails(tab) {
-      set({ panel: 'details', detailsTab: tab ?? get().detailsTab, editor: null })
+      set({ panel: 'details', detailsTab: tab ?? get().detailsTab, editor: null, ...parked() })
     },
 
     openPanel(panel) {
@@ -613,6 +729,7 @@ export const useStore = create<State>((set, get) => {
       set({
         panel: null,
         editor: null,
+        ...parked(),
         view: view.level === 'lecture' ? { level: 'lecture', lecture: view.lecture } : view,
       })
     },

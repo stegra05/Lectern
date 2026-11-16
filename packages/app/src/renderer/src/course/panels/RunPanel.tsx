@@ -30,7 +30,7 @@ export function timeLeft(run: RunState): string | null {
   if (!phase) return null
   const { done, total } = run.phases[phase]
   if (done <= 0 || total <= done) return null
-  const ms = ((Date.now() - run.phaseStartedAt) * (total - done)) / done
+  const ms = ((Date.now() - (run.phaseStartedAt[phase] ?? run.startedAt)) * (total - done)) / done
   const minutes = Math.ceil(ms / 60_000)
   return minutes <= 1 ? 'Less than a minute' : `About ${minutes} minutes`
 }
