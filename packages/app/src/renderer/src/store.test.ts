@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Command, Event } from '../../shared/contract.ts'
+import { timeLeft } from './course/panels/RunPanel.tsx'
 import { useStore } from './store.ts'
 
-type Handler = (command: Command) => Event[] | Promise<Event[]>
+/** Answers a command. `emit` hands an event over at once, before the answer is complete. */
+type Handler = (command: Command, emit: (event: Event) => void) => Event[] | Promise<Event[]>
 
 /** The bridge the store talks to, answering each kind of command from `handlers`. */
 const handlers: Partial<Record<Command['type'], Handler>> = {}
@@ -60,7 +62,8 @@ beforeEach(() => {
     window: {
       lectern: {
         run: async (command: Command, onEvent: (event: Event) => void) => {
-          for (const event of (await handlers[command.type]?.(command)) ?? []) onEvent(event)
+          for (const event of (await handlers[command.type]?.(command, onEvent)) ?? [])
+            onEvent(event)
         },
       },
     },
@@ -175,5 +178,30 @@ describe('a problem from adding files', () => {
     await useStore.getState().addFiles([bad])
     await useStore.getState().send()
     expect(useStore.getState().addProblem).toBeNull()
+  })
+})
+
+describe('the time left of a phase', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('counts from the start of that phase, also when the next one has begun', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(0)
+    const end = gate<Event[]>()
+    handlers.build = async (_, emit) => {
+      emit({ type: 'phase', phase: 'write', status: 'started', total: 100 })
+      vi.setSystemTime(100_000)
+      emit({ type: 'progress', phase: 'write', done: 40, total: 100 })
+      // The check of the first lecture begins while write is still going.
+      emit({ type: 'phase', phase: 'check', status: 'started', total: 100 })
+      return end.promise
+    }
+    await useStore.getState().openCourse('a')
+    const building = useStore.getState().build()
+    await vi.waitFor(() => expect(useStore.getState().run?.phases.check.status).toBe('started'))
+    // 40 of 100 in 100 s: 150 s to go, which is 3 minutes. Counted from check it was under 1.
+    expect(timeLeft(useStore.getState().run!)).toBe('About 3 minutes')
+    end.release([])
+    await building
   })
 })

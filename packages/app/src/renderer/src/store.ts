@@ -47,8 +47,8 @@ export interface RunState {
   course: string
   phases: Record<Phase, PhaseState>
   startedAt: number
-  /** When the phase that is running now started, for the time left. */
-  phaseStartedAt: number
+  /** When each phase started, for the time left. Phases overlap, so each has its own. */
+  phaseStartedAt: Partial<Record<Phase, number>>
   /** The lecture the engine is working on, when it says so. */
   lecture: number | null
 }
@@ -164,7 +164,7 @@ function freshRun(course: string, now: number): RunState {
   const phases = Object.fromEntries(
     PHASES.map((p) => [p, { status: 'waiting', done: 0, total: 0 }]),
   ) as Record<Phase, PhaseState>
-  return { course, phases, startedAt: now, phaseStartedAt: now, lecture: null }
+  return { course, phases, startedAt: now, phaseStartedAt: {}, lecture: null }
 }
 
 /** Runs a command and hands back its events once it has finished. */
@@ -504,7 +504,10 @@ export const useStore = create<State>((set, get) => {
             run: {
               ...current,
               phases: { ...current.phases, [event.phase]: phase },
-              phaseStartedAt: event.status === 'started' ? Date.now() : current.phaseStartedAt,
+              phaseStartedAt:
+                event.status === 'started'
+                  ? { ...current.phaseStartedAt, [event.phase]: Date.now() }
+                  : current.phaseStartedAt,
               lecture: null,
             },
           })
