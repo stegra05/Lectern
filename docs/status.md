@@ -21,7 +21,10 @@ that drops course administration, exact twins dropped, past exam questions turne
 sending to a real Anki. One preset, `CONCEPT`, serves every course. How the code works:
 `docs/architecture.md`.
 
-Engine tests: 218 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+Each lecture is saved as soon as its cards are checked, so a stopped run keeps the lectures it
+finished and building again pays only for the rest.
+
+Engine tests: 223 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 

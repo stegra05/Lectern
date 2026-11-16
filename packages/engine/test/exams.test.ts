@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { Decision, Event, Lecture } from '../src/api.ts'
@@ -166,5 +166,29 @@ describe('building again with a new past paper', () => {
       expect.stringContaining('2 questions from 1 past papers'),
       expect.stringContaining('1 questions from 1 past papers came down to 1 questions'),
     ])
+  })
+})
+
+describe('past exams in a build that was stopped', () => {
+  let again: Event[]
+
+  beforeAll(async () => {
+    await courseOf('01 Risk.pdf', '02 Effectuation.pdf')
+    await mkdir(join(h.root, 'course', 'exams'), { recursive: true })
+    await writeFile(join(h.root, 'course', 'exams', 'Winter 2025-26.pdf'), await makePdf([EXAM]))
+    // Lecture 1 is finished when the cap is passed in lecture 2.
+    await run({ type: 'build', course: 'course', capUsd: 0.5 }, { costPerCall: 0.02 })
+  })
+
+  it('does not count the papers as read, since lecture 2 still waits for its questions', async () => {
+    expect((await json<{ lectures: unknown[] }>('course.json')).lectures).toHaveLength(1)
+    await expect(readFile(join(h.root, 'course', 'exams.json'))).rejects.toThrow()
+  })
+
+  it('reads them again when the build is repeated, and keeps them once it is through', async () => {
+    again = await run({ type: 'build', course: 'course' })
+    expect(again.at(-1)).toMatchObject({ type: 'built', lectures: [{ number: 2 }] })
+    expect(calls('read').some((r) => r.context.startsWith('Exam paper:'))).toBe(true)
+    expect((await json<{ papers: unknown[] }>('exams.json')).papers).toHaveLength(1)
   })
 })

@@ -1,15 +1,18 @@
 /**
- * The build command. Four course-wide phases, as the run screen shows them, carrying the
- * steps of how cards are created:
+ * The build command. Four phases, as the run screen shows them, carrying the steps of how
+ * cards are created:
  *
  *   read   text and pictures of the slides
- *   map    every slide read on its own, its facts sorted into topics and concepts, their
- *          checks, the kind and worth of each fact and the plan
+ *   map    every slide read on its own, its facts sorted into topics and concepts, the kind
+ *          and worth of each fact, the past exam questions and the plan
  *   write  one form per planned card
- *   check  the gate with repair and split, then clashes across the course
+ *   check  the gate with repair and split, then clashes with every card of the course
  *
- * Only lectures that are not in `course.json` yet are built. Nothing is written until every
- * phase is through, and files of earlier lectures are never touched.
+ * Read and map run over all new lectures at once: the plan shares the goal's cards out over
+ * the whole build. Write and check then run lecture by lecture, and each lecture is saved as
+ * soon as it is through, so a stopped run keeps what it finished. A lecture counts as built
+ * once `course.json` lists it, which is written last. Only lectures that are not in
+ * `course.json` yet are built, and files of earlier lectures are never touched.
  */
 
 import type { BuildCommand, Emit, EstimateCommand, Event } from './commands.ts'
@@ -132,6 +135,14 @@ interface Checked {
   dropped: Item[]
 }
 
+/** The course as this build leaves it, saved again each time a lecture is finished. */
+interface Saved {
+  file: CourseFile
+  decisions: Decision[]
+  /** Every card of the course, for the clash check of the next lecture. */
+  cards: { id: string; card: CardFile }[]
+}
+
 /** A past paper not read before: its name and its pages. */
 interface Paper {
   name: string
@@ -240,10 +251,15 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   const phaseMs = { read: 0, map: 0, write: 0, check: 0 }
   const phase = async <T>(name: Phase, total: number, work: () => Promise<T>): Promise<T> => {
     emit({ type: 'phase', phase: name, status: 'started', total })
+    const result = await timed(name, work)
+    emit({ type: 'phase', phase: name, status: 'done', total })
+    return result
+  }
+  /** Adds the time `work` takes to the phase: write and check run once per lecture. */
+  const timed = async <T>(name: Phase, work: () => Promise<T>): Promise<T> => {
     const start = ports.now()
     const result = await work()
-    phaseMs[name] = ports.now() - start
-    emit({ type: 'phase', phase: name, status: 'done', total })
+    phaseMs[name] += ports.now() - start
     return result
   }
 
@@ -279,7 +295,9 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   phaseMs.read = ports.now() - readStart
   emit({ type: 'phase', phase: 'read', status: 'done', total: read.length })
 
-  const checked: Checked = { accepted: [], dropped: [] }
+  /** What the build has saved so far: its lectures, listed in `course.json`. */
+  const done = { lectures: [] as BuiltLecture[], dropped: 0 }
+  const cardsDone = () => done.lectures.reduce((sum, l) => sum + l.cards, 0)
   /**
    * The run's record, with what it spent. Written once: when the build is through, or when it
    * stopped, so that money spent on a run that failed still shows.
@@ -295,9 +313,9 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       decisionModel: ports.decisions.model,
       ...(failed ? { failed: true as const } : {}),
       goal,
-      lectures: read.map((l) => l.number),
-      cards: checked.accepted.length,
-      dropped: checked.dropped.length,
+      lectures: done.lectures.map((l) => l.number),
+      cards: cardsDone(),
+      dropped: done.dropped,
       ...meter,
       costEur: shownEuros(meter.costUsd),
       estimateUsd: estimated.costUsd,
@@ -310,7 +328,7 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   try {
     const before = await courseSoFar(b, existing)
 
-    // Map each lecture, label its facts, add the exam questions, plan the cards.
+    // Map each lecture, label its facts, add the exam questions, plan the cards of all.
     const { lectures, exams, planned } = await phase('map', read.length, async () => {
       const lectures: OpenLecture[] = []
       for (const [i, lecture] of read.entries()) {
@@ -327,29 +345,73 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
       return { lectures, exams, planned: planCards(lectures, goal) }
     })
 
-    // Identity is fixed by the plan, before a single word is written.
+    const saved: Saved = {
+      file: {
+        format: 1,
+        name: existing?.name ?? course.split('/').at(-1)!,
+        goal,
+        lectures: existing?.lectures ?? [],
+      },
+      decisions: await courseDecisions(b, existing, goal, lectures),
+      cards: before.existingCards,
+    }
+    const allowed = budget(
+      goal,
+      lectures.reduce((sum, lecture) => sum + lecture.slides, 0),
+    )
+
+    // Write and check one lecture after the other, so the two phases overlap. A lecture is saved
+    // as soon as it is through. Identity is fixed by the plan, before a single word is written.
     const nextId = createIds()
-    const items = await phase('write', planned.length, () => fillCards(b, planned, nextId))
-    await phase('check', items.length, async () => {
-      await checkCards(b, items, nextId, checked)
-      dropClashes(before.existingCards, checked)
-    })
+    const written = { done: 0, total: planned.length }
+    emit({ type: 'phase', phase: 'write', status: 'started', total: planned.length })
+    for (const [i, lecture] of lectures.entries()) {
+      const slots = planned.filter((slot) => slot.lecture === lecture)
+      const later = planned.filter((slot) => lectures.indexOf(slot.lecture) > i).length
+      const items = await timed('write', () => fillCards(b, slots, nextId, written))
+      if (i === lectures.length - 1)
+        emit({ type: 'phase', phase: 'write', status: 'done', total: planned.length })
+      if (i === 0) emit({ type: 'phase', phase: 'check', status: 'started', total: planned.length })
 
-    const summary = await saveLectures(b, { existing, goal, exams, lectures, checked })
+      const settled = cardsDone() + done.dropped
+      const checked = await timed('check', async () => {
+        const checked = await checkCards(b, items, nextId, (passed, total) =>
+          emit({
+            type: 'progress',
+            phase: 'check',
+            done: cardsDone() + passed,
+            total: settled + total + later,
+          }),
+        )
+        dropClashes(saved.cards, checked)
+        return checked
+      })
+
+      done.lectures.push(await saveLecture(b, saved, lecture, checked, allowed))
+      done.dropped += checked.dropped.length
+      // The papers count as read once the last lecture is saved: a stopped run asks them again.
+      if (i === lectures.length - 1) await saveExams(b, saved, exams)
+      // `course.json` goes last: a lecture counts as built once it is listed there.
+      saved.file.lectures = [...saved.file.lectures, listing(lecture)].sort(
+        (x, y) => x.number - y.number,
+      )
+      await writeJson(store, paths.course(course), saved.file)
+    }
+    emit({ type: 'phase', phase: 'check', status: 'done', total: planned.length })
+
     await record(false)
-    await listLectures(b, existing, goal, lectures)
-
     emit({
       type: 'built',
-      lectures: summary,
-      cards: checked.accepted.length,
-      dropped: checked.dropped.length,
+      lectures: done.lectures,
+      cards: cardsDone(),
+      dropped: done.dropped,
       costUsd: meter.costUsd,
       durationMs: ports.now() - startedAt,
     })
-  } finally {
-    // A build that stopped before this point still records what it spent.
+  } catch (error) {
+    // A stopped run keeps the lectures it saved, and its record says what it cost.
     await record(true).catch(() => undefined)
+    throw error
   }
 }
 
@@ -567,9 +629,13 @@ const draftOf = (item: Item): Draft => ({
   ...item.slots,
 })
 
-/** Fill one form per planned card. */
-async function fillCards(b: Build, planned: Planned[], nextId: NextId): Promise<Item[]> {
-  let done = 0
+/** Fill one form per planned card. `written` counts the cards of the whole build. */
+async function fillCards(
+  b: Build,
+  planned: Planned[],
+  nextId: NextId,
+  written: { done: number; total: number },
+): Promise<Item[]> {
   const empty: Slots = { front: '', answers: [], labels: [], extra: '', code: '' }
   const drafted: Item[] = planned.map((slot, order) => ({
     ...slot,
@@ -584,8 +650,8 @@ async function fillCards(b: Build, planned: Planned[], nextId: NextId): Promise<
     b.emit({
       type: 'progress',
       phase: 'write',
-      done: ++done,
-      total: drafted.length,
+      done: ++written.done,
+      total: written.total,
       lecture: item.lecture.number,
     })
   }
@@ -607,14 +673,17 @@ async function fillCards(b: Build, planned: Planned[], nextId: NextId): Promise<
 
 /**
  * The gate, the card check and the repair, in rounds. What fails is repaired or split and
- * checked again, at most `REPAIRS` times, then dropped. Fills `checked` as cards are decided.
+ * checked again, at most `REPAIRS` times, then dropped. After each round `progress` hears how
+ * many cards passed and how many are in play.
  */
 async function checkCards(
   b: Build,
   items: Item[],
   nextId: NextId,
-  { accepted, dropped }: Checked,
-): Promise<void> {
+  progress: (passed: number, total: number) => void,
+): Promise<Checked> {
+  const accepted: Item[] = []
+  const dropped: Item[] = []
   let pending = items
   for (let round = 0; pending.length > 0; round++) {
     const failing: Item[] = []
@@ -626,8 +695,7 @@ async function checkCards(
       else accepted.push(item)
     }
     // A split adds cards, so the total is what is in play now, never less than what is done.
-    const total = accepted.length + failing.length + dropped.length
-    b.emit({ type: 'progress', phase: 'check', done: accepted.length, total })
+    progress(accepted.length, accepted.length + failing.length + dropped.length)
     if (round === REPAIRS) {
       dropped.push(...failing)
       break
@@ -635,6 +703,7 @@ async function checkCards(
     pending = await rewrite(b, failing, nextId, dropped)
   }
   accepted.sort((x, y) => x.order - y.order)
+  return { accepted, dropped }
 }
 
 /**
@@ -716,8 +785,9 @@ async function rewrite(
 }
 
 /**
- * Clashes across the whole course: a new card whose question is word for word one that
- * exists is dropped. No card is rewritten here.
+ * Clashes with every card of the course so far, those of earlier lectures of this build
+ * included: a new card whose question is word for word one that exists is dropped. No card is
+ * rewritten here.
  */
 function dropClashes(existingCards: { id: string; card: CardFile }[], checked: Checked): void {
   const { accepted, dropped } = checked
@@ -737,102 +807,83 @@ function dropClashes(existingCards: { id: string; card: CardFile }[], checked: C
 }
 
 /**
- * Save the past papers, the decisions and the files of every new lecture. What this run writes
- * about a lecture replaces what an earlier run that did not finish wrote. Returns each
- * lecture's line of the `built` event.
+ * The decisions that exist before the first lecture is saved: those of earlier builds, without
+ * what an earlier run that did not finish wrote about a lecture of this one, and on the first
+ * build the goal.
  */
-async function saveLectures(
-  b: Build,
-  done: {
-    existing: CourseFile | null
-    goal: Goal
-    exams: Exams
-    lectures: OpenLecture[]
-    checked: Checked
-  },
-): Promise<BuiltLecture[]> {
-  const { store } = b.ports
-  const { course } = b
-  const { existing, goal, lectures } = done
-  const { accepted, dropped } = done.checked
-  const { file: examsFile, tally: examTally } = done.exams
-  if (examsFile.papers.length > 0) await writeJson(store, paths.examsFile(course), examsFile)
-  const built = new Set(lectures.map((lecture) => lecture.number))
-  const decisions: Decision[] = existing?.lectures.length
-    ? ((await readJson<Decision[]>(store, paths.decisions(course))) ?? []).filter(
-        (decision) => decision.lecture === null || !built.has(decision.lecture),
-      )
-    : []
-  if (!existing?.lectures.length) {
-    const { label, cardsPerSlide } = GOAL_PRESETS[goal]
-    decisions.push({
-      lecture: null,
-      kind: 'goal',
-      text: `Goal "${label}": the facts worth most get a card, at most ${cardsPerSlide} per slide.`,
-    })
-  }
-  if (examTally.families > 0) {
-    const byModel = examTally.families - examTally.fromSlides
-    decisions.push({
-      lecture: null,
-      kind: 'exams',
-      text: `${examTally.questions} questions from ${examTally.papers} past papers came down to ${examTally.families} questions that get a card first. The slides answer ${examTally.fromSlides} of them; ${byModel} the model answered from what it knows, and those cards say so.`,
-    })
-  }
-  const summary: BuiltLecture[] = []
-  const allowed = budget(
-    goal,
-    lectures.reduce((sum, lecture) => sum + lecture.slides, 0),
-  )
-  for (const lecture of lectures) {
-    const cards = accepted.filter((item) => item.lecture === lecture)
-    const lost: Dropped[] = dropped
-      .filter((item) => item.lecture === lecture)
-      .map((item) => ({
-        concept: item.concept.name,
-        role: item.role,
-        front: item.slots.front,
-        problems: item.problems,
-      }))
-    await writeCards(
-      store,
-      course,
-      lecture.number,
-      cards.map((item) => item.card!),
-    )
-    const { number, title, file, slides, topics, leftOut } = lecture
-    const tree: Lecture = { number, title, file, slides, topics, leftOut, dropped: lost }
-    await writeJson(store, paths.lecture(course, number), tree)
-    decisions.push(
-      ...account(lecture, allowed, new Set(cards.map((item) => item.concept)), lost.length),
-    )
-    const concepts = topics.flatMap((t) => t.concepts).length
-    summary.push({ number, title, concepts, cards: cards.length })
-  }
-  await writeJson(store, paths.decisions(course), decisions)
-  return summary
-}
-
-/** `course.json` goes last: a lecture counts as built once it is listed there. */
-async function listLectures(
+async function courseDecisions(
   b: Build,
   existing: CourseFile | null,
   goal: Goal,
   lectures: OpenLecture[],
-): Promise<void> {
-  const listed = lectures.map((l) => ({
-    number: l.number,
-    title: l.title,
-    file: l.file,
-    sha256: l.sha256,
-    slides: l.slides,
+): Promise<Decision[]> {
+  if (existing?.lectures.length) {
+    const built = new Set(lectures.map((lecture) => lecture.number))
+    return ((await readJson<Decision[]>(b.ports.store, paths.decisions(b.course))) ?? []).filter(
+      (decision) => decision.lecture === null || !built.has(decision.lecture),
+    )
+  }
+  const { label, cardsPerSlide } = GOAL_PRESETS[goal]
+  return [
+    {
+      lecture: null,
+      kind: 'goal',
+      text: `Goal "${label}": the facts worth most get a card, at most ${cardsPerSlide} per slide.`,
+    },
+  ]
+}
+
+/**
+ * Save one finished lecture: its cards, its tree, and the decisions of the course so far. Its
+ * cards join the course, so the next lecture's clash check sees them. Returns the lecture's
+ * line of the `built` event.
+ */
+async function saveLecture(
+  b: Build,
+  saved: Saved,
+  lecture: OpenLecture,
+  { accepted, dropped }: Checked,
+  allowed: number,
+): Promise<BuiltLecture> {
+  const { store } = b.ports
+  const lost: Dropped[] = dropped.map((item) => ({
+    concept: item.concept.name,
+    role: item.role,
+    front: item.slots.front,
+    problems: item.problems,
   }))
-  await writeJson(b.ports.store, paths.course(b.course), {
-    format: 1,
-    name: existing?.name ?? b.course.split('/').at(-1)!,
-    goal,
-    lectures: [...(existing?.lectures ?? []), ...listed].sort((x, y) => x.number - y.number),
-  } satisfies CourseFile)
+  const cards = accepted.map((item) => item.card!)
+  await writeCards(store, b.course, lecture.number, cards)
+  const { number, title, file, slides, topics, leftOut } = lecture
+  const tree: Lecture = { number, title, file, slides, topics, leftOut, dropped: lost }
+  await writeJson(store, paths.lecture(b.course, number), tree)
+  saved.decisions.push(
+    ...account(lecture, allowed, new Set(accepted.map((item) => item.concept)), lost.length),
+  )
+  await writeJson(store, paths.decisions(b.course), saved.decisions)
+  saved.cards.push(...cards.map((card) => ({ id: card.id, card })))
+  const concepts = topics.flatMap((t) => t.concepts).length
+  return { number, title, concepts, cards: cards.length }
+}
+
+/** The past papers and what this build made of them, saved with the last lecture. */
+async function saveExams(b: Build, saved: Saved, { file, tally }: Exams): Promise<void> {
+  const { store } = b.ports
+  if (file.papers.length > 0) await writeJson(store, paths.examsFile(b.course), file)
+  if (tally.families === 0) return
+  const byModel = tally.families - tally.fromSlides
+  saved.decisions.push({
+    lecture: null,
+    kind: 'exams',
+    text: `${tally.questions} questions from ${tally.papers} past papers came down to ${tally.families} questions that get a card first. The slides answer ${tally.fromSlides} of them; ${byModel} the model answered from what it knows, and those cards say so.`,
+  })
+  await writeJson(store, paths.decisions(b.course), saved.decisions)
+}
+
+/** A lecture as `course.json` lists it. */
+function listing(lecture: OpenLecture): CourseFile['lectures'][number] {
+  const { number, title, file, sha256, slides } = lecture
+  return { number, title, file, sha256, slides }
 }
 
 /** The decisions of one lecture, written by code from what happened. */

@@ -19,14 +19,15 @@ describe('building a course of two lectures, offline', () => {
 
   it('emits the real phases in order, the estimate first, then the result', () => {
     const phases = events.filter((e) => e.type === 'phase').map((e) => `${e.phase} ${e.status}`)
+    // Lectures are written and checked one after the other, so the two phases overlap.
     expect(phases).toEqual([
       'read started',
       'read done',
       'map started',
       'map done',
       'write started',
-      'write done',
       'check started',
+      'write done',
       'check done',
     ])
     expect(events.slice(0, 2)).toEqual([
@@ -58,7 +59,9 @@ describe('building a course of two lectures, offline', () => {
   it('never reports more done than in total, also when a split adds cards', () => {
     const checks = events.filter((e) => e.type === 'progress' && e.phase === 'check')
     expect(checks.map((e) => (e.type === 'progress' ? [e.done, e.total] : []))).toEqual([
-      [6, 9],
+      [4, 9],
+      [5, 9],
+      [7, 9],
       [9, 10],
       [9, 10],
     ])
@@ -426,7 +429,8 @@ describe('building a course of two lectures, offline', () => {
       costUsd: 0,
       costEur: 0,
       durationMs: expect.any(Number) as number,
-      phaseMs: { read: 1000, map: 1000, write: 1000, check: 1000 },
+      // Writing and checking count once per lecture.
+      phaseMs: { read: 1000, map: 1000, write: 2000, check: 2000 },
     })
     expect(run.inputTokens).toBeGreaterThan(0)
     expect(run.durationMs).toBeGreaterThan(0)
@@ -627,19 +631,73 @@ describe('goal and cost', () => {
     })
   })
 
-  it('stops a build whose real cost passes the cap, starts no further call and saves only its run record', async () => {
+  it('stops a build whose real cost passes the cap, starts no further call and saves only its run record when no lecture was finished', async () => {
     await courseOf('01 Risk.pdf')
     const events = await run({ type: 'build', course: 'course', goal: 'top' }, { costPerCall: 0.2 })
     expect(events.at(-1)).toEqual({
       type: 'failed',
       message: 'The run was stopped at 0.40 dollars, above its cap of 0.25 dollars.',
-      fix: 'Nothing was saved. Build again, or build fewer lectures at once.',
+      fix: 'The lectures finished before the stop are saved. Build again to make the rest.',
     })
     // The first slide, then the four reads already under way, pass the cap. Nothing more starts.
     expect(h.model.requests.map((r) => r.task)).toEqual(['read', 'read', 'read', 'read', 'read'])
     // Only the record of the run is kept, so that the money it spent still shows.
     expect((await readdir(join(h.root, 'course'))).sort()).toEqual(['runs', 'slides'])
     expect(await json('runs/001.json')).toMatchObject({ run: 1, failed: true, cards: 0 })
+  })
+})
+
+describe('a build stopped at its cap, then built again', () => {
+  let stopped: Event[]
+  let lectures: Map<string, Buffer>
+  let listed: CourseFile
+  let again: Event[]
+
+  beforeAll(async () => {
+    await courseOf('01 Risk.pdf', '02 Effectuation.pdf')
+    // Lecture 1 is finished after 17 calls, 0.34 dollars. The first card of lecture 2 passes the cap.
+    stopped = await run({ type: 'build', course: 'course', capUsd: 0.35 }, { costPerCall: 0.02 })
+    lectures = await snapshot(join(h.root, 'course/lectures'))
+    listed = await json<CourseFile>('course.json')
+    again = await run({ type: 'build', course: 'course' })
+  })
+
+  it('keeps every lecture finished before the stop, and lists only those', async () => {
+    expect(stopped.at(-1)).toEqual({
+      type: 'failed',
+      message: 'The run was stopped at 0.36 dollars, above its cap of 0.35 dollars.',
+      fix: 'The lectures finished before the stop are saved. Build again to make the rest.',
+    })
+    expect([...lectures.keys()].sort()).toEqual(['01/cards.yaml', '01/lecture.json'])
+    expect(listed.lectures.map((l) => l.number)).toEqual([1])
+    const record = await json<Run>('runs/001.json')
+    expect(record).toMatchObject({ run: 1, failed: true, lectures: [1], cards: 5 })
+    // The calls already under way when the cap was passed are paid and counted too.
+    expect(record.costUsd).toBeGreaterThan(0.35)
+  })
+
+  it('builds again only what was not finished, and pays only for that', async () => {
+    expect(again.at(-1)).toMatchObject({
+      type: 'built',
+      lectures: [{ number: 2, title: 'Effectuation' }],
+    })
+    expect(h.model.requests.length).toBeGreaterThan(0)
+    expect(h.model.requests.every((r) => /^Lecture (file: 02|02) /.test(r.context))).toBe(true)
+    const after = await snapshot(join(h.root, 'course/lectures'))
+    for (const [path, bytes] of lectures) expect(after.get(path)!.equals(bytes), path).toBe(true)
+    expect((await json<CourseFile>('course.json')).lectures.map((l) => l.number)).toEqual([1, 2])
+    expect(await json('runs/002.json')).toMatchObject({ run: 2, lectures: [2] })
+  })
+
+  it('knows the finished lecture as the earlier one: its concept comes up again, its card is not asked twice', async () => {
+    const lecture = await json<Lecture>('lectures/02/lecture.json')
+    expect(lecture.topics[0]!.concepts[2]).toMatchObject({ id: 'risk', since: 1 })
+    expect(lecture.dropped).toContainEqual({
+      concept: 'risk',
+      role: 'definition',
+      front: 'Knight (1921): what is risk?',
+      problems: ['asks the same question as 01-risk-definition-1'],
+    })
   })
 })
 

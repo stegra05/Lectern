@@ -15,7 +15,10 @@
 - **Estimate first.** `estimate` is a pure function of characters, slides, pictures, the goal
   and the price lists. It calls no model; the app shows it in euros, rounded up to a coarse step.
 - **Cap.** `max(3 × estimate, 0.25 dollars)`, or the command's own `--cap`. After every paid
-  call the meter is checked, and the build fails once the real cost is above the cap.
+  call the meter is checked, and the build fails once the real cost is above the cap. The call
+  that passes it and the calls in flight, at most four, are paid. The lectures finished by then
+  stay saved, so building again pays only for the rest.
+- **A stopped run records its cost** in `runs/NNN.json` like any other run, marked `failed`.
 - **OpenAI only, for now.** Steffen has credits there. The Anthropic adapter was removed.
   The provider layer stays easy to swap for hosted keys later
   ([#101](https://github.com/stegra05/lectern/issues/101)).
@@ -45,6 +48,4 @@ spent on it shows.
 
 ## Open
 
-- The cap can be passed by the last call and up to four in flight, and a stopped run keeps
-  nothing: [#109](https://github.com/stegra05/lectern/issues/109).
 - The default models are not yet chosen by eval: [#130](https://github.com/stegra05/lectern/issues/130).
