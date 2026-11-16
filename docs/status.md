@@ -70,8 +70,9 @@ card arrived tagged `::own`.
 - The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
 - The exam rubric is model-made and no person has checked it
   ([#264](https://github.com/stegra05/lectern/issues/264)). It exists for one course.
-- No build has been scored on the dev papers: every build so far read them as input
-  ([#270](https://github.com/stegra05/lectern/issues/270)).
+- The dev baseline (three builds of v3 on the 14 papers before 2022: 48.5%, 47.7% and 55.2% of
+  the dev marks, mean 50.5) has not been read on the test papers
+  ([#270](https://github.com/stegra05/lectern/issues/270)). No change has passed the gate yet.
 
 ## Not built
 
