@@ -89,7 +89,7 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     )
   })
 
-  await test.step('a file left out is added by hand, and a lecture moved to past exams', async () => {
+  await test.step('a file left out is added by hand, moved to past exams and taken out again', async () => {
     const panel = page.getByRole('complementary')
     await panel.getByRole('button', { name: 'Add Blatt 1 as a lecture' }).click()
     await expect(page.getByRole('img', { name: /Lecture 03 Blatt 1, 1 slide/ })).toBeVisible()
@@ -99,6 +99,11 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     await expect(page.getByRole('img', { name: /Lecture 03/ })).toHaveCount(0)
     await expect(panel.locator('.setup-exams')).toContainText('Blatt 1')
     await expect(panel.getByRole('button', { name: 'Move Blatt 1 to lectures' })).toBeVisible()
+    await panel.getByRole('button', { name: 'Take Blatt 1 out of the course' }).click()
+    await expect(panel.locator('.setup-exams')).not.toContainText('Blatt 1')
+    await expect(
+      panel.getByRole('button', { name: 'Take 02_Effectuation out of the course' }),
+    ).toBeVisible()
   })
 
   await test.step('past exams: a paper is added in the setup and waits for the cards', async () => {

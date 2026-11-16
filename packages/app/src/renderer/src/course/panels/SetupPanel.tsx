@@ -38,6 +38,9 @@ function reason(left: LeftFile): string {
   return 'I could not tell what this is.'
 }
 
+/** Beside the action that takes a file out of the course: nothing of the student's is lost. */
+const OWN_FILE = 'Taking a file out leaves your own copy as it is. Add it again to bring it back.'
+
 const nameOf = (path: string) =>
   path
     .split('/')
@@ -64,6 +67,19 @@ export function SetupPanel({ close }: { close: ReactNode }) {
   const adding = cardCount(course) > 0
   const already = leftOut.filter((l) => l.why === 'already').length
   const shown = leftOut.filter((l) => l.why !== 'already')
+  const papersOut = course.exams.some((paper) => paper.questions === null)
+  const papersRead = course.exams.some((paper) => paper.questions !== null)
+  const takeOut = (file: string) => (
+    <button
+      type="button"
+      className="btn btn-quiet btn-accent"
+      disabled={sorting}
+      aria-label={`Take ${nameOf(file)} out of the course`}
+      onClick={() => void moveFile(file, 'out')}
+    >
+      Take out of the course
+    </button>
+  )
 
   return (
     <>
@@ -107,22 +123,30 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                 {course.pending.map((p) => (
                   <li key={p.file} className="setup-row">
                     <span className="setup-paper-name">{nameOf(p.file)}</span>
-                    {p.unreadable ? (
+                    {p.unreadable && (
                       <span className="t-secondary">{UNREADABLE[p.unreadable]}</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-quiet btn-accent"
-                        disabled={sorting}
-                        aria-label={`Move ${nameOf(p.file)} to past exams`}
-                        onClick={() => void moveFile(p.file, 'exams')}
-                      >
-                        Move to past exams
-                      </button>
                     )}
+                    <span className="setup-row-actions">
+                      {!p.unreadable && (
+                        <button
+                          type="button"
+                          className="btn btn-quiet btn-accent"
+                          disabled={sorting}
+                          aria-label={`Move ${nameOf(p.file)} to past exams`}
+                          onClick={() => void moveFile(p.file, 'exams')}
+                        >
+                          Move to past exams
+                        </button>
+                      )}
+                      {takeOut(p.file)}
+                    </span>
                   </li>
                 ))}
               </ul>
+              <p className="panel-note setup-files-note">
+                {OWN_FILE}
+                {adding && ' Lectures that have cards stay in the course.'}
+              </p>
             </details>
           </section>
         )}
@@ -186,6 +210,7 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                   <li key={paper.file} className="setup-row">
                     <span className="setup-paper-name">{nameOf(paper.file)}</span>
                     <span className="t-secondary">{UNREADABLE[paper.unreadable]}</span>
+                    <span className="setup-row-actions">{takeOut(paper.file)}</span>
                   </li>
                 ) : paper.questions === null ? (
                   <li key={paper.file} className="setup-row">
@@ -201,6 +226,7 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                       >
                         Move to lectures
                       </button>
+                      {takeOut(paper.file)}
                     </span>
                   </li>
                 ) : (
@@ -211,6 +237,13 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                 ),
               )}
             </ul>
+          )}
+          {(papersOut || papersRead) && (
+            <p className="panel-note">
+              {papersOut && OWN_FILE}
+              {papersOut && papersRead && ' '}
+              {papersRead && 'Papers whose questions are in your cards stay in the course.'}
+            </p>
           )}
           <button
             type="button"

@@ -137,8 +137,8 @@ interface State {
   addExams: (files: Picked[]) => Promise<void>
   /** Adds a file that was left out, as lecture slides or as a past exam. */
   addLeftOut: (path: string, to: 'slides' | 'exams') => Promise<void>
-  /** Moves a file without cards between lecture slides and past exams. */
-  moveFile: (file: string, to: 'slides' | 'exams') => Promise<void>
+  /** Moves a file without cards between lecture slides and past exams, or out of the course. */
+  moveFile: (file: string, to: 'slides' | 'exams' | 'out') => Promise<void>
   setGoal: (goal: Goal) => Promise<void>
   build: () => Promise<void>
   /** Sends the cards that are not in Anki yet. */
