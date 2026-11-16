@@ -93,6 +93,8 @@ panel, where the student can add a file by hand.
   name reads as an exercise and the file is kept out unread. A course whose midterm is a real
   exam adds it by hand as a past exam.
 - **The threshold is not measured yet** ([#219](https://github.com/stegra05/lectern/issues/219)).
+  `eval/sort-files.ts` measures it on labelled files: 224 from the same folders, labelled by
+  their folder where their own name says nothing, plus 40 unrelated documents as junk.
 
 ## Given up
 
