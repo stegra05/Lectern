@@ -49,7 +49,7 @@ src/deliver.ts        send (Anki)
 src/cards/            roles, validate, assemble, slots, id, words, question-answer
 src/adapters/         openai, pdfjs, node-store, node-templates, ankiconnect, memory-anki, offline, fake
 src/cli.ts            command line: estimate, build, send
-eval/                 refdeck.ts, read-slides.ts and the judge instructions (section 14)
+eval/                 bench.ts, refdeck.ts, read-slides.ts and the judge instructions (section 14)
 anki/                 four card templates and style-native.css
 ```
 
@@ -644,10 +644,30 @@ course to its cards in the in-memory Anki on the offline models. `e2e/shots.spec
 pictures of the screens into `out/shots` (git-ignored) with `pnpm --filter @lectern/app shots`.
 How many tests there are is in `docs/status.md`, not here.
 
-## 14. Evals against the reference deck
+## 14. Evals: unseen papers and the reference deck
 
-The harness is in `packages/engine/eval/`. It measures a run against a reference deck. Two scripts
-and three judge files:
+The harness is in `packages/engine/eval/`. It measures a run two ways: against the marks of past
+papers the build never saw (`bench.ts`), and against a reference deck (`refdeck.ts`). Neither
+script calls a model; judges are people or models that answer batch files.
+
+**`bench.ts`** scores a deck on a rubric: the knowledge points of the held-out papers.
+
+| Step | Command | Writes |
+| --- | --- | --- |
+| The test set | `node eval/bench.ts rubric <course name> <folder of paper files> <rubric.json>` | `rubric.json`, after checking that the marks add up |
+| Work for the judge | `node eval/bench.ts batches <rubric.json> <run folder> [--size 27]` | `pairs/NN.json`: per point its eight closest cards, only pairs no judge has decided |
+| Score | `node eval/bench.ts report <rubric.json> <run folder>` | prints the share of the marks held with its 95 percent interval, writes `standings.json` |
+| Two runs | `node eval/bench.ts compare <rubric.json> <run folder> <run folder>` | prints the paired difference and the points gained and lost |
+
+A run folder is what `refdeck.ts run` writes (`cards.json`, `cards.txt`). The paper files come
+from extractors that follow `eval/RUBRIC.md`: one file per held-out paper with its questions,
+their marks, the choices the paper gives ("five of these six") and one fact per point. A judge
+follows `eval/JUDGE-PAIRS.md` and answers each batch into `verdicts/NN.json` with `same`,
+`partial` or `no` per pair. Verdicts are kept in `verdicts.json` beside the rubric under the
+texts of the fact and the card, so a fact several papers ask for is judged once, and `report`
+refuses while a pair of the shortlist is undecided. The shortlist is by shared words
+(`minisearch`); the judge searches the whole deck before it leaves a point unheld. The scoring
+is in `eval/bench/score.ts` and `eval/bench/rubric.ts`, tested in `test/bench.test.ts`.
 
 **`refdeck.ts`** calls no model itself. Five steps:
 

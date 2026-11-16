@@ -30,7 +30,7 @@ Start with 1. The rest can be read in any order.
 | [11](rfd/0011-app-shape.md)                      | A native window, a snake of lectures, rings, one side panel                    | decided, needs polish |
 | [12](rfd/0012-feedback-loop.md)                  | Feedback through fixed actions, no free text                                   | decided, not built    |
 | [13](rfd/0013-copy-for-chat.md)                  | One button copies the course for a chat tutor                                  | deferred, #195        |
-| [14](rfd/0014-the-quality-bar.md)                | The bar is Steffen's own deck; form is fine, coverage is the gap               | measuring             |
+| [14](rfd/0014-the-quality-bar.md)                | The bar is the marks of unseen past papers, then Steffen's own deck            | measuring             |
 
 ## Writing an RFD
 
