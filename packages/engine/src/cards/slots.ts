@@ -209,6 +209,18 @@ function standsAlone(sentence: string, part: string, at: number): boolean {
 }
 
 /**
+ * Where the key term stands in its answer: the first place it stands as whole words, or else
+ * the first place it stands at all. -1 when it is not in the answer.
+ */
+export function keyAt(text: string, key: string): number {
+  if (key === '') return -1
+  for (let k = text.indexOf(key); k >= 0; k = text.indexOf(key, k + 1)) {
+    if (standsAlone(text, key, k)) return k
+  }
+  return text.indexOf(key)
+}
+
+/**
  * Where each hidden part stands in the sentence, or what the student has to fix. A part is kept
  * where `at` says when it still stands there; otherwise it is the one place after the part
  * before it where it stands as whole words.
@@ -249,7 +261,7 @@ function placeGaps(
 }
 
 /** The sentence with each hidden part wrapped as a deletion. */
-function gapSentence(sentence: string, hidden: string[], starts: number[]): string {
+export function gapSentence(sentence: string, hidden: string[], starts: number[]): string {
   let out = ''
   let end = 0
   for (const [i, part] of hidden.entries()) {
@@ -257,6 +269,56 @@ function gapSentence(sentence: string, hidden: string[], starts: number[]): stri
     end = starts[i]! + part.length
   }
   return out + sentence.slice(end)
+}
+
+/** A mark the stored slots have no place for: its words stay, the `==` around them go. */
+const unwrap = (text: string) => text.replace(/==(.+?)==/g, '$1')
+
+/**
+ * The slots of a checked draft from the model. The model marks the key term of an answer in
+ * the text, as `==term==`, and writes a gap sentence with its deletions, `{{c1::part}}`; here
+ * both come out of the text, so nothing in the stored slots is read as markup again. A mark
+ * anywhere else (the question or lead-in, a label, the extra, a second mark in one answer) has
+ * no place in the slots and is unwrapped.
+ */
+export function fromDraft(draft: Draft): Slots {
+  const role = draft.role as Role
+  const spec = ROLE_SPECS[role]
+  const slots: Slots = {
+    role,
+    front: unwrap(draft.front.trim()),
+    answers: draft.answers.map((answer, i) => {
+      const text = answer.trim()
+      // The TeX of a formula is not prose: nothing in it is a mark.
+      if (spec.back === 'formula' && i === 0) return { text, key: '' }
+      // A term is its answer as a whole.
+      if (spec.back === 'term') return { text: unwrap(text), key: '' }
+      const mark = /==(.+?)==/.exec(text)
+      if (!mark) return { text, key: '' }
+      const before = unwrap(text.slice(0, mark.index))
+      const plain = before + mark[1]! + unwrap(text.slice(mark.index + mark[0].length))
+      // Where an unmarked answer is the key term as a whole, a mark around all of it says nothing.
+      return { text: plain, key: spec.markWhole && plain === mark[1] ? '' : mark[1]! }
+    }),
+    labels: draft.labels.map((label) => unwrap(label.trim())),
+    hidden: [],
+    at: [],
+    extra: unwrap(draft.extra.trim()),
+    code: draft.code.replace(/\s+$/, ''),
+  }
+  if (role === 'cloze') {
+    let front = ''
+    let end = 0
+    for (const m of slots.front.matchAll(CLOZE)) {
+      front += slots.front.slice(end, m.index)
+      slots.at.push(front.length)
+      slots.hidden.push(m[2]!)
+      front += m[2]!
+      end = m.index + m[0].length
+    }
+    slots.front = front + slots.front.slice(end)
+  }
+  return slots
 }
 
 /** The draft of the slots, for the validator and for `assemble`. Run `checkSlots` first. */

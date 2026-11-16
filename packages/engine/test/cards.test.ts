@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { assemble, excerpt, type Placement } from '../src/cards/assemble.ts'
+import { assemble, type Placement } from '../src/cards/assemble.ts'
+import { excerpt } from '../src/cards/card.ts'
 import { cardId } from '../src/cards/id.ts'
 import type { Draft } from '../src/cards/roles.ts'
 import { conceptId, slideRange, slug, words } from '../src/cards/words.ts'

@@ -4,7 +4,8 @@
  * excerpt) is code. Pure.
  */
 
-import { CLOZE, contentWords, escapeHtml, two, words } from './words.ts'
+import { excerpt } from './card.ts'
+import { CLOZE, escapeHtml, two } from './words.ts'
 import { ROLE_SPECS, type Draft, type Role } from './roles.ts'
 
 /** One card as it is stored in the `cards.yaml` of its lecture. */
@@ -28,8 +29,6 @@ export interface Placement {
   /** Set for a card that answers a past exam question. */
   exam?: { papers: number; fromSlides: boolean }
 }
-
-const EXCERPT_WORDS = 30
 
 /** Plain text from the model to field HTML: escaped, `<sub>`/`<sup>` kept, `==x==` marked. */
 function toHtml(text: string): string {
@@ -75,22 +74,6 @@ function clozeText(role: Role, front: string, answers: string[]): string {
   if (role === 'cloze') return toHtml(front)
   const items = answers.map((a, i) => `<li>{{c${i + 1}::${toHtml(a)}}}</li>`).join('')
   return `${toHtml(front)}<ul>${items}</ul>`
-}
-
-/** The slide line that shares the most terms with the card, as a short quote. */
-export function excerpt(lines: string[], about: string): string {
-  const stems = contentWords(about).map((w) => w.slice(0, 5))
-  const filled = lines.map((l) => l.trim()).filter((l) => l !== '')
-  let best = 0
-  let bestScore = -1
-  filled.forEach((line, i) => {
-    const lower = line.toLowerCase()
-    const score = stems.filter((s) => lower.includes(s)).length
-    if (score > bestScore) [best, bestScore] = [i, score]
-  })
-  let quote = filled[best] ?? ''
-  if (words(quote) < 6 && filled[best + 1]) quote += ` ${filled[best + 1]}`
-  return quote.split(/\s+/).slice(0, EXCERPT_WORDS).join(' ')
 }
 
 export function assemble(draft: Draft, place: Placement): CardFile {
