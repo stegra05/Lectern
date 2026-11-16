@@ -1,27 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { lectureColour, two } from '../lecture.ts'
-
-/** Slide pictures for this session, by course, lecture and slide. Null: the engine has none. */
-const cache = new Map<string, Promise<string | null>>()
+import { slideCache } from './slideCache.ts'
 
 /**
  * The one lazy picture load outside the store: a slide is asked for only once its row scrolls
- * into view, so a lecture of 50 cards does not render 50 slides up front.
+ * into view, so a lecture of 50 cards does not render 50 slides up front. Slide pictures are
+ * kept for this session, by course, lecture and slide.
  */
+const cached = slideCache()
+
 function load(course: string, lecture: number, slide: number): Promise<string | null> {
-  const key = `${course}/${lecture}/${slide}`
-  let found = cache.get(key)
-  if (!found) {
-    found = (async () => {
-      let png = null as string | null
-      await window.lectern.run({ type: 'slide', course, lecture, slide }, (event) => {
-        if (event.type === 'slide') png = event.png
-      })
-      return png ? `data:image/png;base64,${png}` : null
-    })().catch(() => null)
-    cache.set(key, found)
-  }
-  return found
+  return cached(`${course}/${lecture}/${slide}`, async () => {
+    let png = null as string | null
+    await window.lectern.run({ type: 'slide', course, lecture, slide }, (event) => {
+      if (event.type === 'slide') png = event.png
+    })
+    return png ? `data:image/png;base64,${png}` : null
+  })
 }
 
 export function SlideThumb({

@@ -33,13 +33,16 @@ export function CourseScreen() {
         setDropping(true)
       }}
       onDragLeave={(event) => {
-        if (event.currentTarget === event.target) setDropping(false)
+        // Moving between children keeps the veil; leaving the screen or the window (no related
+        // target) hides it, and so does Esc, which fires the same event.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false)
       }}
       onDrop={(event) => {
         if (busy || !hasFiles(event)) return
         event.preventDefault()
         setDropping(false)
-        void fromDrop(event.dataTransfer).then(addFiles)
+        // A folder that cannot be read adds nothing.
+        void fromDrop(event.dataTransfer).then(addFiles, () => {})
       }}
     >
       <CourseMap />
