@@ -49,7 +49,8 @@ Engine tests: 270 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 `packages/app` is the base prototype on the engine's one boundary: first run, courses, files and
 goal, the run with the real phases, the result track, a lecture as rings, cards in the side
-panel with changing, removing and writing a card, course details, settings with the OpenAI key,
+panel with changing, removing and writing a card, course details with changing the goal and
+deleting the course, settings with the OpenAI key,
 sending to Anki, past exam papers added in the course setup, in light and dark. 44 unit tests and one Playwright test from a new course to
 its cards pass on the offline models. `pnpm --filter @lectern/app shots` takes pictures of the
 screens into `out/shots`. `pnpm --filter @lectern/app package` builds an installer with the Anki

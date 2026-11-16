@@ -75,8 +75,10 @@ Window 1100 by 720. It must hold before and after generation.
   wide, 12px from the top and right edges, ending 8px above the bottom bar, with a close
   button. Closing it returns the full-width map. It shows one of:
   - the cards of the selected lecture, topic or concept;
-  - course details, opened by "Details": two tabs, "Decisions" (what Lectern decided, and the
-    deck as one bar per lecture in the lecture colours) and "Statistics";
+  - course details, opened by "Details": two tabs, "Decisions" (the goal, with the setup's
+    control, then what Lectern decided, and the deck as one bar per lecture in the lecture
+    colours) and "Statistics". Last, a quiet "Delete course" in the problem colour, which asks
+    in place before anything goes;
   - before generation, the setup: what was found in the files and the goal question. It is
     open by default then, because there is something to answer;
   - during the run, the engine's real phases as a checklist. Open by default then too.

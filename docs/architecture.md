@@ -514,7 +514,10 @@ Properties that hold by construction and by test:
   (`sort.ts`, [RFD 5](rfd/0005-decision-models.md)), stores only lecture slides and past exams, and
   returns the rest as `left` with the reason, a name or a content the course already has among them. `move`
   shifts a file without cards between `slides/` and `exams/`, or deletes the course's copy (`to:
-  'out'`); a lecture gets its number only when it is built, so that leaves no gap. A changed PDF behind a built lecture is ignored (the sha256
+  'out'`); a lecture gets its number only when it is built, so that leaves no gap. `goal` changes
+  the goal in `course.json` and nothing else, so only lectures built later follow it. `delete`
+  removes the course folder and refuses a name that is empty or holds a separator or `..`; the
+  store never deletes its root. A changed PDF behind a built lecture is ignored (the sha256
   is stored, nothing compares it).
 - A PDF that cannot be read (`UnreadablePdf` from the PDF port: a password, or damage) is refused
   by `add` with a target shelf, left out as `password` or `damaged` without one, before any
@@ -546,7 +549,8 @@ the send writes `anki.json` as it does after any failure. Other commands ignore 
 PDFs cross the boundary as `Uint8Array`: the `add` command carries each file as its name, or its
 path inside the folder it came in, and its bytes. A slide picture leaves it as a base64 PNG in the `slide` event.
 
-The commands that write to a course (`build`, `add`, `move`, `send`, `edit`, `remove`, `write`)
+The commands that write to a course (`build`, `add`, `move`, `send`, `edit`, `remove`, `write`,
+`goal`, `delete`)
 run one after the other, in one `p-queue` per course that every engine in the process shares,
 since the app makes an engine per command. A build takes minutes, so while one runs every other
 writing command of its course, a second build too, fails at once with a message to wait. The
@@ -557,6 +561,7 @@ commands that only read never wait, and other courses do not wait for this one.
 | `build`, `estimate` | `build` calls both models, `estimate` neither | `phase`, `progress`, `estimate`, `built` |
 | `add` | the decision model, for every file whose name does not keep it out, and only without `to` | `added` |
 | `courses`, `course`, `cards`, `create`, `move`, `slide` | no model | `courses`, `course`, `cards`, `created`, `moved`, `slide` |
+| `goal`, `delete` | no model, and `delete` touches nothing in Anki | `goal`, `deleted` |
 | `send` | AnkiConnect only | `sending`, `sent` |
 | `slots`, `edit`, `remove`, `write` | none (Anki when the card is there) | `slots`, `edited`, `removed`, `written`, `refused` |
 

@@ -41,8 +41,8 @@ export function BottomBar() {
   if (!course) return null
   const stage = stageOf(course, run)
 
-  // The panel that fits the stage. An empty course has nothing to show in one.
-  const fitting: Panel = { empty: null, setup: 'setup', running: 'run', ready: 'details' }[
+  // The panel that fits the stage. An empty course has its details: the goal, and deleting it.
+  const fitting: Panel = { empty: 'details', setup: 'setup', running: 'run', ready: 'details' }[
     stage
   ] as Panel
   const pressed = fitting !== null && panel === fitting

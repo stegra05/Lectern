@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
-import type { CourseView } from '../../../../shared/contract.ts'
+import type { CourseView, Goal } from '../../../../shared/contract.ts'
 import { useStore } from '../../store.ts'
 import { euros, lectureColour, plural, two } from '../../lecture.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
+import { DeleteCourse } from './DeleteCourse.tsx'
 import './panels.css'
 
 /** Course details: what Lectern decided and the deck, or the statistics. */
@@ -30,6 +31,7 @@ export function DetailsPanel({ close }: { close: ReactNode }) {
       </div>
       <div className="panel-body">
         {tab === 'decisions' ? <Decisions course={course} /> : <Statistics course={course} />}
+        <DeleteCourse />
       </div>
     </>
   )
@@ -43,11 +45,37 @@ function LecChip({ number }: { number: number }) {
   )
 }
 
+/** The goal, as the setup asks it, for the lectures still to come. */
+function GoalSection() {
+  const goal = useStore((s) => s.goal)
+  const setGoal = useStore((s) => s.setGoal)
+  return (
+    <section className="panel-section setup-goal">
+      <h2 className="panel-h2 panel-h2-large">I am aiming for</h2>
+      <Segmented<Goal>
+        label="I am aiming for"
+        large
+        value={goal}
+        onChange={(g) => void setGoal(g)}
+        segments={[
+          { value: 'pass', label: 'a pass' },
+          { value: 'good', label: 'a good grade' },
+          { value: 'top', label: 'a top grade' },
+        ]}
+      />
+      <p className="panel-note">
+        Lectures you add from now on follow this goal. Cards already made stay as they are.
+      </p>
+    </section>
+  )
+}
+
 function Decisions({ course }: { course: CourseView }) {
   return (
     <>
+      <GoalSection />
       {course.decisions.length > 0 && (
-        <section className="panel-section">
+        <section className="panel-section panel-section-rule">
           <h2 className="panel-h2 panel-h2-large">What I decided</h2>
           <ol className="panel-group">
             {course.decisions.map((d, i) => (

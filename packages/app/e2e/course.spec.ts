@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { launch, type Launched } from './launch.ts'
@@ -8,8 +8,8 @@ import { LATER, LECTURES, makePdf } from './pdf.ts'
  * The whole way of a student through the base product, on the offline models: first run,
  * a new course, a folder of two lecture PDFs, the goal, a past exam paper, the run with the engine's phases,
  * the result on the track, the paper's question as a card, a lecture as rings, the cards of a concept in the side panel, changing, writing
- * and removing a card, the cards in Anki, changing and removing a card that was sent, and a
- * lecture that arrives later. Anki is the one in memory, which writes its notes to the data
+ * and removing a card, the cards in Anki, changing and removing a card that was sent, a
+ * lecture that arrives later, a new goal, and deleting the course. Anki is the one in memory, which writes its notes to the data
  * folder on every change, so the test reads what reached it and nothing reaches a real
  * collection.
  */
@@ -323,5 +323,43 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     await send.click()
     await expect(status).toContainText(`${first + later} cards are in Anki, in 3 subdecks`)
     expect(await launched.notes()).toHaveLength(first + later)
+  })
+
+  const panel = page.getByRole('complementary')
+  const courseFile = join(launched.courses, 'entrepreneurship', 'course.json')
+
+  await test.step('details: a new goal for the lectures to come, and no card changes', async () => {
+    const made = await status.locator('b').first().textContent()
+    await status.getByRole('button', { name: 'Details' }).click()
+    await expect(panel).toContainText(
+      'Lectures you add from now on follow this goal. Cards already made stay as they are.',
+    )
+    await expect(panel.getByRole('button', { name: 'a top grade' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await panel.getByRole('button', { name: 'a pass' }).click()
+    await expect(panel.getByRole('button', { name: 'a pass' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect
+      .poll(async () => (JSON.parse(await readFile(courseFile, 'utf8')) as { goal: string }).goal)
+      .toBe('pass')
+    await expect(status.locator('b').first()).toHaveText(made!)
+  })
+
+  await test.step('delete the course: asked first, Anki keeps its deck', async () => {
+    const notes = (await launched.notes()).length
+    await panel.getByRole('button', { name: 'Delete course' }).click()
+    const ask = panel.getByRole('group', { name: 'Delete Entrepreneurship?' })
+    await expect(ask).toContainText('Its deck in Anki stays as it is, with your progress')
+    await ask.getByRole('button', { name: 'Keep course' }).click()
+    await expect(ask).toHaveCount(0)
+    await panel.getByRole('button', { name: 'Delete course' }).click()
+    await panel.getByRole('button', { name: 'Delete Entrepreneurship' }).click()
+    await expect(page.getByRole('heading', { name: 'Start your first course' })).toBeVisible()
+    expect(await readdir(launched.courses)).toEqual([])
+    expect(await launched.notes()).toHaveLength(notes)
   })
 })

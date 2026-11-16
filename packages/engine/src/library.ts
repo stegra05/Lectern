@@ -226,6 +226,29 @@ export async function createCourse(store: Store, name: string, goal: Goal): Prom
   return id
 }
 
+/** Changes the goal of a course. Lectures built from now on follow it; cards made stay. */
+export async function setGoal(store: Store, course: string, goal: Goal): Promise<void> {
+  await writeJson(store, paths.course(course), { ...(await courseFile(store, course)), goal })
+}
+
+/**
+ * Deletes a course: its folder in the library, with its cards and its copies of the PDFs.
+ * Nothing in Anki changes. Only a folder right inside the library is ever deleted.
+ */
+export async function deleteCourse(store: Store, course: string): Promise<void> {
+  if (course === '' || course === '.' || course.includes('..') || /[\\/]/.test(course)) {
+    throw new EngineError(
+      `"${course}" is not the name of a course.`,
+      'Delete a course from the list.',
+    )
+  }
+  // A damaged course file still counts: such a course is listed, so it can be deleted.
+  if ((await store.read(paths.course(course))) === null) {
+    throw new EngineError(`No course found in ${course}.`, 'Delete a course from the list.')
+  }
+  await store.remove(course)
+}
+
 /**
  * The past papers of a course: those a build read, with their questions, and those it has not,
  * with why one of those cannot be read.

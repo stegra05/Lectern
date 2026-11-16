@@ -4,6 +4,7 @@ import { cardCount, useStore } from '../../store.ts'
 import { plural } from '../../lecture.ts'
 import { fromInput } from '../../picked.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
+import { DeleteCourse } from './DeleteCourse.tsx'
 import './panels.css'
 
 /** What each goal makes, in one line, as the engine decides it. */
@@ -338,6 +339,7 @@ export function SetupPanel({ close }: { close: ReactNode }) {
             {estimate && ` About ${plural(estimate.cards, 'card')}.`}
           </p>
         </section>
+        <DeleteCourse />
       </div>
     </>
   )

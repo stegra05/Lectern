@@ -15,6 +15,8 @@ import {
   addFiles,
   moveFile,
   createCourse,
+  deleteCourse,
+  setGoal,
   listCourses,
   readCourse,
   readLectureCards,
@@ -39,6 +41,8 @@ const WRITES: ReadonlySet<string> = new Set([
   'edit',
   'remove',
   'write',
+  'goal',
+  'delete',
 ] satisfies Command['type'][])
 
 /**
@@ -124,6 +128,12 @@ function direct(ports: Ports): Engine {
               type: 'created',
               course: await createCourse(store, known.name, known.goal ?? 'good'),
             })
+          case 'goal':
+            await setGoal(store, known.course, known.goal)
+            return emit({ type: 'goal', course: known.course, goal: known.goal })
+          case 'delete':
+            await deleteCourse(store, known.course)
+            return emit({ type: 'deleted', course: known.course })
           case 'add':
             return emit({
               type: 'added',

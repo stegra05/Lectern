@@ -130,7 +130,7 @@ export interface Store {
   writeBytes(path: string, data: Uint8Array): Promise<void>
   /** Moves a file, and creates missing folders. */
   move(from: string, to: string): Promise<void>
-  /** Deletes a file. */
+  /** Deletes a file, or a folder with everything in it. Never the root. */
   remove(path: string): Promise<void>
 }
 

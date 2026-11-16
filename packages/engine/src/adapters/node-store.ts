@@ -51,7 +51,11 @@ export function nodeStore(root: string): Store {
       await mkdir(dirname(at(to)), { recursive: true })
       await rename(at(from), at(to))
     },
-    remove: (path) => rm(at(path)),
+    async remove(path) {
+      const full = at(path)
+      if (full === base) throw new Error('The course library itself cannot be deleted.')
+      await rm(full, { recursive: true })
+    },
     async list(dir) {
       try {
         return (await readdir(at(dir))).filter((name) => !name.endsWith(PART))

@@ -259,6 +259,40 @@ describe('a problem from adding files', () => {
   })
 })
 
+describe('the goal and deleting a course', () => {
+  it('saves a new goal in the course, and goes back to the saved one when that fails', async () => {
+    const sent: Command[] = []
+    handlers.goal = (command) => {
+      sent.push(command)
+      return command.type === 'goal' && command.goal === 'top'
+        ? [failed('The course file cannot be written.')]
+        : [{ type: 'goal', course: 'a', goal: 'pass' }]
+    }
+    await useStore.getState().openCourse('a')
+    await useStore.getState().setGoal('pass')
+    expect(sent).toEqual([{ type: 'goal', course: 'a', goal: 'pass' }])
+    expect(useStore.getState().goal).toBe('pass')
+    await useStore.getState().setGoal('top')
+    expect(useStore.getState().goal).toBe('pass')
+    expect(useStore.getState().failure?.message).toBe('The course file cannot be written.')
+  })
+
+  it('goes to the Courses list after a delete, and stays on the course when it fails', async () => {
+    handlers.delete = () => [failed('Lectern is making the cards of this course.')]
+    await useStore.getState().openCourse('a')
+    await useStore.getState().deleteCourse()
+    expect(useStore.getState().screen).toBe('course')
+    expect(useStore.getState().failure?.message).toBe('Lectern is making the cards of this course.')
+
+    handlers.delete = () => [{ type: 'deleted', course: 'a' }]
+    listed = 'after'
+    await useStore.getState().deleteCourse()
+    expect(useStore.getState().screen).toBe('courses')
+    expect(useStore.getState().course).toBeNull()
+    expect(useStore.getState().courses).toMatchObject([{ name: 'after' }])
+  })
+})
+
 describe('the time left of a phase', () => {
   afterEach(() => vi.useRealTimers())
 
