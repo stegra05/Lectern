@@ -26,7 +26,8 @@ unseen by construction.
 
 **A change passes one gate.** `bench.ts gate` holds the builds of the new code against the
 builds of the old and says `better` only when the mean score rose by more than builds of the
-same code differ, and no guard fails: the deck at most 5 percent bigger, the answers at most 10
+same code differ (at 95 percent, with what so few builds ask for: about 6 points with three
+builds a side, 4 with five, and 11 with two), and no guard fails: the deck at most 5 percent bigger, the answers at most 10
 percent longer, at most 10 percent more calls and tokens written. The guards close the cheap
 ways to a higher score, more cards and cards stuffed with several facts, and hold a change to
 what a build takes. Calls and tokens written stand in for time: the clock moved by 7 percent
@@ -79,15 +80,17 @@ by Claude Haiku:
   build, and of a paired difference, covers which questions an exam asks, not the luck of the
   build. Of the 218 points, 63 are held by all three builds of v3, 51 by one or two, 104 by
   none; counting a point that any of the three holds gives 59.0%. So a change of code counts
-  only when it beats the old figure by **about 7 points for one build each, 5 for two, 4 for
-  three** (twice the standard error of the difference, `eval/spread.ts`); three builds give a
-  rough sd, so these are rough too. The gain of exam cards over slides only (12.5 points, one
-  build each) clears that bar.
+  only when it beats the old figure by more than this spread allows: with an sd of 2.6, **about
+  6 points with three builds a side, 4 with five**. Two a side show only a change above 11, and
+  one build against one shows nothing: two builds of one code that happened to land at 48.5%
+  and 47.7% made a third at 55.2% look better until the gate asked for Student's t and never
+  believed a spread under 2.6. The gain of exam cards over slides only (12.5 points) is large
+  enough to stand.
 - **The gate on real builds.** Slides only against v3: 17.4 points up, and stopped by two
   guards (664 cards against 631, 36 percent more tokens written). Cards from past exams buy
   their marks with a bigger deck and more writing, which was Steffen's call
   ([RFD 8](0008-past-exams.md)). The build of 2026-11-15 with exam cards against v3: 4.9 points
-  up where 6.0 are believable, every guard holds, so unclear. These builds read 18 papers, the
+  up where 12.9 are believable from one build against three, every guard holds, so unclear. These builds read 18 papers, the
   dev papers among them, so none of them can be scored on the dev set yet
   ([#270](https://github.com/stegra05/lectern/issues/270)).
 - **A run's score counts its own pairs only.** Its shortlist, and what its own judges found

@@ -37,7 +37,28 @@ describe('the gate of a change', () => {
 
   it('sees nothing in builds that all score the same', () => {
     const flat = [0.5, 0.5].map((c) => build(c))
-    expect(gate(flat, flat)).toMatchObject({ verdict: 'unclear', difference: 0, bar: 0 })
+    const same = gate(flat, flat)
+    expect(same).toMatchObject({ verdict: 'unclear', difference: 0 })
+    // Builds that land together are luck, not proof that builds do not spread.
+    expect(same.bar).toBeGreaterThan(0.1)
+  })
+
+  it('does not take two builds that landed together for a quiet engine', () => {
+    // One code, measured 2026-11-16: 48.5%, 47.7% and 55.2%.
+    const lucky = gate([build(0.485), build(0.477)], [build(0.552)])
+    expect(lucky.difference).toBeCloseTo(0.071, 3)
+    expect(lucky.verdict).toBe('unclear')
+  })
+
+  it('needs three builds a side to see six points', () => {
+    const bar = (builds: number) =>
+      gate(
+        Array.from({ length: builds }, () => build(0.5)),
+        Array.from({ length: builds }, () => build(0.5)),
+      ).bar
+    expect(bar(2)).toBeCloseTo(0.112, 3)
+    expect(bar(3)).toBeCloseTo(0.059, 3)
+    expect(bar(5)).toBeCloseTo(0.038, 3)
   })
 
   it('asks more of one build than of three', () => {
