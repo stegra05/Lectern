@@ -307,6 +307,7 @@ export const useStore = create<State>((set, get) => {
     set({
       sending: { course: course.id, done: 0, total: unsentCount(course), lecture: null },
       failure: null,
+      addProblem: null,
     })
     const events = await ask({ type: 'send', course: course.id }, (event) => {
       if (event.type !== 'sending') return
@@ -320,7 +321,8 @@ export const useStore = create<State>((set, get) => {
     }
     // Also after a failure: the cards that went before it are in Anki.
     await refresh(course.id)
-    set({ failure: failureOf(events) })
+    // An add that failed meanwhile is old news next to the result of the send.
+    set({ failure: failureOf(events), addProblem: null })
   }
 
   /** Empty slots of a kind, or the slots of a card, with the limits of the form. */
@@ -470,6 +472,7 @@ export const useStore = create<State>((set, get) => {
       set({
         run: freshRun(course.id, Date.now()),
         failure: null,
+        addProblem: null,
         panel: 'run',
         view: { level: 'course' },
       })
@@ -512,7 +515,7 @@ export const useStore = create<State>((set, get) => {
       }
       await refresh(course.id)
       // A failed run keeps its panel open, so the student reads what went wrong and the fix.
-      set({ failure, estimate: null, panel: failure ? 'run' : null })
+      set({ failure, addProblem: null, estimate: null, panel: failure ? 'run' : null })
       if (failure) await estimate()
     },
 

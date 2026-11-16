@@ -87,3 +87,30 @@ describe('a build that ends while the student is elsewhere', () => {
     expect(useStore.getState().failure?.fix).toBe('Fix for The key was refused.')
   })
 })
+
+describe('a problem from adding files', () => {
+  const bad = { path: 'bad.pdf', file: new File(['x'], 'bad.pdf') }
+
+  it('goes away when a build starts and stays away over its result', async () => {
+    const end = gate<Event[]>()
+    handlers.add = () => [failed('bad.pdf is not a PDF.')]
+    handlers.build = () => end.promise
+    await useStore.getState().openCourse('a')
+    await useStore.getState().addFiles([bad])
+    expect(useStore.getState().addProblem?.message).toBe('bad.pdf is not a PDF.')
+    const building = useStore.getState().build()
+    expect(useStore.getState().addProblem).toBeNull()
+    end.release([])
+    await building
+    expect(useStore.getState().addProblem).toBeNull()
+  })
+
+  it('goes away when a send starts', async () => {
+    handlers.add = () => [failed('bad.pdf is not a PDF.')]
+    handlers.send = () => []
+    await useStore.getState().openCourse('a')
+    await useStore.getState().addFiles([bad])
+    await useStore.getState().send()
+    expect(useStore.getState().addProblem).toBeNull()
+  })
+})
