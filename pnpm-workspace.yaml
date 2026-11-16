@@ -2,4 +2,6 @@ packages:
   - packages/*
 allowBuilds:
   electron: true
+  # Squirrel.Windows only; the Windows installer is NSIS.
+  electron-winstaller: false
   esbuild: true

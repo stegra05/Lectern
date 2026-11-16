@@ -513,8 +513,9 @@ The app side (`packages/app`):
   how many events it sent. The preload script waits for that many before the call resolves, because
   the "finished" answer can overtake the last events (`preload/index.ts`).
 - `engine.ts` wires the ports: `nodeStore`, `ankiConnect`, `nodeTemplates` (reading
-  `packages/engine/anki` in the repository), `pdfjsReader`, `openaiModel` and `openaiDecisions` with
-  the stored key. With `LECTERN_FAKE=1` it uses the offline models and a module-level `memoryAnki`
+  `packages/engine/anki` in the repository, or, in a packaged app, the `anki` folder that
+  `electron-builder.yml` copies into the app's resources, `process.resourcesPath`), `pdfjsReader`,
+  `openaiModel` and `openaiDecisions` with the stored key. With `LECTERN_FAKE=1` it uses the offline models and a module-level `memoryAnki`
   instead.
 - `src/main/settings.ts` holds what is not engine business: the OpenAI key, sealed with Electron's
   `safeStorage` (`openai.key`). `OPENAI_API_KEY` in the environment wins. The key never reaches the
@@ -528,7 +529,13 @@ The app side (`packages/app`):
   key). Design is binding in `design/KIT.md`; the app's rules are in `packages/app/README.md`.
 - Commands to run it: `pnpm --filter @lectern/app start`, with `LECTERN_FAKE=1` for the offline
   models and an Anki in memory. Environment: `LECTERN_FAKE_DELAY`, `LECTERN_COURSES`, `LECTERN_DATA`,
-  `LECTERN_SHOW`.
+  `LECTERN_SHOW`; a packaged app ignores them.
+- Installers: `pnpm --filter @lectern/app package` builds them with electron-builder into
+  `packages/app/dist` (dmg, NSIS exe, AppImage). The engine is a development dependency, bundled
+  into the main process; the installer ships only `@napi-rs/canvas` and `pdfjs-dist`, which load
+  native code and data files at run time. A `v3.*` tag runs `.github/workflows/release.yml`,
+  which builds all three on their own runners and puts them in one draft prerelease. Nothing is
+  signed or notarised.
 
 ## 12. Sending to Anki
 

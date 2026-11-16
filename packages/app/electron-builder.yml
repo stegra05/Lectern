@@ -1,0 +1,27 @@
+# Installers for macOS, Windows and Linux: `pnpm --filter @lectern/app package`.
+# Unsigned: macOS and Windows warn on first open.
+appId: com.steffengrabert.lectern
+productName: Lectern
+artifactName: Lectern-${version}-${os}-${arch}.${ext}
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**
+  - resources/icon.png
+# The note type files the engine installs in Anki (the four templates and the stylesheet). The
+# main process reads them from here when packaged (src/main/index.ts).
+extraResources:
+  - from: ../engine/anki
+    to: anki
+mac:
+  target: dmg
+  category: public.app-category.education
+  # Ad hoc, so an Apple Silicon Mac runs it, and the same here as in CI: a development
+  # certificate in the local keychain is never picked up.
+  identity: '-'
+win:
+  target: nsis
+linux:
+  target: AppImage
+  category: Education

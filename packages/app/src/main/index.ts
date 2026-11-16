@@ -26,8 +26,11 @@ if (env.LECTERN_DATA) app.setPath('userData', env.LECTERN_DATA)
 const fake = env.LECTERN_FAKE === '1'
 const fakeDelayMs = Number(env.LECTERN_FAKE_DELAY ?? 0)
 const courses = env.LECTERN_COURSES ?? join(app.getPath('userData'), 'courses')
-// The note type files are read from the repository, as the interface reads them for its previews.
-const templates = join(app.getAppPath(), '../engine/anki')
+// The note type files Anki receives. Packaged, they ship as a resource of the app
+// (electron-builder.yml); in development they are read from the engine in the repository.
+const templates = app.isPackaged
+  ? join(process.resourcesPath, 'anki')
+  : join(app.getAppPath(), '../engine/anki')
 const settings = settingsStore(app.getPath('userData'), fake)
 // Rendered from design/icon/master.py by design/icon/export.sh.
 const icon = join(app.getAppPath(), 'resources/icon.png')
@@ -86,8 +89,8 @@ ipcMain.handle('settings:get', () => settings.get())
 ipcMain.handle('key:save', (_, key: string) => settings.saveKey(key))
 
 void app.whenReady().then(() => {
-  // Until the app is packaged, macOS would show Electron's own icon in the Dock.
-  app.dock?.setIcon(icon)
+  // Unpackaged, macOS would show Electron's own icon in the Dock.
+  if (!app.isPackaged) app.dock?.setIcon(icon)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

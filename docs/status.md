@@ -33,7 +33,10 @@ goal, the run with the real phases, the result track, a lecture as rings, cards 
 panel with changing, removing and writing a card, course details, settings with the OpenAI key,
 sending to Anki, past exam papers added in the course setup, in light and dark. 44 unit tests and one Playwright test from a new course to
 its cards pass on the offline models. `pnpm --filter @lectern/app shots` takes pictures of the
-screens into `out/shots`.
+screens into `out/shots`. `pnpm --filter @lectern/app package` builds an installer with the Anki
+note type files inside it; the macOS one, opened from its dmg on this Mac, reached the
+first-run screen and found its templates. A `v3.*` tag builds macOS, Windows and Linux installers into a
+draft prerelease ([`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
 ## Unverified
 
@@ -43,7 +46,10 @@ screens into `out/shots`.
 - Past papers added after a course's lectures are built change no card already made; they count
   only for lectures built later. Answers the model wrote are not checked against the readings.
 - The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
-- Packaging: the app reads the Anki templates from `packages/engine/anki` in the repository.
+- The release workflow has not run: only a pushed `v3.*` tag tests it. The Windows and Linux
+  installers have not been built. The macOS installer is arm64 only and signed ad hoc, so a
+  downloaded copy is quarantined by Gatekeeper; nothing is signed or notarised
+  ([#191](https://github.com/stegra05/lectern/issues/191)).
 
 ## Not built
 
