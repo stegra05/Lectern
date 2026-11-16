@@ -203,7 +203,7 @@ export function inCourseOrder(files: string[]): string[] {
 export function assignNumbers(taken: number[], files: string[]): number[] {
   const used = new Set(taken)
   return files.map((file) => {
-    const leading = Number(/^\d{1,3}/.exec(file)?.[0] ?? 0)
+    const leading = Number(/^\d{1,3}(?!\d|[-./]\d)/.exec(file)?.[0] ?? 0)
     const number = leading > 0 && !used.has(leading) ? leading : Math.max(0, ...used) + 1
     used.add(number)
     return number
