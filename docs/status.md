@@ -1,7 +1,7 @@
 # Lectern v3: status
 
 What is true today. Update it in the pull request that changes it. What comes next lives on the
-[roadmap board](https://github.com/users/stegra05/projects/3), not here. Last updated 2026-11-16.
+[roadmap board](https://github.com/users/stegra05/projects/3), not here. Last updated 2026-11-17.
 
 ## Design
 
@@ -17,12 +17,24 @@ is `design/cards/gallery.html`, built by `design/cards/build.py`; the app icon i
 `packages/engine` runs the whole pipeline on real slides: reading slide by slide with pictures,
 a map of topics, concepts and facts, a kind and a worth score for every fact, the worth deciding
 which facts get cards under the goal, cards written per fact and checked, an organisation check
-that drops course administration, exact twins dropped, past exam questions turned into cards, and
+that drops course administration, twins dropped (the same words in the same order), past exam questions turned into cards, and
 sending to a real Anki. One preset, `CONCEPT`, serves every course. How the code works:
 `docs/architecture.md`.
 
 Each lecture is saved as soon as its cards are checked, so a stopped run keeps the lectures it
-finished and building again pays only for the rest.
+finished and building again pays only for the rest. Any failure of a build stops its model calls
+at once, and the run record counts the calls that were under way.
+
+`cards.yaml` holds each card as plain-text slots and where it comes from; one function builds the
+field HTML, at send and for the preview. A course built before this is built again. The cost cap
+counts calls in flight at their estimate, so a run cannot start a call that would pass it; a hard
+limit on the reply of one call is open as [#303](https://github.com/stegra05/lectern/issues/303).
+Commands that write to one course run one after the other, and an edit during a build is refused.
+A PDF that cannot be read (password or damaged) is named with the reason and left out, and the
+rest of the course builds. Concept ids keep letters of any script and tell C, C++ and C# apart. A
+cloze gap keeps its place in the sentence. A refused, failed or rejected model call is worded in
+plain words. The command line honours `LECTERN_FAKE=1` like the app and is tested on the offline
+models.
 
 On the 11 Entrepreneurship decks with 18 past papers a build took 35 minutes four calls at a
 time and lecture after lecture. Measured on the code before v3's cuts
@@ -41,9 +53,10 @@ from slides only 31.3%. Builds of the same code differ by several points, so a c
 only above about 6 points with three builds a side. `bench.ts gate` gives one verdict on a change:
 better only above that bar and with the deck no bigger, the answers no longer and the build
 no costlier. The papers of 2022 to 2024 are a dev set to tune on, the four newest the test set
-([RFD 14](rfd/0014-the-quality-bar.md)).
+([RFD 14](rfd/0014-the-quality-bar.md)). `blind.ts` draws the blind sample against the reference
+deck and scores the answers.
 
-Engine tests: 270 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+Engine tests: 390 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 
@@ -51,16 +64,28 @@ Engine tests: 270 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 goal, the run with the real phases, the result track, a lecture as rings, cards in the side
 panel with changing, removing and writing a card, course details with changing the goal and
 deleting the course, settings with the OpenAI key,
-sending to Anki, past exam papers added in the course setup, in light and dark. 44 unit tests and one Playwright test from a new course to
-its cards pass on the offline models. `pnpm --filter @lectern/app shots` takes pictures of the
+sending to Anki, past exam papers added in the course setup, in light and dark. Formulas are
+typeset in the card preview, and long courses fit on the course card. The app can be used with the
+keyboard from a new course to a changed card. 104 unit tests and 6 Playwright tests in 5 spec
+files (the course from a new course to its cards in Anki, a double click on Make my cards, a
+formula card, the keyboard, a map drag) pass on the offline models; 8 more, which take pictures,
+run only with `LECTERN_SHOTS`. `pnpm --filter @lectern/app shots` takes pictures of the
 screens into `out/shots`. `pnpm --filter @lectern/app package` builds an installer with the Anki
 note type files inside it; the macOS one, opened from its dmg on this Mac, reached the
 first-run screen and found its templates. A `v3.*` tag builds macOS, Windows and Linux installers into a
 draft prerelease ([`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
 A whole course folder, dropped or chosen in the course setup, is sorted into lectures and past
-exams; the setup panel lists the rest as left out, adds a left-out file by hand, and moves a file
-without cards between lectures and past exams or takes it out of the course again.
+exams; the threshold of the sort was measured on one folder. The setup panel lists the rest as
+left out, adds a left-out file by hand, and moves a file without cards between lectures and past
+exams or takes it out of the course again. A file that cannot be read is named in the panel with
+what to do.
+
+A course can be deleted, which leaves its deck in Anki, and its goal changed for the lectures
+added later; renaming a course waits for
+[#334](https://github.com/stegra05/lectern/issues/334). Closing the window during a build or send
+only hides it on macOS. Quitting then asks first and stops the command at a safe point, so a cut
+build keeps its run record and a cut send keeps its record of notes.
 
 On 2026-11-15 the app ran once for real: a build of one lecture (Session 8, 19 slides, goal
 "a good grade") on `gpt-6-luna` made 19 cards in 73 seconds for 1.9 cents (estimate 1.9). Sent
@@ -83,8 +108,14 @@ card arrived tagged `::own`.
   to 0.9, all 36 lectures and exams in, 2 other files let in as sure answers. Nothing is held
   out; other courses and other languages are unmeasured. A file let in wrongly is taken out by
   hand while it has no cards.
+- No change of the run of 2026-11-16 was sent to a real Anki; the tests use an Anki in memory.
+- Since the cards are stored as slots, the lead-in highlight of a cloze list is gone (about one
+  cloze list in ten had one), and courses built before must be built again.
+- The hidden window on macOS during a build has been tried by hand only; no committed test covers
+  it, as CI runs Linux.
 
 ## Not built
 
-Each is an issue on the roadmap board: more card designs (#193), presets for other kinds of
+Each is an issue on the roadmap board: a hard limit on the cost of one call (#303), renaming a
+course (#334), more card designs (#193), presets for other kinds of
 course (#194), Copy for chat (#195), calibrating further checks (#105), typed answers (#128).
