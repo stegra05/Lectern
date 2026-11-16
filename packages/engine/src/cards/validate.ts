@@ -4,7 +4,7 @@
  * An empty list means the draft may become a card.
  */
 
-import { CLOZE, contentWords, wordingKey, words } from './words.ts'
+import { CLOZE, contentWords, TAG, wordingKey, words } from './words.ts'
 import { isRole, ROLES, ROLE_SPECS, type Draft, type RoleSpec } from './roles.ts'
 
 export const LIMITS = {
@@ -104,7 +104,7 @@ function plainText(texts: string[]): string[] {
   const all = texts.join('\n')
   if (texts.some((t) => /[\r\n]/.test(t.trim())))
     problems.push('no line breaks; one slot holds one line')
-  if (/<\/?(?!su[bp]>)[a-zA-Z][^>]*>/.test(all))
+  if ([...all.matchAll(TAG)].some(([tag]) => !/^<\/?su[bp]>$/.test(tag)))
     problems.push('no HTML tags except <sub> and <sup>')
   if (/\*\*/.test(all)) problems.push('no Markdown; mark the key term as ==term==')
   if (/\$[^$\n]*[\\^_{}][^$\n]*\$/.test(all))
@@ -155,11 +155,12 @@ function answer(spec: RoleSpec, answers: string[], labels: string[]): string[] {
 
 /**
  * Words that point at the teaching material instead of the subject, in English and German.
- * On the real runs this free rule found more such questions than the decision model did, with
+ * "Session" and "class" count only when nothing follows them, so "the class constructor" and
+ * "in class B" are about the subject. On the real runs this free rule found more such questions than the decision model did, with
  * a fifth of its false alarms.
  */
 const MATERIAL =
-  /\b(?:slides?|folien?|wrap-up)\b|\b(?:the|this|last|previous|next|today[’']?s)\s+(?:lecture|session|class)\b|\blecture[’']s\b|\bin class\b|\btoday[’']?s\s+(?:two\s+)?topics\b|\b(?:der|dieser|letzten?|heutigen?)\s+(?:vorlesung|sitzung)\b/i
+  /\b(?:slides?|folien?|wrap-up)\b|\b(?:the|this|last|previous|next|today[’']?s)\s+(?:lecture\b|(?:session|class)(?=\s*(?:[:,;.?!]|$)))|\blecture[’']s\b|\bin class(?=\s*(?:[:,;.?!]|$))|\btoday[’']?s\s+(?:two\s+)?topics\b|\b(?:der|dieser|letzten?|heutigen?)\s+(?:vorlesung|sitzung)\b/i
 
 /**
  * A question that only makes sense with the slides at hand: "What does slide 16 say", "Last

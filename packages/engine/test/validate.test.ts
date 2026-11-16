@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ROLE_SPECS, type Draft } from '../src/cards/roles.ts'
+import { words as countWords } from '../src/cards/words.ts'
 import {
   isYesNo,
   leansOnSlides,
@@ -251,6 +252,15 @@ describe('roles', () => {
       expect(spec.labels[1] + (role === 'chain' ? spec.answers[1] : 0)).toBeLessThanOrEqual(6)
       if (spec.back === 'list') expect(spec.answers[1]).toBeLessThanOrEqual(2)
     }
+  })
+
+  it('lets a < and a later > through when they are not a tag', () => {
+    expect(
+      problems({ front: 'When is \\(a<b\\) true?', answers: ['When ==\\(c>d\\)== holds.'] }),
+    ).toEqual([])
+    expect(problems({ front: 'When do \\(a<b\\) and \\(c>d\\) hold?' })).toEqual([])
+    expect(countWords('Is a<b and c>d true')).toBe(5)
+    expect(countWords('What is <b class="x">risk</b>?')).toBe(3)
   })
 
   it('rejects markup written by the model', () => {
@@ -551,6 +561,8 @@ describe('a question that leans on the slides', () => {
     'Last session: what aspect of entrepreneurial intentions was covered?',
     'Today’s topics:',
     'What does the wrap-up say about basic growth strategies?',
+    'What did the lecture say about risk?',
+    'What was covered in class?',
     'Welche Begriffe nennt die Folie zur Relationenalgebra?',
   ])('sends back: %s', (front) => {
     expect(leans(front)).toEqual([
@@ -561,6 +573,9 @@ describe('a question that leans on the slides', () => {
   it.each([
     'Knight (1921): what is risk?',
     'Which brainstorming session rule defers judgement?',
+    'What does the class constructor initialise?',
+    'How does the session token expire?',
+    'Which methods are overridden in class B?',
     'HIGGS case: what was the start-up trying to find?',
   ])('lets through: %s', (front) => {
     expect(leans(front)).toEqual([])

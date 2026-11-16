@@ -5,12 +5,12 @@ import { createHash } from 'node:crypto'
 /** One cloze deletion: `{{c1::text}}`. Group 1 is the number, group 2 the hidden text. */
 export const CLOZE = /\{\{c(\d+)::(.*?)\}\}/g
 
+/** An HTML tag: a name, then only `name=value` attributes, so `a<b and c>d` is not one. */
+export const TAG = /<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s+[\w-]+=(?:"[^"]*"|'[^']*'|[^\s>]+))*\s*\/?>/g
+
 /** Words a reader has to process: tags, cloze wrappers and key term marks are not words. */
 export function words(text: string): number {
-  const plain = text
-    .replace(CLOZE, '$2')
-    .replace(/<\/?[a-zA-Z][^>]*>|==/g, '')
-    .trim()
+  const plain = text.replace(CLOZE, '$2').replace(TAG, '').replace(/==/g, '').trim()
   return plain === '' ? 0 : plain.split(/\s+/).length
 }
 
