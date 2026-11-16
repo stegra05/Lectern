@@ -1,4 +1,5 @@
 import type { Answer, DecisionsPort, ModelPort, ModelRequest, Question } from '../ports.ts'
+import { FILE_KINDS } from '../sort.ts'
 
 /**
  * A stand-in for both models that needs no script and no network: it turns the text of any
@@ -171,7 +172,18 @@ function decide(question: Question, context: string): Answer {
   }
   // Sure that no card is about the organisation of the course.
   if (question.type === 'predicate') return { type: 'predicate', probability: 0.1 }
-  return { type: 'choice', choice: 'definition' }
+  if (question.choices === FILE_KINDS) return sortChoice(context)
+  return { type: 'choice', choice: 'definition', probability: 0.9 }
+}
+
+/**
+ * Sorting an added file: pages with a line that starts with "Exam" are an exam paper, other
+ * pages with text are lecture slides, and pages without text leave the model unsure.
+ */
+function sortChoice(context: string): Answer {
+  const pages = context.split('Its first pages:\n')[1] ?? ''
+  if (/^(exam|klausur)\b/im.test(pages)) return { type: 'choice', choice: 'exam', probability: 0.9 }
+  return { type: 'choice', choice: 'slides', probability: pages.trim() ? 0.9 : 0.2 }
 }
 
 export function offlineDecisions(delayMs = 0): DecisionsPort {

@@ -63,7 +63,7 @@ async function fresh(): Promise<CardFile[]> {
   await run({ type: 'create', name: 'Entrepreneurship WS26' })
   const name = '01 Risk.pdf'
   const data = await makePdf(SLIDES[name]!)
-  await run({ type: 'add', course: COURSE, files: [{ name, data }] })
+  await run({ type: 'add', course: COURSE, files: [{ name, data }], to: 'slides' })
   expect((await run({ type: 'build', course: COURSE })).at(-1)!.type).toBe('built')
   return cardsOf()
 }

@@ -11,6 +11,7 @@ import { edit, remove, slots, write } from './edit.ts'
 import { EngineError } from './errors.ts'
 import {
   addFiles,
+  moveFile,
   createCourse,
   listCourses,
   readCourse,
@@ -69,8 +70,11 @@ export function createEngine(ports: Ports): Engine {
             return emit({
               type: 'added',
               course: known.course,
-              files: await addFiles(store, known.course, known.files, known.to),
+              ...(await addFiles(ports, known.course, known.files, known.to)),
             })
+          case 'move':
+            await moveFile(store, known.course, known.file, known.to)
+            return emit({ type: 'moved', course: known.course, file: known.file, to: known.to })
           case 'send':
             return await send(ports, known, emit)
           case 'slots':
@@ -102,5 +106,9 @@ export type {
   CourseSummary,
   LectureState,
   PaperState,
+  Added,
+  LeftOut,
   PendingLecture,
+  Shelf,
 } from './library.ts'
+export type { FileKind } from './sort.ts'

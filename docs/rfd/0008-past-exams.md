@@ -11,7 +11,7 @@
 
 ## Decision
 
-When a course folder has `exams/` (in the app: "Past exams" in the course setup, the `add` command with `to: 'exams'`), each new paper is read into its questions. Questions that
+When a course folder has `exams/` (in the app: "Past exams" in the course setup, the `add` command with `to: 'exams'`, or a file the `add` command sorted as a past exam), each new paper is read into its questions. Questions that
 ask for the same answer form a family, placed in a lecture and a concept. One call per family
 writes the answer as a fact and says whether the slides hold it; if not, the model answers
 from what it knows and the card's source says so. Exam facts go first in the plan, the most

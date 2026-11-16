@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import OpenAI, { toFile } from 'openai'
-import { EngineError } from '../errors.ts'
+import { EngineError, ProviderError } from '../errors.ts'
 import { MAX_DECISION_IMAGES } from '../ports.ts'
 import { pace } from './pace.ts'
 import type { Answer, DecisionsPort, ModelPort, Question, SlideImage } from '../ports.ts'
@@ -283,7 +283,12 @@ export function openaiDecisions(options: OpenAIOptions = {}): DecisionsPort {
           if (answer.type === 'predicate')
             answers.push({ type: 'predicate', probability: answer.probability })
           else if (answer.type === 'choice') {
-            answers.push({ type: 'choice', choice: String(answer.choice) })
+            answers.push({
+              type: 'choice',
+              choice: String(answer.choice),
+              probability:
+                answer.probabilities.find((p) => p.value === answer.choice)?.probability ?? 0,
+            })
           } else if (answer.type === 'score') answers.push({ type: 'score', score: answer.score })
           else answers.push({ type: 'refusal' })
         }
@@ -303,43 +308,55 @@ function toQuestion(question: Question) {
   return {
     type: 'choice' as const,
     instructions: question.ask,
-    choices: question.choices.map((value) => ({ value })),
+    choices: question.choices.map((value) => {
+      const description = question.descriptions?.[value]
+      return description ? { value, description } : { value }
+    }),
   }
 }
 
 function explain(error: unknown): Error {
   if (error instanceof OpenAI.AuthenticationError) {
-    return new EngineError('OpenAI rejected the API key.', 'Check the key in OPENAI_API_KEY.')
+    return new ProviderError(
+      'OpenAI rejected the API key.',
+      'Check the key in OPENAI_API_KEY.',
+      'key',
+    )
   }
   if (error instanceof OpenAI.RateLimitError) {
     return error.code === 'insufficient_quota'
-      ? new EngineError(
+      ? new ProviderError(
           'The OpenAI account has no credit left.',
           'Add credit to the account, then build again.',
+          'credit',
         )
-      : new EngineError(
+      : new ProviderError(
           'OpenAI is limiting requests for this key.',
           'Wait a minute and build again.',
+          'limit',
         )
   }
   if (error instanceof OpenAI.APIConnectionError) {
-    return new EngineError(
+    return new ProviderError(
       'OpenAI could not be reached.',
       'Check the internet connection and build again.',
+      'connection',
     )
   }
   if (error instanceof OpenAI.APIError) {
     // Waiting does not change a request that OpenAI rejected for what it contains.
     const status = Number(error.status)
     if (status >= 400 && status < 500 && status !== 408 && status !== 409) {
-      return new EngineError(
+      return new ProviderError(
         `OpenAI rejected the request: ${error.message}`,
         'Building again will not change this. Leave this lecture out, or split it into smaller PDFs.',
+        'rejected',
       )
     }
-    return new EngineError(
+    return new ProviderError(
       `OpenAI answered with an error: ${error.message}`,
       'Build again in a few minutes.',
+      'server',
     )
   }
   return error instanceof Error ? error : new Error(String(error))

@@ -10,11 +10,13 @@ import {
   type CardFile,
   type CourseState,
   type CourseSummary,
+  type DecisionsPort,
   EngineError,
   type Event,
   type ModelPort,
 } from '../src/api.ts'
 import { validateDraft } from '../src/cards/validate.ts'
+import { ProviderError } from '../src/errors.ts'
 import { SLIDES } from './fixtures.ts'
 import { makePdf, tempRoot, templates } from './helpers.ts'
 
@@ -22,13 +24,13 @@ let root: string
 const pdfs = new Map<string, Uint8Array>()
 const upload = (...names: string[]) => names.map((name) => ({ name, data: pdfs.get(name)! }))
 
-async function run(command: unknown): Promise<Event[]> {
+async function run(command: unknown, decisions = offlineDecisions()): Promise<Event[]> {
   let clock = 0
   const ports = {
     store: nodeStore(root),
     pdf: pdfjsReader,
     model: offlineModel(),
-    decisions: offlineDecisions(),
+    decisions,
     anki: memoryAnki(),
     templates,
     now: () => (clock += 1000),
@@ -37,8 +39,12 @@ async function run(command: unknown): Promise<Event[]> {
   await createEngine(ports).run(command, (event) => events.push(event))
   return events
 }
-const only = async <T extends Event['type']>(command: unknown, type: T) => {
-  const events = await run(command)
+const only = async <T extends Event['type']>(
+  command: unknown,
+  type: T,
+  decisions?: DecisionsPort,
+) => {
+  const events = await run(command, decisions)
   expect(events.map((e) => e.type)).toEqual([type])
   return events[0] as Extract<Event, { type: T }>
 }
@@ -83,12 +89,16 @@ describe('a course from creation to its cards, through the boundary only, with t
     })
   })
 
-  it('adds PDFs to a course: a name and the bytes', async () => {
+  it('adds PDFs to a course: a name and the bytes, sorted as lecture slides', async () => {
     const files = upload('01 Risk.pdf', '02 Effectuation.pdf')
     expect(await only({ type: 'add', course: 'entrepreneurship-ws26', files }, 'added')).toEqual({
       type: 'added',
       course: 'entrepreneurship-ws26',
-      files: ['01 Risk.pdf', '02 Effectuation.pdf'],
+      added: [
+        { file: '01 Risk.pdf', to: 'slides' },
+        { file: '02 Effectuation.pdf', to: 'slides' },
+      ],
+      left: [],
     })
     expect(await readdir(join(root, 'entrepreneurship-ws26/slides'))).toEqual([
       '01 Risk.pdf',
@@ -114,7 +124,10 @@ describe('a course from creation to its cards, through the boundary only, with t
   it('refuses a file that is no PDF or whose name the course already has, and adds nothing then', async () => {
     const again = upload('03 Lean startup.pdf', '01 Risk.pdf')
     expect(
-      await only({ type: 'add', course: 'entrepreneurship-ws26', files: again }, 'failed'),
+      await only(
+        { type: 'add', course: 'entrepreneurship-ws26', files: again, to: 'slides' },
+        'failed',
+      ),
     ).toEqual({
       type: 'failed',
       message: 'The course already has a file named 01 Risk.pdf.',
@@ -122,7 +135,10 @@ describe('a course from creation to its cards, through the boundary only, with t
     })
     const notes = [{ name: 'notes.pdf', data: new TextEncoder().encode('just text') }]
     expect(
-      await only({ type: 'add', course: 'entrepreneurship-ws26', files: notes }, 'failed'),
+      await only(
+        { type: 'add', course: 'entrepreneurship-ws26', files: notes, to: 'slides' },
+        'failed',
+      ),
     ).toMatchObject({
       message: 'notes.pdf is not a PDF.',
     })
@@ -134,15 +150,17 @@ describe('a course from creation to its cards, through the boundary only, with t
   })
 
   it('adds the PDFs of a folder by their own names, and by their folders where names repeat', async () => {
-    const risk = pdfs.get('01 Risk.pdf')!
     const files = [
-      { name: 'Course/Week 1/slides.pdf', data: risk },
-      { name: 'Course/Week 2/slides.pdf', data: risk },
-      { name: 'Course/Week 2/Pivots.pdf', data: risk },
+      { name: 'Course/Week 1/slides.pdf', data: pdfs.get('01 Risk.pdf')! },
+      { name: 'Course/Week 2/slides.pdf', data: pdfs.get('02 Effectuation.pdf')! },
+      { name: 'Course/Week 2/Pivots.pdf', data: pdfs.get('04 Pivot.pdf')! },
     ]
-    expect(
-      (await only({ type: 'add', course: 'entrepreneurship-ws26-2', files }, 'added')).files,
-    ).toEqual(['Week 1 slides.pdf', 'Week 2 slides.pdf', 'Pivots.pdf'])
+    const { added } = await only({ type: 'add', course: 'entrepreneurship-ws26-2', files }, 'added')
+    expect(added.map((a) => a.file)).toEqual([
+      'Week 1 slides.pdf',
+      'Week 2 slides.pdf',
+      'Pivots.pdf',
+    ])
   })
 
   it('adds past exam papers to their own folder and lists them as not read yet', async () => {
@@ -152,7 +170,12 @@ describe('a course from creation to its cards, through the boundary only, with t
     const files = [{ name: 'Winter 2025-26.pdf', data: paper }]
     expect(
       await only({ type: 'add', course: 'entrepreneurship-ws26', files, to: 'exams' }, 'added'),
-    ).toEqual({ type: 'added', course: 'entrepreneurship-ws26', files: ['Winter 2025-26.pdf'] })
+    ).toEqual({
+      type: 'added',
+      course: 'entrepreneurship-ws26',
+      added: [{ file: 'Winter 2025-26.pdf', to: 'exams' }],
+      left: [],
+    })
     expect(await readdir(join(root, 'entrepreneurship-ws26/exams'))).toEqual(['Winter 2025-26.pdf'])
     const course = (await only({ type: 'course', course: 'entrepreneurship-ws26' }, 'course'))
       .course
@@ -312,6 +335,146 @@ describe('a course from creation to its cards, through the boundary only, with t
   })
 })
 
+describe('a whole course folder, added at once', () => {
+  const course = 'messy-folder'
+  const exam2019 = makePdf([['Exam 2019', '1) What is risk?']])
+  const files = async () => [
+    { name: 'Course/Week 1/Introduction.pdf', data: pdfs.get('01 Risk.pdf')! },
+    { name: 'Course/Altklausuren/2019.pdf', data: await exam2019 },
+    // The same paper a second time, under another name.
+    { name: 'Course/Altklausuren/Copy of 2019.pdf', data: await exam2019 },
+    {
+      name: 'Course/Übungen/Blatt 1.pdf',
+      data: await makePdf([['Exercise 1', 'Name three risks']]),
+    },
+    { name: 'Course/Scan.pdf', data: await makePdf([[]]) },
+    { name: 'Course/Broken.pdf', data: new TextEncoder().encode('%PDF and then nothing') },
+    { name: 'Course/notes.txt.pdf', data: new TextEncoder().encode('just text') },
+    { name: 'Course/Projekt/.venv/lib/icon.pdf', data: pdfs.get('01 Risk.pdf')! },
+  ]
+
+  beforeAll(async () => {
+    expect((await only({ type: 'create', name: 'Messy folder' }, 'created')).course).toBe(course)
+  })
+
+  it('takes in lecture slides and past exams, and keeps everything else out', async () => {
+    expect(await only({ type: 'add', course, files: await files() }, 'added')).toEqual({
+      type: 'added',
+      course,
+      added: [
+        { file: 'Introduction.pdf', to: 'slides' },
+        { file: '2019.pdf', to: 'exams' },
+      ],
+      left: [
+        { path: 'Course/Altklausuren/Copy of 2019.pdf', why: 'already', kind: null },
+        { path: 'Course/Broken.pdf', why: 'unreadable', kind: null },
+        { path: 'Course/notes.txt.pdf', why: 'unreadable', kind: null },
+        { path: 'Course/Übungen/Blatt 1.pdf', why: 'kind', kind: 'exercise' },
+        { path: 'Course/Scan.pdf', why: 'unsure', kind: null },
+      ],
+    })
+    expect(await readdir(join(root, course, 'slides'))).toEqual(['Introduction.pdf'])
+    expect(await readdir(join(root, course, 'exams'))).toEqual(['2019.pdf'])
+  })
+
+  it('takes nothing twice when the folder is added again, and pays nothing for what it holds', async () => {
+    const asked: string[] = []
+    const offline = offlineDecisions()
+    const counted: DecisionsPort = {
+      ...offline,
+      decide: (request) => {
+        asked.push(request.context)
+        return offline.decide(request)
+      },
+    }
+    const { added, left } = await only(
+      { type: 'add', course, files: await files() },
+      'added',
+      counted,
+    )
+    expect(added).toEqual([])
+    // Only the scan, which the model could not tell before, is asked about again.
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toContain('File: Course/Scan.pdf')
+    expect(left.filter((l) => l.why === 'already').map((l) => l.path)).toEqual([
+      'Course/Week 1/Introduction.pdf',
+      'Course/Altklausuren/2019.pdf',
+      'Course/Altklausuren/Copy of 2019.pdf',
+    ])
+  })
+
+  it('moves a file without cards between lecture slides and past exams', async () => {
+    expect(
+      await only({ type: 'move', course, file: 'Introduction.pdf', to: 'exams' }, 'moved'),
+    ).toEqual({ type: 'moved', course, file: 'Introduction.pdf', to: 'exams' })
+    expect(await readdir(join(root, course, 'exams'))).toEqual(['2019.pdf', 'Introduction.pdf'])
+    expect(
+      await only({ type: 'move', course, file: 'Introduction.pdf', to: 'exams' }, 'failed'),
+    ).toMatchObject({ message: 'The course has no lecture named Introduction.pdf.' })
+  })
+
+  it('leaves a lecture with cards where it is', async () => {
+    expect(
+      await only(
+        { type: 'move', course: 'entrepreneurship-ws26', file: '01 Risk.pdf', to: 'exams' },
+        'failed',
+      ),
+    ).toEqual({
+      type: 'failed',
+      message: '01 Risk.pdf has cards already, so it cannot move.',
+      fix: 'Only a file without cards can be moved.',
+    })
+  })
+})
+
+describe('a sort that the decision model cannot finish', () => {
+  const course = 'failing-sort'
+  /** Offline decisions that fail with `error` for a file whose first pages hold `text`. */
+  const failing = (text: string, error: Error): DecisionsPort => {
+    const offline = offlineDecisions()
+    return {
+      ...offline,
+      decide: (request) =>
+        request.context.includes(text) ? Promise.reject(error) : offline.decide(request),
+    }
+  }
+  const files = async () => [
+    { name: 'Course/Introduction.pdf', data: pdfs.get('01 Risk.pdf')! },
+    { name: 'Course/2019.pdf', data: await makePdf([['Exam 2019', '1) What is risk?']]) },
+  ]
+
+  beforeAll(async () => {
+    expect((await only({ type: 'create', name: 'Failing sort' }, 'created')).course).toBe(course)
+  })
+
+  it('leaves out as unsure only the file whose request was rejected, and takes the rest', async () => {
+    const rejected = new ProviderError('OpenAI rejected the request: Bad image.', '', 'rejected')
+    expect(
+      await only(
+        { type: 'add', course, files: await files() },
+        'added',
+        failing('Exam 2019', rejected),
+      ),
+    ).toEqual({
+      type: 'added',
+      course,
+      added: [{ file: 'Introduction.pdf', to: 'slides' }],
+      left: [{ path: 'Course/2019.pdf', why: 'unsure', kind: null }],
+    })
+  })
+
+  it('stops the add on a failure of the account, with nothing written', async () => {
+    const key = new ProviderError('OpenAI rejected the API key.', 'Check the key.', 'key')
+    const fresh = [{ name: 'Course/Lecture 2.pdf', data: pdfs.get('02 Effectuation.pdf')! }]
+    expect(await only({ type: 'add', course, files: fresh }, 'failed', failing('', key))).toEqual({
+      type: 'failed',
+      message: 'OpenAI rejected the API key.',
+      fix: 'Check the key in OPENAI_API_KEY, then add the files again.',
+    })
+    expect(await readdir(join(root, course, 'slides'))).toEqual(['Introduction.pdf'])
+  })
+})
+
 describe('a build that fails after the provider billed it', () => {
   it('still records the run, marked failed, with what it spent', async () => {
     const library = join(await tempRoot(), 'failing')
@@ -337,7 +500,7 @@ describe('a build that fails after the provider billed it', () => {
     const emit = (event: Event) => events.push(event)
     await engine.run({ type: 'create', name: 'Failing' }, emit)
     const files = [{ name: '01 Risk.pdf', data: await makePdf(SLIDES['01 Risk.pdf']!) }]
-    await engine.run({ type: 'add', course: 'failing', files }, emit)
+    await engine.run({ type: 'add', course: 'failing', files, to: 'slides' }, emit)
     await engine.run({ type: 'build', course: 'failing', capUsd: 1 }, emit)
     expect(events.at(-1)).toMatchObject({ type: 'failed', message: 'The model ran out of room.' })
     await engine.run({ type: 'course', course: 'failing' }, emit)

@@ -14,6 +14,7 @@ import type {
   Event,
   Goal,
   KeyResult,
+  LeftFile,
   Lecture,
   Limits,
   Phase,
@@ -23,6 +24,9 @@ import type {
 } from '../../shared/contract.ts'
 import { PHASES } from '../../shared/contract.ts'
 import type { Picked } from './picked.ts'
+
+/** Slide decks, documents and photos: course material a student can export as PDF. */
+const NOT_PDF = /\.(pptx?|key|odp|docx?|odt|pages|rtf|png|jpe?g|heic)$/i
 
 declare global {
   interface Window {
@@ -87,6 +91,9 @@ export interface Failure {
   fix: string
 }
 
+/** A file an add kept out, with the file itself so it can be added by hand. */
+export type LeftEntry = LeftFile & { picked: Picked }
+
 interface State {
   screen: Screen
   /** The screen settings returns to. */
@@ -102,6 +109,13 @@ interface State {
   failure: Failure | null
   /** Why files could not be added. Apart from `failure`, which labels the build button. */
   addProblem: Failure | null
+  /** The course whose added files are being sorted now. Nothing else is added meanwhile. */
+  adding: string | null
+  /**
+   * What the adds of this session kept out, by course, so a file left out wrongly can still be
+   * added after more files came in or another course was open.
+   */
+  leftOut: Record<string, LeftEntry[]>
   view: View
   panel: Panel
   detailsTab: 'decisions' | 'statistics'
@@ -111,9 +125,14 @@ interface State {
   openCourses: () => Promise<void>
   createCourse: (name: string) => Promise<void>
   openCourse: (course: string) => Promise<void>
+  /** Adds files, a course folder too: the engine sorts them and keeps out what it does not use. */
   addFiles: (files: Picked[]) => Promise<void>
   /** Adds past exam papers. The next build turns their recurring questions into cards first. */
   addExams: (files: Picked[]) => Promise<void>
+  /** Adds a file that was left out, as lecture slides or as a past exam. */
+  addLeftOut: (path: string, to: 'slides' | 'exams') => Promise<void>
+  /** Moves a file without cards between lecture slides and past exams. */
+  moveFile: (file: string, to: 'slides' | 'exams') => Promise<void>
   setGoal: (goal: Goal) => Promise<void>
   build: () => Promise<void>
   /** Sends the cards that are not in Anki yet. */
@@ -212,15 +231,20 @@ export const useStore = create<State>((set, get) => {
     if (failure) set({ failure })
   }
 
-  /** Adds PDFs as lecture slides or as past exam papers. */
-  async function addPdfs(files: Picked[], to: 'slides' | 'exams'): Promise<void> {
-    const { course, sending } = get()
-    if (!course || sending) return
-    // Hidden files are skipped: a folder from another disk can hold `._slides.pdf` copies.
-    const pdfs = files.filter(
-      ({ file }) => file.name.toLowerCase().endsWith('.pdf') && !file.name.startsWith('.'),
-    )
-    if (pdfs.length === 0) {
+  /**
+   * Adds files. Without `to` the engine sorts them, and what it keeps out is listed in the
+   * setup panel, with the slide decks, documents and photos that are not PDFs. Other files,
+   * hidden ones among them, are dropped without a word: a course folder holds all sorts.
+   */
+  async function addPdfs(files: Picked[], to?: 'slides' | 'exams'): Promise<void> {
+    const { course, sending, adding } = get()
+    if (!course || sending || adding) return
+    const visible = files.filter(({ file }) => !file.name.startsWith('.'))
+    const pdfs = visible.filter(({ file }) => /\.pdf$/i.test(file.name))
+    const formats: LeftEntry[] = visible
+      .filter(({ file }) => NOT_PDF.test(file.name))
+      .map((picked) => ({ path: picked.path, why: 'format', kind: null, picked }))
+    if (pdfs.length === 0 && formats.length === 0) {
       set({
         addProblem: {
           message: 'There is no PDF in what you added.',
@@ -232,16 +256,36 @@ export const useStore = create<State>((set, get) => {
       })
       return
     }
-    const data = await Promise.all(
-      pdfs.map(async ({ path, file }) => ({
-        name: path,
-        data: new Uint8Array(await file.arrayBuffer()),
-      })),
-    )
-    const events = await ask({ type: 'add', course: course.id, files: data, to })
-    set({ addProblem: failureOf(events) })
-    const view = await refresh(course.id)
-    if (view && view.pending.length > 0) set({ panel: 'setup', view: { level: 'course' } })
+    set({ adding: course.id })
+    try {
+      let left = formats
+      let problem: Failure | null = null
+      if (pdfs.length > 0) {
+        const data = await Promise.all(
+          pdfs.map(async ({ path, file }) => ({
+            name: path,
+            data: new Uint8Array(await file.arrayBuffer()),
+          })),
+        )
+        const events = await ask({ type: 'add', course: course.id, files: data, to })
+        problem = failureOf(events)
+        const added = events.find((e) => e.type === 'added')
+        const picked = new Map(pdfs.map((p) => [p.path, p]))
+        left = [...(added?.left ?? []).map((l) => ({ ...l, picked: picked.get(l.path)! })), ...left]
+      }
+      // An add that failed wrote nothing, so the list stays. Otherwise what this add took in
+      // leaves the list, and what it kept out joins it.
+      const before = get().leftOut[course.id] ?? []
+      const sent = new Set(visible.map((p) => p.path))
+      const list = problem ? before : [...before.filter((l) => !sent.has(l.path)), ...left]
+      set({ addProblem: problem, leftOut: { ...get().leftOut, [course.id]: list } })
+      const view = await refresh(course.id)
+      if (view && (view.pending.length > 0 || list.length > 0)) {
+        set({ panel: 'setup', view: { level: 'course' } })
+      }
+    } finally {
+      set({ adding: null })
+    }
     await estimate()
   }
 
@@ -309,6 +353,8 @@ export const useStore = create<State>((set, get) => {
     editor: null,
     failure: null,
     addProblem: null,
+    adding: null,
+    leftOut: {},
     view: { level: 'course' },
     panel: null,
     detailsTab: 'decisions',
@@ -360,13 +406,31 @@ export const useStore = create<State>((set, get) => {
       set({
         screen: 'course',
         goal: view.goal,
-        panel: running ? 'run' : view.pending.length > 0 ? 'setup' : null,
+        panel: running
+          ? 'run'
+          : view.pending.length > 0 || (get().leftOut[course]?.length ?? 0) > 0
+            ? 'setup'
+            : null,
       })
       if (!running) await estimate()
     },
 
-    addFiles: (files) => addPdfs(files, 'slides'),
+    addFiles: (files) => addPdfs(files),
     addExams: (files) => addPdfs(files, 'exams'),
+
+    async addLeftOut(path, to) {
+      const { course, leftOut } = get()
+      const left = course ? leftOut[course.id]?.find((l) => l.path === path) : undefined
+      if (left) await addPdfs([left.picked], to)
+    },
+
+    async moveFile(file, to) {
+      const { course, adding } = get()
+      if (!course || adding) return
+      set({ addProblem: failureOf(await ask({ type: 'move', course: course.id, file, to })) })
+      await refresh(course.id)
+      await estimate()
+    },
 
     async setGoal(goal) {
       set({ goal })

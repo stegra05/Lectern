@@ -57,6 +57,10 @@ note type files inside it; the macOS one, opened from its dmg on this Mac, reach
 first-run screen and found its templates. A `v3.*` tag builds macOS, Windows and Linux installers into a
 draft prerelease ([`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
+A whole course folder, dropped or chosen in the course setup, is sorted into lectures and past
+exams; the setup panel lists the rest as left out, adds a left-out file by hand and moves a file
+without cards between lectures and past exams.
+
 On 2026-11-15 the app ran once for real: a build of one lecture (Session 8, 19 slides, goal
 "a good grade") on `gpt-6-luna` made 19 cards in 73 seconds for 1.9 cents (estimate 1.9). Sent
 from the app to a real Anki (a throwaway Anki data folder), all 19 arrived in one subdeck; a
@@ -73,6 +77,11 @@ card arrived tagged `::own`.
 - The dev baseline (three builds of v3 on the 14 papers before 2022: 48.5%, 47.7% and 55.2% of
   the dev marks, mean 50.5) has not been read on the test papers
   ([#270](https://github.com/stegra05/lectern/issues/270)). No change has passed the gate yet.
+- The sort of added files is measured on one folder only, the Entrepreneurship folder its rules
+  were shaped on: 43 of 45 files the model read on the right shelf at every threshold from 0.3
+  to 0.9, all 36 lectures and exams in, 2 other files let in as sure answers. Nothing is held
+  out; other courses and other languages are unmeasured. A file let in wrongly cannot be removed
+  in the app ([#219](https://github.com/stegra05/lectern/issues/219)).
 
 ## Not built
 

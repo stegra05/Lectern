@@ -43,7 +43,7 @@ async function addAndBuild(...names: string[]): Promise<void> {
   const files = await Promise.all(
     names.map(async (name) => ({ name, data: await makePdf(SLIDES[name]!) })),
   )
-  await run({ type: 'add', course: COURSE, files })
+  await run({ type: 'add', course: COURSE, files, to: 'slides' })
   expect((await last({ type: 'build', course: COURSE })).type).toBe('built')
 }
 
@@ -436,7 +436,12 @@ describe('a course folder with capitals and a space in its name', () => {
     await run({ type: 'create', name: 'My Course' })
     await rename(join(root, 'my-course'), join(root, 'My Course'))
     const data = await makePdf(SLIDES['01 Risk.pdf']!)
-    await run({ type: 'add', course: 'My Course', files: [{ name: '01 Risk.pdf', data }] })
+    await run({
+      type: 'add',
+      course: 'My Course',
+      files: [{ name: '01 Risk.pdf', data }],
+      to: 'slides',
+    })
     await run({ type: 'build', course: 'My Course' })
     expect(await last({ type: 'send', course: 'My Course' })).toMatchObject({ type: 'sent' })
     expect(anki.notes.length).toBeGreaterThan(0)

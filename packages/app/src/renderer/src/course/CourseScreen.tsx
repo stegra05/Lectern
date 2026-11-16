@@ -17,7 +17,7 @@ export function CourseScreen() {
   const openCourses = useStore((s) => s.openCourses)
   const openSettings = useStore((s) => s.openSettings)
   const addFiles = useStore((s) => s.addFiles)
-  const busy = useStore((s) => s.run !== null || s.sending !== null)
+  const busy = useStore((s) => s.run !== null || s.sending !== null || s.adding !== null)
   const [dropping, setDropping] = useState(false)
 
   if (!course) return null

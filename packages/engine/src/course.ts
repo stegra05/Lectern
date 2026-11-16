@@ -2,6 +2,7 @@
  * The course folder: its shapes and how they are read and written.
  *
  *   <course>/slides/*.pdf              input, one PDF per lecture
+ *   <course>/exams/*.pdf               input, past exam papers
  *   <course>/course.json               CourseFile
  *   <course>/lectures/02/lecture.json  Lecture: the tree, and what was left out
  *   <course>/lectures/02/cards.yaml    CardFile[], one readable file per lecture
@@ -187,6 +188,12 @@ export function titleFromFile(file: string, number: number): string {
     .replace(/^[\d\s._-]+/, '')
     .replace(/_+/g, ' ')
   return name || `Lecture ${number}`
+}
+
+/** The fingerprint of a file's content: two files with the same one are the same file. */
+export async function sha256(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 /** Lecture PDFs in course order: by file name, numbers compared as numbers. */

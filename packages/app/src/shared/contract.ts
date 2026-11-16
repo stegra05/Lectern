@@ -11,6 +11,8 @@ import type {
   CourseSummary,
   Decision,
   Event,
+  FileKind,
+  LeftOut,
   LectureState,
   PendingLecture,
   Problem,
@@ -18,7 +20,7 @@ import type {
   Slots,
 } from '@lectern/engine'
 
-export type { Command, CourseSummary, Decision, Event, Problem, Run, Slots }
+export type { Command, CourseSummary, Decision, Event, FileKind, Problem, Run, Slots }
 
 export type Goal = CourseState['goal']
 export type Phase = Extract<Event, { type: 'phase' }>['phase']
@@ -39,6 +41,16 @@ export interface Lecture extends Omit<LectureState, 'cards'> {
 
 /** The word limits a card form shows next to its fields. */
 export type Limits = Extract<Event, { type: 'slots' }>['limits']
+
+/**
+ * A file of the last add that stayed out of the course: the engine's reasons, and `format` for
+ * a slide deck, document or photo that is not a PDF.
+ */
+export interface LeftFile {
+  path: string
+  why: LeftOut['why'] | 'format'
+  kind: FileKind | null
+}
 
 /** A lecture PDF that is in the course but has no cards yet. */
 export type Pending = PendingLecture

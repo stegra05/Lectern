@@ -735,8 +735,8 @@ function EmptyPrompt({ area, onFiles }: { area: Area; onFiles: (files: Picked[])
       </div>
       <h2 className="t-heading">Bring your lecture slides</h2>
       <p className="map-empty-text">
-        Drop the PDFs or their folder anywhere on this window, one file per lecture. Each one
-        becomes a stop on your course track.
+        Drop the PDFs or the whole course folder anywhere on this window. I put each lecture on your
+        course track, keep the past exams for the cards and show you what I left out.
       </p>
       <div className="map-empty-actions">
         <button type="button" className="btn" onClick={() => pdfs.current?.click()}>

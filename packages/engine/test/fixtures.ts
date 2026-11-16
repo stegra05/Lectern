@@ -391,7 +391,7 @@ export function script(request: ModelRequest): unknown {
 export function decisions(question: Question, request: DecisionRequest): Answer {
   if (question.type === 'choice') {
     const told = /^What kind of knowledge is this fact: "(.+)"$/.exec(question.ask)![1]!
-    return { type: 'choice', choice: KINDS[told] ?? 'definition' }
+    return { type: 'choice', choice: KINDS[told] ?? 'definition', probability: 1 }
   }
   // Every fact is examinable, so a goal that cuts keeps the first facts of the map.
   if (question.type === 'score') return { type: 'score', score: 2 }

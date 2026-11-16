@@ -14,6 +14,7 @@ import {
   paths,
   readCards,
   readJson,
+  sha256,
   titleFromFile,
   writeJson,
   type Concept,
@@ -26,6 +27,7 @@ import { sentCards } from './deliver.ts'
 import { EngineError } from './errors.ts'
 import type { ExamsFile } from './exams.ts'
 import type { Ports, SlideImage, Store } from './ports.ts'
+import { entersCourse, isJunkPath, sortFiles, type FileKind } from './sort.ts'
 
 export interface CourseSummary {
   /** The folder name: what every command takes as `course`. */
@@ -198,10 +200,6 @@ export async function createCourse(store: Store, name: string, goal: Goal): Prom
   return id
 }
 
-/**
- * Adds PDFs to the course. Nothing is added unless every file can be: a lecture is known by
- * its file name, so a name is never taken twice.
- */
 /** The past papers of a course: those a build read, with their questions, and those it has not. */
 async function papers(store: Store, course: string): Promise<PaperState[]> {
   const read = (await readJson<ExamsFile>(store, paths.examsFile(course)))?.papers ?? []
@@ -212,40 +210,139 @@ async function papers(store: Store, course: string): Promise<PaperState[]> {
   }))
 }
 
+/** Where an added PDF goes: lecture slides or past exam papers. */
+export type Shelf = 'slides' | 'exams'
+
+/** A file of an add that stayed out of the course, and why. */
+export interface LeftOut {
+  /** As it was given: its name, or its path inside the folder it came in. */
+  path: string
+  /**
+   * `kind`: a kind the course does not use yet, such as an exercise sheet. `unsure`: the
+   * decision model could not tell. `already`: the course has a file of that name or that
+   * content, or this add holds the same file twice. `unreadable`: not a PDF that can be read.
+   */
+  why: 'kind' | 'unsure' | 'already' | 'unreadable'
+  kind: FileKind | null
+}
+
+export interface Added {
+  added: { file: string; to: Shelf }[]
+  left: LeftOut[]
+}
+
+const looksLikePdf = (name: string, bytes: Uint8Array) =>
+  name.toLowerCase().endsWith('.pdf') && String.fromCharCode(...bytes.slice(0, 4)) === '%PDF'
+
 /**
- * Adds PDFs to the course: lecture slides, which the next build turns into lectures, or past
+ * Adds PDFs to the course: lecture slides, which the next build turns into lectures, and past
  * exam papers, whose questions the next build turns into cards for the lectures it builds.
+ *
+ * With `to`, every file goes there, and nothing is added unless every file can be. Without it,
+ * each file is sorted by its kind ([sort.ts](sort.ts)), and only lecture slides and past exams
+ * come in. Everything else stays out of the course and is listed, so a whole course folder can
+ * be added, and added again once new lectures are in it. The same file under a second name comes
+ * in once: a paper counted twice would double how often its questions were asked.
  */
 export async function addFiles(
-  store: Store,
+  { store, pdf, decisions }: Ports,
   course: string,
   files: { name: string; data: Uint8Array }[],
-  to: 'slides' | 'exams' = 'slides',
-): Promise<string[]> {
+  to?: Shelf,
+): Promise<Added> {
   await courseFile(store, course)
-  const folder = to === 'exams' ? paths.exams(course) : paths.slides(course)
   const present = new Set([
     ...(await store.list(paths.slides(course))),
     ...(await store.list(paths.exams(course))),
   ])
   const names = fileNames(files.map((file) => file.name))
-  const pdfs = files.map(({ data }, i) => ({ name: names[i]!, bytes: data }))
-  for (const [i, { name, bytes }] of pdfs.entries()) {
-    const isPdf =
-      name.toLowerCase().endsWith('.pdf') && String.fromCharCode(...bytes.slice(0, 4)) === '%PDF'
-    if (!isPdf) {
-      const what = to === 'exams' ? 'the exam paper' : 'the slides'
-      throw new EngineError(`${name} is not a PDF.`, `Export ${what} as PDF and add that file.`)
+  const pdfs = files.map(({ name, data }, i) => ({ path: name, name: names[i]!, bytes: data }))
+  const taken = (name: string, i: number) =>
+    present.has(name) || pdfs.findIndex((other) => other.name === name) !== i
+
+  if (to) {
+    for (const [i, { name, bytes }] of pdfs.entries()) {
+      if (!looksLikePdf(name, bytes)) {
+        const what = to === 'exams' ? 'the exam paper' : 'the slides'
+        throw new EngineError(`${name} is not a PDF.`, `Export ${what} as PDF and add that file.`)
+      }
+      if (taken(name, i)) {
+        throw new EngineError(
+          `The course already has a file named ${name}.`,
+          'Rename the new file, then add it again.',
+        )
+      }
     }
-    if (present.has(name) || pdfs.findIndex((other) => other.name === name) !== i) {
-      throw new EngineError(
-        `The course already has a file named ${name}.`,
-        'Rename the new file, then add it again.',
-      )
-    }
+    for (const { name, bytes } of pdfs)
+      await store.writeBytes(`${paths[to](course)}/${name}`, bytes)
+    return { added: pdfs.map(({ name }) => ({ file: name, to })), left: [] }
   }
-  for (const { name, bytes } of pdfs) await store.writeBytes(`${folder}/${name}`, bytes)
-  return pdfs.map((pdf) => pdf.name)
+
+  // Files in hidden folders or code projects are no course material; they are not even listed.
+  const courseFiles = pdfs.filter(({ path }) => !isJunkPath(path))
+  // Content the course holds, and a second copy inside this add, stay out before any request is
+  // paid for them, so adding a folder again costs nothing for what it took in before.
+  const held = new Set<string>()
+  for (const shelf of ['slides', 'exams'] as const) {
+    for (const name of await store.list(paths[shelf](course)))
+      held.add(await sha256(await store.readBytes(`${paths[shelf](course)}/${name}`)))
+  }
+  const left: LeftOut[] = []
+  const readable: ((typeof pdfs)[number] & { pages: string[][] })[] = []
+  for (const file of courseFiles) {
+    const content = await sha256(file.bytes)
+    if (taken(file.name, pdfs.indexOf(file)) || held.has(content)) {
+      left.push({ path: file.path, why: 'already', kind: null })
+      continue
+    }
+    held.add(content)
+    const pages = looksLikePdf(file.name, file.bytes)
+      ? await pdf.readSlides(file.bytes).catch(() => null)
+      : null
+    if (pages && pages.length > 0) readable.push({ ...file, pages })
+    else left.push({ path: file.path, why: 'unreadable', kind: null })
+  }
+  const kinds = await sortFiles({ pdf, decisions }, readable)
+  const added: Added['added'] = []
+  for (const [i, { path, name, bytes }] of readable.entries()) {
+    const kind = kinds[i]!
+    if (!kind || !entersCourse(kind)) {
+      left.push({ path, why: kind ? 'kind' : 'unsure', kind })
+      continue
+    }
+    const shelf: Shelf = kind === 'slides' ? 'slides' : 'exams'
+    await store.writeBytes(`${paths[shelf](course)}/${name}`, bytes)
+    added.push({ file: name, to: shelf })
+  }
+  return { added, left }
+}
+
+/**
+ * Moves a file between lecture slides and past exams, for a file that was sorted wrongly. Only
+ * a file no build has used yet can move: a built lecture or a paper that was read stays.
+ */
+export async function moveFile(
+  store: Store,
+  course: string,
+  file: string,
+  to: Shelf,
+): Promise<void> {
+  const state = await courseFile(store, course)
+  const from: Shelf = to === 'exams' ? 'slides' : 'exams'
+  if (!(await store.list(paths[from](course))).includes(file)) {
+    throw new EngineError(
+      `The course has no ${from === 'exams' ? 'past exam' : 'lecture'} named ${file}.`,
+      'Move a file the course has.',
+    )
+  }
+  const read = (await readJson<ExamsFile>(store, paths.examsFile(course)))?.papers ?? []
+  if (state.lectures.some((l) => l.file === file) || read.some((p) => p.file === file)) {
+    throw new EngineError(
+      `${file} has cards already, so it cannot move.`,
+      'Only a file without cards can be moved.',
+    )
+  }
+  await store.move(`${paths[from](course)}/${file}`, `${paths[to](course)}/${file}`)
 }
 
 /**
@@ -255,7 +352,7 @@ export async function addFiles(
  * spaces: `Week 1 slides.pdf`.
  */
 function fileNames(paths: string[]): string[] {
-  const parts = paths.map((path) => path.split(/[\\/]/).filter(Boolean))
+  const parts = paths.map((path) => path.normalize('NFC').split(/[\\/]/).filter(Boolean))
   const own = parts.map((p) => p.at(-1)!)
   let shared = 0
   while (parts.every((p) => p.length - 1 > shared && p[shared] === parts[0]![shared])) shared += 1

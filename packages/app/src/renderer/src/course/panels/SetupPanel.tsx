@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import type { Goal } from '../../../../shared/contract.ts'
+import type { FileKind, Goal, LeftFile } from '../../../../shared/contract.ts'
 import { cardCount, useStore } from '../../store.ts'
 import { plural } from '../../lecture.ts'
 import { fromInput } from '../../picked.ts'
@@ -13,6 +13,30 @@ const CONSEQUENCE: Record<Goal, string> = {
   top: 'Everything worth learning: nearly two cards per slide.',
 }
 
+/** Why a file stayed out of the course for its kind, in one line. Slides and exams come in. */
+const KIND_REASON: Partial<Record<FileKind, string>> = {
+  notes: 'Lecture notes or a summary. Cards are made from the slides.',
+  'exam-solution': 'An exam solution. The questions are read from the exam itself.',
+  exercise: 'An exercise sheet. Lectern does not use those yet.',
+  'exercise-solution': 'An exercise solution. Lectern does not use those yet.',
+  reading: 'A reading. Cards are made from the slides.',
+  organisation: 'About how the course is run, not its subject.',
+}
+
+function reason(left: LeftFile): string {
+  const kind = left.why === 'kind' && left.kind ? KIND_REASON[left.kind] : undefined
+  if (kind) return kind
+  if (left.why === 'unsure') return 'I could not tell what this is.'
+  if (left.why === 'format') return 'Not a PDF. Export it as PDF and add that.'
+  return 'This PDF could not be read.'
+}
+
+const nameOf = (path: string) =>
+  path
+    .split('/')
+    .at(-1)!
+    .replace(/\.pdf$/i, '')
+
 /** Before the cards: what was found in the files, and the goal question. */
 export function SetupPanel({ close }: { close: ReactNode }) {
   const course = useStore((s) => s.course)
@@ -20,12 +44,18 @@ export function SetupPanel({ close }: { close: ReactNode }) {
   const setGoal = useStore((s) => s.setGoal)
   const estimate = useStore((s) => s.estimate)
   const addExams = useStore((s) => s.addExams)
+  const leftOut = useStore((s) => (s.course ? s.leftOut[s.course.id] : undefined)) ?? []
+  const sorting = useStore((s) => s.adding !== null)
+  const addLeftOut = useStore((s) => s.addLeftOut)
+  const moveFile = useStore((s) => s.moveFile)
   const picker = useRef<HTMLInputElement>(null)
   if (!course) return null
 
   const lectures = course.pending.length
   const slides = course.pending.reduce((n, p) => n + p.slides, 0)
   const adding = cardCount(course) > 0
+  const already = leftOut.filter((l) => l.why === 'already').length
+  const shown = leftOut.filter((l) => l.why !== 'already')
 
   return (
     <>
@@ -37,22 +67,95 @@ export function SetupPanel({ close }: { close: ReactNode }) {
         {close}
       </div>
       <div className="panel-body">
-        <section className="panel-section">
-          <p>
-            {adding
-              ? `I found ${plural(lectures, 'new lecture PDF')} and put them on the map after your other lectures.`
-              : `I read your ${plural(lectures, 'lecture PDF')} and put them on the map in course order.`}
+        {sorting && (
+          <p className="panel-section panel-note" role="status">
+            Looking at the files you added: which are lectures, which are past exams.
           </p>
-          <ul className="panel-group">
-            <li className="setup-found">
-              <span className="setup-count num">{lectures}</span>
-              <span>
-                <b>{lectures === 1 ? 'lecture' : 'lectures'}</b>
-                <span className="t-secondary">: {plural(slides, 'slide')}</span>
-              </span>
-            </li>
-          </ul>
-        </section>
+        )}
+        {lectures > 0 && (
+          <section className="panel-section">
+            <p>
+              {adding
+                ? `I found ${plural(lectures, 'new lecture PDF')} and put them on the map after your other lectures.`
+                : `I read your ${plural(lectures, 'lecture PDF')} and put them on the map in course order.`}
+            </p>
+            <ul className="panel-group">
+              <li className="setup-found">
+                <span className="setup-count num">{lectures}</span>
+                <span>
+                  <b>{lectures === 1 ? 'lecture' : 'lectures'}</b>
+                  <span className="t-secondary">: {plural(slides, 'slide')}</span>
+                </span>
+              </li>
+            </ul>
+            <details className="setup-files">
+              <summary>Lecture files</summary>
+              <ul className="panel-group">
+                {course.pending.map((p) => (
+                  <li key={p.file} className="setup-row">
+                    <span className="setup-paper-name">{nameOf(p.file)}</span>
+                    <button
+                      type="button"
+                      className="btn btn-quiet btn-accent"
+                      disabled={sorting}
+                      aria-label={`Move ${nameOf(p.file)} to past exams`}
+                      onClick={() => void moveFile(p.file, 'exams')}
+                    >
+                      Move to past exams
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </section>
+        )}
+        {(shown.length > 0 || already > 0) && (
+          <section className="panel-section panel-section-rule setup-left">
+            <h2 className="panel-h2">Left out</h2>
+            <p className="panel-note">
+              Only lecture slides and past exams make cards. These files stay out of the course.
+            </p>
+            <ul className="panel-group">
+              {shown.map((left) => (
+                <li key={left.path} className="setup-row">
+                  <span className="setup-paper-name" title={left.path}>
+                    {nameOf(left.path)}
+                  </span>
+                  <span className="t-secondary">{reason(left)}</span>
+                  {(left.why === 'kind' || left.why === 'unsure') && (
+                    <span className="setup-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-quiet btn-accent"
+                        disabled={sorting}
+                        aria-label={`Add ${nameOf(left.path)} as a lecture`}
+                        onClick={() => void addLeftOut(left.path, 'slides')}
+                      >
+                        Add as lecture
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-quiet btn-accent"
+                        disabled={sorting}
+                        aria-label={`Add ${nameOf(left.path)} as a past exam`}
+                        onClick={() => void addLeftOut(left.path, 'exams')}
+                      >
+                        Add as past exam
+                      </button>
+                    </span>
+                  )}
+                </li>
+              ))}
+              {already > 0 && (
+                <li className="setup-row t-secondary">
+                  {already === 1
+                    ? 'One file is in the course already.'
+                    : `${already} files are in the course already.`}
+                </li>
+              )}
+            </ul>
+          </section>
+        )}
         <section className="panel-section panel-section-rule setup-exams">
           <h2 className="panel-h2">Past exams</h2>
           <p className="panel-note">
@@ -61,19 +164,38 @@ export function SetupPanel({ close }: { close: ReactNode }) {
           </p>
           {course.exams.length > 0 && (
             <ul className="panel-group">
-              {course.exams.map((paper) => (
-                <li key={paper.file} className="setup-paper">
-                  <span className="setup-paper-name">{paper.file.replace(/\.pdf$/i, '')}</span>
-                  <span className="t-secondary">
-                    {paper.questions === null
-                      ? 'read with these cards'
-                      : plural(paper.questions, 'question')}
-                  </span>
-                </li>
-              ))}
+              {course.exams.map((paper) =>
+                paper.questions === null ? (
+                  <li key={paper.file} className="setup-row">
+                    <span className="setup-paper-name">{nameOf(paper.file)}</span>
+                    <span className="t-secondary">read with these cards</span>
+                    <span className="setup-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-quiet btn-accent"
+                        disabled={sorting}
+                        aria-label={`Move ${nameOf(paper.file)} to lectures`}
+                        onClick={() => void moveFile(paper.file, 'slides')}
+                      >
+                        Move to lectures
+                      </button>
+                    </span>
+                  </li>
+                ) : (
+                  <li key={paper.file} className="setup-paper">
+                    <span className="setup-paper-name">{nameOf(paper.file)}</span>
+                    <span className="t-secondary">{plural(paper.questions, 'question')}</span>
+                  </li>
+                ),
+              )}
             </ul>
           )}
-          <button type="button" className="btn" onClick={() => picker.current?.click()}>
+          <button
+            type="button"
+            className="btn"
+            disabled={sorting}
+            onClick={() => picker.current?.click()}
+          >
             {course.exams.length > 0 ? 'Add more past exams' : 'Add past exams'}
           </button>
           <input

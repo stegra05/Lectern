@@ -43,18 +43,32 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     )
   })
 
-  await test.step('a folder: its two lectures land on the track, the goal is asked', async () => {
-    // The course folder as a student keeps it: a lecture at the top, one in a subfolder, and a
-    // file that is no PDF, which is skipped.
+  await test.step('a folder: its two lectures land on the track, the rest stays out', async () => {
+    // The course folder as a student keeps it: a lecture at the top, one in a subfolder, an
+    // exercise sheet, a slide deck not exported as PDF, a scan without text, and junk.
     const folder = test.info().outputPath('Entrepreneurship')
     const [first, second] = Object.entries(LECTURES)
     await mkdir(join(folder, 'Week 2'), { recursive: true })
+    await mkdir(join(folder, 'Übungen'), { recursive: true })
     await writeFile(join(folder, first![0]), await makePdf(first![1]))
     await writeFile(join(folder, 'Week 2', second![0]), await makePdf(second![1]))
+    await writeFile(join(folder, 'Übungen', 'Blatt 1.pdf'), await makePdf([['Name three risks']]))
+    await writeFile(join(folder, 'Week 3.pptx'), 'not a pdf')
+    await writeFile(join(folder, 'Scan.pdf'), await makePdf([[]]))
     await writeFile(join(folder, 'notes.txt'), 'Bring a pen.')
+    await writeFile(join(folder, '.DS_Store'), '')
     await page.getByLabel('Folder of lecture PDFs').setInputFiles(folder)
     await expect(page.getByRole('img', { name: /Lecture 01 Introduction, 4 slides/ })).toBeVisible()
     await expect(page.getByRole('img', { name: /Lecture 02 Effectuation, 4 slides/ })).toBeVisible()
+    await expect(page.getByRole('img', { name: /Lecture 03/ })).toHaveCount(0)
+    const panel = page.getByRole('complementary')
+    await expect(panel.getByRole('heading', { name: 'Left out' })).toBeVisible()
+    const left = panel.locator('.setup-left li')
+    await expect(left).toHaveCount(3)
+    await expect(left.filter({ hasText: 'Blatt 1' })).toContainText('An exercise sheet.')
+    await expect(left.filter({ hasText: 'Week 3' })).toContainText('Not a PDF.')
+    await expect(left.filter({ hasText: 'Scan' })).toContainText('I could not tell what this is.')
+    await expect(panel.getByRole('button', { name: 'Add Blatt 1 as a lecture' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'I am aiming for' })).toBeVisible()
     // The goal changes what is made: the estimate of cards differs between goals.
     const note = page.getByRole('complementary').getByText(/About \d+ cards?\./)
@@ -73,6 +87,18 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
       'aria-pressed',
       'true',
     )
+  })
+
+  await test.step('a file left out is added by hand, and a lecture moved to past exams', async () => {
+    const panel = page.getByRole('complementary')
+    await panel.getByRole('button', { name: 'Add Blatt 1 as a lecture' }).click()
+    await expect(page.getByRole('img', { name: /Lecture 03 Blatt 1, 1 slide/ })).toBeVisible()
+    await expect(panel.locator('.setup-left li')).toHaveCount(2)
+    await panel.getByText('Lecture files').click()
+    await panel.getByRole('button', { name: 'Move Blatt 1 to past exams' }).click()
+    await expect(page.getByRole('img', { name: /Lecture 03/ })).toHaveCount(0)
+    await expect(panel.locator('.setup-exams')).toContainText('Blatt 1')
+    await expect(panel.getByRole('button', { name: 'Move Blatt 1 to lectures' })).toBeVisible()
   })
 
   await test.step('past exams: a paper is added in the setup and waits for the cards', async () => {
