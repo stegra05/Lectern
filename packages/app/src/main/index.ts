@@ -13,7 +13,7 @@
  *   LECTERN_SHOW=0         keep the window off the screen, for tests
  */
 
-import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
 import { engineFor } from './engine.ts'
 import { inAppWords } from './words.ts'
@@ -35,10 +35,51 @@ const templates = app.isPackaged
 const settings = settingsStore(app.getPath('userData'), fake)
 // Rendered from design/icon/master.py by design/icon/export.sh.
 const icon = join(app.getAppPath(), 'resources/icon.png')
-/** Engine commands that have not finished yet. */
-let running = 0
+/** Engine commands that have not finished yet: what each is, its stop and its end. */
+const running = new Map<AbortController, { type: unknown; ended: Promise<void> }>()
 /** Set once the app quits, when a closed window really closes. */
 let quitting = false
+/** Set while the student is asked whether to stop a run and quit. */
+let asking = false
+
+/** What the student is asked before a quit cuts a build or a send. */
+const QUESTIONS = {
+  build: {
+    message: 'Lectern is still making your cards.',
+    detail: 'The lectures finished so far are kept. Building again makes only the rest.',
+  },
+  send: {
+    message: 'Lectern is still sending your cards to Anki.',
+    detail: 'The cards already sent stay in Anki. The rest are sent next time.',
+  },
+}
+
+/**
+ * Quits once every command has ended. A build or a send is stopped at its next safe point, after
+ * the student said so; a short command just finishes.
+ */
+async function stopAndQuit(): Promise<void> {
+  const types = new Set([...running.values()].map((r) => r.type))
+  const cut = types.has('build') ? 'build' : types.has('send') ? 'send' : null
+  if (cut) {
+    if (asking) return
+    asking = true
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      ...QUESTIONS[cut],
+      buttons: ['Keep going', 'Stop and quit'],
+      defaultId: 0,
+      cancelId: 0,
+    })
+    asking = false
+    if (response === 0) return
+  }
+  quitting = true
+  const ended = [...running.values()].map((r) => r.ended)
+  for (const stop of running.keys()) stop.abort()
+  await Promise.all(ended)
+  app.quit()
+}
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -70,12 +111,12 @@ function createWindow(): void {
   })
   // On macOS the app outlives its window. Closed while a command runs, such as a build or a
   // send, the window is only hidden: the Dock icon brings it back with the run still on screen,
-  // and no second run of the course starts beside it.
+  // and no second run of the course starts beside it. Elsewhere closing the window quits.
   window.on('close', (closing) => {
-    if (process.platform === 'darwin' && running > 0 && !quitting) {
-      closing.preventDefault()
-      window.hide()
-    }
+    if (quitting || running.size === 0) return
+    closing.preventDefault()
+    if (process.platform === 'darwin') window.hide()
+    else void stopAndQuit()
   })
   if (devServer) void window.loadURL(devServer)
   else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))
@@ -91,15 +132,21 @@ ipcMain.handle('engine:run', async (event, id: number, command: unknown) => {
     notesFile: join(app.getPath('userData'), 'anki-notes.json'),
   })
   let sent = 0
-  running++
-  try {
-    await engine.run(command, (engineEvent) => {
+  const stop = new AbortController()
+  const ended = engine.run(
+    command,
+    (engineEvent) => {
       if (event.sender.isDestroyed()) return
       event.sender.send('engine:event', id, inAppWords(engineEvent))
       sent++
-    })
+    },
+    stop.signal,
+  )
+  running.set(stop, { type: (command as { type?: unknown } | null)?.type, ended })
+  try {
+    await ended
   } finally {
-    running--
+    running.delete(stop)
   }
   // How many events went out: the interface waits for all of them, see the preload script.
   return sent
@@ -118,8 +165,14 @@ void app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => {
-  quitting = true
+app.on('before-quit', (quit) => {
+  if (quitting) return
+  if (running.size === 0) {
+    quitting = true
+    return
+  }
+  quit.preventDefault()
+  void stopAndQuit()
 })
 
 app.on('window-all-closed', () => {

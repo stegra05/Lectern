@@ -183,6 +183,8 @@ export async function send(
   ports: Ports,
   { course }: { course: string },
   emit: Emit,
+  /** Aborted when the student stops the send: no card is added after it. */
+  signal?: AbortSignal,
 ): Promise<void> {
   const { store, pdf, anki } = ports
   const file = await readJson<CourseFile>(store, paths.course(course))
@@ -229,6 +231,12 @@ export async function send(
     let missing = items
     for (let attempt = 1; missing.length > 0 && attempt <= ATTEMPTS; attempt++) {
       for (const item of missing) {
+        if (signal?.aborted) {
+          throw new EngineError(
+            'The send was stopped.',
+            'The cards already sent stay in Anki. Send again to add the rest.',
+          )
+        }
         const { card, lecture, deck } = item
         // A call that timed out may still have been applied: look for the note before adding
         // it again, and after an add that failed.

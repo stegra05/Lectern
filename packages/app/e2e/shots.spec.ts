@@ -188,6 +188,10 @@ test('pictures of every base screen', async () => {
       { polling: 10, timeout: 60_000 },
     )
     await shoot(page, '05-run-midway')
+    // A quit during the run would ask first, so the test lets it end.
+    await expect(page.getByRole('region', { name: 'Status' })).toContainText(/\d+ cards/, {
+      timeout: 60_000,
+    })
   } finally {
     await app.close()
   }

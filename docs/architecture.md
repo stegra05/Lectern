@@ -27,7 +27,7 @@ Engine runtime dependencies (`packages/engine/package.json`): `openai`, `pdfjs-d
 ### Engine source tree
 
 ```
-src/api.ts            the boundary: createEngine(ports).run(command, emit)
+src/api.ts            the boundary: createEngine(ports).run(command, emit, signal?)
 src/commands.ts       CommandSchema and the Event type: what crosses the boundary
 src/ports.ts          every dependency from outside: Store, PdfPort, ModelPort, DecisionsPort, AnkiPort, TemplatesPort
 src/build.ts          the build and estimate commands: the whole pipeline
@@ -540,6 +540,9 @@ One function: `createEngine(ports).run(command, emit)` (`api.ts`). Commands in a
 plain data, so the in-app channel can later be swapped for HTTP. A command is parsed with a zod
 discriminated union (`CommandSchema` in `commands.ts`); a bad command, or any thrown
 `EngineError`, becomes a `failed` event with `message` and `fix`. Nothing throws out of `run`.
+An aborted `signal` stops a build before its next model call, after the calls under way have
+ended, so its run record is written as for any failure; it stops a send before its next note, and
+the send writes `anki.json` as it does after any failure. Other commands ignore it.
 PDFs cross the boundary as `Uint8Array`: the `add` command carries each file as its name, or its
 path inside the folder it came in, and its bytes. A slide picture leaves it as a base64 PNG in the `slide` event.
 
@@ -585,6 +588,8 @@ The app side (`packages/app`):
   how many events it sent. The preload script waits for that many before the call resolves, because
   the "finished" answer can overtake the last events (`preload/index.ts`). On macOS a window closed
   while a command runs is only hidden, and the Dock icon shows it again with the run still on screen.
+  A quit while a build or a send runs (Cmd+Q, or closing the window on Windows and Linux) asks
+  first; "Stop and quit" aborts every running command, waits until each has ended, then quits.
 - `engine.ts` wires the ports: `nodeStore`, `ankiConnect`, `nodeTemplates` (reading
   `packages/engine/anki` in the repository, or, in a packaged app, the `anki` folder that
   `electron-builder.yml` copies into the app's resources, `process.resourcesPath`), `pdfjsReader`,
