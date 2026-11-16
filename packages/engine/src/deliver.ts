@@ -131,8 +131,11 @@ function fieldsForAnki(course: string, card: CardFile): Record<string, string> {
   )
 }
 
-/** Marks the note of a card, so a note that Anki added after the add-on gave up is found again. */
-const idTag = (card: CardFile) => `lectern-id::${card.id}`
+/**
+ * Marks the note of a card, so a note that Anki added after the add-on gave up is found again.
+ * It names the course: two courses may have cards with the same id.
+ */
+const idTag = (course: string, card: CardFile) => `lectern-id::${tagged(course)}::${card.id}`
 
 /**
  * Tags are hierarchical in Anki: `entrepreneurship::lecture::02`, `entrepreneurship::role::case`,
@@ -144,7 +147,7 @@ function tags(course: string, lecture: number, card: CardFile): string[] {
     `${name}::lecture::${two(lecture)}`,
     `${name}::role::${card.fields.Role}`,
     ...(card.own ? [`${name}::own`] : []),
-    idTag(card),
+    idTag(course, card),
   ]
 }
 
@@ -227,7 +230,7 @@ export async function send(
         const { card, lecture, deck } = item
         // A call that timed out may still have been applied: look for the note before adding
         // it again, and after an add that failed.
-        let note = (await anki.taggedNotes(idTag(card)))[0]
+        let note = (await anki.taggedNotes(idTag(course, card)))[0]
         if (note === undefined) {
           try {
             note = await anki.addNote({
@@ -237,7 +240,7 @@ export async function send(
               tags: tags(course, lecture, card),
             })
           } catch (error) {
-            note = (await anki.taggedNotes(idTag(card)).catch(() => []))[0]
+            note = (await anki.taggedNotes(idTag(course, card)).catch(() => []))[0]
             if (note === undefined) throw error
           }
         }
