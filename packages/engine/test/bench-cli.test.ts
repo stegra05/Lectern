@@ -106,4 +106,69 @@ describe('the exam eval on the command line', () => {
       expect(batches.out).toContain('--size is a whole number above zero')
     }
   })
+
+  /** A judged run folder beside the rubric: its cards, what its build took, and verdicts. */
+  async function judgedRun(
+    root: string,
+    rubric: string,
+    name: string,
+    held: string[],
+    calls: number,
+  ) {
+    const deck = join(root, name)
+    await mkdir(deck)
+    await write(join(deck, 'cards.json'), [
+      {
+        id: `${name}-vp`,
+        question: 'What is a value proposition?',
+        answer: `The unique offering (${name}).`,
+      },
+      {
+        id: `${name}-means`,
+        question: 'What does effectuation start from?',
+        answer: `Available means (${name}).`,
+      },
+    ])
+    await write(join(deck, 'meta.json'), { effort: { calls, outputTokens: 1000 } })
+    await run('batches', rubric, deck)
+    const batch = JSON.parse(await readFile(join(deck, 'pairs/01.json'), 'utf8')) as {
+      point: string
+      cards: { id: string }[]
+    }[]
+    const fits = (point: string, card: string) =>
+      (point.endsWith('/1/1') && card.endsWith('-vp')) ||
+      (point.endsWith('/2/1') && card.endsWith('-means'))
+    await write(
+      join(deck, 'verdicts/01.json'),
+      batch.flatMap(({ point, cards }) =>
+        cards.map((card) => ({
+          point,
+          card: card.id,
+          verdict: fits(point, card.id) && held.some((h) => card.id.endsWith(h)) ? 'same' : 'no',
+        })),
+      ),
+    )
+    return deck
+  }
+
+  it('gives one verdict on a change: better, or stopped by a guard', async () => {
+    const { root, rubric } = await setup()
+    const old = [
+      await judgedRun(root, rubric, 'old1', ['-vp'], 100),
+      await judgedRun(root, rubric, 'old2', ['-vp'], 100),
+    ]
+    const better = await judgedRun(root, rubric, 'new1', ['-vp', '-means'], 105)
+    const gate = (next: string) =>
+      run('gate', rubric, '--old', old[0]!, '--old', old[1]!, '--new', next)
+    const passed = await gate(better)
+    expect(passed.out).toContain('Old: 50.0% of the marks over 2 builds (50.0%, 50.0%)')
+    expect(passed.out).toContain('New: 100.0% of the marks over 1 builds (100.0%)')
+    expect(passed.out).toContain('holds  calls: 100 to 105, at most 110')
+    expect(passed.out.trim().endsWith('Verdict: better')).toBe(true)
+
+    const costly = await judgedRun(root, rubric, 'new2', ['-vp', '-means'], 130)
+    const stopped = await gate(costly)
+    expect(stopped.out).toContain('FAILS  calls: 100 to 130, at most 110')
+    expect(stopped.out.trim().endsWith('Verdict: guard')).toBe(true)
+  })
 })

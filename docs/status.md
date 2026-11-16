@@ -38,9 +38,12 @@ never saw (`bench.ts`), and against Steffen's reference deck (`refdeck.ts`). On 
 Entrepreneurship papers three builds of v3 of 2026-11-16 hold 46.0%, 51.2% and 48.5% of the
 marks (mean 48.6), a build of 2026-11-15 with cards from the older papers 43.8%, and a build
 from slides only 31.3%. Builds of the same code differ by several points, so a change counts
-only above about 7 points for one build each ([RFD 14](rfd/0014-the-quality-bar.md)).
+only above about 7 points for one build each. `bench.ts gate` gives one verdict on a change:
+better only above that bar and with the deck no bigger, the answers no longer and the build
+no costlier. The papers of 2022 to 2024 are a dev set to tune on, the four newest the test set
+([RFD 14](rfd/0014-the-quality-bar.md)).
 
-Engine tests: 260 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+Engine tests: 268 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 
@@ -67,6 +70,8 @@ card arrived tagged `::own`.
 - The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
 - The exam rubric is model-made and no person has checked it
   ([#264](https://github.com/stegra05/lectern/issues/264)). It exists for one course.
+- No build has been scored on the dev papers: every build so far read them as input
+  ([#270](https://github.com/stegra05/lectern/issues/270)).
 
 ## Not built
 

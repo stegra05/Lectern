@@ -658,8 +658,12 @@ script calls a model; judges are people or models that answer batch files.
 | Work for the judge | `node eval/bench.ts batches <rubric.json> <run folder> [--size 27]` | `pairs/NN.json`: per point its eight closest cards, only pairs no judge has decided |
 | Score | `node eval/bench.ts report <rubric.json> <run folder>` | prints the share of the marks held with its 95 percent interval, writes `standings.json` |
 | Two runs | `node eval/bench.ts compare <rubric.json> <run folder> <run folder>` | prints the paired difference and the points gained and lost |
+| A change | `node eval/bench.ts gate <rubric.json> --old <run folder>... --new <run folder>...` | prints both sides' mean score, the difference against what builds of the same code differ by, every guard, and a last line `Verdict: better`, `worse`, `guard` or `unclear` |
 
-A run folder is what `refdeck.ts run` writes (`cards.json`, `cards.txt`). The paper files come
+A run folder is what `refdeck.ts run` writes (`cards.json`, `cards.txt`, and `meta.json` with
+what the build took, which the gate reads). The gate's rule and its guards are in
+`eval/bench/gate.ts`: deck size, answer length, calls and tokens written, each held to a share
+above the old side. The paper files come
 from extractors that follow `eval/RUBRIC.md`: one file per held-out paper with its questions,
 their marks, the choices the paper gives ("five of these six") and one fact per point. A judge
 follows `eval/JUDGE-PAIRS.md` and answers each batch into `verdicts/NN.json` with `same`,

@@ -24,6 +24,23 @@ very exams the engine also reads, a third of them are not on the slides, and the
 shaped on the same course. Past papers exist for most courses, and the held-back ones are
 unseen by construction.
 
+**A change passes one gate.** `bench.ts gate` holds the builds of the new code against the
+builds of the old and says `better` only when the mean score rose by more than builds of the
+same code differ, and no guard fails: the deck at most 5 percent bigger, the answers at most 10
+percent longer, at most 10 percent more calls and tokens written. The guards close the cheap
+ways to a higher score, more cards and cards stuffed with several facts, and hold a change to
+what a build takes. Calls and tokens written stand in for time: the clock moved by 7 percent
+between three builds of the same code, calls by 7 and tokens by 5, and only those two are the
+engine's doing. A change that fails a guard is not refused for good. It is a trade, and a trade
+is Steffen's to decide, not an agent's.
+
+**Tune on the dev papers, confirm on the test papers.** The four papers of 2022 to 2024 are
+the dev set (221 points), the four newest the test set (218 points), and a build for either
+reads only the 14 papers before 2022. Work on the engine looks at the dev score. The test score
+is read once, when a change is to be accepted. This exam repeats itself: 114 of the dev set's
+143 facts are also in the test set. So the test set guards against a slip, not against fitting
+this one course; only a second course does that.
+
 **The reference deck stays second.** Steffen's Entrepreneurship deck: 636 vetted notes for 11
 slide decks (356 slides), made with a strong model. Its atomic pass took 178 cards to 636 and
 the average answer from 59 words to 11.6. The eval exports it from Anki and a judge (Claude
@@ -66,6 +83,13 @@ by Claude Haiku:
   three** (twice the standard error of the difference, `eval/spread.ts`); three builds give a
   rough sd, so these are rough too. The gain of exam cards over slides only (12.5 points, one
   build each) clears that bar.
+- **The gate on real builds.** Slides only against v3: 17.4 points up, and stopped by two
+  guards (664 cards against 631, 36 percent more tokens written). Cards from past exams buy
+  their marks with a bigger deck and more writing, which was Steffen's call
+  ([RFD 8](0008-past-exams.md)). The build of 2026-11-15 with exam cards against v3: 4.9 points
+  up where 6.0 are believable, every guard holds, so unclear. These builds read 18 papers, the
+  dev papers among them, so none of them can be scored on the dev set yet
+  ([#270](https://github.com/stegra05/lectern/issues/270)).
 - **A run's score counts its own pairs only.** Its shortlist, and what its own judges found
   by searching the deck. Verdicts are kept under the texts of a pair, and builds share some
   cards word for word, so counting every kept verdict let a run rise when others were judged
@@ -144,3 +168,4 @@ with official solutions. Datenbanken has a deck from AnkiTUM as a reference, jud
 - Coverage at the fact level: [#108](https://github.com/stegra05/lectern/issues/108).
 - Facts only in pictures: [#106](https://github.com/stegra05/lectern/issues/106).
 - The exam rubric checked by Steffen: [#264](https://github.com/stegra05/lectern/issues/264).
+- The baseline of v3 on the dev papers: [#270](https://github.com/stegra05/lectern/issues/270).
