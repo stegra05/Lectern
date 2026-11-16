@@ -5,6 +5,7 @@
  */
 
 import { GOAL_PRESETS, type Goal } from './cards/roles.ts'
+import type { DecisionRequest, ModelRequest } from './ports.ts'
 
 /** The run stops when its real cost passes this multiple of the estimate. */
 export const CAP_MULTIPLE = 3
@@ -65,6 +66,54 @@ export interface Prices {
   model: { input: number; cachedInput: number; output: number; fast: number }
   /** Dollars per million input tokens of the decision model. Its answers cost nothing. */
   decisions: { input: number }
+}
+
+/** A call's input by the estimate's measures, in tokens: its characters and its pictures. */
+const inputTokens = (text: string[], pictures: number) =>
+  text.reduce((sum, part) => sum + part.length, 0) * TOKENS.perChar + pictures * TOKENS.perImage
+
+/**
+ * What a model call is expected to cost before it starts, by the estimate's own measures: its
+ * input at the full input price, and the reply the estimate counts for that kind of call. A
+ * sorting call (`map`) replies in proportion to the list in its prompt. The run holds this much
+ * of its cap while the call is under way. Dollars.
+ */
+export function modelReservation(
+  request: Pick<
+    ModelRequest,
+    'task' | 'system' | 'context' | 'prompt' | 'images' | 'shown' | 'fast'
+  >,
+  price: Prices['model'],
+): number {
+  const reply =
+    request.task === 'read'
+      ? Math.max(TOKENS.readReply, TOKENS.questionsPerPaper * TOKENS.questionReply)
+      : request.task === 'map'
+        ? request.prompt.length *
+          TOKENS.perChar *
+          Math.max(
+            TOKENS.groupReplyPerFact / TOKENS.groupPerFact,
+            TOKENS.familyReplyPerQuestion / TOKENS.familyPerQuestion,
+          )
+        : Math.max(TOKENS.fillReply, TOKENS.answerReply)
+  const input = inputTokens(
+    [request.system, request.context, request.prompt],
+    request.images.length + (request.shown?.length ?? 0),
+  )
+  const dollars = input * price.input + reply * price.output
+  return ((request.fast ? price.fast : 1) * dollars) / 1_000_000
+}
+
+/** What a decision request is expected to cost before it starts: its input, sent once. */
+export function decisionReservation(
+  request: Pick<DecisionRequest, 'context' | 'images' | 'questions'>,
+  price: Prices['decisions'],
+): number {
+  const input = inputTokens(
+    [request.context, JSON.stringify(request.questions)],
+    request.images.length,
+  )
+  return (input * price.input) / 1_000_000
 }
 
 export interface Estimate {

@@ -369,11 +369,17 @@ cents above. The bottom bar of the app shows "About N cents" from it. Runs carry
 the same conversion. The engine counts and caps in dollars.
 
 **Cap.** `capUsd = max(3 x estimate, 0.25 dollars)` (`CAP_MULTIPLE`, `CAP_FLOOR_USD`), or the
-command's own `capUsd` (CLI `--cap`). After every paid call, `spend` in `createAsk` adds the usage
-to the meter and throws an `EngineError` when the real cost is above the cap. Consequences:
+command's own `capUsd` (CLI `--cap`). Before a call starts, `createAsk` reserves its expected cost
+(`modelReservation` and `decisionReservation` in `cost.ts`: the input by the estimate's measures at
+the full input price, the reply at the estimate's figure for that kind of call). A call that would
+take the meter plus the reservations of the calls under way above the cap is not started, and
+throws an `EngineError`. When a call ends, failed or not, its reservation is released and its real
+cost is in the meter. `spend` still throws when the real cost is above the cap. Consequences:
 
-- The check happens after a call, so the call that crosses the cap is already paid, and up to 31
-  calls in flight finish (`createAsk` in `ask.ts`; after the first failure no call starts).
+- The run passes the cap only by how far the replies in flight cost more than their reservation,
+  and by the repeated input of a decision request with more than 200 questions (the adapter sends
+  it once per 200; `decisionReservation` counts it once). A hard limit needs an output limit per
+  call: #303. After the first failure no call starts.
 - The run fails, keeps the lectures it finished, and its run file records what it spent. Building
   again makes and pays only for the rest.
 - The app passes no `capUsd`, so it always uses 3 times the estimate.
@@ -637,7 +643,7 @@ tests pass scripted or in-memory versions:
 
 Engine test files, by what they cover: `build` (the pipeline), `checks` (the card checks and the
 organisation threshold), `exams`, `cli`, `plan`, `tree`, `slides`, `validate`, `cards`, `library`,
-`edit`, `deliver`, `openai`, and `openai.live` (skipped unless `LECTERN_LIVE=1`; it costs a fraction
+`edit`, `deliver`, `ask` (the cap with calls in flight), `openai`, and `openai.live` (skipped unless `LECTERN_LIVE=1`; it costs a fraction
 of a cent). `pnpm check` runs lint, format check, typecheck and the unit tests of both packages.
 The app's Playwright test (`pnpm test:e2e`, `e2e/course.spec.ts`) runs the whole way from a new
 course to its cards in the in-memory Anki on the offline models. `e2e/shots.spec.ts` takes
@@ -732,7 +738,8 @@ Each of these is an issue; none is a promise in this file.
 - `cloze` is never planned. No fact kind maps to it in the preset, so only a student's own card can
   have that role; the `cloze` example in the preset is never shown to a model. `name-two` is
   reached only from a `list` fact with exactly 2 items.
-- The cap can be exceeded by the last call and up to 31 in-flight calls.
+- The cap can be exceeded by how far the replies in flight run past their reservation: requests
+  carry no output limit (#303).
 - `survey` (also used by `estimate`) renders every slide to PNG locally, so an estimate is free but
   not instant.
 - A changed PDF behind a built lecture is ignored; the stored sha256 is not compared.
