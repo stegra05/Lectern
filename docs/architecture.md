@@ -96,9 +96,11 @@ Both models go through `createAsk` (`ask.ts`), which meters every call.
 
 ## 3. The pipeline, step by step
 
-`build` (`build.ts`) runs four course-wide phases that the app shows as the run screen: `read`,
-`map`, `write`, `check`. Only PDFs not yet in `course.json` are built. Nothing about the new
-lectures is written until every phase is through, and `course.json` is written last.
+`build` (`build.ts`) runs four phases that the app shows as the run screen: `read`, `map`,
+`write`, `check`. Only PDFs not yet in `course.json` are built. `read` and `map` run over all
+new lectures at once, since the plan shares the goal's cards out over the whole build. `write`
+and `check` then run one lecture after the other, so they overlap in the events, and each
+lecture is saved as soon as it is through (step 16).
 
 ```mermaid
 flowchart TD
@@ -139,7 +141,7 @@ flowchart TD
 | 14 | Assemble | code | Passing slots, place in the course, slide text | Card fields: HTML, Slots, Typed (empty), Source, Excerpt, Slide, Key | `assemble` in `cards/assemble.ts` |
 | 15 | Organisation check | decision | The card alone: question and answer | Probability that the card is about course organisation; at 0.2 or more the card is dropped | `ORGANISATION_THRESHOLD`, `cardInput` in `decide.ts` |
 | 16 | Exact twins | code | Questions of new cards against earlier and new cards | An identical question is dropped | `findClashes` in `clash.ts` |
-| 17 | Save | code | Everything accepted | `cards.yaml`, `lecture.json`, `exams.json`, `decisions.json`, `runs/NNN.json`, `course.json` | `build` in `build.ts` |
+| 17 | Save | code | One finished lecture | `cards.yaml`, `lecture.json`, `decisions.json`, `course.json`; with the last lecture `exams.json`; once per run `runs/NNN.json` | `saveLecture`, `saveExams`, `build` in `build.ts` |
 | 18 | Send | code through AnkiConnect | Cards not yet in Anki | Decks, note types, media, notes | `send` in `deliver.ts` |
 
 ### Step by step
@@ -269,14 +271,20 @@ words, with all earlier cards and the new ones before it. The same word set is d
 "asks the same question as <id>". An existing card is never the one that is dropped. No card is
 rewritten here.
 
-**16. Save (code).** Per new lecture: `cards.yaml` (the accepted cards), `lecture.json` (the tree,
-left-out slides with reasons, dropped cards). Then `exams.json` when there are papers,
-`decisions.json` (lines written by code from facts: goal, exams, left out, beyond the goal,
-recurring concepts, concepts without a card, dropped counts), `runs/NNN.json` (models, goal,
-calls, decisions, tokens, estimate, cost in dollars and euros, durations per phase) and last
-`course.json`. Because `course.json` lists a lecture only when everything else is saved, an
-interrupted build never leaves a half-built lecture counted as built. A build that fails still
-writes its run, marked `failed`, so money spent on it shows; it saves nothing else.
+**16. Save (code).** The rule: a lecture is saved when its cards are through the check, in this
+order, and `course.json` lists it last, so an interrupted build never leaves a half-built lecture
+counted as built. Per lecture: `cards.yaml` (the accepted cards), `lecture.json` (the tree,
+left-out slides with reasons, dropped cards), `decisions.json` (lines written by code from
+facts: goal, left out, beyond the goal, recurring concepts, concepts without a card, dropped
+counts; the lines of this lecture from an earlier run that did not finish are replaced), then its
+entry in `course.json`. The cards of a saved lecture join the course at once, so the clash check
+of the next lecture sees them. With the last lecture, before its entry in `course.json`, come
+`exams.json` and the decision about the papers: papers count as read only when every lecture
+their questions were placed in is saved, so a stopped run asks them again. `runs/NNN.json`
+(models, goal, calls, decisions, tokens, estimate, cost in dollars and euros, durations per
+phase, the lectures and cards saved) is written once, when the build ends. A build that stops
+writes it too, marked `failed`, so money spent on it shows, and keeps the lectures it saved. Build
+again and only the rest is built and paid for.
 
 **17. Send (code).** Section 12.
 
@@ -334,8 +342,8 @@ to the meter and throws an `EngineError` when the real cost is above the cap. Co
 
 - The check happens after a call, so the call that crosses the cap is already paid, and up to four
   calls in flight finish (`pool` in `build.ts`; after the first failure no new item starts).
-- The run fails with "Nothing was saved". A stopped run loses its paid work, but its run file
-  records what it spent.
+- The run fails, keeps the lectures it finished, and its run file records what it spent. Building
+  again makes and pays only for the rest.
 - The app passes no `capUsd`, so it always uses 3 times the estimate.
 
 Paid runs are started only through the engine (`cli build`), on OpenAI, each preceded by its
@@ -661,8 +669,7 @@ Each of these is an issue; none is a promise in this file.
 - `cloze` is never planned. No fact kind maps to it in the preset, so only a student's own card can
   have that role; the `cloze` example in the preset is never shown to a model. `name-two` is
   reached only from a `list` fact with exactly 2 items.
-- The cap can be exceeded by the last call and up to four in-flight calls, and a stopped run loses
-  its cards, though not its record.
+- The cap can be exceeded by the last call and up to four in-flight calls.
 - `survey` (also used by `estimate`) renders every slide to PNG locally, so an estimate is free but
   not instant.
 - A changed PDF behind a built lecture is ignored; the stored sha256 is not compared.

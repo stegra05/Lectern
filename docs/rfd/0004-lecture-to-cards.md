@@ -32,7 +32,12 @@
    organisation check ([RFD 5](0005-decision-models.md)). A card too
    long is split into two or three atomic cards. Others are repaired with the full list of
    problems, at most twice. What still fails is dropped and listed with its reason.
-7. **End.** Identical questions are dropped by code. An existing card is never the one dropped. No rewriting pass.
+7. **End.** Identical questions are dropped by code, against every card of the course so far.
+   An existing card is never the one dropped. No rewriting pass.
+8. **Save.** Steps 1 to 4 run over all lectures of the build, since the plan needs every map.
+   Steps 5 to 7 then run one lecture after the other, and a lecture is saved as soon as it is
+   through, with `course.json` last. A stopped run keeps the lectures it finished; building
+   again maps, plans and pays only for the rest.
 
 **Seeing the course as a whole** means no repeats across lectures and one vocabulary: a
 concept from an earlier lecture keeps its id and name. In code it gets exactly one more card,
@@ -65,4 +70,3 @@ Measured against the reference deck on 2026-11-15 (636 notes):
 - Near-identical facts, too many lists and contrasts: [#110](https://github.com/stegra05/lectern/issues/110).
 - Defects the gate lets through: [#136](https://github.com/stegra05/lectern/issues/136).
 - Cloze is never planned: [#131](https://github.com/stegra05/lectern/issues/131).
-- A stopped run keeps nothing: [#109](https://github.com/stegra05/lectern/issues/109).

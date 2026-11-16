@@ -24,7 +24,7 @@
 
 | File                       | Holds                                                                    |
 | -------------------------- | ------------------------------------------------------------------------ |
-| `course.json`              | lectures built, goal. Written last, so a half-built lecture never counts |
+| `course.json`              | lectures built, goal. Lists a lecture after its files are written, so a half-built lecture never counts |
 | `lectures/NN/cards.yaml`   | the accepted cards of one lecture                                        |
 | `lectures/NN/lecture.json` | the map, slides left out with reasons, dropped cards                     |
 | `decisions.json`           | the decisions shown to the student, written by code from facts           |

@@ -42,7 +42,7 @@ export function createAsk(
     if (meter.costUsd > capUsd) {
       throw new EngineError(
         `The run was stopped at ${meter.costUsd.toFixed(2)} dollars, above its cap of ${capUsd.toFixed(2)} dollars.`,
-        'Nothing was saved. Build again, or build fewer lectures at once.',
+        'The lectures finished before the stop are saved. Build again to make the rest.',
       )
     }
   }
