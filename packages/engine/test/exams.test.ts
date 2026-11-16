@@ -201,3 +201,32 @@ describe('past exams in a build that was stopped', () => {
     expect((await json<{ papers: unknown[] }>('exams.json')).papers).toHaveLength(1)
   })
 })
+
+describe('past exams in a lecture without facts', () => {
+  beforeAll(async () => {
+    await courseOf()
+    await addSlides(h.root, '01 Welcome.pdf', [['Welcome'], ['Organisation'], ['Questions']])
+    await mkdir(join(h.root, 'course', 'exams'), { recursive: true })
+    await writeFile(join(h.root, 'course', 'exams', 'Winter 2025-26.pdf'), await makePdf([EXAM]))
+  })
+
+  it('builds, and gives an exam question placed in it its card', async () => {
+    const events = await run(
+      { type: 'build', course: 'course', goal: 'pass' },
+      {
+        script: (r: ModelRequest) => {
+          if (r.task === 'map' && r.context.startsWith('Lecture file:'))
+            return { title: 'Welcome', topics: [], repeats: [] }
+          return script(r)
+        },
+      },
+    )
+    expect(events.at(-1)).toMatchObject({ type: 'built', lectures: [{ number: 1 }] })
+    const lecture = await json<Lecture>('lectures/01/lecture.json')
+    expect(lecture.topics.flatMap((t) => t.concepts).map((c) => c.name)).toEqual([
+      'risk',
+      'Kickstarter',
+    ])
+    expect(await cards('01')).toHaveLength(2)
+  })
+})

@@ -1097,6 +1097,8 @@ function examFact(lecture: OpenLecture, family: Family, answer: Answer): Fact {
     let id = slug(name) || 'exam-question'
     while (concepts.some((c) => c.id === id)) id = `${id}-2`
     concept = { id, name, slides: [], facts: [] }
+    // A lecture without facts has no topic yet: the exam question opens one.
+    if (lecture.topics.length === 0) lecture.topics.push({ name: lecture.title, concepts: [] })
     lecture.topics.at(-1)!.concepts.push(concept)
   }
   const onSlide = answer.fromSlides && answer.slide >= 1 && answer.slide <= lecture.slides
