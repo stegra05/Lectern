@@ -161,22 +161,24 @@ export function SetupPanel({ close }: { close: ReactNode }) {
         )}
         {hasLectures && (
           <section className="panel-section">
-            <button
-              type="button"
-              className="btn"
-              disabled={sorting}
-              onClick={() => pdfs.current?.click()}
-            >
-              Add more lectures
-            </button>
-            <button
-              type="button"
-              className="btn"
-              disabled={sorting}
-              onClick={() => folder.current?.click()}
-            >
-              Add a folder
-            </button>
+            <div className="setup-lectures">
+              <button
+                type="button"
+                className="btn"
+                disabled={sorting}
+                onClick={() => pdfs.current?.click()}
+              >
+                Add PDFs
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={sorting}
+                onClick={() => folder.current?.click()}
+              >
+                Add a folder
+              </button>
+            </div>
             <input
               ref={pdfs}
               type="file"

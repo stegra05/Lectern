@@ -49,7 +49,7 @@ test('a new course to a changed card, with the keyboard only', async () => {
     await page
       .getByLabel('Lecture PDFs', { exact: true })
       .setInputFiles([{ name, mimeType: 'application/pdf', buffer: await makePdf(slides) }])
-    await expect(panel.getByRole('button', { name: 'Add more lectures' })).toBeVisible()
+    await expect(panel.getByRole('button', { name: 'Add PDFs' })).toBeVisible()
     await tabTo(page.getByRole('button', { name: 'Make my cards' }))
     await page.keyboard.press('Enter')
     await expect(page.getByRole('region', { name: 'Status' })).toContainText(/\d+ cards/, {
