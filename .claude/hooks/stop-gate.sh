@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Stop gate: typecheck and tests must pass before a session stops, but only
-# for a session that changed src itself. Sessions share checkouts, and one
+# for a session that changed packages itself. Sessions share checkouts, and one
 # that only read code must not be held by another's work in progress.
 #
 #   stop-gate.sh mark         PostToolUse Write|Edit|NotebookEdit
-#   stop-gate.sh before-bash  PreToolUse Bash: note the state of src
+#   stop-gate.sh before-bash  PreToolUse Bash: note the state of packages
 #   stop-gate.sh after-bash   PostToolUse Bash: mark if the command changed it
 #   stop-gate.sh check        Stop
 #
@@ -18,7 +18,7 @@ id=$(jq -r '.session_id // empty')
 dir="${TMPDIR:-/tmp}/lectern-stop-gate"
 mkdir -p "$dir"
 marker="$dir/$id"
-paths=(src src-tauri/src)
+paths=(packages)
 
 src_state() {
   {
@@ -47,7 +47,7 @@ case "${1:-}" in
       printf 'Stop gate: typecheck failing:\n%s\n' "$out" | tail -30 >&2
       exit 2
     }
-    out=$(pnpm vitest run 2>&1) || {
+    out=$(pnpm test 2>&1) || {
       printf 'Stop gate: tests failing:\n%s\n' "$out" | tail -30 >&2
       exit 2
     }
