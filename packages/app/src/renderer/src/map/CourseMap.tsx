@@ -199,6 +199,8 @@ export function CourseMap() {
   const onPointerMove = (event: PointerEvent) => {
     const d = drag.current
     if (!d) return
+    // A button let go where the page saw no mouse-up, outside the window for one, ends the drag.
+    if (event.buttons === 0) return endDrag(false)
     const mx = event.clientX - d.x
     const my = event.clientY - d.y
     if (!d.moved) {
@@ -209,9 +211,10 @@ export function CourseMap() {
     }
     setAdjust({ key, z: adjust.z, dx: d.dx + mx, dy: d.dy + my })
   }
-  const onPointerUp = () => {
+  /** Ends a drag. Only a release is followed by a click, so only it swallows one. */
+  const endDrag = (released: boolean) => {
     if (drag.current?.moved) {
-      swallowClick.current = true
+      swallowClick.current = released
       setMoving(false)
     }
     drag.current = null
@@ -291,8 +294,9 @@ export function CourseMap() {
       style={{ backgroundPosition: `${adjust.dx}px ${adjust.dy}px` }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={() => endDrag(true)}
+      onPointerCancel={() => endDrag(false)}
+      onLostPointerCapture={() => endDrag(false)}
       onClickCapture={(event) => {
         if (!swallowClick.current) return
         swallowClick.current = false
