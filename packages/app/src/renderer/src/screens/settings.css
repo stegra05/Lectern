@@ -1,0 +1,133 @@
+/* Settings: one page, the key and the version. */
+
+.set {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.set-window-title {
+  display: block;
+  line-height: 24px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.set-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.set-back span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-back:hover {
+  background: var(--control);
+}
+.set-main {
+  height: 100%;
+  box-sizing: border-box;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: calc(var(--titlebar-h) + 24px) 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+.set-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px;
+}
+.set-head .t-title {
+  line-height: 1.2;
+}
+.set-group {
+  flex: none;
+  background: var(--group);
+  border-radius: var(--r-group);
+  box-shadow:
+    0 0 0 0.5px var(--hairline),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.set-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 24px 16px;
+}
+.set-about img {
+  display: block;
+  margin-bottom: 8px;
+  /* The light icon is white, like the group behind it: a soft shadow gives it its edge. */
+  filter: drop-shadow(0 0 0.5px rgba(0, 0, 0, 0.25)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.12));
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 0 16px;
+}
+.set-key-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--positive);
+  font-weight: 500;
+}
+.set-key {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+.set-key-label {
+  font-weight: 600;
+}
+.set-key-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.set-key-line .field {
+  flex: 1;
+  height: 32px;
+  font-family: var(--mono);
+}
+.set-key-note {
+  min-height: 1.4em;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.set-key-failed {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--problem);
+}
+.set-key-failed svg {
+  margin-top: 1px;
+}
+.set-key-failed p {
+  color: var(--label);
+}
+.set-key-failed b {
+  color: var(--problem);
+  font-weight: 600;
+}
