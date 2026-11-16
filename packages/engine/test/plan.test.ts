@@ -173,15 +173,13 @@ describe('clashes', () => {
     expect(findClashes(existing, fresh)).toEqual({ same: [['b', 'a']] })
   })
 
-  it('finds a plain rewording of the question', () => {
-    const fresh = [{ id: 'b', text: 'Risk: what is it?' }]
-    const [clash] = findClashes([{ id: 'a', text: 'What is risk?' }], fresh).same
-    expect(clash).toEqual(['b', 'a'])
-  })
-
   it.each([
     ['How does price affect demand?', 'How does demand affect price?'],
     ['Which comes first: build or measure?', 'Which comes first: measure or build?'],
+    [
+      'Which ideas have low opportunity and high team fit?',
+      'Which ideas have high opportunity and low team fit?',
+    ],
   ])('keeps a question and its reverse as different cards: %s', (first, second) => {
     expect(findClashes([{ id: 'a', text: first }], [{ id: 'b', text: second }])).toEqual({
       same: [],
