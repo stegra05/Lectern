@@ -142,6 +142,62 @@ describe('a save that answers late', () => {
   })
 })
 
+describe('a form with unsaved text', () => {
+  const cards = [
+    { id: 'c1', concept: 'k1' },
+    { id: 'c2', concept: 'k2' },
+  ]
+
+  async function open1() {
+    handlers.cards = () => [{ type: 'cards', cards, sent: [] }] as unknown as Event[]
+    handlers.slots = () =>
+      [{ type: 'slots', slots: { front: '' }, limits: {} }] as unknown as Event[]
+    handlers.course = () => [lectureEvent()]
+    const store = useStore.getState()
+    await store.openCourse('a')
+    store.openLecture(1)
+    await store.editCard(cards[0] as never)
+  }
+
+  it('is kept when another concept is clicked, and is back when its concept is', async () => {
+    await open1()
+    useStore.getState().setEditor({ slots: { front: 'my draft' } as never })
+    useStore.getState().selectConcept('k2')
+    expect(useStore.getState().editor).toBeNull()
+    useStore.getState().selectConcept('k1')
+    expect(useStore.getState().editor?.slots.front).toBe('my draft')
+    expect(useStore.getState().drafts).toEqual({})
+  })
+
+  it('is kept when the panel is closed, and is back when its card is opened', async () => {
+    await open1()
+    useStore.getState().setEditor({ slots: { front: 'my draft' } as never })
+    useStore.getState().closePanel()
+    await useStore.getState().editCard(cards[0] as never)
+    expect(useStore.getState().editor?.slots.front).toBe('my draft')
+  })
+
+  it('closes as before when nothing was changed', async () => {
+    await open1()
+    useStore.getState().selectConcept('k2')
+    expect(useStore.getState().drafts).toEqual({})
+  })
+
+  it('is dropped by Cancel and when the course is left', async () => {
+    await open1()
+    useStore.getState().setEditor({ slots: { front: 'my draft' } as never })
+    useStore.getState().closeEditor()
+    useStore.getState().selectConcept('k1')
+    expect(useStore.getState().editor).toBeNull()
+    await useStore.getState().editCard(cards[0] as never)
+    useStore.getState().setEditor({ slots: { front: 'again' } as never })
+    useStore.getState().selectConcept('k2')
+    expect(Object.keys(useStore.getState().drafts)).toHaveLength(1)
+    await useStore.getState().openCourses()
+    expect(useStore.getState().drafts).toEqual({})
+  })
+})
+
 describe('a problem from adding files', () => {
   const bad = { path: 'bad.pdf', file: new File(['x'], 'bad.pdf') }
 

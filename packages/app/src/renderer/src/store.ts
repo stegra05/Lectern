@@ -80,6 +80,8 @@ export interface Editor {
   /** The id of the concept the card belongs to. */
   concept: string
   slots: Slots
+  /** `slots` as the form opened, as JSON, to tell whether the student changed anything. */
+  start: string
   limits: Limits
   /** What has to be fixed before the card is taken, by field of the form. */
   problems: Problem[]
@@ -106,6 +108,8 @@ interface State {
   run: RunState | null
   sending: SendState | null
   editor: Editor | null
+  /** Forms with unsaved changes that a click on the map or the panel closed, by card. */
+  drafts: Record<string, Editor>
   failure: Failure | null
   /** What ended a build or send while the student was elsewhere, by course, until it is opened. */
   kept: Record<string, Failure>
@@ -329,6 +333,26 @@ export const useStore = create<State>((set, get) => {
     set({ failure: failureOf(events), addProblem: null })
   }
 
+  /** The key of a form's card: the card itself, or the concept of a card still being written. */
+  const draftKey = (e: Pick<Editor, 'lecture' | 'card' | 'concept'>) =>
+    `${e.lecture}/${e.card ?? `new:${e.concept}`}`
+
+  /**
+   * The drafts once the open form is closed by a click elsewhere: a form with changes joins
+   * them, one without is let go. The student gets a draft back by opening its card again.
+   */
+  function parked(): Pick<State, 'drafts'> {
+    const { editor, drafts } = get()
+    if (!editor || editor.busy || JSON.stringify(editor.slots) === editor.start) return { drafts }
+    return { drafts: { ...drafts, [draftKey(editor)]: { ...editor, busy: false } } }
+  }
+
+  /** Opens the form on a draft, which stops being one. */
+  function reopen(key: string): void {
+    const { [key]: editor, ...drafts } = get().drafts
+    set({ editor: editor ?? null, drafts })
+  }
+
   /** Empty slots of a kind, or the slots of a card, with the limits of the form. */
   async function slotsFor(
     lecture: number,
@@ -382,6 +406,7 @@ export const useStore = create<State>((set, get) => {
     run: null,
     sending: null,
     editor: null,
+    drafts: {},
     failure: null,
     kept: {},
     addProblem: null,
@@ -412,6 +437,7 @@ export const useStore = create<State>((set, get) => {
         screen: 'courses',
         courses: found?.courses ?? [],
         course: null,
+        drafts: {},
         failure: failureOf(events),
       })
     },
@@ -433,6 +459,7 @@ export const useStore = create<State>((set, get) => {
         estimate: null,
         view: { level: 'course' },
         editor: null,
+        drafts: {},
       })
       const view = await refresh(course)
       if (!view) return
@@ -544,6 +571,9 @@ export const useStore = create<State>((set, get) => {
     async editCard(card) {
       const { view } = get()
       if (view.level !== 'lecture') return
+      const key = draftKey({ lecture: view.lecture, card: card.id, concept: card.concept })
+      const draft = get().drafts[key]
+      if (draft) return reopen(key)
       const found = await slotsFor(view.lecture, { card: card.id })
       if (!found) return
       set({
@@ -552,6 +582,7 @@ export const useStore = create<State>((set, get) => {
           card: card.id,
           concept: card.concept,
           ...found,
+          start: JSON.stringify(found.slots),
           problems: [],
           busy: false,
         },
@@ -561,10 +592,20 @@ export const useStore = create<State>((set, get) => {
     async writeCard(concept) {
       const { view } = get()
       if (view.level !== 'lecture') return
+      const key = draftKey({ lecture: view.lecture, card: null, concept })
+      if (get().drafts[key]) return reopen(key)
       const found = await slotsFor(view.lecture, { role: 'definition' })
       if (!found) return
       set({
-        editor: { lecture: view.lecture, card: null, concept, ...found, problems: [], busy: false },
+        editor: {
+          lecture: view.lecture,
+          card: null,
+          concept,
+          ...found,
+          start: JSON.stringify(found.slots),
+          problems: [],
+          busy: false,
+        },
       })
     },
 
@@ -608,16 +649,22 @@ export const useStore = create<State>((set, get) => {
     },
 
     closeEditor() {
+      // Cancel: what was written is let go, with no draft left behind.
       set({ editor: null })
     },
 
     showCourse() {
       const { panel } = get()
-      set({ view: { level: 'course' }, panel: panel === 'cards' ? null : panel, editor: null })
+      set({
+        view: { level: 'course' },
+        panel: panel === 'cards' ? null : panel,
+        editor: null,
+        ...parked(),
+      })
     },
 
     openLecture(lecture) {
-      set({ view: { level: 'lecture', lecture }, panel: 'cards', editor: null })
+      set({ view: { level: 'lecture', lecture }, panel: 'cards', editor: null, ...parked() })
     },
 
     selectTopic(topic) {
@@ -627,6 +674,7 @@ export const useStore = create<State>((set, get) => {
         view: { level: 'lecture', lecture: view.lecture, topic },
         panel: 'cards',
         editor: null,
+        ...parked(),
       })
     },
 
@@ -637,11 +685,17 @@ export const useStore = create<State>((set, get) => {
         view: { level: 'lecture', lecture: view.lecture, concept },
         panel: 'cards',
         editor: null,
+        ...parked(),
       })
+      // Coming back to the concept of a draft shows the form as it was left.
+      const back = Object.entries(get().drafts).find(
+        ([, d]) => d.lecture === view.lecture && d.concept === concept,
+      )
+      if (back) reopen(back[0])
     },
 
     openDetails(tab) {
-      set({ panel: 'details', detailsTab: tab ?? get().detailsTab, editor: null })
+      set({ panel: 'details', detailsTab: tab ?? get().detailsTab, editor: null, ...parked() })
     },
 
     openPanel(panel) {
@@ -654,6 +708,7 @@ export const useStore = create<State>((set, get) => {
       set({
         panel: null,
         editor: null,
+        ...parked(),
         view: view.level === 'lecture' ? { level: 'lecture', lecture: view.lecture } : view,
       })
     },

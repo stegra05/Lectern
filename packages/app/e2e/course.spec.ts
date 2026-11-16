@@ -152,6 +152,25 @@ test('from creating a course to its cards in Anki, and a lecture added later', a
     await expect(panel).toContainText('afford to lose')
   })
 
+  await test.step('a card with unsaved text survives a click on another concept', async () => {
+    const panel = page.getByRole('complementary')
+    await panel
+      .getByRole('button', { name: /^Edit the card:/ })
+      .first()
+      .click()
+    await panel.getByLabel('Extra line, optional').fill('A draft I have not saved.')
+    const other = page
+      .getByRole('button', { name: /, \d+ cards?$/ })
+      .filter({ hasNotText: 'Affordable loss' })
+      .first()
+    await other.click()
+    await expect(panel.getByRole('heading', { name: 'Edit this card' })).toHaveCount(0)
+    await page.getByRole('button', { name: /^Affordable loss, \d+ cards?$/ }).click()
+    await expect(panel.getByRole('heading', { name: 'Edit this card' })).toBeVisible()
+    await expect(panel.getByLabel('Extra line, optional')).toHaveValue('A draft I have not saved.')
+    await panel.getByRole('button', { name: 'Cancel' }).click()
+  })
+
   await test.step('a card: change it, be told what is over the limit, write one, remove one', async () => {
     const panel = page.getByRole('complementary')
     const rows = panel.getByRole('listitem')
