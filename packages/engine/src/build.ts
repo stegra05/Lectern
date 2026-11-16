@@ -317,7 +317,12 @@ export async function estimateCourse(
   emit({ type: 'estimate', ...(await survey(ports, command)).estimate })
 }
 
-export async function build(ports: Ports, command: BuildCommand, emit: Emit): Promise<void> {
+export async function build(
+  ports: Ports,
+  command: BuildCommand,
+  emit: Emit,
+  signal?: AbortSignal,
+): Promise<void> {
   const { store } = ports
   const startedAt = ports.now()
   const phaseMs = { read: 0, map: 0, write: 0, check: 0 }
@@ -365,7 +370,7 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
   }
   const capUsd = command.capUsd ?? estimated.capUsd
   emit({ type: 'estimate', ...estimated, capUsd })
-  const { model, decide, stop } = createAsk(ports, meter, capUsd)
+  const { model, decide, stop } = createAsk(ports, meter, capUsd, signal)
   const b: Build = {
     ports,
     emit,

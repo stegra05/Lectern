@@ -23,8 +23,11 @@ import {
 import type { Ports } from './ports.ts'
 
 export interface Engine {
-  /** Runs one command. Resolves after the last event; a failure is an event, not a throw. */
-  run(command: unknown, emit: Emit): Promise<void>
+  /**
+   * Runs one command. Resolves after the last event; a failure is an event, not a throw. A build
+   * or a send stops when `signal` aborts, at the next point where what it did so far is saved.
+   */
+  run(command: unknown, emit: Emit, signal?: AbortSignal): Promise<void>
 }
 
 /** The commands that write to a course. Every other command only reads, and never waits. */
@@ -56,9 +59,9 @@ function writesTo(command: unknown): string | null {
 export function createEngine(ports: Ports): Engine {
   const engine = direct(ports)
   return {
-    async run(command, emit) {
+    async run(command, emit, signal) {
       const course = writesTo(command)
-      if (course === null) return engine.run(command, emit)
+      if (course === null) return engine.run(command, emit, signal)
       if (building.has(course)) {
         return emit({
           type: 'failed',
@@ -71,7 +74,7 @@ export function createEngine(ports: Ports): Engine {
       let queue = queues.get(course)
       if (!queue) queues.set(course, (queue = new PQueue({ concurrency: 1 })))
       try {
-        await queue.add(() => engine.run(command, emit))
+        await queue.add(() => engine.run(command, emit, signal))
       } finally {
         if (isBuild) building.delete(course)
       }
@@ -82,7 +85,7 @@ export function createEngine(ports: Ports): Engine {
 /** Runs a command at once, whatever else runs on its course. */
 function direct(ports: Ports): Engine {
   return {
-    async run(command, emit) {
+    async run(command, emit, signal) {
       try {
         const parsed = CommandSchema.safeParse(command)
         if (!parsed.success) {
@@ -95,7 +98,7 @@ function direct(ports: Ports): Engine {
         const { store } = ports
         switch (known.type) {
           case 'build':
-            return await build(ports, known, emit)
+            return await build(ports, known, emit, signal)
           case 'estimate':
             return await estimateCourse(ports, known, emit)
           case 'courses':
@@ -131,7 +134,7 @@ function direct(ports: Ports): Engine {
             await moveFile(store, known.course, known.file, known.to)
             return emit({ type: 'moved', course: known.course, file: known.file, to: known.to })
           case 'send':
-            return await send(ports, known, emit)
+            return await send(ports, known, emit, signal)
           case 'slots':
             return await slots(ports, known, emit)
           case 'edit':

@@ -47,6 +47,8 @@ export function createAsk(
   ports: Ports,
   meter: Meter,
   capUsd: number,
+  /** Aborted when the student stops the build: no call starts after it. */
+  signal?: AbortSignal,
 ): {
   model: AskModel
   decide: Decide
@@ -81,6 +83,12 @@ export function createAsk(
       return await queue.add(
         async () => {
           if (stopped) throw stopped.error
+          if (signal?.aborted) {
+            throw new EngineError(
+              'The build was stopped.',
+              'The lectures finished before the stop are saved. Build again to make the rest.',
+            )
+          }
           if (meter.costUsd + reserved + reservation > capUsd) {
             throw capped('as the next call could take it past')
           }

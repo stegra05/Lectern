@@ -24,7 +24,8 @@
   repeated input. A hard limit needs an output limit per call, which is open
   ([#303](https://github.com/stegra05/Lectern/issues/303)). The lectures finished by then stay
   saved, so building again pays only for the rest.
-- **A stopped run records its cost** in `runs/NNN.json` like any other run, marked `failed`.
+- **A stopped run records its cost** in `runs/NNN.json` like any other run, marked `failed`. A
+  run stopped by quitting the app too: the app asks first, then waits for the calls under way.
 - **OpenAI only, for now.** Steffen has credits there. The Anthropic adapter was removed.
   The provider layer stays easy to swap for hosted keys later
   ([#101](https://github.com/stegra05/lectern/issues/101)).
