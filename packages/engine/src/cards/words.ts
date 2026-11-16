@@ -1,5 +1,7 @@
 /** Text helpers shared by every limit. Pure. */
 
+import { createHash } from 'node:crypto'
+
 /** One cloze deletion: `{{c1::text}}`. Group 1 is the number, group 2 the hidden text. */
 export const CLOZE = /\{\{c(\d+)::(.*?)\}\}/g
 
@@ -12,14 +14,27 @@ export function words(text: string): number {
   return plain === '' ? 0 : plain.split(/\s+/).length
 }
 
-/** A file and id safe handle for a name: `Bird in hand` becomes `bird-in-hand`. */
+/** A file and id safe handle for a name: `Bird in hand` becomes `bird-in-hand`, `Риск` stays `риск`. */
 export function slug(name: string): string {
   return name
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+    .normalize('NFC')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+/**
+ * A concept's id: its slug, plus a short hash of the normalised name when the slug drops
+ * symbols that carry meaning (`C++`, `C#`, `p < 0.05`) or leaves nothing. Depends on the name only.
+ */
+export function conceptId(name: string): string {
+  const base = slug(name)
+  if (base !== '' && !/[\p{S}#%&@*]/u.test(name)) return base
+  const key = name.normalize('NFKC').toLowerCase().trim().replace(/\s+/g, ' ')
+  const hash = createHash('sha1').update(key).digest('hex').slice(0, 6)
+  return base === '' ? hash : `${base}-${hash}`
 }
 
 /** Lowercase letters and digits only, for comparing two wordings of the same question. */

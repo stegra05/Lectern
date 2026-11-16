@@ -87,6 +87,39 @@ describe('settleMap', () => {
     expect(again).toMatchObject({ id: 'risk', name: 'risk', since: 1, slides: [3] })
   })
 
+  it('keeps concepts apart that differ only in symbols or letters of another script', () => {
+    const names = ['C', 'C++', 'C#', 'α-Fehler', 'β-Fehler', 'p < 0.05', 'p > 0.05']
+    const out = { title: 'T', topics: [{ name: 'T', concepts: names.map((n) => concept(n, [2])) }] }
+    const concepts = settleMap(out, { ...ctx, earlier: new Map() }).topics[0]!.concepts
+    expect(concepts.map((c) => c.name)).toEqual(names)
+    expect(new Set(concepts.map((c) => c.id)).size).toBe(names.length)
+  })
+
+  it('folds a concept named again with the same name, in any case', () => {
+    const out = {
+      title: 'T',
+      topics: [{ name: 'T', concepts: [concept('C++', [2]), concept(' c++ ', [3])] }],
+    }
+    const concepts = settleMap(out, { ...ctx, earlier: new Map() }).topics[0]!.concepts
+    expect(concepts).toHaveLength(1)
+    expect(concepts[0]!.slides).toEqual([2, 3])
+  })
+
+  it('tells a two-lecture Cyrillic course apart, and knows a recurring name', () => {
+    const lecture = (names: string[], earlier: MapContext['earlier']) =>
+      settleMap(
+        { title: 'T', topics: [{ name: 'T', concepts: names.map((n) => concept(n, [2])) }] },
+        { ...ctx, earlier },
+      ).topics[0]!.concepts
+    const one = lecture(['Риск', 'Неопределённость'], new Map())
+    const earlier = new Map(one.map((c) => [c.id, { name: c.name, lecture: 1 }]))
+    const two = lecture(['Эффектуация', 'риск'], earlier)
+    expect(one.map((c) => c.id)).toEqual(['риск', 'неопределённость'])
+    expect(two[0]).toMatchObject({ id: 'эффектуация', name: 'Эффектуация' })
+    expect(two[0]!.since).toBeUndefined()
+    expect(two[1]).toMatchObject({ id: 'риск', name: 'Риск', since: 1 })
+  })
+
   it('drops facts on slides the lecture does not have', () => {
     const out = {
       ...good,

@@ -178,7 +178,7 @@ concept the reading named for it, and a repeat is left out.
 **5. Settle the map (code).** `settleMap` checks the map and repairs it itself: empty or too long
 title (`TITLE_CHARS`), unnamed concepts, facts on slides that do not exist, facts without text,
 more than 12 facts per concept (`FACTS_PER_CONCEPT`, the rest is cut), concepts named twice (one id
-from a slug of the name; the later facts join the first). It returns the tree and the slides no
+from the name alone, a slug plus a short hash when it holds symbols like `++`; the later facts join the first). It returns the tree and the slides no
 concept uses (`leftOut`, reason "No testable fact on this slide"). Nothing is asked again. A concept
 whose id exists in an earlier lecture keeps the stored name and gets `since: <lecture>` (one
 vocabulary).
