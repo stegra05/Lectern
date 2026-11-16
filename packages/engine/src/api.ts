@@ -8,7 +8,7 @@ import { build, estimateCourse } from './build.ts'
 import { CommandSchema, type Emit } from './commands.ts'
 import { send, sentCards } from './deliver.ts'
 import { edit, remove, slots, write } from './edit.ts'
-import { EngineError, ProviderError } from './errors.ts'
+import { EngineError, fileFailure, ProviderError } from './errors.ts'
 import {
   addFiles,
   moveFile,
@@ -87,10 +87,22 @@ export function createEngine(ports: Ports): Engine {
             return await write(ports, known, emit)
         }
       } catch (error) {
+        const known = error instanceof EngineError ? error : fileFailure(error)
+        if (known) {
+          const reason = known instanceof ProviderError ? known.reason : undefined
+          return emit({
+            type: 'failed',
+            message: known.message,
+            fix: known.fix,
+            ...(reason && { reason }),
+          })
+        }
         const message = error instanceof Error ? error.message : String(error)
-        const fix = error instanceof EngineError ? error.fix : 'Run the command again.'
-        const reason = error instanceof ProviderError ? error.reason : undefined
-        emit({ type: 'failed', message, fix, ...(reason && { reason }) })
+        emit({
+          type: 'failed',
+          message,
+          fix: 'Try again. If it keeps failing, start Lectern again.',
+        })
       }
     },
   }

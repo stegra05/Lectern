@@ -86,8 +86,8 @@ export function SetupPanel({ close }: { close: ReactNode }) {
               <>
                 <p>
                   {adding
-                    ? `I found ${plural(lectures, 'new lecture PDF')} and put them on the map after your other lectures.`
-                    : `I read your ${plural(lectures, 'lecture PDF')} and put them on the map in course order.`}
+                    ? `I found ${plural(lectures, 'new lecture PDF')} and put ${lectures === 1 ? 'it' : 'them'} on the map after your other lectures.`
+                    : `I read your ${plural(lectures, 'lecture PDF')} and put ${lectures === 1 ? 'it' : 'them'} on the map in course order.`}
                 </p>
                 <ul className="panel-group">
                   <li className="setup-found">
