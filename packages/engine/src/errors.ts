@@ -65,3 +65,38 @@ export function cannotRead(file: string, why: Unreadable): EngineError {
         'Download or export the file again, then add the new copy.',
       )
 }
+
+const FILE_FAILURES: Record<string, (where: string) => EngineError> = {
+  EACCES: noPermission,
+  EPERM: noPermission,
+  EROFS: (where) =>
+    new EngineError(
+      `${where} is read-only, so Lectern cannot save to it.`,
+      'Move the course to a folder you can edit, for example inside Documents.',
+    ),
+  ENOSPC: (where) =>
+    new EngineError(
+      `The disk is full, so Lectern could not save to ${where}.`,
+      'Free some space on the disk, then try again.',
+    ),
+  ENOENT: (where) =>
+    new EngineError(
+      `Lectern cannot find ${where}.`,
+      'Check that the course folder was not moved, renamed or deleted, then open the course again.',
+    ),
+}
+
+function noPermission(where: string): EngineError {
+  return new EngineError(
+    `Lectern is not allowed to change ${where}.`,
+    'Give yourself access to that folder, or move the course to a folder you own.',
+  )
+}
+
+/** A failure of the file system, in the student's words with the path it names, else undefined. */
+export function fileFailure(error: unknown): EngineError | undefined {
+  if (!(error instanceof Error)) return undefined
+  const { code, path } = error as { code?: unknown; path?: unknown }
+  const words = typeof code === 'string' ? FILE_FAILURES[code] : undefined
+  return words?.(typeof path === 'string' ? path : 'its folder')
+}
