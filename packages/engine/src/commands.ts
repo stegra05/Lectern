@@ -22,6 +22,7 @@ const slotsSchema = z.object({
   answers: z.array(z.object({ text: z.string(), key: z.string() })),
   labels: z.array(z.string()),
   hidden: z.array(z.string()),
+  at: z.array(z.number().int()),
   extra: z.string(),
   code: z.string(),
 })

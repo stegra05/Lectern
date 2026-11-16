@@ -19,6 +19,11 @@ export interface Slots {
   labels: string[]
   /** Gap card: the parts of the sentence that are hidden, in the order they stand in it. */
   hidden: string[]
+  /**
+   * Gap card: where each hidden part starts in `front`, as `toSlots` read it. The editor hands it
+   * back untouched, so a part that stands twice in the sentence stays at the place it had.
+   */
+  at: number[]
   extra: string
   code: string
 }
@@ -28,7 +33,7 @@ export const OWN_ROLES = ['definition', 'cloze'] as const satisfies readonly Rol
 
 export function blankSlots(role: (typeof OWN_ROLES)[number]): Slots {
   const answers = role === 'definition' ? [{ text: '', key: '' }] : []
-  return { role, front: '', answers, labels: [], hidden: [], extra: '', code: '' }
+  return { role, front: '', answers, labels: [], hidden: [], at: [], extra: '', code: '' }
 }
 
 /** The word limits a form shows next to its fields. */
@@ -70,14 +75,23 @@ export function toSlots(card: CardFile): Slots {
       .map((m) => plain(m[1]!))
       .filter((label) => label !== ''),
     hidden: [],
+    at: [],
     extra: plain(f.Extra ?? ''),
     code: unescape(f.Code ?? ''),
   }
   const back = f.Back ?? ''
   const text = f.Text ?? ''
   if (role === 'cloze') {
-    slots.hidden = [...text.matchAll(CLOZE)].map((m) => plain(m[2]!))
-    slots.front = plain(text.replace(CLOZE, '$2'))
+    let front = ''
+    let end = 0
+    for (const m of text.matchAll(CLOZE)) {
+      front += plain(text.slice(end, m.index))
+      slots.at.push(front.length)
+      slots.hidden.push(plain(m[2]!))
+      front += plain(m[2]!)
+      end = m.index + m[0].length
+    }
+    slots.front = front + plain(text.slice(end))
   } else if (role === 'cloze-list') {
     slots.front = plain(text.replace(/<ul>.*$/s, ''))
     slots.answers = items(text).map((item) => ({ text: plain(item.replace(CLOZE, '$2')), key: '' }))
@@ -169,11 +183,9 @@ export function checkSlots(slots: Slots): Problem[] {
         field: 'hidden',
         message: `A hidden part has at most ${LIMITS.deletionWords} words.`,
       })
-    } else if (gapSentence(front, hidden) === null) {
-      problems.push({
-        field: 'hidden',
-        message: 'Each hidden part must stand in the sentence, word for word and in this order.',
-      })
+    } else {
+      const placed = placeGaps(slots.front, hidden, slots.at)
+      if ('problem' in placed) problems.push({ field: 'hidden', message: placed.problem })
     }
   }
 
@@ -183,28 +195,80 @@ export function checkSlots(slots: Slots): Problem[] {
   return problems
 }
 
-/** The sentence with each hidden part wrapped as a deletion, or null when a part is not in it. */
-function gapSentence(sentence: string, hidden: string[]): string | null {
-  let out = ''
-  let rest = sentence
+const LETTER = /[\p{L}\p{N}]/u
+
+/** A part stands as whole words at `at`: no letter or digit of the sentence touches its edges. */
+function standsAlone(sentence: string, part: string, at: number): boolean {
+  if (!sentence.startsWith(part, at)) return false
+  const before = sentence[at - 1] ?? ''
+  const after = sentence[at + part.length] ?? ''
+  return (
+    !(LETTER.test(part[0]!) && LETTER.test(before)) &&
+    !(LETTER.test(part.at(-1)!) && LETTER.test(after))
+  )
+}
+
+/**
+ * Where each hidden part stands in the sentence, or what the student has to fix. A part is kept
+ * where `at` says when it still stands there; otherwise it is the one place after the part
+ * before it where it stands as whole words.
+ */
+function placeGaps(
+  sentence: string,
+  hidden: string[],
+  at: number[],
+): { starts: number[] } | { problem: string } {
+  const starts: number[] = []
+  let from = 0
   for (const [i, part] of hidden.entries()) {
-    const at = rest.indexOf(part)
-    if (at < 0) return null
-    out += `${rest.slice(0, at)}{{c${i + 1}::${part}}}`
-    rest = rest.slice(at + part.length)
+    const kept = at[i]
+    let start: number
+    if (kept !== undefined && kept >= from && standsAlone(sentence, part, kept)) {
+      start = kept
+    } else {
+      const found: number[] = []
+      for (let k = sentence.indexOf(part, from); k >= 0; k = sentence.indexOf(part, k + 1)) {
+        if (standsAlone(sentence, part, k)) found.push(k)
+      }
+      if (found.length > 1) {
+        return {
+          problem: `"${part}" stands more than once in the sentence. Hide a longer part, with the words next to it, so that it is clear which one.`,
+        }
+      }
+      if (found.length === 0) {
+        return {
+          problem: 'Each hidden part must stand in the sentence, word for word and in this order.',
+        }
+      }
+      start = found[0]!
+    }
+    starts.push(start)
+    from = start + part.length
   }
-  return out + rest
+  return { starts }
+}
+
+/** The sentence with each hidden part wrapped as a deletion. */
+function gapSentence(sentence: string, hidden: string[], starts: number[]): string {
+  let out = ''
+  let end = 0
+  for (const [i, part] of hidden.entries()) {
+    out += `${sentence.slice(end, starts[i])}{{c${i + 1}::${part}}}`
+    end = starts[i]! + part.length
+  }
+  return out + sentence.slice(end)
 }
 
 /** The draft of the slots, for the validator and for `assemble`. Run `checkSlots` first. */
 export function toDraft(slots: Slots, card: { concept: string; slide: number }): Draft {
   const hidden = slots.hidden.map((part) => part.trim())
-  const front = slots.front.trim()
+  const placed = placeGaps(slots.front, hidden, slots.at)
+  const front = 'starts' in placed ? gapSentence(slots.front, hidden, placed.starts) : slots.front
   return {
     concept: card.concept,
     role: slots.role,
     slide: card.slide,
-    front: slots.role === 'cloze' ? (gapSentence(front, hidden) ?? front) : front,
+    front: front.trim(),
     answers: slots.answers.map(({ text, key }) => {
       const answer = text.trim()
       const term = key.trim()

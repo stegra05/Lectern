@@ -74,6 +74,7 @@ const own = (changes: Partial<Slots> = {}): Slots => ({
   answers: [{ text: 'He calls it risk, as opposed to uncertainty.', key: 'risk' }],
   labels: [],
   hidden: [],
+  at: [],
   extra: '',
   code: '',
   ...changes,
@@ -126,7 +127,16 @@ describe('the slots of a card', () => {
   it('come empty for a card the student is about to write, with the limits of the form', async () => {
     expect(await only({ type: 'slots', ...at, role: 'cloze' }, 'slots')).toEqual({
       type: 'slots',
-      slots: { role: 'cloze', front: '', answers: [], labels: [], hidden: [], extra: '', code: '' },
+      slots: {
+        role: 'cloze',
+        front: '',
+        answers: [],
+        labels: [],
+        hidden: [],
+        at: [],
+        extra: '',
+        code: '',
+      },
       limits: { front: 20, answer: 25, extra: 40, gapSentence: 45 },
     })
   })
