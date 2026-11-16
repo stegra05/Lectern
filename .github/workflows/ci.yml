@@ -28,16 +28,8 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: App end to end (${{ matrix.window }} window)
+    name: App end to end (offline models)
     runs-on: ubuntu-latest
-    # Experiment: does a shown window remove the 2 s per action? Removed after.
-    strategy:
-      fail-fast: false
-      matrix:
-        window: [hidden, shown]
-    env:
-      E2E_SHOW: ${{ matrix.window == 'shown' && '1' || '0' }}
-      DEBUG: pw:api
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
