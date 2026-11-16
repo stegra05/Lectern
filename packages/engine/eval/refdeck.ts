@@ -7,6 +7,7 @@
  *   node eval/refdeck.ts run <course folder> <eval folder>
  *   node eval/refdeck.ts batches <eval folder> [--size 40]
  *   node eval/refdeck.ts report <eval folder>
+ *   node eval/refdeck.ts spread <eval folder> <eval folder> [...]
  *
  * `reference` reads the deck through AnkiConnect into `reference.json`; `reference-files` reads
  * a deck kept as YAML files instead (`title`, and `cards` with `front` and `back` or `text`). `run`
@@ -15,6 +16,9 @@
  * one file per group of reference notes under `batches/` and refuses to when `labels/` already
  * holds judged batches. A judge (a person or a model) answers each into `labels/<same name>.json`.
  * `report` counts the labels and fails on a label for a note that is not in `reference.json`.
+ * `spread` takes the judged folders of several runs of one variant, on the same reference notes,
+ * and reports the mean and spread of the same-fact count, in total and per subdeck, the notes
+ * each pair of runs gains and loses, and the smallest difference worth believing.
  *
  * Which judge file goes with which input:
  *   `JUDGE.md`        the cards of a build: `cards.txt` and `slides.txt` from `run`.
@@ -46,6 +50,7 @@ import {
 } from '../src/course.ts'
 import { questionAndAnswer } from '../src/cards/question-answer.ts'
 import { slideText } from '../src/slides.ts'
+import { believable, spread } from './spread.ts'
 
 interface ReferenceNote {
   id: number
@@ -197,7 +202,8 @@ async function batches(out: string, size: number): Promise<void> {
   console.log(`${Math.ceil(notes.length / size)} batches of up to ${size} notes`)
 }
 
-async function report(out: string): Promise<void> {
+/** The reference notes of an eval folder and their labels, refusing labels for unknown notes. */
+async function readJudged(out: string) {
   const notes = JSON.parse(await readFile(join(out, 'reference.json'), 'utf8')) as ReferenceNote[]
   const labels = new Map<number, Label>()
   for (const name of await readdir(join(out, 'labels'))) {
@@ -210,6 +216,11 @@ async function report(out: string): Promise<void> {
   if (unknown.length > 0) {
     throw new Error(`labels for notes that are not in reference.json: ${unknown.join(', ')}`)
   }
+  return { notes, labels }
+}
+
+async function report(out: string): Promise<void> {
+  const { notes, labels } = await readJudged(out)
   const judged = notes.filter((note) => labels.has(note.id))
   const share = (part: number, whole: number) =>
     whole === 0 ? '-' : `${part} of ${whole} (${Math.round((100 * part) / whole)}%)`
@@ -278,6 +289,55 @@ async function report(out: string): Promise<void> {
   }
 }
 
+async function spreadReport(folders: string[]): Promise<void> {
+  const runs = await Promise.all(folders.map(readJudged))
+  const notes = runs[0]!.notes
+  const ids = notes.map((note) => note.id).join()
+  runs.forEach((run, i) => {
+    if (run.notes.map((note) => note.id).join() !== ids)
+      throw new Error(`${folders[i]} holds other reference notes than ${folders[0]}.`)
+    const unjudged = notes.filter((note) => !run.labels.has(note.id)).length
+    if (unjudged > 0) throw new Error(`${folders[i]} has ${unjudged} notes without a label.`)
+  })
+  const same = runs.map(
+    ({ labels }) =>
+      new Set(notes.filter((n) => labels.get(n.id)!.match === 'same').map((n) => n.id)),
+  )
+  const figure = (name: string, list: ReferenceNote[]) => {
+    const counts = same.map((ids) => list.filter((note) => ids.has(note.id)).length)
+    const s = spread(counts)
+    const percent = (n: number) => (list.length === 0 ? 0 : Math.round((100 * n) / list.length))
+    console.log(
+      `  ${name} (${list.length} notes): ${counts.join(', ')}; mean ${s.mean.toFixed(1)} (${percent(s.mean)}%), sd ${s.sd.toFixed(1)}, range ${s.max - s.min}`,
+    )
+    return s
+  }
+  console.log(`Same fact over ${runs.length} runs:`)
+  const total = figure('all', notes)
+  figure(
+    'asked 9+x',
+    notes.filter((note) => note.asked !== null && note.asked >= 9),
+  )
+  console.log('By subdeck:')
+  for (const deck of [...new Set(notes.map((note) => note.deck))])
+    figure(
+      deck,
+      notes.filter((note) => note.deck === deck),
+    )
+  console.log('Notes gained and lost between runs:')
+  for (let a = 0; a < runs.length; a++)
+    for (let b = a + 1; b < runs.length; b++) {
+      const gained = [...same[b]!].filter((id) => !same[a]!.has(id)).length
+      const lost = [...same[a]!].filter((id) => !same[b]!.has(id)).length
+      console.log(`  ${basename(folders[a]!)} to ${basename(folders[b]!)}: +${gained} -${lost}`)
+    }
+  console.log('Smallest difference in the total worth believing, at this spread:')
+  for (const k of [1, 2, 3])
+    console.log(
+      `  ${k} run${k > 1 ? 's' : ''} per variant: ${believable(total.sd, k).toFixed(0)} notes`,
+    )
+}
+
 const out = resolve(rest.at(-1) ?? '.')
 await mkdir(out, { recursive: true })
 if (step === 'reference' && rest.length === 2) await reference(rest[0]!, out)
@@ -286,9 +346,10 @@ else if (step === 'reference-files' && rest.length === 2)
 else if (step === 'run' && rest.length === 2) await run(resolve(rest[0]!), out)
 else if (step === 'batches' && rest.length === 1) await batches(out, Number(values.size ?? 40))
 else if (step === 'report' && rest.length === 1) await report(out)
+else if (step === 'spread' && rest.length >= 2) await spreadReport(rest.map((f) => resolve(f)))
 else {
   console.error(
-    'Usage: refdeck reference <anki deck> <out> | reference-files <folder> <out> | run <course> <out> | batches <out> | report <out>',
+    'Usage: refdeck reference <anki deck> <out> | reference-files <folder> <out> | run <course> <out> | batches <out> | report <out> | spread <out> <out> ...',
   )
   process.exit(2)
 }
