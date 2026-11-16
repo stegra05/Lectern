@@ -14,6 +14,7 @@ The Lectern v3 desktop app: an Electron shell around `@lectern/engine`. Design: 
 | End-to-end test (builds first, offline models)                                                        | `pnpm --filter @lectern/app test:e2e`             |
 | Pictures of every base screen into `out/shots/`                                                       | `pnpm --filter @lectern/app shots`                |
 | Typecheck                                                                                             | `pnpm --filter @lectern/app typecheck`            |
+| Installer for this computer into `dist/` (see CONTRIBUTING.md, Releases)                              | `pnpm --filter @lectern/app package`              |
 
 Environment: `LECTERN_FAKE=1` (offline models), `LECTERN_FAKE_DELAY=<ms>` (each offline call
 takes that long), `LECTERN_COURSES=<dir>` (where courses live), `LECTERN_DATA=<dir>` (settings

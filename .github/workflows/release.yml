@@ -1,0 +1,56 @@
+name: Release
+
+# Builds the v3 installers when a v3 tag is pushed:
+#   git tag v3.0.0-alpha.1 && git push origin v3.0.0-alpha.1
+# The tag names the version. Each platform builds its installer, then one job puts them all in
+# a single draft prerelease, so the v2 release stays the latest. Review the draft, then publish.
+# Nothing is signed or notarised yet.
+
+on:
+  push:
+    tags: ['v3.*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Installer (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @lectern/app package -c.extraMetadata.version=${GITHUB_REF_NAME#v}
+        shell: bash
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer-${{ matrix.os }}
+          path: |
+            packages/app/dist/*.dmg
+            packages/app/dist/*.exe
+            packages/app/dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: installers
+          merge-multiple: true
+      - run: >
+          gh release create "$GITHUB_REF_NAME" installers/*
+          --repo "$GITHUB_REPOSITORY" --draft --prerelease --verify-tag
+          --title "Lectern $GITHUB_REF_NAME" --notes "Unsigned test build of Lectern v3."
+        env:
+          GH_TOKEN: ${{ github.token }}

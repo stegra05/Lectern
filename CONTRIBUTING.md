@@ -9,12 +9,29 @@ hook checks staged package files with Prettier and ESLint.
 | ------------------------------------------------------------- | ------------------------------------------------------------ |
 | `pnpm check`                                                  | lint, format check, typecheck and unit tests, all packages   |
 | `pnpm test:e2e`                                               | builds the app and drives it with Playwright, offline        |
+| `pnpm --filter @lectern/app package`                          | an installer for this computer in `packages/app/dist`        |
 | `pnpm format`                                                 | Prettier over `packages/`                                    |
 | `LECTERN_FAKE=1 pnpm --filter @lectern/app start`             | the app on offline models and an Anki in memory              |
 | `pnpm --filter @lectern/engine cli <command> <course folder>` | the engine from a command line (`estimate`, `build`, `send`) |
 
 `cli build` spends money on the OpenAI account of `OPENAI_API_KEY`. Every test runs on the
 offline models; live tests run only with `LECTERN_LIVE=1`.
+
+## Releases
+
+`pnpm --filter @lectern/app package` builds an installer for this computer into
+`packages/app/dist` (add `--mac --arm64`, `--win` or `--linux` to pick). A tag that starts with
+`v3.` on a `v3` commit builds the macOS, Windows and Linux installers in CI and puts them in a
+draft prerelease named after the tag, which also sets the version:
+
+```sh
+git tag v3.0.0-alpha.1 && git push origin v3.0.0-alpha.1
+```
+
+v2 releases are `v2.x` tags on `main`. A tag runs the workflows of the commit it points at, so a
+`v3.` tag on a `v3` commit runs only this one, and the draft is marked a prerelease so v2 stays
+the latest download. The installers are not signed: macOS and Windows warn before the first
+open.
 
 ## Issues and the board
 
