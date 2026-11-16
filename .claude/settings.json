@@ -10,6 +10,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/roadmap.sh before-bash",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -41,6 +51,17 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.sh after-bash",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/roadmap.sh after-bash",
+            "timeout": 60,
+            "statusMessage": "roadmap board"
           }
         ]
       }
