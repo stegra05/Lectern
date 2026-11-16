@@ -100,14 +100,43 @@ export interface Standing {
 const RANK: Record<Verdict, number> = { no: 0, partial: 1, same: 2 }
 
 /**
- * Where each point stands in a deck: the best verdict over every judged card of the deck, in
- * its shortlist or not. A verdict is about the texts of a fact and a card, so it holds for the
- * card wherever a judge met it.
+ * The cards a run's score looks at for each point: its shortlist, and the cards the run's own
+ * judges labelled for the point's fact, which holds what they found by searching the deck.
+ * Nothing else counts, so a run scores the same whatever other runs are judged later. Measured
+ * 2026-11-16: with every kept verdict counted, a run rose from 31.3% to 33.1% when other
+ * builds that share some of its cards were judged.
  */
-export function standings(points: Point[], cards: Card[], verdicts: Verdicts): Standing[] {
+export function considered(
+  points: Point[],
+  cards: Card[],
+  short: Map<string, Card[]>,
+  labels: Label[],
+): Map<string, Card[]> {
+  const cardOf = new Map(cards.map((card) => [card.id, card]))
+  const factOf = new Map(points.map((point) => [point.id, point.knows]))
+  const found = new Map<string, Set<string>>()
+  for (const label of labels) {
+    const fact = factOf.get(label.point)
+    if (fact !== undefined) found.set(fact, (found.get(fact) ?? new Set()).add(label.card))
+  }
+  return new Map(
+    points.map((point) => {
+      const ids = new Set((short.get(point.id) ?? []).map((card) => card.id))
+      for (const id of found.get(point.knows) ?? []) ids.add(id)
+      return [point.id, [...ids].flatMap((id) => cardOf.get(id) ?? [])]
+    }),
+  )
+}
+
+/** Where each point stands in a run: the best verdict over the cards the run looks at for it. */
+export function standings(
+  points: Point[],
+  cards: Map<string, Card[]>,
+  verdicts: Verdicts,
+): Standing[] {
   return points.map((point) => {
     const standing: Standing = { point, verdict: 'no', card: null }
-    for (const card of cards) {
+    for (const card of cards.get(point.id) ?? []) {
       const verdict = verdicts[pairKey(point, card)]
       if (verdict && RANK[verdict] > RANK[standing.verdict]) {
         standing.verdict = verdict
@@ -235,28 +264,33 @@ export const LabelSchema = z.object({
 export type Label = z.infer<typeof LabelSchema>
 
 /**
- * Takes a judge's labels into the kept verdicts and says how many were new. A label for a
- * point or a card the run does not have is an error, never dropped in silence.
+ * Takes a judge's labels into the kept verdicts and says how many were new, and how many
+ * differ from a verdict already kept. The kept one stands: a pair is judged once, and a score
+ * that was reported does not move. A label for a point or a card the run does not have is an
+ * error, never dropped in silence.
  */
 export function ingest(
   labels: Label[],
   points: Point[],
   cards: Card[],
   verdicts: Verdicts,
-): number {
+): { added: number; differing: number } {
   const pointOf = new Map(points.map((point) => [point.id, point]))
   const cardOf = new Map(cards.map((card) => [card.id, card]))
   let added = 0
+  let differing = 0
   for (const label of labels) {
     const point = pointOf.get(label.point)
     const card = cardOf.get(label.card)
     if (!point) throw new Error(`A verdict names the point ${label.point}, which the rubric lacks.`)
     if (!card) throw new Error(`A verdict names the card ${label.card}, which the run lacks.`)
     const key = pairKey(point, card)
-    if (!(key in verdicts)) added++
-    verdicts[key] = label.verdict
+    if (!(key in verdicts)) {
+      verdicts[key] = label.verdict
+      added++
+    } else if (verdicts[key] !== label.verdict) differing++
   }
-  return added
+  return { added, differing }
 }
 
 /** An interval drawn from fewer questions than this says little, so none is given. */

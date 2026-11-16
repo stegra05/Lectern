@@ -44,8 +44,8 @@ by Claude Haiku:
 | Slides only                            | 631   | 31.3%      | 23.7 to 37.2 | 56 of 218   |
 | With cards from the 18 older papers    | 633   | 43.8%      | 38.0 to 51.1 | 80 of 218   |
 | v3, 18 older papers, first build       | 661   | 46.0%      | 37.8 to 55.0 | 84 of 218   |
-| v3, 18 older papers, second build      | 668   | 53.1%      | 46.8 to 59.7 | 96 of 218   |
-| v3, 18 older papers, third build       | 663   | 49.0%      | 42.6 to 55.9 | 95 of 218   |
+| v3, 18 older papers, second build      | 668   | 51.2%      | 45.5 to 57.2 | 94 of 218   |
+| v3, 18 older papers, third build       | 663   | 48.5%      | 41.9 to 55.9 | 93 of 218   |
 
 - **The measure sees a known gain.** The paired difference is 12.5 points of coverage (6.8 to
   21.7): 35 points gained, 11 lost. The lost ones are facts the slides state that one build
@@ -55,18 +55,24 @@ by Claude Haiku:
   slides state would hold 39.8%. Cards from older papers are what lifts a build above that.
 - **Where the misses are.** Of the 138 points the better build misses, 120 have a card on the
   concept that lacks the fact, and 18 have nothing.
-- **v3 holds about half the marks.** Its three builds average 49.4% (sd 3.6). Against the 43.8%
-  of the build of 2026-11-15 that is 5.6 points, less than three builds against one can show
-  (about 8).
+- **v3 holds about half the marks.** Its three builds average 48.6% (sd 2.6). Against the 43.8%
+  of the build of 2026-11-15 that is 4.8 points, less than three builds against one can show
+  (about 6).
 - **Builds of the same code differ, and the interval does not know it.** The interval of a
   build, and of a paired difference, covers which questions an exam asks, not the luck of the
-  build. Two of the three pairs of v3 builds differ by more than their paired interval allows
-  (7.5 points, 0.6 to 13.1, and 4.6 points, 0.4 to 9.2), though the code is the same. Of the
-  218 points, 65 are held by all three builds, 51 by one or two, 102 by none. So a change of
-  code counts only when it beats the old figure by **about 10 points for one build each, 7 for
-  two, 6 for three** (twice the standard error of the difference, `eval/spread.ts`); three
-  builds give a rough sd, so these are rough too. The gain of exam cards over slides only
-  (12.5 points, one build each) clears that bar.
+  build. Of the 218 points, 63 are held by all three builds of v3, 51 by one or two, 104 by
+  none; counting a point that any of the three holds gives 59.0%. So a change of code counts
+  only when it beats the old figure by **about 7 points for one build each, 5 for two, 4 for
+  three** (twice the standard error of the difference, `eval/spread.ts`); three builds give a
+  rough sd, so these are rough too. The gain of exam cards over slides only (12.5 points, one
+  build each) clears that bar.
+- **A run's score counts its own pairs only.** Its shortlist, and what its own judges found
+  by searching the deck. Verdicts are kept under the texts of a pair, and builds share some
+  cards word for word, so counting every kept verdict let a run rise when others were judged
+  after it: the slides-only build read 33.1% instead of 31.3%, and the second and third build
+  of v3 first read 53.1% and 49.0%. That drift also made two of the three pairs of v3 builds
+  look different beyond their interval; scored on their own pairs, none does. The price: a
+  card that holds a point and is outside the shortlist is missed, about 2 points of a deck.
 - **The judge is steadier than the build.** Two judges on the same 240 pairs agree on 93%
   (kappa 0.88) and on 29 of 30 points. A rubric whose points bundled several facts scored the
   same deck at 35.2% and let the judges part on 2 of 27 points, so a point is one fact. A judge

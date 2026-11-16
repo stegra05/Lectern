@@ -16,7 +16,8 @@
  * has decided yet into `pairs/NN.json`. A judge (`JUDGE-PAIRS.md`) answers each batch into
  * `verdicts/NN.json`. Verdicts are kept in `verdicts.json` beside the rubric under the texts
  * of the pair, so a fact several papers share is judged once and a second look at a run asks
- * only about what is new. `report` gives
+ * only about what is new. A run's score counts its shortlist and what its own judges found,
+ * nothing else, so it does not move when other runs are judged. `report` gives
  * the share of the marks the deck holds with its 95 percent interval and refuses while pairs
  * are open. `compare` gives the difference between two runs on the same points. Its interval
  * says whether two decks differ on this exam; whether the code behind them does takes more
@@ -30,6 +31,7 @@ import { z } from 'zod'
 import { assemble, PaperSchema } from './bench/rubric.ts'
 import {
   compare,
+  considered,
   ingest,
   LabelSchema,
   open,
@@ -38,6 +40,7 @@ import {
   shortlist,
   standings,
   type Card,
+  type Label,
   type Rubric,
   type Standing,
   VERDICTS,
@@ -82,8 +85,13 @@ async function files(folder: string): Promise<string[]> {
   return names.filter((name) => name.endsWith('.json')).sort()
 }
 
-/** The rubric, the run's cards and every verdict so far, the run's own new ones taken in. */
-async function load(run: string): Promise<{ rubric: Rubric; cards: Card[]; verdicts: Verdicts }> {
+/**
+ * The rubric, the run's cards, the labels of the run's own judges and every verdict kept so
+ * far, the run's new ones taken in.
+ */
+async function load(
+  run: string,
+): Promise<{ rubric: Rubric; cards: Card[]; labels: Label[]; verdicts: Verdicts }> {
   const rubric = RubricSchema.parse(await json(rubricPath!))
   const cards = z
     .array(z.object({ id: z.string(), question: z.string(), answer: z.string() }))
@@ -100,16 +108,18 @@ async function load(run: string): Promise<{ rubric: Rubric; cards: Card[]; verdi
       throw new Error(`${kept} cannot be read: ${(error as Error).message}`)
     }),
   )
-  let added = 0
-  for (const name of await files(join(run, 'verdicts'))) {
-    const labels = z.array(LabelSchema).parse(await json(join(run, 'verdicts', name)))
-    added += ingest(labels, rubric.points, cards, verdicts)
-  }
+  const labels: Label[] = []
+  for (const name of await files(join(run, 'verdicts')))
+    labels.push(...z.array(LabelSchema).parse(await json(join(run, 'verdicts', name))))
+  const { added, differing } = ingest(labels, rubric.points, cards, verdicts)
   if (added > 0) {
     await writeFile(kept, `${JSON.stringify(verdicts, null, 1)}\n`)
     console.log(`${added} new verdicts kept in ${kept}`)
   }
-  return { rubric, cards, verdicts }
+  if (differing > 0) {
+    console.log(`${differing} verdicts differ from ones kept earlier, which stand.`)
+  }
+  return { rubric, cards, labels, verdicts }
 }
 
 async function batches(run: string, size: number): Promise<void> {
@@ -144,12 +154,13 @@ async function batches(run: string, size: number): Promise<void> {
 
 /** Where every point stands in a run. Fails while the shortlist has undecided pairs. */
 async function judged(run: string): Promise<Standing[]> {
-  const { rubric, cards, verdicts } = await load(run)
-  const pairs = open(rubric.points, shortlist(rubric.points, cards, SHORTLIST), verdicts)
+  const { rubric, cards, labels, verdicts } = await load(run)
+  const short = shortlist(rubric.points, cards, SHORTLIST)
+  const pairs = open(rubric.points, short, verdicts)
   if (pairs.length > 0) {
     throw new Error(`${run}: ${pairs.length} points have undecided pairs. Run batches and judge.`)
   }
-  return standings(rubric.points, cards, verdicts)
+  return standings(rubric.points, considered(rubric.points, cards, short, labels), verdicts)
 }
 
 const percent = (share: number) => `${(100 * share).toFixed(1)}%`
@@ -196,8 +207,8 @@ async function compareRuns(first: string, second: string): Promise<void> {
     console.log(
       `Difference: ${sign(difference)} points of coverage (${sign(low)} to ${sign(high)})`,
     )
-    // The interval covers which questions an exam asks, not the luck of a build: two builds
-    // of the same code have differed by more than it allows (RFD 14).
+    // The interval covers which questions an exam asks, not the luck of a build, and builds
+    // of the same code differ by several points (RFD 14).
     console.log(
       low > 0 || high < 0
         ? 'The interval excludes zero: these two decks differ on this exam. Builds of the same code differ too, so a change of code needs the bar of RFD 14.'

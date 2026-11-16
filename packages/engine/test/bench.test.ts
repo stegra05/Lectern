@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { assemble, type Paper } from '../eval/bench/rubric.ts'
 import {
   compare,
+  considered,
   coverage,
   ingest,
   open,
@@ -81,6 +82,8 @@ const cards: Card[] = [
   { id: 'porter', question: 'Who named the five forces?', answer: 'Porter' },
 ]
 const card = (id: string) => cards.find((c) => c.id === id)!
+/** Every card looked at for every point. */
+const every = (list: Point[]) => new Map(list.map((point) => [point.id, cards]))
 
 function verdictsOf(held: [Point, string][]): Verdicts {
   const verdicts: Verdicts = {}
@@ -187,7 +190,34 @@ describe('verdicts', () => {
     expect(pairs.map((entry) => entry.point.id)).toEqual([proposition.id])
     const verdicts: Verdicts = {}
     ingest([{ point: proposition.id, card: 'vp', verdict: 'same' }], twice, cards, verdicts)
-    expect(standings(twice, cards, verdicts).map((s) => s.verdict)).toEqual(['same', 'same'])
+    expect(standings(twice, every(twice), verdicts).map((s) => s.verdict)).toEqual(['same', 'same'])
+  })
+
+  it('stand once kept: a later judge who differs changes nothing', () => {
+    const verdicts: Verdicts = {}
+    const label = { point: proposition.id, card: 'vp', verdict: 'partial' as const }
+    expect(ingest([label], points, cards, verdicts)).toEqual({ added: 1, differing: 0 })
+    expect(ingest([{ ...label, verdict: 'same' }], points, cards, verdicts)).toEqual({
+      added: 0,
+      differing: 1,
+    })
+    expect(verdicts[pairKey(proposition, card('vp'))]).toBe('partial')
+  })
+
+  it('count for a run only on its shortlist and on what its own judges found', () => {
+    const twin = { ...loss, id: 'Winter 25/2/1', paper: 'Winter 25' }
+    const list = [proposition, loss, twin]
+    const short = new Map(list.map((point) => [point.id, [card('porter')]]))
+    // Another run's judge once found that the card `loss` holds the fact.
+    const verdicts = verdictsOf([[loss, 'loss']])
+    const blind = considered(list, cards, short, [])
+    expect(standings(list, blind, verdicts).map((s) => s.verdict)).toEqual(['no', 'no', 'no'])
+    // This run's own judge found it, for one of the two points that share the fact.
+    const found = considered(list, cards, short, [
+      { point: loss.id, card: 'loss', verdict: 'same' },
+    ])
+    expect(found.get(twin.id)!.map((c) => c.id)).toEqual(['porter', 'loss'])
+    expect(standings(list, found, verdicts).map((s) => s.verdict)).toEqual(['no', 'same', 'same'])
   })
 
   it('refuse a point or a card the run does not have', () => {
@@ -199,14 +229,17 @@ describe('verdicts', () => {
   it('give a point the best verdict of any card', () => {
     const verdicts = verdictsOf([[proposition, 'vp']])
     ingest([{ point: proposition.id, card: 'porter', verdict: 'no' }], points, cards, verdicts)
-    const [first, second] = standings(points, cards, verdicts)
+    const [first, second] = standings(points, every(points), verdicts)
     expect(first).toMatchObject({ verdict: 'same', card: 'vp' })
     expect(second).toMatchObject({ verdict: 'no', card: null })
     // A card judged to be about something else is not the point's card.
     ingest([{ point: loss.id, card: 'porter', verdict: 'no' }], points, cards, verdicts)
-    expect(standings(points, cards, verdicts)[1]).toMatchObject({ verdict: 'no', card: null })
+    expect(standings(points, every(points), verdicts)[1]).toMatchObject({
+      verdict: 'no',
+      card: null,
+    })
     ingest([{ point: loss.id, card: 'means', verdict: 'partial' }], points, cards, verdicts)
-    expect(standings(points, cards, verdicts)[1]).toMatchObject({
+    expect(standings(points, every(points), verdicts)[1]).toMatchObject({
       verdict: 'partial',
       card: 'means',
     })
@@ -218,7 +251,7 @@ describe('coverage', () => {
     // Question 1 held (2 of 2), two of the three ideas held (4 of 4), the case not (0 of 4).
     const list = standings(
       points,
-      cards,
+      every(points),
       verdictsOf([
         [proposition, 'vp'],
         [loss, 'loss'],
@@ -229,7 +262,7 @@ describe('coverage', () => {
     // The third idea adds nothing: the question is full.
     const more = standings(
       points,
-      cards,
+      every(points),
       verdictsOf([
         [proposition, 'vp'],
         [loss, 'loss'],
@@ -368,10 +401,10 @@ describe('coverage', () => {
   })
 
   it('compares two decks point by point', () => {
-    const before = standings(points, cards, verdictsOf([[proposition, 'vp']]))
+    const before = standings(points, every(points), verdictsOf([[proposition, 'vp']]))
     const after = standings(
       points,
-      cards,
+      every(points),
       verdictsOf([
         [loss, 'loss'],
         [means, 'means'],

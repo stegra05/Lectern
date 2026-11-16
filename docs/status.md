@@ -35,12 +35,12 @@ the time.
 
 The eval (`packages/engine/eval`) scores a deck two ways: on the marks of past papers its build
 never saw (`bench.ts`), and against Steffen's reference deck (`refdeck.ts`). On the four newest
-Entrepreneurship papers three builds of v3 of 2026-11-16 hold 46.0%, 53.1% and 49.0% of the
-marks (mean 49.4), a build of 2026-11-15 with cards from the older papers 43.8%, and a build
+Entrepreneurship papers three builds of v3 of 2026-11-16 hold 46.0%, 51.2% and 48.5% of the
+marks (mean 48.6), a build of 2026-11-15 with cards from the older papers 43.8%, and a build
 from slides only 31.3%. Builds of the same code differ by several points, so a change counts
-only above about 10 points for one build each ([RFD 14](rfd/0014-the-quality-bar.md)).
+only above about 7 points for one build each ([RFD 14](rfd/0014-the-quality-bar.md)).
 
-Engine tests: 258 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
+Engine tests: 260 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
 
