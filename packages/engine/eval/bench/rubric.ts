@@ -45,13 +45,23 @@ const differ = (a: number, b: number) => Math.abs(a - b) > 1e-9
 
 export function assemble(course: string, papers: Paper[]): Rubric {
   const points: Point[] = []
+  const names = papers.map((p) => p.paper)
+  const twice = names.find((name, i) => names.indexOf(name) !== i)
+  if (twice) throw new Error(`Two paper files are named ${twice}.`)
   for (const { paper, total, choices, questions } of papers) {
     const marksOf = new Map(questions.map((question) => [question.number, question.marks]))
+    if (marksOf.size !== questions.length) {
+      throw new Error(`${paper}: two questions carry the same number.`)
+    }
     const choiceOf = new Map<string, { name: string; pick: number }>()
     let marks = 0
     choices.forEach((choice, i) => {
+      if (choice.pick >= choice.questions.length) {
+        throw new Error(`${paper}: choice ${i + 1} picks all of its questions or more.`)
+      }
       const each = choice.questions.map((number) => {
         if (!marksOf.has(number)) throw new Error(`${paper}: a choice names question ${number}.`)
+        if (choiceOf.has(number)) throw new Error(`${paper}: question ${number} is in two choices.`)
         choiceOf.set(number, { name: `choice ${i + 1}`, pick: choice.pick })
         return marksOf.get(number)!
       })
@@ -86,5 +96,5 @@ export function assemble(course: string, papers: Paper[]): Rubric {
       )
     }
   }
-  return { course, papers: papers.map((p) => p.paper), points }
+  return { course, papers: names, points }
 }

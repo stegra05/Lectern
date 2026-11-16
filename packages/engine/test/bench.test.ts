@@ -119,6 +119,23 @@ describe('the rubric', () => {
     expect(assemble('c', [fine]).points).toHaveLength(10)
   })
 
+  it('refuses papers and questions named twice, and a choice that is none', () => {
+    expect(() => assemble('c', [paper, paper])).toThrow('Two paper files are named Summer 26')
+    const twice = structuredClone(paper)
+    twice.questions[1]!.number = '1'
+    expect(() => assemble('c', [twice])).toThrow('two questions carry the same number')
+    const all = { ...paper, choices: [{ questions: ['1', '2'], pick: 2 }] }
+    expect(() => assemble('c', [all])).toThrow('picks all of its questions or more')
+    const both = {
+      ...paper,
+      choices: [
+        { questions: ['2', '3'], pick: 1 },
+        { questions: ['3', '2'], pick: 1 },
+      ],
+    }
+    expect(() => assemble('c', [both])).toThrow('is in two choices')
+  })
+
   it('refuses a question whose points earn less than its marks', () => {
     const short = structuredClone(paper)
     short.questions[0]!.points[0]!.marks = 1
@@ -140,6 +157,12 @@ describe('verdicts', () => {
     const reworded = { ...card('vp'), answer: 'What a firm offers.' }
     expect(pairKey(proposition, card('vp'))).toBe(pairKey(proposition, { ...card('vp') }))
     expect(pairKey(proposition, reworded)).not.toBe(pairKey(proposition, card('vp')))
+  })
+
+  it('keep apart two cards whose texts differ only in where the question ends', () => {
+    const one = { id: 'a', question: 'What is\nx', answer: 'y' }
+    const other = { id: 'b', question: 'What is', answer: 'x\ny' }
+    expect(pairKey(proposition, one)).not.toBe(pairKey(proposition, other))
   })
 
   it('leave only the pairs no judge has decided open', () => {
@@ -179,6 +202,14 @@ describe('verdicts', () => {
     const [first, second] = standings(points, cards, verdicts)
     expect(first).toMatchObject({ verdict: 'same', card: 'vp' })
     expect(second).toMatchObject({ verdict: 'no', card: null })
+    // A card judged to be about something else is not the point's card.
+    ingest([{ point: loss.id, card: 'porter', verdict: 'no' }], points, cards, verdicts)
+    expect(standings(points, cards, verdicts)[1]).toMatchObject({ verdict: 'no', card: null })
+    ingest([{ point: loss.id, card: 'means', verdict: 'partial' }], points, cards, verdicts)
+    expect(standings(points, cards, verdicts)[1]).toMatchObject({
+      verdict: 'partial',
+      card: 'means',
+    })
   })
 })
 
@@ -237,21 +268,103 @@ describe('coverage', () => {
     ).toThrow('carry 30 marks, the paper 60')
   })
 
-  it('has an interval that holds it and is the same every time', () => {
-    const list = standings(points, cards, verdictsOf([[proposition, 'vp']]))
+  /** An exam of `count` questions of two marks, one point each, the listed ones held. */
+  function exam(count: number, held: number[]) {
+    const questions = Array.from({ length: count }, (_, i) => ({
+      number: String(i + 1),
+      asks: `Question ${i + 1}`,
+      marks: 2,
+      points: [
+        { knows: `Fact ${i + 1}.`, marks: 2, kind: 'recall' as const, basis: 'slides' as const },
+      ],
+    }))
+    const rubric = assemble('c', [{ paper: 'p', total: 2 * count, choices: [], questions }])
+    return rubric.points.map((point, i) => ({
+      point,
+      verdict: held.includes(i) ? ('same' as const) : ('no' as const),
+      card: null,
+    }))
+  }
+
+  it('counts the best two of a choice of three', () => {
+    const question = (number: string) => ({
+      number,
+      asks: `Short answer ${number}`,
+      marks: 4,
+      points: [
+        { knows: `Fact ${number}.`, marks: 4, kind: 'recall' as const, basis: 'slides' as const },
+      ],
+    })
+    const paper3 = {
+      paper: 'p',
+      total: 8,
+      choices: [{ questions: ['1', '2', '3'], pick: 2 }],
+      questions: ['1', '2', '3'].map(question),
+    }
+    const rubric = assemble('c', [paper3])
+    const stand = (held: number[]) =>
+      rubric.points.map((point, i) => ({
+        point,
+        verdict: held.includes(i) ? ('same' as const) : ('no' as const),
+        card: null,
+      }))
+    expect(coverage(stand([2]))).toBe(0.5)
+    expect(coverage(stand([0, 2]))).toBe(1)
+    expect(coverage(stand([0, 1, 2]))).toBe(1)
+  })
+
+  it('has an interval around it that is the same every time', () => {
+    const list = exam(20, [0, 1, 2, 3, 4])
     const first = score(list)
-    expect(first.coverage).toBe(0.2)
-    expect(first.low).toBeLessThanOrEqual(0.2)
-    expect(first.high).toBeGreaterThanOrEqual(0.2)
+    expect(first.coverage).toBe(0.25)
+    const [low, high] = first.interval!
+    expect(low).toBeLessThan(0.25)
+    expect(high).toBeGreaterThan(0.25)
+    expect(low).toBeGreaterThanOrEqual(0)
+    expect(high).toBeLessThan(0.6)
     expect(score(list)).toEqual(first)
   })
 
-  it('draws a unit as a whole, so a half-held question never counts as full', () => {
-    // One question, half of its marks held: every draw of it is a half, whatever is drawn.
-    const list = standings(points, cards, verdictsOf([[loss, 'loss']])).filter(
-      (s) => s.point.question === '2',
-    )
-    expect(score(list)).toEqual({ coverage: 0.5, low: 0.5, high: 0.5 })
+  it('gives no interval from a handful of questions', () => {
+    expect(score(exam(9, [0])).interval).toBeNull()
+    expect(compare(exam(9, [0]), exam(9, [0, 1])).interval).toBeNull()
+  })
+
+  it('draws a question as a whole, so a half-held question never counts as full', () => {
+    // Ten questions, each half held: every draw is a half, whatever is drawn.
+    const half = Array.from({ length: 10 }, (_, i) => ({
+      number: String(i + 1),
+      asks: `Question ${i + 1}`,
+      marks: 4,
+      points: ['first', 'second'].map((part) => ({
+        knows: `The ${part} half of fact ${i + 1}.`,
+        marks: 2,
+        kind: 'recall' as const,
+        basis: 'slides' as const,
+      })),
+    }))
+    const rubric = assemble('c', [{ paper: 'p', total: 40, choices: [], questions: half }])
+    const list = rubric.points.map((point, i) => ({
+      point,
+      verdict: i % 2 === 0 ? ('same' as const) : ('no' as const),
+      card: null,
+    }))
+    expect(score(list)).toEqual({ coverage: 0.5, interval: [0.5, 0.5] })
+  })
+
+  it('pairs two decks question by question', () => {
+    // The second deck holds all the first holds and four questions more: every draw gains.
+    const gain = compare(exam(20, [0, 1, 2]), exam(20, [0, 1, 2, 3, 4, 5, 6]))
+    expect(gain.difference).toBeCloseTo(0.2)
+    expect(gain.interval![0]).toBeGreaterThan(0)
+    // The same deck twice differs by nothing in every draw.
+    expect(compare(exam(20, [0, 5]), exam(20, [0, 5])).interval).toEqual([0, 0])
+    // Decks that hold as much on other questions: no difference, and an interval around zero.
+    const swap = compare(exam(20, [0, 1, 2]), exam(20, [3, 4, 5]))
+    expect(swap.difference).toBe(0)
+    expect(swap.interval![0]).toBeLessThan(0)
+    expect(swap.interval![1]).toBeGreaterThan(0)
+    expect(() => compare(exam(20, []), exam(19, []))).toThrow('the same points')
   })
 
   it('compares two decks point by point', () => {

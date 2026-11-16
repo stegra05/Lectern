@@ -71,7 +71,7 @@ export type Verdicts = Record<string, Verdict>
  */
 export function pairKey(point: Point, card: Card): string {
   return createHash('sha256')
-    .update([point.knows, card.question, card.answer].join('\n'))
+    .update(JSON.stringify([point.knows, card.question, card.answer]))
     .digest('hex')
     .slice(0, 20)
 }
@@ -93,19 +93,23 @@ export interface Standing {
   point: Point
   /** The best verdict any card of the deck has for the point. */
   verdict: Verdict
-  /** The card that earned it, null when no card was judged. */
+  /** The card that earned it, null when no card holds the point or is on its concept. */
   card: string | null
 }
 
 const RANK: Record<Verdict, number> = { no: 0, partial: 1, same: 2 }
 
-/** Where each point stands in a deck: the best verdict over every judged card of the deck. */
+/**
+ * Where each point stands in a deck: the best verdict over every judged card of the deck, in
+ * its shortlist or not. A verdict is about the texts of a fact and a card, so it holds for the
+ * card wherever a judge met it.
+ */
 export function standings(points: Point[], cards: Card[], verdicts: Verdicts): Standing[] {
   return points.map((point) => {
     const standing: Standing = { point, verdict: 'no', card: null }
     for (const card of cards) {
       const verdict = verdicts[pairKey(point, card)]
-      if (verdict && (standing.card === null || RANK[verdict] > RANK[standing.verdict])) {
+      if (verdict && RANK[verdict] > RANK[standing.verdict]) {
         standing.verdict = verdict
         standing.card = card.id
       }
@@ -183,7 +187,10 @@ function share(units: Tally[]): number {
   return possible === 0 ? 0 : earned / possible
 }
 
-/** The share of the marks the deck's points earn. */
+/**
+ * The share of the marks the deck's points earn. Of a part of the points (one paper, only the
+ * points to recall) it is the share of the marks that part can earn, not of the whole exam.
+ */
 export function coverage(list: Standing[]): number {
   return share(tallies(list))
 }
@@ -252,35 +259,53 @@ export function ingest(
   return added
 }
 
+/** An interval drawn from fewer questions than this says little, so none is given. */
+const ENOUGH_UNITS = 10
+
+export interface Score {
+  coverage: number
+  /** The 95 percent interval, null when the points span too few questions for one. */
+  interval: [number, number] | null
+}
+
 /** Coverage with its interval. */
-export function score(list: Standing[]): { coverage: number; low: number; high: number } {
+export function score(list: Standing[]): Score {
   const units = tallies(list)
-  const [low, high] = interval(units.length, (drawn) => share(drawn.map((i) => units[i]!)))
-  return { coverage: share(units), low, high }
+  return {
+    coverage: share(units),
+    interval:
+      units.length < ENOUGH_UNITS
+        ? null
+        : interval(units.length, (drawn) => share(drawn.map((i) => units[i]!))),
+  }
 }
 
 export interface Comparison {
-  /** Coverage of the second deck minus coverage of the first, with its interval. */
+  /** Coverage of the second deck minus coverage of the first. */
   difference: number
-  low: number
-  high: number
+  /** Its 95 percent interval, null when the points span too few questions for one. */
+  interval: [number, number] | null
   /** Points only the second deck holds, and points only the first holds. */
   gained: Point[]
   lost: Point[]
 }
 
-/** Two decks on the same points, compared point by point. */
+/**
+ * Two decks on the same points, compared point by point. The same questions are drawn for
+ * both decks, so what the two share cancels out of the interval.
+ */
 export function compare(first: Standing[], second: Standing[]): Comparison {
+  if (first.length !== second.length || first.some((s, i) => s.point.id !== second[i]!.point.id)) {
+    throw new Error('Two runs are compared on the same points in the same order.')
+  }
   const a = tallies(first)
   const b = tallies(second)
-  const [low, high] = interval(a.length, (drawn) => {
-    return share(drawn.map((i) => b[i]!)) - share(drawn.map((i) => a[i]!))
-  })
+  const difference = (drawn: number[]) =>
+    share(drawn.map((i) => b[i]!)) - share(drawn.map((i) => a[i]!))
   const held = (s: Standing) => s.verdict === 'same'
   return {
     difference: share(b) - share(a),
-    low,
-    high,
+    interval: a.length < ENOUGH_UNITS ? null : interval(a.length, difference),
     gained: first.filter((s, i) => !held(s) && held(second[i]!)).map((s) => s.point),
     lost: first.filter((s, i) => held(s) && !held(second[i]!)).map((s) => s.point),
   }
