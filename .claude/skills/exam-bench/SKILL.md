@@ -21,8 +21,10 @@ procedure. Read RFD 14 once before your first run.
    `rubric-test.json` once, when a change is ready to be accepted, and do not open that file or
    the four newest papers while you tune.
 2. **A change is judged by `gate`, never by two figures side by side.** Builds of the same code
-   differ by several points. Three builds a side is the working number; `unclear` is a result,
-   not a failure to report.
+   differ by several points. Three builds a side show a change from about 6 points, five from
+   about 4, two only from 11, and one against one shows nothing. `unclear` is a result, not a
+   failure to report. Old-side builds can be kept and added to; they do not have to be rebuilt
+   for every change.
 3. **A failed guard is Steffen's to decide.** Do not loosen a limit and do not work around it.
    Say what the change buys and what it costs, and ask.
 4. **A build costs money.** Estimate first and get Steffen's yes for every paid run (AGENTS.md).
