@@ -113,7 +113,7 @@ const pillAt = (x: number, y: number, width: number): Box => ({
   bottom: y + PILL_H / 2,
 })
 
-/** The centre title wrapped into at most two lines of 14px, the second ending in an ellipsis. */
+/** The centre title wrapped into at most two lines of 14px; a line that is too wide ends in an ellipsis. */
 export function wrapTitle(title: string, measure: Measure): { lines: string[]; disc: number } {
   const wide = (text: string) => (measure(text, 600) * 14) / 13
   const words = title.split(/\s+/).filter(Boolean)
@@ -128,11 +128,12 @@ export function wrapTitle(title: string, measure: Measure): { lines: string[]; d
   }
   if (line) lines.push(line)
   if (lines.length > 2) lines.splice(1, lines.length - 1, lines.slice(1).join(' '))
-  if (lines.length === 2 && wide(lines[1]!) > TITLE_MAX) {
-    let cut = lines[1]!
+  lines.forEach((text, i) => {
+    if (wide(text) <= TITLE_MAX) return
+    let cut = text
     while (cut.length > 1 && wide(`${cut}…`) > TITLE_MAX) cut = cut.slice(0, -1)
-    lines[1] = `${cut.trimEnd()}…`
-  }
+    lines[i] = `${cut.trimEnd()}…`
+  })
   const widest = Math.max(0, ...lines.map(wide))
   return { lines, disc: lines.length > 1 ? 72 : Math.max(58, Math.min(80, widest / 2 + 10)) }
 }

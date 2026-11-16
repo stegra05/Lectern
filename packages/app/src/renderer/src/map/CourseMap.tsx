@@ -561,8 +561,8 @@ function RingsView({
           {two(lecture.number)}
         </span>
         <span className="map-centre-text" style={{ top: disc + (twoLines ? -7 : 5) }}>
-          {rings.title.map((line) => (
-            <span key={line} className="map-centre-title">
+          {rings.title.map((line, i) => (
+            <span key={i} className="map-centre-title">
               {line}
             </span>
           ))}

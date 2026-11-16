@@ -374,6 +374,20 @@ describe('wrapTitle', () => {
     expect(lines).toHaveLength(2)
     expect(lines[1]!.endsWith('…')).toBe(true)
   })
+
+  it('cuts a single very long word with an ellipsis, inside the disc', () => {
+    const { lines, disc } = wrapTitle('Wahrscheinlichkeitsrechnungsgrundlagen', measure)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]!.endsWith('…')).toBe(true)
+    expect((measure(lines[0]!, 600) * 14) / 13).toBeLessThanOrEqual(2 * disc)
+  })
+
+  it('cuts a long first word and keeps the words after it', () => {
+    const { lines } = wrapTitle('Wahrscheinlichkeitsrechnungsgrundlagen und mehr', measure)
+    expect(lines).toHaveLength(2)
+    expect(lines[0]!.endsWith('…')).toBe(true)
+    expect(lines[1]).toBe('und mehr')
+  })
 })
 
 describe('placeRings', () => {
