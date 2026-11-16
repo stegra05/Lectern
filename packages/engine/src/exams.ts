@@ -126,6 +126,8 @@ export async function askFamilies(
       images: [],
       prompt: familiesPrompt(questions, lectures),
       effort: 'medium',
+      // Every exam answer and the plan wait for this one call.
+      fast: true,
     },
     FamiliesSchema,
   )

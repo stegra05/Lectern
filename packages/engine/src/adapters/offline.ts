@@ -71,13 +71,44 @@ function answer(): unknown {
   }
 }
 
-/** Fills the form of a definition or a term card; other forms get the fact in every field. */
+type Schema = {
+  properties?: Record<string, Schema>
+  items?: Schema
+  anyOf?: Schema[]
+  enum?: string[]
+}
+
+/** One card for each fact the request names, in the form of its card type. */
+function fillAll(request: ModelRequest): unknown {
+  const concept = /^Concept: (.+)$/m.exec(request.prompt)?.[1] ?? ''
+  const forms = (request.schema as Schema).properties!.cards!.items!.anyOf!
+  const cards = request.prompt
+    .split(/^Fact to test: /m)
+    .slice(1)
+    .map((block) => {
+      const fact = /^(.+) \(slide \d+\)$/m.exec(block)?.[1] ?? ''
+      const role = /^Card type: ([^.]+)\./m.exec(block)?.[1] ?? ''
+      const form = forms.find((f) => f.properties!.cardType!.enum![0] === role)!
+      const fields = Object.keys(form.properties!).filter((field) => field !== 'cardType')
+      return { cardType: role, ...fillForm(concept, fact, fields) }
+    })
+  return { cards }
+}
+
+/** Fills the one form a repair or a split asks for. */
 function fill(request: ModelRequest): Record<string, unknown> {
   const concept = /^Concept: (.+)$/m.exec(request.prompt)?.[1] ?? ''
-  const fact = take(/^Fact to test: (.+) \(slide \d+\)$/m.exec(request.prompt)?.[1] ?? '', 20)
+  const fact = /^Fact to test: (.+) \(slide \d+\)$/m.exec(request.prompt)?.[1] ?? ''
+  const schema = request.schema as Schema
+  const form = request.task === 'split' ? schema.properties!.cards!.items! : schema
+  return fillForm(concept, fact, Object.keys(form.properties ?? {}))
+}
+
+/** Fills the form of a definition or a term card; other forms get the fact in every field. */
+function fillForm(concept: string, told: string, fields: string[]): Record<string, unknown> {
+  const fact = take(told, 20)
   const words = fact.split(' ')
   const keyFrom = Math.max(0, words.length - 2)
-  const fields = Object.keys(request.schema.properties ?? {})
   if (fields.includes('answer')) {
     // Quoting the start of a fact of a few words would give the whole answer away.
     const asks =
@@ -107,7 +138,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 export function offlineModel(delayMs = 0): ModelPort {
   return {
     model: 'offline',
-    price: { input: 0, cachedInput: 0, output: 0 },
+    price: { input: 0, cachedInput: 0, output: 0, fast: 1 },
     async complete(request) {
       await wait(delayMs)
       const data = request.context.startsWith('Exam paper:')
@@ -120,9 +151,11 @@ export function offlineModel(delayMs = 0): ModelPort {
               ? read(request)
               : request.task === 'map'
                 ? group(request)
-                : request.task === 'split'
-                  ? { cards: [fill(request)] }
-                  : fill(request)
+                : request.task === 'fill'
+                  ? fillAll(request)
+                  : request.task === 'split'
+                    ? { cards: [fill(request)] }
+                    : fill(request)
       request.onUsage(free)
       return data
     },

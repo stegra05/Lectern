@@ -30,6 +30,11 @@ export interface ModelRequest {
   effort: 'low' | 'medium'
   /** Called with the cost of each billed call as soon as the provider reports it, even if the call then fails. */
   onUsage: (usage: Usage) => void
+  /**
+   * On the path every later step of the build waits for: asked on the provider's faster tier,
+   * at `price.fast` times the list price.
+   */
+  fast?: boolean
 }
 
 export interface Usage {
@@ -44,8 +49,11 @@ export interface Usage {
 /** The one way to a model that writes. The reply is the parsed JSON. */
 export interface ModelPort {
   readonly model: string
-  /** List price in dollars per million tokens, for the estimate before a run. */
-  readonly price: { input: number; cachedInput: number; output: number }
+  /**
+   * List price in dollars per million tokens, for the estimate before a run, and how many times
+   * that a call on the faster tier costs.
+   */
+  readonly price: { input: number; cachedInput: number; output: number; fast: number }
   complete(request: ModelRequest): Promise<unknown>
 }
 

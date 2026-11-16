@@ -113,7 +113,7 @@ flowchart TD
   T --> K[Kind and worth of every fact<br/>DECISION]
   K --> X[Past exam answers as facts<br/>GENERATIVE, only with exams/]
   X --> PL[Plan the cards: slots, roles, ids<br/>CODE]
-  PL --> F[Fill one form per planned card<br/>GENERATIVE, effort low]
+  PL --> F[Fill one form per planned card,<br/>up to three of a concept a call<br/>GENERATIVE, effort low]
   F --> G[Gate: limits, leans-on-slides, says-nothing<br/>CODE]
   G --> O[Organisation check<br/>DECISION, card alone]
   O -->|failed gate| RS[Split or repair<br/>GENERATIVE, effort low]
@@ -231,15 +231,21 @@ measurement is in the comment at the top of `exams.ts`.
 not part of it, so a reworded card keeps its id, its place in the file and its Anki note. Ids are
 fixed by the plan, before a word is written.
 
-**11. Fill (generative model).** One call per planned card (`createWriter` in `writer.ts`), effort
-`low`. The input is the whole lecture again (cached by the provider), the concept name, the fact and
-its slide, the card type with a one-line description (`ROLE_SPECS[role].use`), the preset's
-`rules`, and the preset's example of that card type. The reply schema is a small form per card type
-(`FORMS` in `writer.ts`) with the limits written into the field descriptions: for example a
-definition has `question`, `answer`, `extra`; a contrast has `question`, two sides, two values,
-`extra`. The model never writes HTML, list markup, slot labels, cloze numbers of a list, or any
-provenance field. Calls run four at a time (`PARALLEL`). The first card of each card type in a
-lecture runs ahead of the others to fill the provider's prompt cache.
+**11. Fill (generative model).** One call per concept for up to three of its planned cards
+(`CARDS_PER_CALL`, `createWriter` in `writer.ts`), effort `low`. The input is the whole lecture as
+text again (`cardContext`, cached by the provider), then the pictures of the call's own cards'
+slides only, then the concept name, per card the fact and its slide, the card type with a one-line
+description (`ROLE_SPECS[role].use`) and the preset's example of that card type, then the preset's
+`rules` once. The reply is a list of forms, each tagged with its card type; every call has that one
+reply format, so the provider's cache of the lecture holds for all of them. A card the reply leaves
+out or writes in another form is asked again on its own. Each card type has a small form (`FORMS`
+in `writer.ts`) with the limits written into the field descriptions: for example a definition has
+`question`, `answer`, `extra`; a contrast has `question`, two sides, two values, `extra`. The model
+never writes HTML, list markup, slot labels, cloze numbers of a list, or any provenance field. The
+first call of each lecture runs ahead of the others to fill the provider's prompt cache. Why three
+cards and only their own pictures: the lecture, and above all its pictures, made most of every
+call's input, and the key's tokens a minute hold the build; judged blind, neither change lost
+anything ([RFD 4](rfd/0004-lecture-to-cards.md)).
 
 **12. Gate, split and repair.** For every filled card, `validateDraft` (all hard limits, section 9),
 then, only if that passes, `leansOnSlides` (the question points at the slides or the session, a
@@ -286,6 +292,31 @@ their questions were placed in is saved, so a stopped run asks them again. `runs
 phase, the lectures and cards saved) is written once, when the build ends. A build that stops
 writes it too, marked `failed`, so money spent on it shows, and keeps the lectures it saved. Build
 again and only the rest is built and paid for.
+
+### How the calls of a build run
+
+All model calls and decision requests of a build share one queue (`createAsk`, `ask.ts`), 32 at
+a time (`PARALLEL`). Of the calls waiting, the one with the highest priority goes first: the
+sorting of each lecture's facts (`askGroups`) above everything, since every later step waits for
+it; then the earlier lecture before the later one; past papers last. After the first failure no
+call starts. What runs at once and what waits for what (`build.ts`):
+
+- The reading of every slide of every lecture and the reading of past papers start together.
+- The map of lecture n (sort and settle) waits for its own slides and the map of lecture n-1,
+  whose concepts it names again (22 to 32 concepts of Entrepreneurship come up again in a later
+  lecture). The kind and worth of its facts start as soon as its map is settled (`labelFacts`).
+- Exam families wait for every map; the plan waits for every map, label and exam answer.
+- Cards of all lectures are written and checked at once; clashes and saving go in course order,
+  and the earlier lecture's calls go first, so lectures still finish, and are saved, in order.
+
+The OpenAI adapter sends each lecture picture once, as a file that expires after a day, instead
+of inside every call: sent inline, lecture 4 of Entrepreneurship (54 pictures) put 14 MB into
+each of its card calls and the upload limited the build. Writing-model calls are paced to the
+key's tokens a minute (`pace.ts`, [RFD 6](rfd/0006-money.md)). The sorting of facts and the exam
+families run on the provider's faster tier at twice the price, since everything waits for them.
+
+`runs/NNN.json` records `phaseMs` and, per step, its wall time, its calls, their time added up
+(waiting for a place included) and the slowest (`steps`). Steps of different lectures overlap.
 
 **17. Send (code).** Section 12.
 
@@ -341,8 +372,8 @@ the same conversion. The engine counts and caps in dollars.
 command's own `capUsd` (CLI `--cap`). After every paid call, `spend` in `createAsk` adds the usage
 to the meter and throws an `EngineError` when the real cost is above the cap. Consequences:
 
-- The check happens after a call, so the call that crosses the cap is already paid, and up to four
-  calls in flight finish (`pool` in `build.ts`; after the first failure no new item starts).
+- The check happens after a call, so the call that crosses the cap is already paid, and up to 31
+  calls in flight finish (`createAsk` in `ask.ts`; after the first failure no call starts).
 - The run fails, keeps the lectures it finished, and its run file records what it spent. Building
   again makes and pays only for the rest.
 - The app passes no `capUsd`, so it always uses 3 times the estimate.
@@ -677,7 +708,7 @@ Each of these is an issue; none is a promise in this file.
 - `cloze` is never planned. No fact kind maps to it in the preset, so only a student's own card can
   have that role; the `cloze` example in the preset is never shown to a model. `name-two` is
   reached only from a `list` fact with exactly 2 items.
-- The cap can be exceeded by the last call and up to four in-flight calls.
+- The cap can be exceeded by the last call and up to 31 in-flight calls.
 - `survey` (also used by `estimate`) renders every slide to PNG locally, so an estimate is free but
   not instant.
 - A changed PDF behind a built lecture is ignored; the stored sha256 is not compared.

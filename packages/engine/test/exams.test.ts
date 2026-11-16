@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { Decision, Event, Lecture } from '../src/api.ts'
 import type { ModelRequest } from '../src/ports.ts'
 import { EXAM, script, SLIDES } from './fixtures.ts'
-import { pipeline } from './harness.ts'
+import { onlyLecture2Costs, pipeline } from './harness.ts'
 import { addSlides, makePdf } from './helpers.ts'
 
 const h = pipeline()
@@ -99,16 +99,25 @@ describe('building again with a new past paper', () => {
     if (request.prompt.startsWith('A question past exams')) {
       return { answer: ANSWER, items: 0, slide: 2, fromSlides: true }
     }
-    if (request.prompt.includes(`Fact to test: ${ANSWER}`)) {
-      return {
-        question: 'Lean startup: why test early?',
-        answer: 'It ==lowers risk== before money is spent.',
-        extra: '',
-      }
+    // Writing: the exam answer's card as here, the other cards of its call as the fixture writes them.
+    if (request.task === 'fill' && request.prompt.includes(`Fact to test: ${ANSWER}`)) {
+      const blocks = request.prompt.split(/^Fact to test: /m).slice(1)
+      const cards = blocks.map((block) =>
+        block.startsWith(ANSWER)
+          ? {
+              cardType: /^Card type: ([^.]+)\./m.exec(block)![1],
+              question: 'Lean startup: why test early?',
+              answer: 'It ==lowers risk== before money is spent.',
+              extra: '',
+            }
+          : (script({ ...request, prompt: `Fact to test: ${block}` }) as { cards: unknown[] })
+              .cards[0],
+      )
+      return { cards }
     }
     return script(request)
   }
-  const price = { input: 1, cachedInput: 0.1, output: 4 }
+  const price = { input: 1, cachedInput: 0.1, output: 4, fast: 2 }
   const estimateOf = async () => {
     const [event] = await run({ type: 'estimate', course: 'course' }, { price })
     if (event?.type !== 'estimate') throw new Error('No estimate')
@@ -177,7 +186,7 @@ describe('past exams in a build that was stopped', () => {
     await mkdir(join(h.root, 'course', 'exams'), { recursive: true })
     await writeFile(join(h.root, 'course', 'exams', 'Winter 2025-26.pdf'), await makePdf([EXAM]))
     // Lecture 1 is finished when the cap is passed in lecture 2.
-    await run({ type: 'build', course: 'course', capUsd: 0.5 }, { costPerCall: 0.02 })
+    await run({ type: 'build', course: 'course', capUsd: 0.35 }, onlyLecture2Costs(0.2))
   })
 
   it('does not count the papers as read, since lecture 2 still waits for its questions', async () => {

@@ -15,9 +15,24 @@ import type { ModelPort, ModelRequest } from '../src/ports.ts'
 import { decisions, script, SLIDES } from './fixtures.ts'
 import { addSlides, tempRoot, templates } from './helpers.ts'
 
+/**
+ * A build in which only the cards of lecture 2 cost money, `dollars` each, and come back late:
+ * lecture 1 is finished and saved first, then lecture 2 passes a low cap.
+ */
+export function onlyLecture2Costs(dollars: number): RunOptions {
+  const ofLecture2 = (r: ModelRequest) => r.context.startsWith('Lecture 02')
+  return {
+    costPerCall: (r) => (ofLecture2(r) ? dollars : 0),
+    script: async (r) => {
+      if (ofLecture2(r)) await new Promise((resolve) => setTimeout(resolve, 200))
+      return script(r)
+    },
+  }
+}
+
 interface RunOptions {
-  /** Dollars each model call is billed. */
-  costPerCall?: number
+  /** Dollars each model call is billed, or a price per call. */
+  costPerCall?: number | ((request: ModelRequest) => number)
   /** Dollars per million tokens of the writing model, for the estimate. */
   price?: ModelPort['price']
   /** Replaces the scripted writing model. */

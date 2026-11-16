@@ -317,7 +317,7 @@ describe('a build that fails after the provider billed it', () => {
     const library = join(await tempRoot(), 'failing')
     const billed: ModelPort = {
       model: 'billed',
-      price: { input: 0, cachedInput: 0, output: 0 },
+      price: { input: 0, cachedInput: 0, output: 0, fast: 1 },
       complete(request) {
         request.onUsage({ inputTokens: 10, cachedInputTokens: 0, outputTokens: 5, costUsd: 0.01 })
         return Promise.reject(new EngineError('The model ran out of room.', 'Split the lecture.'))
@@ -356,11 +356,31 @@ describe('the offline model', () => {
       context: '',
       images: [],
       prompt:
-        'Concept: risk\nFact to test: An outcome whose probability can be calculated or known (slide 2)',
-      schema: { type: 'object', properties: { question: {}, answer: {}, extra: {} } },
+        'Concept: risk\n\nFact to test: An outcome whose probability can be calculated or known (slide 2)\nCard type: definition. What a term means.',
+      schema: {
+        type: 'object',
+        properties: {
+          cards: {
+            items: {
+              anyOf: [
+                {
+                  properties: {
+                    cardType: { enum: ['definition'] },
+                    question: {},
+                    answer: {},
+                    extra: {},
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
       effort: 'low',
     })
-    const form = reply as { question: string; answer: string }
+    const form = (reply as { cards: { cardType: string; question: string; answer: string }[] })
+      .cards[0]!
+    expect(form.cardType).toBe('definition')
     const draft = {
       concept: 'risk',
       role: 'definition',

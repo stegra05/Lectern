@@ -13,27 +13,28 @@ export interface ScriptedModel extends ModelPort {
 }
 
 /**
- * A model that follows a script: `reply` gets each request and returns the JSON the model
- * would have sent. No network. It charges `costPerCall` dollars, nothing by default.
+ * A model that follows a script: `reply` gets each request and returns, or resolves to, the
+ * JSON the model would have sent. No network. Each call costs `cost` dollars, nothing by default.
  */
 export function scriptedModel(
   reply: (request: ModelRequest) => unknown,
-  costPerCall = 0,
+  cost: number | ((request: ModelRequest) => number) = 0,
 ): ScriptedModel {
   const requests: ModelRequest[] = []
   return {
     model: 'scripted',
-    price: { input: 0, cachedInput: 0, output: 0 },
+    price: { input: 0, cachedInput: 0, output: 0, fast: 1 },
     requests,
-    complete(request) {
+    async complete(request) {
       requests.push(request)
-      const data = reply(request)
+      const data = await reply(request)
       const inputTokens = Math.ceil(
         (request.system.length + request.context.length + request.prompt.length) / 4,
       )
       const outputTokens = Math.ceil(JSON.stringify(data).length / 4)
-      request.onUsage({ inputTokens, cachedInputTokens: 0, outputTokens, costUsd: costPerCall })
-      return Promise.resolve(data)
+      const costUsd = typeof cost === 'number' ? cost : cost(request)
+      request.onUsage({ inputTokens, cachedInputTokens: 0, outputTokens, costUsd })
+      return data
     },
   }
 }

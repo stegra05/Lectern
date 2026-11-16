@@ -47,6 +47,8 @@ const TOKENS = {
   factWorth: 225,
   /** Repairs and splits on top of the fill calls. */
   reworkShare: 0.25,
+  /** Cards a fill call writes: up to three of one concept, 641 cards in 337 calls on 2026-11-16. */
+  cardsPerFill: 1.9,
   /** Calls per lecture that read the lecture at full price: the cache is kept per card type. */
   uncachedCalls: 10,
   /**
@@ -60,7 +62,7 @@ const TOKENS = {
 
 export interface Prices {
   /** Dollars per million tokens of the writing model. */
-  model: { input: number; cachedInput: number; output: number }
+  model: { input: number; cachedInput: number; output: number; fast: number }
   /** Dollars per million input tokens of the decision model. Its answers cost nothing. */
   decisions: { input: number }
 }
@@ -114,31 +116,40 @@ export function estimate(
       ? 0
       : exams.chars * TOKENS.perChar * prices.model.input +
         questions * TOKENS.questionReply * prices.model.output +
-        questions * TOKENS.familyPerQuestion * prices.model.input +
-        questions * TOKENS.familyReplyPerQuestion * prices.model.output +
+        (questions * TOKENS.familyPerQuestion * prices.model.input +
+          questions * TOKENS.familyReplyPerQuestion * prices.model.output) *
+          prices.model.fast +
         families *
           (lectureSource * prices.model.cachedInput +
             TOKENS.answerPrompt * prices.model.input +
             TOKENS.answerReply * prices.model.output)
   let cards = 0
   for (const lecture of lectures) {
-    const source = lecture.chars * TOKENS.perChar + lecture.images * TOKENS.perImage
+    const text = lecture.chars * TOKENS.perChar
+    const source = text + lecture.images * TOKENS.perImage
+    // A writing call reads the lecture as text and the pictures of its own cards' slides only.
+    const ownPicture = (lecture.images / Math.max(1, lecture.slides)) * TOKENS.perImage
     const facts = lecture.slides * TOKENS.factsPerSlide
     const fills = Math.round(depth.cardsPerSlide * lecture.slides)
     const calls = fills * (1 + TOKENS.reworkShare)
-    const uncached = Math.min(calls, TOKENS.uncachedCalls)
+    // The lecture is read once per call: a fill call writes several cards, a repair one.
+    const reads = fills / TOKENS.cardsPerFill + fills * TOKENS.reworkShare
+    const uncached = Math.min(reads, TOKENS.uncachedCalls)
     cards += fills
     dollars +=
       // Every slide read on its own: the first call puts the lecture in the cache.
       source * (prices.model.input + (lecture.slides - 1) * prices.model.cachedInput) +
       lecture.slides *
         (TOKENS.readPerSlide * prices.model.input + TOKENS.readReply * prices.model.output) +
-      // The facts sorted into topics and concepts, in one call over the lecture.
-      (source + TOKENS.groupPrompt + facts * TOKENS.groupPerFact) * prices.model.input +
-      facts * TOKENS.groupReplyPerFact * prices.model.output +
-      // Every card sees the whole lecture again, mostly from the provider's cache.
-      source * (uncached * prices.model.input + (calls - uncached) * prices.model.cachedInput) +
-      calls * (TOKENS.fillPrompt * prices.model.input + TOKENS.fillReply * prices.model.output) +
+      // The facts sorted into topics and concepts, in one call over the lecture, on the faster tier.
+      ((source + TOKENS.groupPrompt + facts * TOKENS.groupPerFact) * prices.model.input +
+        facts * TOKENS.groupReplyPerFact * prices.model.output) *
+        prices.model.fast +
+      // Every writing call sees the lecture's text again, mostly from the provider's cache.
+      text * (uncached * prices.model.input + (reads - uncached) * prices.model.cachedInput) +
+      calls *
+        ((TOKENS.fillPrompt + ownPicture) * prices.model.input +
+          TOKENS.fillReply * prices.model.output) +
       (facts * TOKENS.factWorth + calls * TOKENS.cardCheck) * prices.decisions.input
   }
   const costUsd = dollars / 1_000_000

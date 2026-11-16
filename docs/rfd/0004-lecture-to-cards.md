@@ -25,8 +25,9 @@
    good 1, top 1.8, the reference deck's density), shared over all lectures of one build.
    Past exam answers first ([RFD 8](0008-past-exams.md)), then the facts worth most. The kind
    of a fact and the preset pick the card type.
-5. **Fill.** One call per planned card, the whole lecture as cached context, one example of
-   the card type from the preset. Key terms exactly as on the slides, the sentence reworded,
+5. **Fill.** One form per planned card, up to three cards of one concept in a call, the whole
+   lecture's text as cached context plus the pictures of the cards' own slides, one example of
+   each card type from the preset. Key terms exactly as on the slides, the sentence reworded,
    in the language of the slides.
 6. **Gate.** Hard limits, then "leans on slides" and "says nothing" rules, then the
    organisation check ([RFD 5](0005-decision-models.md)). A card too
@@ -54,6 +55,14 @@ Measured against the reference deck on 2026-11-15 (636 notes):
   order 133, random 129.
 - **Sharing cards over the course**: a budget per lecture gave one lecture 173 cards for 140
   facts and cut 63 of 107 facts in another, exactly where the reference deck is densest.
+- **Three cards of a concept in one call, with only their own pictures** (2026-11-16,
+  [#199](https://github.com/stegra05/lectern/issues/199), measured on the code before v3's cuts):
+  sent with every card, the lecture's pictures made most of the tokens that hold a build (lecture
+  4: 54 pictures a call). Three cards a call alone: 9.4 instead of 10.6 minutes, 238 of 636 notes
+  against 245 (sign test p = 0.53). With only the cards' own pictures too: 6.0 instead of 13.7
+  million input tokens, 6.4 to 7.1 minutes, about 39 instead of 50 cents, fewer repairs. Judged
+  blind against one card a call with every picture: 264 of 636 notes against 249 (p = 0.15), 103
+  against 95 of the notes asked nine times or more, 26 of 52 held-back exam questions against 25.
 
 ## Given up
 
