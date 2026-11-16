@@ -12,6 +12,7 @@ import {
   type Event,
   type Slots,
 } from '../src/api.ts'
+import { writeCards } from '../src/course.ts'
 import { assemble } from '../src/cards/assemble.ts'
 import { toDraft, toSlots } from '../src/cards/slots.ts'
 import { SLIDES } from './fixtures.ts'
@@ -232,6 +233,40 @@ describe('changing a card', () => {
       ),
     ).toMatchObject({ message: 'A card keeps its kind.' })
   })
+})
+
+describe('a card that answers a past exam question', () => {
+  it.each([true, false])(
+    'keeps what the exams gave it when it is edited, in the file and in Anki (on the slides: %s)',
+    async (fromSlides) => {
+      const [first] = await fresh()
+      const slots = await slotsOf(first!.id)
+      const exam = assemble(toDraft(slots, { concept: first!.fields.Key!, slide: first!.slide }), {
+        id: first!.id,
+        lecture: { number: 1, title: first!.fields.Topic! },
+        concept: { id: first!.concept, name: first!.fields.Key! },
+        slideLines: ['Risk is an outcome whose probability is known.'],
+        exam: { papers: 3, fromSlides },
+      })
+      await writeCards(nodeStore(root), COURSE, 1, [exam, ...(await cardsOf()).slice(1)])
+      expect((await send()).at(-1)!.type).toBe('sent')
+      const edited = await only(
+        { type: 'edit', ...at, card: exam.id, slots: { ...slots, front: 'Knight: what is risk?' } },
+        'edited',
+      )
+      const kept = ['Asked', 'Source', 'Slide', 'Excerpt'].map((name) => exam.fields[name])
+      const of = (fields: Record<string, string>) =>
+        ['Asked', 'Source', 'Slide', 'Excerpt'].map((name) => fields[name])
+      expect(edited.card.fields.Front).toBe('Knight: what is risk?')
+      expect(of(edited.card.fields)).toEqual(kept)
+      expect(of((await cardsOf())[0]!.fields)).toEqual(kept)
+      const note = (await record())[exam.id]
+      const inAnki = anki.notes.find((n) => n.id === note)!
+      expect(inAnki.fields.Front).toBe('Knight: what is risk?')
+      expect(inAnki.fields.Asked).toBe('3x')
+      expect(inAnki.fields.Source).toBe(exam.fields.Source)
+    },
+  )
 })
 
 describe('a card that is already in Anki', () => {
