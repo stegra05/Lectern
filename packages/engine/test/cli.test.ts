@@ -38,6 +38,7 @@ describe('the command line', () => {
         costUsd: expect.any(Number) as number,
         costEur: expect.any(Number) as number,
         capUsd: 0.25,
+        unreadable: [],
       },
     ])
     expect(code).toBe(0)

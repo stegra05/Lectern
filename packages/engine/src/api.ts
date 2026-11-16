@@ -96,7 +96,7 @@ export function createEngine(ports: Ports): Engine {
 }
 
 export type { BuildCommand, Command, Emit, EstimateCommand, Event } from './commands.ts'
-export { EngineError } from './errors.ts'
+export { EngineError, type Unreadable } from './errors.ts'
 export type * from './ports.ts'
 export type { CardFile } from './cards/assemble.ts'
 export type { Problem, Slots } from './cards/slots.ts'

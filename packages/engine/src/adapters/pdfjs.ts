@@ -1,16 +1,30 @@
 import { createCanvas } from '@napi-rs/canvas'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { UnreadablePdf } from '../errors.ts'
 import type { PdfPort } from '../ports.ts'
 
 /** Width of a rendered slide in pixels: enough to read a formula, small enough to send. */
 const WIDTH = 1024
 
+const unreadable = (error: unknown) =>
+  new UnreadablePdf((error as Error).name === 'PasswordException' ? 'password' : 'damaged')
+
+/** Opens a PDF. One that pdf.js cannot open, for a password or for damage, is `UnreadablePdf`. */
+async function open(data: Uint8Array) {
+  // pdf.js takes ownership of the buffer, so it gets a copy.
+  const task = getDocument({ data: data.slice(), verbosity: 0 })
+  try {
+    return { task, doc: await task.promise }
+  } catch (error) {
+    await task.destroy()
+    throw unreadable(error)
+  }
+}
+
 /** Reads slides with pdf.js: the text of each slide, and a picture of a slide on request. */
 export const pdfjsReader: PdfPort = {
   async readSlides(data) {
-    // pdf.js takes ownership of the buffer, so it gets a copy.
-    const task = getDocument({ data: data.slice(), verbosity: 0 })
-    const doc = await task.promise
+    const { task, doc } = await open(data)
     try {
       const slides: string[][] = []
       for (let n = 1; n <= doc.numPages; n++) {
@@ -31,14 +45,16 @@ export const pdfjsReader: PdfPort = {
         page.cleanup()
       }
       return slides
+    } catch (error) {
+      // A file that opens can still hold a page that does not.
+      throw unreadable(error)
     } finally {
       await task.destroy()
     }
   },
 
   async renderSlides(data, slides) {
-    const task = getDocument({ data: data.slice(), verbosity: 0 })
-    const doc = await task.promise
+    const { task, doc } = await open(data)
     try {
       const images = []
       for (const slide of slides) {

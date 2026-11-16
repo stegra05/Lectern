@@ -18,7 +18,7 @@ import {
 import { validateDraft } from '../src/cards/validate.ts'
 import { ProviderError } from '../src/errors.ts'
 import { SLIDES } from './fixtures.ts'
-import { makePdf, tempRoot, templates } from './helpers.ts'
+import { encryptedPdf, makePdf, tempRoot, templates, truncatedPdf } from './helpers.ts'
 
 let root: string
 const pdfs = new Map<string, Uint8Array>()
@@ -367,8 +367,8 @@ describe('a whole course folder, added at once', () => {
       ],
       left: [
         { path: 'Course/Altklausuren/Copy of 2019.pdf', why: 'already', kind: null },
-        { path: 'Course/Broken.pdf', why: 'unreadable', kind: null },
-        { path: 'Course/notes.txt.pdf', why: 'unreadable', kind: null },
+        { path: 'Course/Broken.pdf', why: 'damaged', kind: null },
+        { path: 'Course/notes.txt.pdf', why: 'damaged', kind: null },
         { path: 'Course/Übungen/Blatt 1.pdf', why: 'kind', kind: 'exercise' },
         { path: 'Course/Scan.pdf', why: 'unsure', kind: null },
       ],
@@ -534,6 +534,132 @@ describe('a library with a damaged course', () => {
       message: 'The file sent/anki.json in your course library is damaged and cannot be read.',
     })
     expect(await last({ type: 'course', course: 'econ' })).toMatchObject({ type: 'course' })
+  })
+})
+
+describe('PDFs that cannot be read', () => {
+  const course = 'unreadable'
+  let library: string
+  const locked = encryptedPdf([['Exam 2020', '1) What is risk?']])
+  const cut = truncatedPdf(SLIDES['02 Effectuation.pdf']!)
+  let asked = 0
+  const counted: DecisionsPort = {
+    ...offlineDecisions(),
+    decide: (request) => {
+      asked += 1
+      return offlineDecisions().decide(request)
+    },
+  }
+  const last = async (command: unknown) => {
+    const events: Event[] = []
+    await createEngine({
+      store: nodeStore(library),
+      pdf: pdfjsReader,
+      model: offlineModel(),
+      decisions: counted,
+      anki: memoryAnki(),
+      templates,
+      now: Date.now,
+    }).run(command, (event) => events.push(event))
+    return events.at(-1)!
+  }
+
+  beforeAll(async () => {
+    library = join(await tempRoot(), 'unreadable')
+    await last({ type: 'create', name: 'Unreadable' })
+  })
+
+  it('refuses them on a shelf, named and with the reason, and adds nothing then', async () => {
+    const risk = { name: '01 Risk.pdf', data: pdfs.get('01 Risk.pdf')! }
+    const lockedPaper = { name: 'Exam 2020.pdf', data: await locked }
+    expect(await last({ type: 'add', course, files: [risk, lockedPaper], to: 'exams' })).toEqual({
+      type: 'failed',
+      message: 'Exam 2020.pdf is protected by a password, so Lectern cannot read it.',
+      fix: 'Save a copy without the password, then add that copy.',
+    })
+    const cutSlides = { name: '02 Effectuation.pdf', data: await cut }
+    expect(await last({ type: 'add', course, files: [cutSlides], to: 'slides' })).toEqual({
+      type: 'failed',
+      message: '02 Effectuation.pdf is damaged, so Lectern cannot read it.',
+      fix: 'Download or export the file again, then add the new copy.',
+    })
+    expect(await readdir(join(library, course))).toEqual(['course.json'])
+  })
+
+  it('leaves them out of a sorted add with the reason, and asks no question about them', async () => {
+    asked = 0
+    const files = [
+      { name: 'Course/Exam 2020.pdf', data: await locked },
+      { name: 'Course/02 Effectuation.pdf', data: await cut },
+    ]
+    expect(await last({ type: 'add', course, files })).toEqual({
+      type: 'added',
+      course,
+      added: [],
+      left: [
+        { path: 'Course/Exam 2020.pdf', why: 'password', kind: null },
+        { path: 'Course/02 Effectuation.pdf', why: 'damaged', kind: null },
+      ],
+    })
+    expect(asked).toBe(0)
+  })
+
+  it('opens a course that holds them, and names each as slides and as a paper', async () => {
+    // Files that came in before they were checked, or turned unreadable after.
+    await last({ type: 'add', course, files: upload('01 Risk.pdf'), to: 'slides' })
+    await writeFile(join(library, course, 'slides', '02 Effectuation.pdf'), await cut)
+    await writeFile(join(library, course, 'slides', '03 Locked.pdf'), await locked)
+    await mkdir(join(library, course, 'exams'))
+    await writeFile(join(library, course, 'exams', 'Exam 2020.pdf'), await locked)
+    await writeFile(join(library, course, 'exams', 'Exam 2021.pdf'), await cut)
+
+    const opened = (await last({ type: 'course', course })) as Extract<Event, { type: 'course' }>
+    expect(opened.course.pending).toEqual([
+      { file: '01 Risk.pdf', number: 1, title: 'Risk', slides: 5 },
+      {
+        file: '02 Effectuation.pdf',
+        number: 2,
+        title: 'Effectuation',
+        slides: 0,
+        unreadable: 'damaged',
+      },
+      { file: '03 Locked.pdf', number: 3, title: 'Locked', slides: 0, unreadable: 'password' },
+    ])
+    expect(opened.course.exams).toEqual([
+      { file: 'Exam 2020.pdf', questions: null, unreadable: 'password' },
+      { file: 'Exam 2021.pdf', questions: null, unreadable: 'damaged' },
+    ])
+    expect(await last({ type: 'slide', course, lecture: 3, slide: 1 })).toMatchObject({
+      message: '03 Locked.pdf is protected by a password, so Lectern cannot read it.',
+    })
+  })
+
+  it('names them in the estimate, and builds the other lectures', async () => {
+    const named = [
+      { file: '02 Effectuation.pdf', why: 'damaged' },
+      { file: '03 Locked.pdf', why: 'password' },
+      { file: 'Exam 2020.pdf', why: 'password' },
+      { file: 'Exam 2021.pdf', why: 'damaged' },
+    ]
+    expect(await last({ type: 'estimate', course })).toMatchObject({
+      type: 'estimate',
+      lectures: 1,
+      unreadable: named,
+    })
+    expect(await last({ type: 'build', course, capUsd: 1 })).toMatchObject({
+      type: 'built',
+      lectures: [{ number: 1 }],
+    })
+    const opened = (await last({ type: 'course', course })) as Extract<Event, { type: 'course' }>
+    expect(opened.course.pending.map((p) => p.unreadable)).toEqual(['damaged', 'password'])
+  })
+
+  it('names the file when nothing else is left to build', async () => {
+    expect(await last({ type: 'build', course, capUsd: 1 })).toEqual({
+      type: 'failed',
+      message: '02 Effectuation.pdf is damaged, so Lectern cannot read it.',
+      fix: 'Download or export the file again, then add the new copy.',
+    })
   })
 })
 

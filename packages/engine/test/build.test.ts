@@ -40,6 +40,7 @@ describe('building a course of two lectures, offline', () => {
         costUsd: 0,
         costEur: 0,
         capUsd: 0.25,
+        unreadable: [],
       },
     ])
     expect(events.at(-1)).toEqual({
@@ -651,6 +652,7 @@ describe('goal and cost', () => {
         costUsd: 0,
         costEur: 0,
         capUsd: 0.25,
+        unreadable: [],
       },
     ])
     expect(h.model.requests).toEqual([])

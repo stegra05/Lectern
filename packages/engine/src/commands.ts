@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { GOALS, ROLES } from './cards/roles.ts'
 import { OWN_ROLES, type Problem, type Slots } from './cards/slots.ts'
 import type { CardFile } from './cards/assemble.ts'
+import type { Unreadable } from './errors.ts'
 import type { Added, CourseState, CourseSummary, Shelf } from './library.ts'
 
 /** The course folder inside the store. */
@@ -109,6 +110,8 @@ export type Event =
       /** What to show the student: euros, rounded up to a coarse step. */
       costEur: number
       capUsd: number
+      /** New lecture PDFs and past papers that cannot be read: the build leaves them out. */
+      unreadable: { file: string; why: Unreadable }[]
     }
   | {
       type: 'built'

@@ -24,9 +24,9 @@ import {
   type Run,
 } from './course.ts'
 import { sentCards } from './deliver.ts'
-import { EngineError } from './errors.ts'
+import { cannotRead, EngineError, orUnreadable, type Unreadable } from './errors.ts'
 import type { ExamsFile } from './exams.ts'
-import type { Ports, SlideImage, Store } from './ports.ts'
+import type { PdfPort, Ports, SlideImage, Store } from './ports.ts'
 import { entersCourse, isJunkPath, sortFiles, type FileKind } from './sort.ts'
 
 export interface CourseSummary {
@@ -56,6 +56,8 @@ export interface PendingLecture {
   /** Guessed from the file name. The build replaces it with the lecture's real name. */
   title: string
   slides: number
+  /** Why the file cannot be read, when it cannot. It has no slides then, and no build takes it. */
+  unreadable?: Unreadable
 }
 
 export interface CourseState extends Omit<CourseFile, 'format' | 'lectures'> {
@@ -73,6 +75,8 @@ export interface CourseState extends Omit<CourseFile, 'format' | 'lectures'> {
 export interface PaperState {
   file: string
   questions: number | null
+  /** Why the file cannot be read, when it cannot. No build reads it then. */
+  unreadable?: Unreadable
 }
 
 async function courseFile(store: Store, course: string): Promise<CourseFile> {
@@ -142,8 +146,13 @@ export async function readCourse({ store, pdf }: Ports, course: string): Promise
   }
   const pending: PendingLecture[] = []
   for (const { file: name, number } of await pendingFiles(store, course, file)) {
-    const slides = await pdf.readSlides(await store.readBytes(`${paths.slides(course)}/${name}`))
-    pending.push({ file: name, number, title: titleFromFile(name, number), slides: slides.length })
+    const title = titleFromFile(name, number)
+    const slides = await orUnreadable(
+      pdf.readSlides(await store.readBytes(`${paths.slides(course)}/${name}`)),
+    )
+    if (typeof slides === 'string')
+      pending.push({ file: name, number, title, slides: 0, unreadable: slides })
+    else pending.push({ file: name, number, title, slides: slides.length })
   }
   const runs: Run[] = []
   for (const name of (await store.list(paths.runs(course))).sort()) {
@@ -155,7 +164,7 @@ export async function readCourse({ store, pdf }: Ports, course: string): Promise
     goal: file.goal,
     lectures,
     pending,
-    exams: await papers(store, course),
+    exams: await papers(store, pdf, course),
     decisions: (await readJson<Decision[]>(store, paths.decisions(course))) ?? [],
     runs,
   }
@@ -187,7 +196,9 @@ export async function renderSlide(
       'Open a lecture from the course.',
     )
   const bytes = await store.readBytes(`${paths.slides(course)}/${name}`)
-  if (slide > (await pdf.readSlides(bytes)).length) {
+  const slides = await orUnreadable(pdf.readSlides(bytes))
+  if (typeof slides === 'string') throw cannotRead(name, slides)
+  if (slide > slides.length) {
     throw new EngineError(
       `Lecture ${lecture} has no slide ${slide}.`,
       'Open a slide the lecture has.',
@@ -215,14 +226,28 @@ export async function createCourse(store: Store, name: string, goal: Goal): Prom
   return id
 }
 
-/** The past papers of a course: those a build read, with their questions, and those it has not. */
-async function papers(store: Store, course: string): Promise<PaperState[]> {
+/**
+ * The past papers of a course: those a build read, with their questions, and those it has not,
+ * with why one of those cannot be read.
+ */
+async function papers(store: Store, pdf: PdfPort, course: string): Promise<PaperState[]> {
   const read = (await readJson<ExamsFile>(store, paths.examsFile(course)))?.papers ?? []
   const files = (await store.list(paths.exams(course))).filter((f) => /\.pdf$/i.test(f)).sort()
-  return files.map((file) => ({
-    file,
-    questions: read.find((paper) => paper.file === file)?.questions.length ?? null,
-  }))
+  const out: PaperState[] = []
+  for (const file of files) {
+    const questions = read.find((paper) => paper.file === file)?.questions.length ?? null
+    if (questions !== null) {
+      out.push({ file, questions })
+      continue
+    }
+    const pages = await orUnreadable(
+      pdf.readSlides(await store.readBytes(`${paths.exams(course)}/${file}`)),
+    )
+    out.push(
+      typeof pages === 'string' ? { file, questions, unreadable: pages } : { file, questions },
+    )
+  }
+  return out
 }
 
 /** Where an added PDF goes: lecture slides or past exam papers. */
@@ -235,9 +260,10 @@ export interface LeftOut {
   /**
    * `kind`: a kind the course does not use yet, such as an exercise sheet. `unsure`: the
    * decision model could not tell. `already`: the course has a file of that name or that
-   * content, or this add holds the same file twice. `unreadable`: not a PDF that can be read.
+   * content, or this add holds the same file twice. `password` and `damaged`: a PDF that cannot
+   * be read, for that reason; a file that only has the name of a PDF counts as damaged.
    */
-  why: 'kind' | 'unsure' | 'already' | 'unreadable'
+  why: 'kind' | 'unsure' | 'already' | Unreadable
   kind: FileKind | null
 }
 
@@ -287,6 +313,8 @@ export async function addFiles(
           'Rename the new file, then add it again.',
         )
       }
+      const pages = await orUnreadable(pdf.readSlides(bytes))
+      if (typeof pages === 'string') throw cannotRead(name, pages)
     }
     for (const { name, bytes } of pdfs)
       await store.writeBytes(`${paths[to](course)}/${name}`, bytes)
@@ -311,11 +339,13 @@ export async function addFiles(
       continue
     }
     held.add(content)
+    // Read before the sort, so a file that cannot be read costs no request.
     const pages = looksLikePdf(file.name, file.bytes)
-      ? await pdf.readSlides(file.bytes).catch(() => null)
-      : null
-    if (pages && pages.length > 0) readable.push({ ...file, pages })
-    else left.push({ path: file.path, why: 'unreadable', kind: null })
+      ? await orUnreadable(pdf.readSlides(file.bytes))
+      : 'damaged'
+    if (typeof pages === 'string') left.push({ path: file.path, why: pages, kind: null })
+    else if (pages.length === 0) left.push({ path: file.path, why: 'damaged', kind: null })
+    else readable.push({ ...file, pages })
   }
   const kinds = await sortFiles({ pdf, decisions }, readable)
   const added: Added['added'] = []
