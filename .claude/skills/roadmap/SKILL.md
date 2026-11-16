@@ -28,7 +28,7 @@ board before anything is written.
 | | Values | Meaning |
 |---|---|---|
 | Type | Feature, Quality, Verify, Decision, Chore, Bug | what kind of work. **Decision**: a question for Steffen, no work until he answers. **Verify**: check something against reality (real Anki, a bill, real clients) |
-| Milestone | v3.0 base, v3.1 feedback loop, v3.2 study plan, ..., Vision | the release it ships in. Vision means not planned |
+| Milestone | v3.0 base, v3.1 hosted models, v3.2 feedback loop, ..., Vision | the release it ships in. Vision means not planned |
 | Priority | P0, P1, P2 | rank inside the current release only. P0 blocks the release, P1 next, P2 if time allows. Issues in later releases have none |
 | Size | S, M, L | under a day, a few days, a stack of PRs |
 | Area | Engine, App, Design, Dev | where the work lives. One per issue |
