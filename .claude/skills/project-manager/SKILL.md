@@ -50,29 +50,29 @@ money`) so it can be reviewed and applied in one pass.
 | tooling, refactors, CI, packaging, release plumbing | Chore |
 | behaviour that is wrong today | Bug |
 
-**Priority**, only for issues in the current release (later releases get none; clear a stray
-one with `gh project item-edit --project-id <id> --id <item> --field-id <Priority> --clear`):
+Priority, Size, Area and milestone mean what the table in the roadmap skill says, and only an
+issue in the current release gets a priority. Here is how to judge them:
 
-- **P0**: on the critical path, or other P0 work waits on it, or paid work or money is at risk
-  until it lands. Keep it to about six and at most a quarter of the release.
-- **P1**: the release needs it, but nothing waits on it this week.
-- **P2**: the release is better with it and can ship without it.
+**Priority**: P0 blocks the release, so an issue is P0 when it is on the critical path from
+step 2, or when other P0 work waits on it. A P0 that is blocked makes its blocker P0. An issue
+already In progress is at least P1. P2 is what the release can ship without. Clear a priority
+that sits outside the current release with `$B clear <n> Priority`.
 
-A P0 that is blocked makes its blocker P0. An issue already In progress is at least P1.
+**Size**: judge from the Done-when list and the files it names; a paid run or a human review
+step adds a size.
 
-**Size**: S under a day, M a few days, L a stack of PRs. Judge from the Done-when list and the
-files it names; a paid run or a human review step adds a size.
-
-**Area**: where most of the change lives (Engine, App, Design, Dev).
+**Area**: where most of the change lives.
 
 **Milestone**: set one only on an issue that has none, from what its body or the RFDs say.
-Moving an issue between releases is Steffen's decision: propose it, don't do it.
+Propose release moves; Steffen makes them.
 
 **Blockers**: read the body for "before #N lands", "measured with #N's command", "changes the
 same function as #N", "once #N exists". Add each with `$B block <n> --by <m>`. Only real
 order, not "related".
 
-**`costs money`**: any Done-when that runs a paid model, buys a licence or pays a fee.
+**`costs money`**: any Done-when that runs a paid model, buys a licence or pays a fee. Apply the
+label with `gh issue edit <n> -R stegra05/Lectern --add-label "costs money"`, and remove it with
+`--remove-label`.
 
 ## 4. Check the board against itself
 
