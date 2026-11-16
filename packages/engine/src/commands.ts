@@ -52,7 +52,8 @@ export const CommandSchema = z.discriminatedUnion('type', [
     slide: z.number().int().positive(),
   }),
   /**
-   * Adds PDFs to the course, each as its file name and its bytes: lecture slides,
+   * Adds PDFs to the course, each as its file name, or its path inside a folder the student
+   * added, and its bytes: lecture slides,
    * which the next `build` builds, or past exam papers (`to: 'exams'`), whose questions the
    * next `build` turns into cards first.
    */

@@ -1,5 +1,6 @@
 import { useState, type DragEvent } from 'react'
 import { CourseMap } from '../map/CourseMap.tsx'
+import { fromDrop } from '../picked.ts'
 import { useStore } from '../store.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { TitleBar } from '../ui/TitleBar.tsx'
@@ -9,7 +10,7 @@ import './course.css'
 
 /**
  * The frame inside a course, the same before and after generation: title bar, the map edge to
- * edge, the slim bar at the bottom and the one side panel. PDFs can be dropped anywhere on it.
+ * edge, the slim bar at the bottom and the one side panel. PDFs, or folders of them, can be dropped anywhere on it.
  */
 export function CourseScreen() {
   const course = useStore((s) => s.course)
@@ -38,7 +39,7 @@ export function CourseScreen() {
         if (busy || !hasFiles(event)) return
         event.preventDefault()
         setDropping(false)
-        void addFiles([...event.dataTransfer.files])
+        void fromDrop(event.dataTransfer).then(addFiles)
       }}
     >
       <CourseMap />
@@ -66,7 +67,7 @@ export function CourseScreen() {
         <div className="drop-veil" aria-hidden="true">
           <div className="drop-veil-card material">
             <Icon name="doc" size={20} stroke={1.3} />
-            <b>Drop your lecture PDFs</b>
+            <b>Drop your lecture PDFs or their folder</b>
             <span className="t-secondary">
               One PDF per lecture. They join the track in course order.
             </span>

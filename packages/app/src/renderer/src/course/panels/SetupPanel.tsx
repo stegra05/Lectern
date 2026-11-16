@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import type { Goal } from '../../../../shared/contract.ts'
 import { cardCount, useStore } from '../../store.ts'
 import { plural } from '../../lecture.ts'
+import { fromInput } from '../../picked.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
 import './panels.css'
 
@@ -83,7 +84,7 @@ export function SetupPanel({ close }: { close: ReactNode }) {
             hidden
             aria-label="Past exam papers"
             onChange={(event) => {
-              const files = [...(event.target.files ?? [])]
+              const files = fromInput(event.target.files)
               event.target.value = ''
               if (files.length > 0) void addExams(files)
             }}

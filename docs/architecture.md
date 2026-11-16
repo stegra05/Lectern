@@ -6,7 +6,8 @@ example `settleMap` in `tree.ts`), never by line number. What is not built yet i
 in section 15. Why it is built this way is in the RFDs (`docs/rfd/`, index in `docs/README.md`).
 
 Lectern turns a course's lecture PDFs into Anki cards. A student creates a course, drops in one PDF
-per lecture, states a goal, and the app writes cards and sends them to Anki.
+per lecture or the folder that holds them, states a goal, and the app writes cards and sends them to
+Anki.
 
 ## 1. Layout of the repository
 

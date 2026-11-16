@@ -430,6 +430,10 @@ button.map-neighbour:hover {
   margin-bottom: 8px;
   color: var(--label-2);
 }
+.map-empty-actions {
+  display: flex;
+  gap: 8px;
+}
 
 /* The lecture the engine is on during a run: a calm halo and its caption in the accent. */
 .map-stop-now::before {
