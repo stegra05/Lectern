@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CardFile } from '../src/cards/assemble.ts'
+import { assemble, type CardFile } from '../src/cards/assemble.ts'
 import { checkSlots, toDraft, toSlots, type Slots } from '../src/cards/slots.ts'
 
 const card = (fields: Record<string, string>): CardFile => ({
@@ -66,5 +66,35 @@ describe('the gaps of a cloze card', () => {
     expect(toDraft(behind, place).front).toBe(
       'Risk is not risk {{c1::until}} the {{c2::risk}} is known',
     )
+  })
+})
+
+describe('a key term with $', () => {
+  const placement = {
+    id: 'c',
+    lecture: { number: 1, title: 'Risk' },
+    concept: { id: 'x', name: 'x' },
+    slideLines: [],
+  }
+  const definition = (text: string, key = ''): Slots => ({
+    role: 'definition',
+    front: 'What does the operator do in code?',
+    answers: [{ text, key }],
+    labels: [],
+    hidden: [],
+    at: [],
+    extra: '',
+    code: '',
+  })
+  const again = (slots: Slots) => {
+    const built = assemble(toDraft(slots, place), placement)
+    return { built, slots: toSlots(built) }
+  }
+
+  it('marks a key term with $ without changing the answer', () => {
+    const { built, slots } = again(definition('It costs $$5 total', '$$5'))
+    expect(built.fields.Back).toBe('It costs <mark>$$5</mark> total')
+    expect(slots.answers[0]).toEqual({ text: 'It costs $$5 total', key: '$$5' })
+    expect(toDraft(definition("a $& b $' c", '$&'), place).answers[0]).toBe("a ==$&== b $' c")
   })
 })

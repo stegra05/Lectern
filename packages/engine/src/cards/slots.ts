@@ -272,7 +272,9 @@ export function toDraft(slots: Slots, card: { concept: string; slide: number }):
     answers: slots.answers.map(({ text, key }) => {
       const answer = text.trim()
       const term = key.trim()
-      return term !== '' && answer.includes(term) ? answer.replace(term, `==${term}==`) : answer
+      return term !== '' && answer.includes(term)
+        ? answer.replace(term, () => `==${term}==`)
+        : answer
     }),
     labels: slots.labels.map((label) => label.trim()),
     extra: slots.extra.trim(),

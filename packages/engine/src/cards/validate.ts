@@ -288,6 +288,11 @@ function clozeList(lead: string, items: string[]): string[] {
     problems.push('write the list items as plain text; code adds the deletions')
   }
   for (const item of items) {
+    if (item.includes('::') && !/\{\{|\}\}/.test(item)) {
+      problems.push(
+        `the item "${item}" holds "::", which Anki reads as a hint; write it without "::"`,
+      )
+    }
     if (words(item) > LIMITS.deletionWords) {
       problems.push(`the item "${item}" has more than ${LIMITS.deletionWords} words`)
     }

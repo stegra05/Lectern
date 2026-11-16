@@ -334,6 +334,9 @@ describe('cloze rules', () => {
       'write the list items as plain text; code adds the deletions',
     ])
     expect(problems({ ...list, answers: ['lemonade', `bird in hand ${words(6)}`] })).toHaveLength(1)
+    expect(problems({ ...list, answers: ['std::vector', 'lemonade'] })).toEqual([
+      'the item "std::vector" holds "::", which Anki reads as a hint; write it without "::"',
+    ])
   })
 })
 
