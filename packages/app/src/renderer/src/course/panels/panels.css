@@ -156,6 +156,8 @@
   line-height: 1.2;
   font-weight: 700;
   letter-spacing: -0.015em;
+  /* A long German compound breaks at the panel's edge instead of being clipped. */
+  overflow-wrap: anywhere;
 }
 .cards-body {
   flex: 1;
