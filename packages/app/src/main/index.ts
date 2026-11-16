@@ -45,12 +45,7 @@ function createWindow(): void {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 14, y: 12 },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1C1C1E' : '#EFEFF2',
-    webPreferences: {
-      preload: join(import.meta.dirname, '../preload/index.cjs'),
-      // A test never shows the window. Linux slows the timers and frames of a hidden window to
-      // about one a second, and the test waits on them at every step.
-      backgroundThrottling: env.LECTERN_SHOW !== '0',
-    },
+    webPreferences: { preload: join(import.meta.dirname, '../preload/index.cjs') },
   })
   // A test drives the window without putting it on the student's screen.
   if (env.LECTERN_SHOW !== '0') window.once('ready-to-show', () => window.show())

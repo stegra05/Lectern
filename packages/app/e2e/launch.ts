@@ -35,7 +35,7 @@ export async function launch(
       LECTERN_FAKE_DELAY: String(options.delayMs ?? 0),
       LECTERN_DATA: data,
       LECTERN_COURSES: courses,
-      LECTERN_SHOW: '0',
+      LECTERN_SHOW: process.env.E2E_SHOW ?? '0',
     },
   })
   const page = await app.firstWindow()
