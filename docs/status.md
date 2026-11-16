@@ -58,8 +58,8 @@ first-run screen and found its templates. A `v3.*` tag builds macOS, Windows and
 draft prerelease ([`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
 A whole course folder, dropped or chosen in the course setup, is sorted into lectures and past
-exams; the setup panel lists the rest as left out, adds a left-out file by hand and moves a file
-without cards between lectures and past exams.
+exams; the setup panel lists the rest as left out, adds a left-out file by hand, and moves a file
+without cards between lectures and past exams or takes it out of the course again.
 
 On 2026-11-15 the app ran once for real: a build of one lecture (Session 8, 19 slides, goal
 "a good grade") on `gpt-6-luna` made 19 cards in 73 seconds for 1.9 cents (estimate 1.9). Sent
@@ -80,8 +80,8 @@ card arrived tagged `::own`.
 - The sort of added files is measured on one folder only, the Entrepreneurship folder its rules
   were shaped on: 43 of 45 files the model read on the right shelf at every threshold from 0.3
   to 0.9, all 36 lectures and exams in, 2 other files let in as sure answers. Nothing is held
-  out; other courses and other languages are unmeasured. A file let in wrongly cannot be removed
-  in the app ([#219](https://github.com/stegra05/lectern/issues/219)).
+  out; other courses and other languages are unmeasured. A file let in wrongly is taken out by
+  hand while it has no cards.
 
 ## Not built
 

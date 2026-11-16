@@ -65,12 +65,15 @@ export const CommandSchema = z.discriminatedUnion('type', [
     files: z.array(z.object({ name: z.string().min(1), data: z.instanceof(Uint8Array) })).min(1),
     to: z.enum(['slides', 'exams']).optional(),
   }),
-  /** Moves a file without cards between lecture slides and past exams. */
+  /**
+   * Moves a file without cards between lecture slides and past exams, or `out` of the course:
+   * the course's copy is deleted, and adding the file again brings it back.
+   */
   z.object({
     type: z.literal('move'),
     course,
     file: z.string().min(1),
-    to: z.enum(['slides', 'exams']),
+    to: z.enum(['slides', 'exams', 'out']),
   }),
   /** Sends the cards that are not in Anki yet. */
   z.object({ type: z.literal('send'), course }),
@@ -131,7 +134,7 @@ export type Event =
   | { type: 'created'; course: string }
   /** What came in, under the names it now has in the course, and what stayed out. */
   | ({ type: 'added'; course: string } & Added)
-  | { type: 'moved'; course: string; file: string; to: Shelf }
+  | { type: 'moved'; course: string; file: string; to: Shelf | 'out' }
   /** After each card that reached Anki. `lecture` is the lecture being sent. */
   | { type: 'sending'; lecture: number; done: number; total: number }
   /** `deck` is the course's deck in Anki, with one subdeck per lecture. */

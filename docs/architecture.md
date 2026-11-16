@@ -513,7 +513,8 @@ Properties that hold by construction and by test:
   a target shelf refuses a name the course already has; `add` without one sorts each file
   (`sort.ts`, [RFD 5](rfd/0005-decision-models.md)), stores only lecture slides and past exams, and
   returns the rest as `left` with the reason, a name or a content the course already has among them. `move`
-  shifts a file without cards between `slides/` and `exams/`. A changed PDF behind a built lecture is ignored (the sha256
+  shifts a file without cards between `slides/` and `exams/`, or deletes the course's copy (`to:
+  'out'`); a lecture gets its number only when it is built, so that leaves no gap. A changed PDF behind a built lecture is ignored (the sha256
   is stored, nothing compares it).
 - A PDF that cannot be read (`UnreadablePdf` from the PDF port: a password, or damage) is refused
   by `add` with a target shelf, left out as `password` or `damaged` without one, before any

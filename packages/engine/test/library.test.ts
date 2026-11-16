@@ -413,7 +413,27 @@ describe('a whole course folder, added at once', () => {
     ).toMatchObject({ message: 'The course has no lecture named Introduction.pdf.' })
   })
 
-  it('leaves a lecture with cards where it is', async () => {
+  it('takes a file without cards out of the course, and adding it again brings it back', async () => {
+    expect(
+      await only({ type: 'move', course, file: 'Introduction.pdf', to: 'out' }, 'moved'),
+    ).toEqual({ type: 'moved', course, file: 'Introduction.pdf', to: 'out' })
+    expect(await readdir(join(root, course, 'exams'))).toEqual(['2019.pdf'])
+    const opened = (await only({ type: 'course', course }, 'course')).course
+    expect(opened.pending).toEqual([])
+    expect(opened.exams.map((p) => p.file)).toEqual(['2019.pdf'])
+    expect(
+      await only({ type: 'move', course, file: 'Introduction.pdf', to: 'out' }, 'failed'),
+    ).toMatchObject({ message: 'The course has no file named Introduction.pdf.' })
+    const again = (await files()).slice(0, 1)
+    expect((await only({ type: 'add', course, files: again }, 'added')).added).toEqual([
+      { file: 'Introduction.pdf', to: 'slides' },
+    ])
+    expect((await only({ type: 'course', course }, 'course')).course.pending).toMatchObject([
+      { file: 'Introduction.pdf', number: 1 },
+    ])
+  })
+
+  it('leaves a lecture with cards and a paper that was read where they are', async () => {
     expect(
       await only(
         { type: 'move', course: 'entrepreneurship-ws26', file: '01 Risk.pdf', to: 'exams' },
@@ -424,6 +444,16 @@ describe('a whole course folder, added at once', () => {
       message: '01 Risk.pdf has cards already, so it cannot move.',
       fix: 'Only a file without cards can be moved.',
     })
+    for (const file of ['01 Risk.pdf', 'Winter 2025-26.pdf']) {
+      expect(
+        await only({ type: 'move', course: 'entrepreneurship-ws26', file, to: 'out' }, 'failed'),
+      ).toEqual({
+        type: 'failed',
+        message: `${file} has cards already, so it stays in the course.`,
+        fix: 'Only a file without cards can be taken out.',
+      })
+    }
+    expect(await readdir(join(root, 'entrepreneurship-ws26/exams'))).toEqual(['Winter 2025-26.pdf'])
   })
 })
 
@@ -661,6 +691,19 @@ describe('PDFs that cannot be read', () => {
       message: '02 Effectuation.pdf is damaged, so Lectern cannot read it.',
       fix: 'Download or export the file again, then add the new copy.',
     })
+  })
+
+  it('takes them out of the course, and the lecture after keeps the number its name gives', async () => {
+    for (const file of ['02 Effectuation.pdf', 'Exam 2021.pdf'])
+      expect(await last({ type: 'move', course, file, to: 'out' })).toEqual({
+        type: 'moved',
+        course,
+        file,
+        to: 'out',
+      })
+    const opened = (await last({ type: 'course', course })) as Extract<Event, { type: 'course' }>
+    expect(opened.course.pending).toMatchObject([{ file: '03 Locked.pdf', number: 3 }])
+    expect(opened.course.exams.map((p) => p.file)).toEqual(['Exam 2020.pdf'])
   })
 })
 

@@ -106,9 +106,8 @@ panel, where the student can add a file by hand.
   36 lectures and exams came in. The two let in are sure answers: the one-page board picture
   as slides at 1.00, and the mock papers of his own study kit as an exam at 0.97. The lowest
   probability of any file was 0.64, and only 2 of the 45 were below 0.9. No threshold catches
-  a sure wrong answer. The student can move such a file between lectures and past exams while
-  it has no cards, but the app cannot remove a file from the course: a stray lecture stays on
-  the track. Limits: one folder, the same one the rules were shaped on, so nothing here is
+  a sure wrong answer. The student can move such a file between lectures and past exams, or
+  take it out of the course, while it has no cards. Limits: one folder, the same one the rules were shaped on, so nothing here is
   held out; 45 files; other courses and other languages are unmeasured. The results are in
   `eval-results/sort-files/sort.json`, not in git.
 

@@ -363,31 +363,40 @@ export async function addFiles(
 }
 
 /**
- * Moves a file between lecture slides and past exams, for a file that was sorted wrongly. Only
- * a file no build has used yet can move: a built lecture or a paper that was read stays.
+ * Moves a file between lecture slides and past exams, for a file that was sorted wrongly, or
+ * out of the course, for a file that should not be in it. Out deletes the course's copy only:
+ * the student's own file was never touched, and adding it again brings it back. Only a file no
+ * build has used yet can move: a built lecture or a paper that was read stays. A lecture gets
+ * its number when it is built, so a file without cards taken out leaves no gap.
  */
 export async function moveFile(
   store: Store,
   course: string,
   file: string,
-  to: Shelf,
+  to: Shelf | 'out',
 ): Promise<void> {
   const state = await courseFile(store, course)
-  const from: Shelf = to === 'exams' ? 'slides' : 'exams'
-  if (!(await store.list(paths[from](course))).includes(file)) {
-    throw new EngineError(
-      `The course has no ${from === 'exams' ? 'past exam' : 'lecture'} named ${file}.`,
-      'Move a file the course has.',
-    )
+  const shelves: Shelf[] =
+    to === 'out' ? ['slides', 'exams'] : [to === 'exams' ? 'slides' : 'exams']
+  let from: Shelf | undefined
+  for (const shelf of shelves) {
+    if (!(await store.list(paths[shelf](course))).includes(file)) continue
+    from = shelf
+    break
+  }
+  if (!from) {
+    const what = to === 'out' ? 'file' : to === 'slides' ? 'past exam' : 'lecture'
+    throw new EngineError(`The course has no ${what} named ${file}.`, 'Move a file the course has.')
   }
   const read = (await readJson<ExamsFile>(store, paths.examsFile(course)))?.papers ?? []
   if (state.lectures.some((l) => l.file === file) || read.some((p) => p.file === file)) {
     throw new EngineError(
-      `${file} has cards already, so it cannot move.`,
-      'Only a file without cards can be moved.',
+      `${file} has cards already, so it ${to === 'out' ? 'stays in the course' : 'cannot move'}.`,
+      `Only a file without cards can be ${to === 'out' ? 'taken out' : 'moved'}.`,
     )
   }
-  await store.move(`${paths[from](course)}/${file}`, `${paths[to](course)}/${file}`)
+  if (to === 'out') await store.remove(`${paths[from](course)}/${file}`)
+  else await store.move(`${paths[from](course)}/${file}`, `${paths[to](course)}/${file}`)
 }
 
 /**
