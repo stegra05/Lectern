@@ -45,7 +45,9 @@ pnpm --filter @lectern/engine cli estimate <course folder>
   `gh-stack` skill in `.claude/skills/` has the non-interactive flags and recovery steps.
 - Commit messages: `type(scope): what changed`, types `feat fix docs build ci chore test refactor`,
   scopes `engine app design`.
-- Never push, open or merge a pull request, or spend money without Steffen's yes in his words.
+- Agents may push branches, open pull requests and merge them into `v3` once CI is green, every
+  "Done when" line has evidence in the PR body and the diff was read by a session that did not
+  write it. `main`, releases and spending money need Steffen's yes in his words.
 - Paid model runs only through the engine (`cli build`), on OpenAI, each preceded by its
   estimate. Keys live in the macOS keychain (service `Lectern`, account `openai_api_key`; the
   service alone finds another provider's key); pass them by environment variable, never write
