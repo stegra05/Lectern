@@ -11,7 +11,12 @@ export function two(number: number): string {
 }
 
 export function plural(count: number, one: string, many = `${one}s`): string {
-  return `${count} ${count === 1 ? one : many}`
+  return `${count} ${noun(count, one, many)}`
+}
+
+/** The word alone, for when the count is set apart, as in "<b>1</b> lecture". */
+export function noun(count: number, one: string, many = `${one}s`): string {
+  return count === 1 ? one : many
 }
 
 const eur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
