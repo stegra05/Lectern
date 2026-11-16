@@ -92,11 +92,25 @@ panel, where the student can add a file by hand.
   is a graded take-home assignment, not a paper whose questions come back, so "Midterm" in a
   name reads as an exercise and the file is kept out unread. A course whose midterm is a real
   exam adds it by hand as a past exam.
-- **The threshold is not measured yet** ([#219](https://github.com/stegra05/lectern/issues/219)).
-  `eval/sort-files.ts` measures it on labelled files: 224 from the same folders, labelled by
-  their folder where their own name says nothing, plus 40 unrelated documents as junk. Each
-  file is sorted as in an add, under its path inside its label folder: the files a name keeps
-  out are counted apart, and the threshold is read on the files the model saw.
+- **The threshold decides nothing on the one folder measured, so it stays 0.5**
+  ([#219](https://github.com/stegra05/lectern/issues/219)). `eval/sort-files.ts` sorts
+  labelled files as an add does, under their path inside their label folder, and reads the
+  threshold on the files the model saw. Run on 2026-11-16 (`gpt-6-luna`, 0.0031 dollars) on
+  Steffen's Entrepreneurship course folder: 57 PDFs (his own submitted midterm left out),
+  labelled by the folder each file sits in: 11 slides, 25 exam papers (8 post-Covid, 14
+  pre-Covid, 3 Covid-version question sheets), 6 exercise (4 midterm assignments, a copy of
+  one, his own mock papers), 8 reading, 6 organisation, 1 notes (a one-page board picture).
+  12 were kept out by their name and never sent (5 exercise, 5 reading, 2 organisation), none
+  of them a lecture or an exam. The model read 45. At every threshold from 0.3 to 0.9 the
+  result is the same: 43 of 45 on the right shelf, no lecture and no exam lost, 2 let in; all
+  36 lectures and exams came in. The two let in are sure answers: the one-page board picture
+  as slides at 1.00, and the mock papers of his own study kit as an exam at 0.97. The lowest
+  probability of any file was 0.64, and only 2 of the 45 were below 0.9. No threshold catches
+  a sure wrong answer. The student can move such a file between lectures and past exams while
+  it has no cards, but the app cannot remove a file from the course: a stray lecture stays on
+  the track. Limits: one folder, the same one the rules were shaped on, so nothing here is
+  held out; 45 files; other courses and other languages are unmeasured. The results are in
+  `eval-results/sort-files/sort.json`, not in git.
 
 ## Given up
 
