@@ -3,6 +3,7 @@ import type { Panel } from '../store.ts'
 import { cardCount, conceptCount, currentPhase, stageOf, unsentCount, useStore } from '../store.ts'
 import { euros, noun, plural, two } from '../lecture.ts'
 import { Icon } from '../ui/Icon.tsx'
+import { subdeckCount } from './subdecks.ts'
 import { PHASE_NOW, timeLeft, useTick } from './panels/RunPanel.tsx'
 import './bar.css'
 
@@ -122,12 +123,13 @@ export function BottomBar() {
       </>
     )
     if (unsent === 0) {
+      const subdecks = subdeckCount(course.lectures)
       status = (
         <Lines
           first={
             <>
-              <b>{made}</b> {made === 1 ? 'card is' : 'cards are'} in Anki, in <b>{lectures}</b>{' '}
-              {noun(lectures, 'subdeck')}
+              <b>{made}</b> {made === 1 ? 'card is' : 'cards are'} in Anki, in <b>{subdecks}</b>{' '}
+              {noun(subdecks, 'subdeck')}
             </>
           }
           second="Open Anki and study. Add the next lecture here when it arrives."
