@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { PDFDocument, StandardFonts } from 'pdf-lib'
+import { PDFDocument, PDFHexString, StandardFonts } from 'pdf-lib'
 import { nodeTemplates } from '../src/adapters/node-templates.ts'
 
 /** The templates and stylesheet that ship, from the folder the app reads them from too. */
@@ -16,6 +16,32 @@ export async function makePdf(slides: string[][]): Promise<Uint8Array> {
     lines.forEach((line, i) => page.drawText(line, { x: 40, y: 350 - i * 30, size: 18, font }))
   }
   return doc.save()
+}
+
+/**
+ * A PDF that asks for a password: it names the standard security handler with a user password
+ * that the empty one does not match, which is what a reader checks before anything else.
+ */
+export async function encryptedPdf(slides: string[][]): Promise<Uint8Array> {
+  const doc = await PDFDocument.load(await makePdf(slides))
+  const bytes = (hex: string) => PDFHexString.of(hex.repeat(32))
+  doc.context.trailerInfo.Encrypt = doc.context.obj({
+    Filter: 'Standard',
+    V: 1,
+    R: 2,
+    Length: 40,
+    P: -4,
+    O: bytes('0'),
+    U: bytes('1'),
+  })
+  doc.context.trailerInfo.ID = doc.context.obj([bytes('a'), bytes('a')])
+  return doc.save({ useObjectStreams: false })
+}
+
+/** A PDF cut short, as a download that stopped halfway leaves it. */
+export async function truncatedPdf(slides: string[][]): Promise<Uint8Array> {
+  const whole = await makePdf(slides)
+  return whole.slice(0, whole.length / 2)
 }
 
 /** A fresh folder that holds one course named `course`. Returns the root for the store. */

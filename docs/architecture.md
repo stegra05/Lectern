@@ -507,10 +507,20 @@ Properties that hold by construction and by test:
   returns the rest as `left` with the reason, a name or a content the course already has among them. `move`
   shifts a file without cards between `slides/` and `exams/`. A changed PDF behind a built lecture is ignored (the sha256
   is stored, nothing compares it).
+- A PDF that cannot be read (`UnreadablePdf` from the PDF port: a password, or damage) is refused
+  by `add` with a target shelf, left out as `password` or `damaged` without one, before any
+  request. One already in the course is marked `unreadable` on its pending lecture or paper in
+  `course`, and `estimate` and `build` leave it out and name it (`unreadable` on the estimate); a
+  build with nothing else to do fails with its name.
 - Card files hold the fields exactly as they go to Anki (HTML), plus `id`, `note`, `concept`, `slide`
   and `own`. The Slide picture is not saved in the course folder: the `slide` command and `send`
   render it from the PDF on request.
-- `createCourse` makes the folder name from a slug of the name and never reuses one.
+- `createCourse` makes the folder name from a slug of the name and never reuses one, nor one that
+  differs from it only by case (macOS and Windows take those for the same folder).
+- `nodeStore` writes a file beside its target (`*.part`, never listed) and renames it over the
+  target, so a crash or a quit leaves the old file or the new one. A file that no longer parses
+  fails with its path (`damaged` in `course.ts`); such a course stays in the list under its folder
+  name.
 
 ## 11. The boundary between the interface and the engine
 

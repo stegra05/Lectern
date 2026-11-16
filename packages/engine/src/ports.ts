@@ -109,6 +109,7 @@ export interface DecisionsPort {
   decide(request: DecisionRequest): Promise<Answer[]>
 }
 
+/** A PDF that cannot be read, for a password or for damage, rejects with `UnreadablePdf`. */
 export interface PdfPort {
   /** The text lines of every slide, in slide order. A slide without text is an empty list. */
   readSlides(data: Uint8Array): Promise<string[][]>

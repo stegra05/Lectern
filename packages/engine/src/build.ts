@@ -54,7 +54,7 @@ import {
   probability,
   score,
 } from './decide.ts'
-import { EngineError } from './errors.ts'
+import { cannotRead, EngineError, orUnreadable, type Unreadable } from './errors.ts'
 import {
   askAnswer,
   askFamilies,
@@ -240,14 +240,28 @@ async function survey(ports: Ports, command: BuildCommand | EstimateCommand) {
   const fresh = files.filter((f) => !known.has(f))
   const numbers = assignNumbers(existing?.lectures.map((l) => l.number) ?? [], fresh)
 
+  // A file that cannot be read stays out of the build and is named; the others build.
+  const unreadable: { file: string; why: Unreadable }[] = []
   const lectures: ReadLecture[] = []
   for (const [i, file] of fresh.entries()) {
     const bytes = await store.readBytes(`${paths.slides(course)}/${file}`)
-    const text = await slideText(ports.pdf, bytes)
-    const pictures = await ports.pdf.renderSlides(
-      bytes,
-      text.map((_, s) => s + 1),
+    const slides = await orUnreadable(
+      (async () => {
+        const text = await slideText(ports.pdf, bytes)
+        return {
+          text,
+          pictures: await ports.pdf.renderSlides(
+            bytes,
+            text.map((_, s) => s + 1),
+          ),
+        }
+      })(),
     )
+    if (typeof slides === 'string') {
+      unreadable.push({ file, why: slides })
+      continue
+    }
+    const { text, pictures } = slides
     // Slides with little text are figures, formulas or scans: the model gets to see them.
     const images = pictures.filter((_, s) => text[s]!.join(' ').length < LOW_TEXT_CHARS)
     lectures.push({
@@ -270,12 +284,13 @@ async function survey(ports: Ports, command: BuildCommand | EstimateCommand) {
   const names = (await store.list(paths.exams(course)))
     .filter((name) => /\.pdf$/i.test(name) && !read.some((p) => p.file === name))
     .sort()
-  const papers = await Promise.all(
-    names.map(async (name) => ({
-      name,
-      pages: await ports.pdf.readSlides(await store.readBytes(`${paths.exams(course)}/${name}`)),
-    })),
-  )
+  const papers: { name: string; pages: string[][] }[] = []
+  for (const name of names) {
+    const bytes = await store.readBytes(`${paths.exams(course)}/${name}`)
+    const pages = await orUnreadable(ports.pdf.readSlides(bytes))
+    if (typeof pages === 'string') unreadable.push({ file: name, why: pages })
+    else papers.push({ name, pages })
+  }
   const prices = { model: ports.model.price, decisions: ports.decisions.price }
   // Questions are placed in the lectures of this build, so without new lectures none are asked.
   const exams = {
@@ -288,7 +303,7 @@ async function survey(ports: Ports, command: BuildCommand | EstimateCommand) {
     goal,
     lectures,
     papers,
-    estimate: estimate(sizes, goal, prices, exams),
+    estimate: { ...estimate(sizes, goal, prices, exams), unreadable },
   }
 }
 
@@ -338,6 +353,9 @@ export async function build(ports: Ports, command: BuildCommand, emit: Emit): Pr
     papers: freshPapers,
     estimate: estimated,
   } = await survey(ports, command)
+  // With nothing to build, a file that cannot be read is the answer.
+  const [stuck] = estimated.unreadable
+  if (read.length === 0 && stuck) throw cannotRead(stuck.file, stuck.why)
   if (read.length === 0) {
     emit({ type: 'phase', phase: 'read', status: 'done', total: 0 })
     emit({ type: 'built', lectures: [], cards: 0, dropped: 0, costUsd: 0, durationMs: 0 })

@@ -18,9 +18,10 @@ import type {
   Problem,
   Run,
   Slots,
+  Unreadable,
 } from '@lectern/engine'
 
-export type { Command, CourseSummary, Decision, Event, FileKind, Problem, Run, Slots }
+export type { Command, CourseSummary, Decision, Event, FileKind, Problem, Run, Slots, Unreadable }
 
 export type Goal = CourseState['goal']
 export type Phase = Extract<Event, { type: 'phase' }>['phase']

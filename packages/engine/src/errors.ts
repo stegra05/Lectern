@@ -29,3 +29,39 @@ export function ankiNotOpen(): EngineError {
     'Open Anki and wait until you see your decks, then try again. If Anki is open, restart it once so the AnkiConnect add-on starts.',
   )
 }
+
+/** Why a PDF cannot be read. */
+export type Unreadable = 'password' | 'damaged'
+
+/** What a PdfPort throws for a PDF it cannot read. It knows no file name; its caller does. */
+export class UnreadablePdf extends Error {
+  readonly why: Unreadable
+
+  constructor(why: Unreadable) {
+    super(why === 'password' ? 'The PDF is protected by a password.' : 'The PDF is damaged.')
+    this.why = why
+  }
+}
+
+/** What reading a PDF gives, or why it cannot be read. Every other failure goes on. */
+export async function orUnreadable<T extends object>(read: Promise<T>): Promise<T | Unreadable> {
+  try {
+    return await read
+  } catch (error) {
+    if (error instanceof UnreadablePdf) return error.why
+    throw error
+  }
+}
+
+/** A PDF that cannot be read, in the student's words, with its file name. */
+export function cannotRead(file: string, why: Unreadable): EngineError {
+  return why === 'password'
+    ? new EngineError(
+        `${file} is protected by a password, so Lectern cannot read it.`,
+        'Save a copy without the password, then add that copy.',
+      )
+    : new EngineError(
+        `${file} is damaged, so Lectern cannot read it.`,
+        'Download or export the file again, then add the new copy.',
+      )
+}
