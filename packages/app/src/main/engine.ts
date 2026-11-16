@@ -3,9 +3,11 @@
  * reader, the models, Anki and the note type files. The rest of the shell only ever calls `run`.
  */
 
+import { writeFile } from 'node:fs/promises'
+
 import { createEngine, type Engine } from '@lectern/engine'
 import { ankiConnect } from '@lectern/engine/adapters/ankiconnect'
-import { memoryAnki } from '@lectern/engine/adapters/memory-anki'
+import { memoryAnki, type MemoryAnki } from '@lectern/engine/adapters/memory-anki'
 import { nodeStore } from '@lectern/engine/adapters/node-store'
 import { nodeTemplates } from '@lectern/engine/adapters/node-templates'
 import { offlineDecisions, offlineModel } from '@lectern/engine/adapters/offline'
@@ -23,15 +25,45 @@ export interface EngineOptions {
   fake: boolean
   /** How long each call of the offline models takes, so a run can be watched. */
   fakeDelayMs: number
+  /** Offline only: a file the in-memory Anki writes its notes to on every change. */
+  notesFile: string
 }
 
 // Offline, cards go to an Anki that lives in memory for as long as the app runs.
 const offlineAnki = memoryAnki()
 
-export function engineFor({ courses, templates, key, fake, fakeDelayMs }: EngineOptions): Engine {
+/** The in-memory Anki, writing its notes to a file whenever they change, for tests to read. */
+function writingNotes(anki: MemoryAnki, file: string): MemoryAnki {
+  const write = () => writeFile(file, JSON.stringify(anki.notes))
+  return {
+    ...anki,
+    addNote: async (note) => {
+      const id = await anki.addNote(note)
+      await write()
+      return id
+    },
+    updateNote: async (id, fields) => {
+      await anki.updateNote(id, fields)
+      await write()
+    },
+    deleteNotes: async (ids) => {
+      await anki.deleteNotes(ids)
+      await write()
+    },
+  }
+}
+
+export function engineFor({
+  courses,
+  templates,
+  key,
+  fake,
+  fakeDelayMs,
+  notesFile,
+}: EngineOptions): Engine {
   return createEngine({
     store: nodeStore(courses),
-    anki: fake ? offlineAnki : ankiConnect(),
+    anki: fake ? writingNotes(offlineAnki, notesFile) : ankiConnect(),
     templates: nodeTemplates(templates),
     pdf: pdfjsReader,
     model: fake ? offlineModel(fakeDelayMs) : openaiModel(undefined, { apiKey: key ?? undefined }),
