@@ -86,6 +86,7 @@ export function CardsPanel({ close }: { close: ReactNode }) {
           <button
             type="button"
             className="btn cards-add"
+            data-return="new"
             onClick={() => void writeCard(inView[0]!.id)}
           >
             <Icon name="plus" size={13} stroke={1.6} />
@@ -153,6 +154,7 @@ function CardRow({ card, lecture, course }: { card: Card; lecture: Lecture; cour
       <button
         type="button"
         className="icon-btn cards-edit"
+        data-return={card.id}
         aria-label={`Edit the card: ${questionOf(card)}`}
         onClick={() => void editCard(card)}
       >

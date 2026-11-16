@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Problem, Slots } from '../../../../shared/contract.ts'
 import { lectureColour, two } from '../../lecture.ts'
 import { useStore } from '../../store.ts'
@@ -26,6 +26,16 @@ export function CardEditor({ close }: { close: ReactNode }) {
   const removeCard = useStore((s) => s.removeCard)
   const closeEditor = useStore((s) => s.closeEditor)
   const [removing, setRemoving] = useState(false)
+  // Closing the form hands the focus back to the card it was opened from, unless the student
+  // clicked elsewhere and the focus is already there.
+  const from = editor ? (editor.card ?? 'new') : null
+  useEffect(
+    () => () => {
+      if (document.activeElement === document.body)
+        document.querySelector<HTMLElement>(`[data-return="${from}"]`)?.focus()
+    },
+    [from],
+  )
   const lecture = course?.lectures.find((l) => l.number === editor?.lecture)
   if (!editor || !lecture) return null
 
@@ -79,6 +89,7 @@ export function CardEditor({ close }: { close: ReactNode }) {
               <select
                 id="editor-concept"
                 className="field"
+                autoFocus
                 value={editor.concept}
                 onChange={(event) => setEditor({ concept: event.target.value })}
               >
@@ -126,6 +137,7 @@ export function CardEditor({ close }: { close: ReactNode }) {
           <textarea
             id="editor-front"
             className="field editor-text"
+            autoFocus={!own}
             rows={3}
             value={slots.front}
             onChange={(event) => set({ front: event.target.value })}

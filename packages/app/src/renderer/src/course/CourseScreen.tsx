@@ -1,4 +1,4 @@
-import { useState, type DragEvent } from 'react'
+import { useEffect, useState, type DragEvent } from 'react'
 import { CourseMap } from '../map/CourseMap.tsx'
 import { fromDrop } from '../picked.ts'
 import { useStore } from '../store.ts'
@@ -19,6 +19,19 @@ export function CourseScreen() {
   const addFiles = useStore((s) => s.addFiles)
   const busy = useStore((s) => s.run !== null || s.sending !== null || s.adding !== null)
   const [dropping, setDropping] = useState(false)
+
+  // Escape cancels the open form, and with none open closes the panel, as the close button does.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      const { editor, panel, closeEditor, closePanel } = useStore.getState()
+      if (editor) {
+        if (!editor.busy) closeEditor()
+      } else if (panel) closePanel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   if (!course) return null
 

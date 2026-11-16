@@ -711,7 +711,7 @@ function EmptyPrompt({ area, onFiles }: { area: Area; onFiles: (files: Picked[])
   const pick = (input: HTMLInputElement) => {
     const files = fromInput(input.files)
     input.value = ''
-    if (files.length > 0) onFiles(files)
+    onFiles(files)
   }
   return (
     <div

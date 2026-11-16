@@ -57,14 +57,18 @@ export function SetupPanel({ close }: { close: ReactNode }) {
   const leftOut = useStore((s) => (s.course ? s.leftOut[s.course.id] : undefined)) ?? []
   const sorting = useStore((s) => s.adding !== null)
   const addLeftOut = useStore((s) => s.addLeftOut)
+  const addFiles = useStore((s) => s.addFiles)
   const moveFile = useStore((s) => s.moveFile)
   const picker = useRef<HTMLInputElement>(null)
+  const pdfs = useRef<HTMLInputElement>(null)
+  const folder = useRef<HTMLInputElement>(null)
   if (!course) return null
 
   const lectures = course.pending.filter((p) => !p.unreadable).length
   const unreadable = course.pending.some((p) => p.unreadable)
   const slides = course.pending.reduce((n, p) => n + p.slides, 0)
   const adding = cardCount(course) > 0
+  const hasLectures = course.lectures.length > 0 || course.pending.length > 0
   const already = leftOut.filter((l) => l.why === 'already').length
   const shown = leftOut.filter((l) => l.why !== 'already')
   const papersOut = course.exams.some((paper) => paper.questions === null)
@@ -80,6 +84,11 @@ export function SetupPanel({ close }: { close: ReactNode }) {
       Take out of the course
     </button>
   )
+  const pick = (input: HTMLInputElement) => {
+    const files = fromInput(input.files)
+    input.value = ''
+    void addFiles(files)
+  }
 
   return (
     <>
@@ -148,6 +157,48 @@ export function SetupPanel({ close }: { close: ReactNode }) {
                 {adding && ' Lectures that have cards stay in the course.'}
               </p>
             </details>
+          </section>
+        )}
+        {hasLectures && (
+          <section className="panel-section">
+            <div className="setup-lectures">
+              <button
+                type="button"
+                className="btn"
+                disabled={sorting}
+                onClick={() => pdfs.current?.click()}
+              >
+                Add PDFs
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={sorting}
+                onClick={() => folder.current?.click()}
+              >
+                Add a folder
+              </button>
+            </div>
+            <input
+              ref={pdfs}
+              type="file"
+              accept=".pdf"
+              multiple
+              hidden
+              aria-label="Lecture PDFs"
+              onChange={(event) => pick(event.target)}
+            />
+            <input
+              ref={(input) => {
+                folder.current = input
+                // React has no prop for a folder picker; the attribute makes the input choose folders.
+                input?.setAttribute('webkitdirectory', '')
+              }}
+              type="file"
+              hidden
+              aria-label="Folder of lecture PDFs"
+              onChange={(event) => pick(event.target)}
+            />
           </section>
         )}
         {(shown.length > 0 || already > 0) && (
