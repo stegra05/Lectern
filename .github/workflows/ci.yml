@@ -28,8 +28,22 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: App end to end (offline models)
+    name: App end to end (${{ matrix.variant.name }})
     runs-on: ubuntu-latest
+    # Experiment: which render setting makes the e2e test fast on the runner. Removed after.
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - { name: baseline }
+          - { name: reduced motion, motion: '1' }
+          - { name: no gpu, args: '--disable-gpu' }
+          - { name: no blur, blur: '1' }
+          - { name: all three, motion: '1', args: '--disable-gpu', blur: '1' }
+    env:
+      E2E_REDUCED_MOTION: ${{ matrix.variant.motion }}
+      E2E_CHROMIUM_ARGS: ${{ matrix.variant.args }}
+      E2E_NO_BLUR: ${{ matrix.variant.blur }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
