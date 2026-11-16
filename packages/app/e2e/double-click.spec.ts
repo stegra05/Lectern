@@ -26,6 +26,10 @@ test('a double click on Make my cards leaves the run panel open', async () => {
     // Past the second click and the render after it, the panel is still there.
     await page.waitForTimeout(500)
     await expect(phases).toBeVisible()
+    // A quit during the run would ask first, so the test lets it end.
+    await expect(page.getByRole('region', { name: 'Status' })).toContainText(/\d+ cards/, {
+      timeout: 60_000,
+    })
   } finally {
     await app.close()
   }
