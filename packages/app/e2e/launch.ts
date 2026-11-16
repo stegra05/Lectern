@@ -28,10 +28,7 @@ export async function launch(
   const data = await mkdtemp(join(tmpdir(), 'lectern-app-'))
   const courses = options.courses ?? join(data, 'courses')
   const app = await electron.launch({
-    args: [
-      ...(process.env.E2E_CHROMIUM_ARGS?.split(' ').filter(Boolean) ?? []),
-      join(import.meta.dirname, '..'),
-    ],
+    args: [join(import.meta.dirname, '..')],
     env: {
       ...process.env,
       LECTERN_FAKE: '1',
@@ -42,9 +39,6 @@ export async function launch(
     },
   })
   const page = await app.firstWindow()
-  if (process.env.E2E_REDUCED_MOTION) await page.emulateMedia({ reducedMotion: 'reduce' })
-  if (process.env.E2E_NO_BLUR)
-    await page.addStyleTag({ content: '* { backdrop-filter: none !important; }' })
   // The reference size of the design kit, whatever the last window size on this computer was.
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0]?.setContentSize(1100, 720)
