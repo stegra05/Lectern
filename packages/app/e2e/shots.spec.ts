@@ -90,7 +90,7 @@ test('pictures of every base screen', async () => {
     const course = JSON.parse(await readFile(file, 'utf8')) as { name: string }
     await writeFile(file, `${JSON.stringify({ ...course, name: 'Entrepreneurship' }, null, 2)}\n`)
   }
-  const { app, page } = await launch({ courses, delayMs: 150 })
+  const { app, page } = await launch({ courses, delayMs: 600 })
 
   try {
     await expect(page.getByRole('heading', { name: 'Welcome to Lectern' })).toBeVisible()
@@ -177,14 +177,16 @@ test('pictures of every base screen', async () => {
     await shoot(page, '04-files-and-goal')
 
     await page.getByRole('button', { name: 'Make my cards' }).click()
-    // Midway: the cards are being written.
-    await expect(page.getByRole('list', { name: 'What Lectern is doing' })).toContainText(
-      /\d+ of about \d+/,
-      {
-        timeout: 5 * 60_000,
-      },
+    // Midway: the cards are being written. The offline models answer fast, so the page is
+    // watched every 10 ms: a slower check lets the whole phase go by.
+    await page.waitForFunction(
+      () =>
+        /\d+ of about \d+/.test(
+          document.querySelector('[aria-label="What Lectern is doing"]')?.textContent ?? '',
+        ),
+      undefined,
+      { polling: 10, timeout: 60_000 },
     )
-    await page.waitForTimeout(3000)
     await shoot(page, '05-run-midway')
   } finally {
     await app.close()
