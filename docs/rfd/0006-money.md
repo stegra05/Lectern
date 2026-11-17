@@ -38,7 +38,8 @@
   files costs under a cent. It has no estimate first and its cost is not recorded,
   since showing a price for it would cost the student more attention than it costs money.
 - **`gpt-6-luna` is the default model** for writing and for decisions
-  ([#130](https://github.com/stegra05/lectern/issues/130)). One build with `gpt-6.1-terra` as
+  ([#130](https://github.com/stegra05/lectern/issues/130)); Steffen accepted this reading on
+  2026-11-17. One build with `gpt-6.1-terra` as
   the writing model, on the same decks, papers and goal and judged the same way (2026-11-17),
   held 47.5% of the marks of the dev papers with 656 cards and 137,583 tokens written, and cost
   2.37 dollars against an estimate of 4.03. `gpt-6-luna` holds a mean of 51.0% over three builds
@@ -80,11 +81,3 @@ spent on it shows.
 - Whether `gpt-6-luna` accepts an effort below `low`.
 - Whether the Decisions API shares the writing model's tokens a minute. It is not paced; no
   decision request has been limited so far.
-
-## Open
-
-- The choice of the default model rests on one terra build and on exam marks in place of
-  reference-deck recall, with no defect count.
-  [#130](https://github.com/stegra05/lectern/issues/130) stays open until Steffen accepts that
-  reading or asks for more builds.
-
