@@ -3,7 +3,7 @@
 |           |                                                                   |
 | --------- | ----------------------------------------------------------------- |
 | **State** | decided                                                           |
-| **Date**  | 2026-11-14, checks cut 2026-11-16                                    |
+| **Date**  | 2026-11-14, checks cut 2026-11-16, sort measured again 2026-11-17    |
 | **Code**  | `packages/engine/src/decide.ts`, `adapters/openai.ts`             |
 
 > **In one breath.** Every yes-or-no question goes to a cheap decision model, but nobody knows
@@ -92,7 +92,7 @@ panel, where the student can add a file by hand.
   is a graded take-home assignment, not a paper whose questions come back, so "Midterm" in a
   name reads as an exercise and the file is kept out unread. A course whose midterm is a real
   exam adds it by hand as a past exam.
-- **The threshold decides nothing on the one folder measured, so it stays 0.5**
+- **The threshold decides nothing on the two folders measured, so it stays 0.5**
   ([#219](https://github.com/stegra05/lectern/issues/219)). `eval/sort-files.ts` sorts
   labelled files as an add does, under their path inside their label folder, and reads the
   threshold on the files the model saw. Run on 2026-11-16 (`gpt-6-luna`, 0.0031 dollars) on
@@ -108,8 +108,15 @@ panel, where the student can add a file by hand.
   probability of any file was 0.64, and only 2 of the 45 were below 0.9. No threshold catches
   a sure wrong answer. The student can move such a file between lectures and past exams, or
   take it out of the course, while it has no cards. Limits: one folder, the same one the rules were shaped on, so nothing here is
-  held out; 45 files; other courses and other languages are unmeasured. The results are in
-  `eval-results/sort-files/sort.json`, not in git.
+  held out; 45 files. The results are in `eval-results/sort-files/sort.json`, not in git.
+  A second folder, Grundlagen Datenbanken, in German (2026-11-17, 0.0015 dollars), is the first
+  held-out measurement: it was not used to shape the rules. 57 PDFs, labelled by the folder
+  each file sits in: 21 slides, 6 exam papers, 2 exam solutions, 22 exercise sheets, 5 exercise
+  solutions, 1 organisation. 30 were kept out by their name and not sent, none of them a lecture
+  or an exam; among them are 19 exercise files that sit in a folder named "Klausuren/Übungen".
+  The model read 27, and 27 of 27 are on the right shelf at every threshold from 0.3 to 0.9: no
+  lecture lost, no exam lost, nothing let in. Two folders, 102 files, two courses and two
+  languages are measured; other courses are not.
 
 ## Given up
 

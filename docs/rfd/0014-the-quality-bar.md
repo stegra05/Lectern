@@ -3,7 +3,7 @@
 |           |                                                                                   |
 | --------- | --------------------------------------------------------------------------------- |
 | **State** | decided, measurement ongoing                                                      |
-| **Date**  | 2026-11-13, measured 2026-11-14 to 2026-11-16, exam measure decided 2026-11-16    |
+| **Date**  | 2026-11-13, measured 2026-11-14 to 2026-11-17, exam measure decided 2026-11-16    |
 | **Code**  | `packages/engine/eval/bench.ts` (exam marks), `eval/refdeck.ts` (reference deck), `eval/blind.ts` (blind sample) |
 
 > **In one breath.** A deck is scored on the marks of past papers its build never saw. Steffen's
@@ -92,13 +92,27 @@ by Claude Haiku:
   ([RFD 8](0008-past-exams.md)). The build of 2026-11-15 with exam cards against v3: 4.9 points
   up where 12.9 are believable from one build against three, every guard holds, so unclear.
   These builds read 18 papers, the dev papers among them, so they count on the test set only.
-- **The dev baseline.** Three builds of v3 on the 14 papers before 2022 (2026-11-16: 671, 653
-  and 673 cards, 1.08 dollars together) hold 48.5%, 47.7% and 55.2% of the marks of the dev
-  papers: mean 50.5, sd 4.1. Of the 221 points, 71 are held by all three, 55 by one or two, 95
-  by none. With this spread a change shows from about 9 points with three builds a side and
-  from 6 with five. The builds took 876 to 937 calls and 265,000 to 276,000 tokens written.
-  Their score on the test papers has not been read
-  ([#270](https://github.com/stegra05/lectern/issues/270)).
+- **The dev baseline.** Three builds of v3 at commit `aaaf741`, after the 46 pull requests
+  merged on 2026-11-16 (`gpt-6-luna`, goal top, the 14 papers before 2022, judged on the dev
+  rubric, 2026-11-17: 672, 666 and 662 cards, mean 667, 0.33, 0.32 and 0.32 dollars), hold
+  53.8%, 46.0% and 53.1% of the marks of the dev papers: mean 51.0. They are the old side of a
+  gate from now on, in place of the three builds before those merges (671, 653 and 673 cards,
+  1.08 dollars together: 48.5%, 47.7% and 55.2%, mean 50.5, sd 4.1). Of the 221 points of those
+  earlier builds, 71 are held by all three, 55 by one or two, 95 by none. With this spread a
+  change shows from about 9 points with three builds a side and from 6 with five. The earlier
+  builds took 876 to 937 calls and 265,000 to 276,000 tokens written. The run folders are
+  `bench/runs/entrepreneurship-v3tip-2026-11-17-run1` to `run3` under `eval-results`. The test
+  rubric was not read for any of these builds, and the test score of the dev baseline has not
+  been read ([#270](https://github.com/stegra05/lectern/issues/270)).
+- **The gate on the merges of 2026-11-16.** v3 before them against v3 after them: 50.5 to
+  51.0, a difference of +0.5 where 9.5 is believable. Every guard holds: cards 666 to 667,
+  words an answer 10.2 to 10.1, calls 911 to 902, tokens written 270,753 to 270,301. The
+  verdict is unclear: the merges made the deck neither better nor worse on the dev papers.
+- **The gate on #256.** v3 against v3 with #256 (reply cards carry their job number): 51.0 to
+  49.4 (45.2%, 51.2% and 51.9%), a difference of -1.5 where 9.1 is believable. Every guard
+  holds: cards 667 to 659, words an answer 10.1 to 9.8, calls 902 to 893, tokens written
+  270,301 to 263,764. The verdict is unclear. #256 was merged on it as a correctness fix that
+  claims no gain: a fix that claims no better cards was merged on "unclear, every guard holds".
 - **A run's score counts its own pairs only.** Its shortlist, and what its own judges found
   by searching the deck. Verdicts are kept under the texts of a pair, and builds share some
   cards word for word, so counting every kept verdict let a run rise when others were judged
