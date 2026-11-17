@@ -3,12 +3,12 @@
 |           |                                                       |
 | --------- | ----------------------------------------------------- |
 | **State** | decided                                               |
-| **Date**  | 2026-11-14                                            |
+| **Date**  | 2026-11-14, default model measured 2026-11-17         |
 | **Code**  | `packages/engine/src/cost.ts`, `ask.ts`, `adapters/openai.ts` |
 | **Detail**| [architecture, section 5](../architecture.md#5-where-money-is-spent-the-estimate-and-the-cap) |
 
 > **In one breath.** An estimate before the first paid call, a cap at three times that,
-> OpenAI only, and 50 dollars for evals.
+> OpenAI only, `gpt-6-luna` as the default model, and 50 dollars for evals.
 
 ## Decision
 
@@ -37,6 +37,17 @@
   (56 files of the Entrepreneurship folder: 0.38 cents); a course folder of a hundred such
   files costs under a cent. It has no estimate first and its cost is not recorded,
   since showing a price for it would cost the student more attention than it costs money.
+- **`gpt-6-luna` is the default model** for writing and for decisions
+  ([#130](https://github.com/stegra05/lectern/issues/130)). One build with `gpt-6.1-terra` as
+  the writing model, on the same decks, papers and goal and judged the same way (2026-11-17),
+  held 47.5% of the marks of the dev papers with 656 cards and 137,583 tokens written, and cost
+  2.37 dollars against an estimate of 4.03. `gpt-6-luna` holds a mean of 51.0% over three builds
+  at about 0.33 dollars a build ([RFD 14](0014-the-quality-bar.md)). One terra build against
+  three luna builds reads unclear (a difference of -3.5 where 21.3 is believable). Terra costs
+  about seven times as much and its one build sits inside the spread of luna's. Limits: one
+  terra build; decisions stayed on `gpt-6-luna` in both; the measure is exam marks on the dev
+  papers, not recall against the reference deck, and no defect count was made; only the two
+  models the engine has prices for were tried.
 - **The prompt cache is set on purpose**: an explicit breakpoint, the same reply form and
   effort, and the first card of each type runs ahead to fill the cache.
 - **Calls are paced to the key's tokens a minute.** A key's limit counts cached input too, so
@@ -55,6 +66,9 @@ fix the same decks cost 16.7 cents, and one deck 60 percent less. The full slide
 of 2026-11-15 cost 45 cents against an estimate of 69.
 
 Spent from the 50 dollars: about 1.10 by the end of 2026-11-14, plus the runs of 2026-11-15.
+The paid runs of 2026-11-16 and 2026-11-17 cost 6.26 dollars together: 0.04 on the 16th; on
+the 17th 1.08 for three builds with #256, 0.98 for three builds of v3, 2.37 for the terra build,
+1.79 for Grundlagen Datenbanken and under a cent for the sort of its files.
 Each run records its own cost in `runs/NNN.json` of its course folder, in dollars and in euros
 (`costEur`, as the app shows it). A run that fails is recorded too, marked `failed`, so money
 spent on it shows.
@@ -67,6 +81,3 @@ spent on it shows.
 - Whether the Decisions API shares the writing model's tokens a minute. It is not paced; no
   decision request has been limited so far.
 
-## Open
-
-- The default models are not yet chosen by eval: [#130](https://github.com/stegra05/lectern/issues/130).

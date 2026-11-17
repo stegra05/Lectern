@@ -56,6 +56,9 @@ no costlier. The papers of 2022 to 2024 are a dev set to tune on, the four newes
 ([RFD 14](rfd/0014-the-quality-bar.md)). `blind.ts` draws the blind sample against the reference
 deck and scores the answers.
 
+The default model is `gpt-6-luna`: one build with `gpt-6.1-terra` held 47.5% of the dev marks for
+about seven times the cost ([RFD 6](rfd/0006-money.md)).
+
 Engine tests: 390 pass, 2 skipped (live only, `LECTERN_LIVE=1`).
 
 ## App
@@ -76,7 +79,7 @@ first-run screen and found its templates. A `v3.*` tag builds macOS, Windows and
 draft prerelease ([`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
 A whole course folder, dropped or chosen in the course setup, is sorted into lectures and past
-exams; the threshold of the sort was measured on one folder. The setup panel lists the rest as
+exams; the threshold of the sort was measured on two folders. The setup panel lists the rest as
 left out, adds a left-out file by hand, and moves a file without cards between lectures and past
 exams or takes it out of the course again. A file that cannot be read is named in the panel with
 what to do.
@@ -97,17 +100,22 @@ card arrived tagged `::own`.
 
 - Past papers added after a course's lectures are built change no card already made; they count
   only for lectures built later. Answers the model wrote are not checked against the readings.
-- The exam step has run on one course; Grundlagen Datenbanken (8 papers) is untested.
+- The exam step has run on two courses. On Grundlagen Datenbanken (6 papers, 109 exam cards)
+  about 17 of the 28 cards answered off the slides do not stand alone, because the question is a
+  task on the paper's own scenario ([#342](https://github.com/stegra05/Lectern/issues/342)); the
+  81 exam cards answered from the slides were not read.
 - The exam rubric is model-made and no person has checked it
   ([#264](https://github.com/stegra05/lectern/issues/264)). It exists for one course.
-- The dev baseline (three builds of v3 on the 14 papers before 2022: 48.5%, 47.7% and 55.2% of
-  the dev marks, mean 50.5) has not been read on the test papers
-  ([#270](https://github.com/stegra05/lectern/issues/270)). No change has passed the gate yet.
-- The sort of added files is measured on one folder only, the Entrepreneurship folder its rules
-  were shaped on: 43 of 45 files the model read on the right shelf at every threshold from 0.3
-  to 0.9, all 36 lectures and exams in, 2 other files let in as sure answers. Nothing is held
-  out; other courses and other languages are unmeasured. A file let in wrongly is taken out by
-  hand while it has no cards.
+- The dev baseline (three builds of v3 at `aaaf741` on the 14 papers before 2022: 53.8%, 46.0%
+  and 53.1% of the dev marks, mean 51.0) has not been read on the test papers
+  ([#270](https://github.com/stegra05/lectern/issues/270)). The merges of 2026-11-16 and #256
+  both read unclear on the gate with every guard holding; no change has passed it as better.
+- The sort of added files is measured on two folders. On the Entrepreneurship folder, which its
+  rules were shaped on, 43 of 45 files the model read were on the right shelf at every threshold
+  from 0.3 to 0.9, all 36 lectures and exams in, 2 other files let in as sure answers. On
+  Grundlagen Datenbanken, in German and not used to shape the rules, 27 of 27 were on the right
+  shelf at every threshold, nothing let in. Other courses are unmeasured. A file let in wrongly
+  is taken out by hand while it has no cards.
 - No change of the run of 2026-11-16 was sent to a real Anki; the tests use an Anki in memory.
 - Since the cards are stored as slots, the lead-in highlight of a cloze list is gone (about one
   cloze list in ten had one), and courses built before must be built again.

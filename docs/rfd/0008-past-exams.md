@@ -3,7 +3,7 @@
 |           |                                                       |
 | --------- | ----------------------------------------------------- |
 | **State** | decided                                               |
-| **Date**  | 2026-11-15                                            |
+| **Date**  | 2026-11-15, second course 2026-11-17                  |
 | **Code**  | `packages/engine/src/exams.ts`, `build.ts` (`addExamAnswers`) |
 
 > **In one breath.** Exams repeat themselves, so the questions of old papers are turned into
@@ -48,6 +48,15 @@ The held-back questions are the honest measure, because the engine never saw tho
 note figure is partly circular: the reference deck was itself chosen with all 22 papers.
 Questions asked only once still pay: 97 of the 136 exam cards.
 
+**A second course** (2026-11-17, Grundlagen Datenbanken, `gpt-6-luna`, goal good): 21
+lectures with 1,538 slides and 6 past papers made 1,616 cards, 40 dropped, for 1.79 dollars
+against an estimate of 2.13, in 21 minutes. 109 cards come from past exam questions, 28 of them
+answered off the slides. Of those 28, about 17 do not stand alone: the question is a task on the
+paper's own scenario (an ER diagram, a schedule, a query to debug) and the card keeps the task
+without the scenario, and on some the answer itself says it cannot be given. About 11 are
+sound. The 81 exam cards answered from the slides were not read. This is open as
+[#342](https://github.com/stegra05/Lectern/issues/342).
+
 ## Given up
 
 - **Exam weight as a multiplier** on facts.
@@ -57,6 +66,7 @@ Questions asked only once still pay: 97 of the 136 exam cards.
 - Papers count for the lectures built with them. Adding papers to a course whose lectures are
   built changes no card already made.
 - Model-written answers looked right in a sample of ten, none checked against the readings.
-- Run on one course only; Grundlagen Datenbanken (8 papers) is untested
-  ([#111](https://github.com/stegra05/lectern/issues/111)).
+- Run on two courses. On Grundlagen Datenbanken about 17 of 28 cards answered off the slides do
+  not stand alone ([#342](https://github.com/stegra05/Lectern/issues/342)); the held-out
+  questions of that course were not measured ([#111](https://github.com/stegra05/lectern/issues/111)).
 - Exam format and exam part (`Part`) are not inferred.
