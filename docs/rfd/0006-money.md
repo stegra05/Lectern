@@ -81,3 +81,10 @@ spent on it shows.
 - Whether the Decisions API shares the writing model's tokens a minute. It is not paced; no
   decision request has been limited so far.
 
+## Open
+
+- The choice of the default model rests on one terra build and on exam marks in place of
+  reference-deck recall, with no defect count.
+  [#130](https://github.com/stegra05/lectern/issues/130) stays open until Steffen accepts that
+  reading or asks for more builds.
+
