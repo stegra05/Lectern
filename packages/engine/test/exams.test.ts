@@ -106,16 +106,20 @@ describe('building again with a new past paper', () => {
     // Writing: the exam answer's card as here, the other cards of its call as the fixture writes them.
     if (request.task === 'fill' && request.prompt.includes(`Fact to test: ${ANSWER}`)) {
       const blocks = request.prompt.split(/^Fact to test: /m).slice(1)
-      const cards = blocks.map((block) =>
+      const cards = blocks.map((block, i) =>
         block.startsWith(ANSWER)
           ? {
+              card: String(i + 1),
               cardType: /^Card type: ([^.]+)\./m.exec(block)![1],
               question: 'Lean startup: why test early?',
               answer: 'It ==lowers risk== before money is spent.',
               extra: '',
             }
-          : (script({ ...request, prompt: `Fact to test: ${block}` }) as { cards: unknown[] })
-              .cards[0],
+          : {
+              ...(script({ ...request, prompt: `Fact to test: ${block}` }) as { cards: object[] })
+                .cards[0],
+              card: String(i + 1),
+            },
       )
       return { cards }
     }

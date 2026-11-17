@@ -86,12 +86,14 @@ function fillAll(request: ModelRequest): unknown {
   const cards = request.prompt
     .split(/^Fact to test: /m)
     .slice(1)
-    .map((block) => {
+    .map((block, i) => {
       const fact = /^(.+) \(slide \d+\)$/m.exec(block)?.[1] ?? ''
       const role = /^Card type: ([^.]+)\./m.exec(block)?.[1] ?? ''
       const form = forms.find((f) => f.properties!.cardType!.enum![0] === role)!
-      const fields = Object.keys(form.properties!).filter((field) => field !== 'cardType')
-      return { cardType: role, ...fillForm(concept, fact, fields) }
+      const fields = Object.keys(form.properties!).filter(
+        (field) => field !== 'card' && field !== 'cardType',
+      )
+      return { card: String(i + 1), cardType: role, ...fillForm(concept, fact, fields) }
     })
   return { cards }
 }
